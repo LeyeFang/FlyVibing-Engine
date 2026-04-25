@@ -14,8 +14,11 @@ from Application.Scene.BasicComponents import *
 
 class openglRenderer(Renderer):
 
+    aspect_ratio: float = 4/3
+    registered_entities: dict[dict] = {}
     registered_mesh: dict[dict] = {}
     registered_shader: dict[dict] = {}
+    registered_transform: dict[dict] = {}
 
     @classmethod
     def Create(
@@ -34,15 +37,14 @@ class openglRenderer(Renderer):
         # About Camera
         camera, transform = SceneManager.GetSceneCamera()
         view = Calculate_Camera_View(camera, transform)
-        proj = Calculate_Camera_Proj(camera)
+        proj = Calculate_Camera_Proj(camera, cls.aspect_ratio)
         # About Mesh and Shader
         renderable_entities = SceneManager.GetRenderableEntitiesModelShader()
-        for model_id, shader_id in renderable_entities:
+        for entity_id, model_id, shader_id in renderable_entities:
             mesh = ResourceManager.GetMesh(model_id)
             cls._register_mesh(mesh, model_id)
             vs, fs = ResourceManager.GetShader(shader_id)
             cls._register_shader(vs, fs, shader_id)
-        # About Model Transform
 
     @classmethod
     def EndFrame(
@@ -62,9 +64,10 @@ class openglRenderer(Renderer):
         cls,
         event: Event
     ):
-        if event is WindowResizeEvent:
-            width, height = event.Unpack()
+        if isinstance(event, WindowResizeEvent):
+            width, height = event.UnPack()
             glViewport(0, 0, width, height)
+            cls.aspect_ratio = width / height
 
     # Interface only for this class
     @classmethod
@@ -78,28 +81,31 @@ class openglRenderer(Renderer):
         cls.registered_mesh[f'{mesh_id}'] = {}
         current_mesh = cls.registered_mesh[f'{mesh_id}']
         vertices: np.ndarray = mesh.vertices
+        uvs: np.ndarray = mesh.uvs
+        normals: np.ndarray = mesh.normals
+        ver_uv_nor = np.hstack((vertices, uvs, normals))
         indices: np.ndarray = mesh.indices
         # VBO
         # ---------------------
         current_mesh['vbo'] = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, current_mesh['vbo'])
-        glBufferData(GL_ARRAY_BUFFER, vertices.nbytes, vertices, GL_STATIC_DRAW)
+        glBufferData(GL_ARRAY_BUFFER, ver_uv_nor.nbytes, ver_uv_nor, GL_STATIC_DRAW)
         # VAO
         # ---------------------
         current_mesh['vao'] = glGenVertexArrays(1)
         glBindVertexArray(current_mesh['vao'])
-        stride = 3 * sizeof(GLfloat)
+        stride = (3+2+3) * sizeof(GLfloat)
         # 顶点位置属性 (location = 0)
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
         glEnableVertexAttribArray(0)
-        # # 纹理坐标属性 (location = 1)
-        # tex_offset = 3 * sizeof(GLfloat)
-        # glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(tex_offset))
-        # glEnableVertexAttribArray(1)
-        # # 法线属性 (location = 2)
-        # normal_offset = (3 + 2) * sizeof(GLfloat)
-        # glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(normal_offset))
-        # glEnableVertexAttribArray(2)
+        # 纹理坐标属性 (location = 1)
+        tex_offset = 3 * sizeof(GLfloat)
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(tex_offset))
+        glEnableVertexAttribArray(1)
+        # 法线属性 (location = 2)
+        normal_offset = (3 + 2) * sizeof(GLfloat)
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(normal_offset))
+        glEnableVertexAttribArray(2)
         # EBO
         # ---------------------
         current_mesh['ebo'] = glGenBuffers(1)
@@ -188,7 +194,8 @@ def Calculate_Camera_View(
 
 
 def Calculate_Camera_Proj(
-    camera: Camera
+    camera: Camera,
+    aspect_ratio: float
 ) -> Matrix44:
     """根据摄像机投影参数计算投影矩阵"""
     near = camera.near_plane
@@ -197,16 +204,15 @@ def Calculate_Camera_Proj(
         # fov 需要弧度（假设 camera.fov 是度数）
         import math
         fov_rad = math.radians(camera.fov)
-        aspect = camera.aspect_ratio
         return matrix44.create_perspective_projection(
             fov_rad,
-            aspect,
+            aspect_ratio,
             near,
             far
         )
     else:
         half_h = camera.ortho_size
-        half_w = half_h * camera.aspect_ratio
+        half_w = half_h * aspect_ratio
         return matrix44.create_orthogonal_projection(
             -half_w, half_w,   # left, right
             -half_h, half_h,   # bottom, top

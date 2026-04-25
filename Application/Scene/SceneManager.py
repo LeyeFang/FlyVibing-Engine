@@ -59,10 +59,21 @@ class SceneManager:
     def GetRenderableEntitiesModelShader(
         cls
     ) -> list:
-        model_shader_handle = []
-        for _, rend in esper.get_component(MeshRenderer):
+        entity_model_shader_id = []
+        for entity_id, rend in esper.get_component(MeshRenderer):
             if rend.visible:
                 model_id = rend.model_id
                 shader_id = rend.shader_id
-                model_shader_handle.append((model_id, shader_id))
-        return model_shader_handle
+                entity_model_shader_id.append((entity_id, model_id, shader_id))
+        return entity_model_shader_id
+
+    @classmethod
+    def GetEntityTransform(
+        cls,
+        entity_id
+    ) -> tuple:
+        transform = esper.component_for_entity(entity_id, Transform)
+        return (
+            transform.position_x, transform.position_y, transform.position_z,
+            transform.rotation_x, transform.rotation_y, transform.rotation_z,
+            transform.scale_x, transform.scale_y, transform.scale_z)

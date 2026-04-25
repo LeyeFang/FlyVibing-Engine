@@ -20,6 +20,29 @@ class Transform:
     scale_y: float = 1
     scale_z: float = 1
 
+    def __init__(
+        self,
+        position_x=0,
+        position_y=0,
+        position_z=0,
+        rotation_x=0,
+        rotation_y=0,
+        rotation_z=0,
+        scale_x=1,
+        scale_y=1,
+        scale_z=1,
+    ):
+        self.position_x = position_x
+        self.position_y = position_y
+        self.position_z = position_z
+        self.rotation_x = rotation_x
+        self.rotation_y = rotation_y
+        self.rotation_z = rotation_z
+        self.scale_x = scale_x
+        self.scale_y = scale_y
+        self.scale_z = scale_z
+
+
 
 @component
 class MeshRenderer:

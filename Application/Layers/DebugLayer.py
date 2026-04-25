@@ -16,3 +16,10 @@ class DebugLayer(Layer):
             entity_id=entity_id,
             component_instance=MeshRenderer(model_id=model_id))
         print(model_id, entity_id)
+
+    @classmethod
+    def OnEvent(
+        cls,
+        event
+    ):
+        print(event.UnPack())

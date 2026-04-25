@@ -18,6 +18,7 @@ class glfwWindow(Window):
     ):
         cls.app = app
         cls.glfw_window = cls._create_window()
+        glfw.set_window_size_callback(cls.glfw_window, cls._window_resize_event_callback)
         return cls
 
     @classmethod
@@ -73,3 +74,13 @@ class glfwWindow(Window):
             return
         glfw.make_context_current(glfw_window)
         return glfw_window
+
+    @classmethod
+    def _window_resize_event_callback(
+        cls,
+        window,
+        width,
+        height
+    ):
+        WindowResizeEvent.Pack(width, height)
+        cls.app.SetEvent(WindowResizeEvent())

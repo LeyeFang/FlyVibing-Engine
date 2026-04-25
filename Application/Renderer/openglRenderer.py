@@ -74,4 +74,3 @@ class openglRenderer(Renderer):
         if event is WindowResizeEvent:
             width, height = event.Unpack()
             glViewport(0, 0, width, height)
-

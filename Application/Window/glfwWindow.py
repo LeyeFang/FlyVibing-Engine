@@ -42,7 +42,8 @@ class glfwWindow(Window):
         cls,
         event: Event
     ) -> None:
-        pass
+        if event is WindowCloseEvent:
+            cls.Therminate()
 
     def _create_window():
         # 1. 初始化 GLFW

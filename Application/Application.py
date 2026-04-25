@@ -5,6 +5,7 @@ from Application.Window.Window import Window
 from Application.Window.glfwWindow import glfwWindow
 from Application.Renderer.Renderer import Renderer
 from Application.Renderer.openglRenderer import openglRenderer
+from Application.Resource.ResourceManager import ResourceManager
 
 
 class Application:
@@ -16,6 +17,7 @@ class Application:
 
     @classmethod
     def Create(cls):
+        ResourceManager.Init()
         cls.window = glfwWindow.Create(cls)
         cls.renderer = openglRenderer.Create(cls)
         return cls
@@ -33,18 +35,19 @@ class Application:
         cls.run_state = True
         while cls.run_state:
             # Update Application
-            cls.window.Update()
             cls.renderer.StartFrame()
             for layer in cls.layer_stack:
                 layer.OnUpdate()
+            cls.renderer.EndFrame()
+            cls.window.Update()
             # Pass Events
             if cls.event is not None:
                 for layer in cls.layer_stack:
                     layer.OnEvent(cls.event)
-                cls.window.OnEvent(cls.event)
                 cls.renderer.OnEvent(cls.event)
+                cls.window.OnEvent(cls.event)
+                cls.OnEvent(cls.event)
                 cls.event = None
-            cls.renderer.EndFrame()
 
     @classmethod
     def Pause(self):
@@ -72,5 +75,11 @@ class Application:
         event: Event
     ) -> None:
         cls.event = event
-        if cls.event is WindowCloseEvent:
+
+    @classmethod
+    def OnEvent(
+        cls,
+        event: Event
+    ) -> None:
+        if event is WindowCloseEvent:
             cls.run_state = False

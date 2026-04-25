@@ -20,7 +20,7 @@ class ResourceManager:
         cls
     ) -> int:
         cls.__load_default_obj()
-        cls.__load_default_shader
+        cls.__load_default_shader()
 
     @classmethod
     def LoadAssets(
@@ -28,11 +28,14 @@ class ResourceManager:
     ) -> int:
         return
 
-    def __load_default_obj(cls) -> None:
-        default_obj_dir = 'Resource/Default/Object'
+    @classmethod
+    def __load_default_obj(
+        cls
+    ) -> None:
+        default_obj_dir = 'Resource/DefaultObjects'
         for file_name in DEFAULT_OBJ_FILE:
             obj_file_path = join(default_obj_dir, file_name)
-            load_mesh = trimesh.load(obj_file_path, 'mesh')
+            load_mesh = trimesh.load(obj_file_path)
             vertices = load_mesh.vertices
             normals = load_mesh.vertex_normals
             uvs = load_mesh.visual.uv

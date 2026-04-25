@@ -10,5 +10,6 @@ dependencies = [
     "numpy>=2.4.4",
     "pyopengl>=3.1.10",
     "pyopengl-accelerate>=3.1.10",
+    "pyrr>=0.10.3",
     "trimesh>=4.12.1",
 ]

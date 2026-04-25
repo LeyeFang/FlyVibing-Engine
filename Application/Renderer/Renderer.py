@@ -15,7 +15,7 @@ class Renderer(ABC):
 
     @classmethod
     @abstractmethod
-    def CreateMesh(cls):
+    def RegisterMesh(cls):
         ...
 
     @classmethod

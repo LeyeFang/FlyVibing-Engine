@@ -45,6 +45,12 @@ class glfwWindow(Window):
         if event is WindowCloseEvent:
             cls.Therminate()
 
+    @classmethod
+    def ResizeCallback(
+        cls
+    ):
+        pass
+
     def _create_window():
         # 1. 初始化 GLFW
         if not glfw.init():
@@ -55,7 +61,12 @@ class glfwWindow(Window):
         glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
         # 2. 创建窗口
-        glfw_window = glfw.create_window(800, 600, "Modern OpenGL Square (VAO + EBO + Shader)", None, None)
+        glfw_window = glfw.create_window(
+            800, 600,
+            "Test Window",
+            None,
+            None
+        )
         if not glfw_window:
             print("无法创建窗口")
             glfw.terminate()

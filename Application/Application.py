@@ -6,6 +6,7 @@ from Application.Window.glfwWindow import glfwWindow
 from Application.Renderer.Renderer import Renderer
 from Application.Renderer.openglRenderer import openglRenderer
 from Application.Resource.ResourceManager import ResourceManager
+from Application.Scene.SceneManager import SceneManager
 
 
 class Application:
@@ -17,7 +18,8 @@ class Application:
 
     @classmethod
     def Create(cls):
-        ResourceManager.Init()
+        SceneManager.Init(cls)
+        ResourceManager.Init(cls)
         cls.window = glfwWindow.Create(cls)
         cls.renderer = openglRenderer.Create(cls)
         return cls

@@ -1,0 +1,14 @@
+[project]
+name = "mygameengine"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "esper>=3.7",
+    "glfw>=2.10.0",
+    "numpy>=2.4.4",
+    "pyopengl>=3.1.10",
+    "pyopengl-accelerate>=3.1.10",
+    "trimesh>=4.12.1",
+]

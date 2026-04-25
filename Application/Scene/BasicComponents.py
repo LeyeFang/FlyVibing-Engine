@@ -2,6 +2,12 @@ from dataclasses import dataclass as component
 
 
 @component
+class ObjectInfo:
+    name: str
+    obj_id: int
+
+
+@component
 class Transform:
     position_x: float = 0
     position_y: float = 0

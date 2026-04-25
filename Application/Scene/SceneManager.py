@@ -1,7 +1,8 @@
 import esper
 
 from Application.Application import Application
-from 
+from Application.Resource.ResourceManager import ResourceManager
+from Application.Scene.BasicComponents import *
 
 
 app = Application.GetApplication()
@@ -9,23 +10,34 @@ app = Application.GetApplication()
 
 class SceneManager:
 
-    scene = []
+    scene: dict = {}
     entities: dict = {}
 
     @classmethod
-    def Init():
-        pass
+    def Init(
+        cls
+    ) -> None:
+        cls.scene["default"] = "default"
 
     @classmethod
-    def CreateScene():
-        pass
+    def CreateScene(
+        cls,
+        new_scene_name: str
+    ) -> None:
+        cls.scene[new_scene_name] = new_scene_name
 
     @classmethod
     def AddObject(
-    ):
-        esper.create_entity()
+        cls
+    ) -> int:
+        obj_id = esper.create_entity(Transform())
+        cls.entities[f'{obj_id}'] = 1
+        return obj_id
 
-    def RemoveObject():
+    @classmethod
+    def RemoveObject(
+        cls
+    ):
         pass
 
     # Debug Interface

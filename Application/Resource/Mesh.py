@@ -16,10 +16,10 @@ class Mesh:
         uvs: np.ndarray,
         indices: np.ndarray
     ) -> int:
-        self.vertices = vertices
-        self.indices = indices
-        self.uvs = uvs
-        self.normals = normals
+        self.vertices = np.array(vertices, dtype=np.float32)
+        self.indices = np.array(indices, dtype=np.uint32)
+        self.uvs = np.array(uvs, dtype=np.float32)
+        self.normals = np.array(normals, dtype=np.float32)
 
     def GetVertices(self):
         return self.vertices

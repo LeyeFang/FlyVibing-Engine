@@ -5,21 +5,27 @@ layout (location = 1) in vec2 aTexCoord; // 纹理坐标（虽然暂时不用，
 layout (location = 2) in vec3 aNormal;   // 法线（暂时不用）
 
 
-uniform mat4 model;      // 模型矩阵 (用于移动、旋转、缩放)
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
 out vec2 TexCoord;       // 传递纹理坐标（备用）
 
 
 void main()
 {
     // 应用模型矩阵变换顶点位置
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
     // gl_Position = model * vec4(aPos, 1.0);
-    gl_Position = vec4(aPos, 1.0);
-    // TexCoord = aTexCoord;
+    // gl_Position = view * model * vec4(aPos, 1.0);
+    // gl_Position = projection * model * vec4(aPos, 1.0);
+    // gl_Position = vec4(aPos, 1.0);
+    TexCoord = aTexCoord;
 }
 
 
 #version 330 core
 
+in vec2 TexCoord;   // 添加这一行
 out vec4 FragColor;      // 最终输出颜色
 
 void main()

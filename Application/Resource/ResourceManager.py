@@ -119,8 +119,8 @@ class ResourceManager:
         for material_name, file_name in zip(DEFAULT_SHADER_NAME, DEFAULT_SHADER_FILE):
             # Create Shader
             shader_file_path = join(default_shader_dir, file_name)
-            vs_src, fs_src = parse_shader_file(shader_file_path)
-            save_material = Material(vs_src, fs_src)
+            vs_src, fs_src, uniforms = parse_shader_file(shader_file_path)
+            save_material = Material(vs_src, fs_src, uniforms)
             # Save
             cls.material_count += 1
             current_shader_id = cls.material_count

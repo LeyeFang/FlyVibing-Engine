@@ -27,6 +27,7 @@ class openglRenderer(Renderer):
     ):
         window_size = app.window.GetSize()
         glViewport(0, 0, window_size[0], window_size[1])
+        cls.aspect_ratio = window_size[0] / window_size[1]
         return cls
 
 
@@ -34,6 +35,9 @@ class openglRenderer(Renderer):
     def StartFrame(
         cls
     ) -> None:
+        glClearColor(0.2, 0.2, 0.2, 1.0)
+        glEnable(GL_DEPTH_TEST)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         # About Camera
         camera, transform = SceneManager.GetSceneCamera()
         view = Calculate_Camera_View(camera, transform)
@@ -41,20 +45,40 @@ class openglRenderer(Renderer):
         # About Mesh and Shader
         renderable_entities = SceneManager.GetRenderableEntities()
         for entity_id in renderable_entities:
+            #
+            # Try Register Entity
             cls._register_entity(entity_id)
+            #
+            # Get Mesh Info
+            entity_mesh_id = cls.registered_entities[f'{entity_id}']['mesh_id']
+            entity_mesh = cls.registered_mesh[f'{entity_mesh_id}']
+            current_vao = entity_mesh['vao']
+            current_counts = entity_mesh['counts']
+            #
+            # Update Shader Program
+            model = Calculate_Entity_Model(SceneManager.GetEntityTransform(entity_id))
+            entity_material_id = cls.registered_entities[f'{entity_id}']['material_id']
+            entity_material = cls.registered_material[f'{entity_material_id}']
+            glUseProgram(entity_material['program'])
+            uniform_locs = entity_material['uniform_locs']
+            if 'model' in uniform_locs:
+                glUniformMatrix4fv(uniform_locs['model'], 1, GL_FALSE, model.astype('float32'))
+            if 'view' in uniform_locs:
+                glUniformMatrix4fv(uniform_locs['view'], 1, GL_FALSE, view.astype('float32'))
+            if 'projection' in uniform_locs:
+                glUniformMatrix4fv(uniform_locs['projection'], 1, GL_FALSE, proj.astype('float32'))
+            #
+            # Draw
+            glBindVertexArray(current_vao)
+            glDrawElements(GL_TRIANGLES, current_counts, GL_UNSIGNED_INT, None)
+            glBindVertexArray(0)
 
     @classmethod
     def EndFrame(
         cls
     ) -> None:
-        glClearColor(0.2, 0.2, 0.2, 1.0)
-        glClear(GL_COLOR_BUFFER_BIT)
-        for current_mesh in cls.registered_mesh.values():
-            current_vao = current_mesh['vao']
-            current_counts = current_mesh['counts']
-            glBindVertexArray(current_vao)
-            glDrawElements(GL_TRIANGLES, current_counts, GL_UNSIGNED_INT, None)
-            glBindVertexArray(0)
+        for entity_info in cls.registered_entities.values():
+            pass
 
     @classmethod
     def OnEvent(
@@ -67,14 +91,15 @@ class openglRenderer(Renderer):
             cls.aspect_ratio = width / height
 
 
-    # =========================================================================
+    #
     # Interface only for this class
-
     @classmethod
     def _register_entity(
         cls,
         entity_id: int
     ) -> None:
+        if f"{entity_id}" in cls.registered_entities.keys():
+            return
         #
         # Get mesh and material resource
         mesh_id = SceneManager.GetEntityMesh(entity_id)
@@ -85,6 +110,9 @@ class openglRenderer(Renderer):
         # Upload mesh and material to Graphic-Device like GPU
         cls._register_mesh(mesh, mesh_id)
         cls._register_material(material, material_id)
+        #
+        # Record mesh and material id that prosibly used by entity
+        cls.registered_entities[f'{entity_id}'] = {'mesh_id': mesh_id, 'material_id': material_id}
 
 
     @classmethod
@@ -93,7 +121,7 @@ class openglRenderer(Renderer):
         mesh: Mesh,
         mesh_id: int
     ):
-        if mesh_id in cls.registered_mesh.keys():
+        if f"{mesh_id}" in cls.registered_mesh.keys():
             return
         cls.registered_mesh[f'{mesh_id}'] = {}
         current_mesh = cls.registered_mesh[f'{mesh_id}']
@@ -138,12 +166,12 @@ class openglRenderer(Renderer):
         material: Material,
         material_id: int
     ) -> None:
-        if material_id not in cls.registered_material.keys():
+        if f"{material_id}" in cls.registered_material.keys():
             return
         # 编译顶点着色器
         vs_src = material.vs_src
         fs_src = material.fs_src
-        uniform = material.uniforms
+        uniforms = material.uniforms
         vertex_shader = glCreateShader(GL_VERTEX_SHADER)
         glShaderSource(vertex_shader, vs_src)
         glCompileShader(vertex_shader)
@@ -179,21 +207,42 @@ class openglRenderer(Renderer):
         # 着色器对象已链接到程序，可以删除
         glDeleteShader(vertex_shader)
         glDeleteShader(fragment_shader)
-        # 存储到 registered_shader 字典中（与 mesh 类似）
-        cls.registered_material[f"{material_id}"] = {
-            'program': program
-            # 如果需要，可以在这里缓存 uniform 位置等
-            # 'uniform_locations': {}
+        # 获取所有 uniform 的位置 (location)
+        uniform_locs = {}
+        for name, typ in uniforms.items():
+            loc = glGetUniformLocation(program, name)
+            if loc != -1:
+                uniform_locs[name] = loc
+        cls.registered_material[f'{material_id}'] = {
+            'program': program,
+            'uniforms': uniforms,        # 保留类型信息以备扩展
+            'uniform_locs': uniform_locs
         }
 
 
 #
 # Math
 # ======================================================================================
+import math
+
+
 def Calculate_Entity_Model(
-    entity_id: int
+    transform: Transform
 ) -> Matrix44:
-    pass
+    # 1. 创建缩放矩阵
+    scale_mat = Matrix44.from_scale(Vector3(
+        [transform.scale_x, transform.scale_y, transform.scale_z]
+    ), dtype=float)
+    # 2. 从欧拉角创建旋转矩阵 (相当于 R = Rz * Ry * Rx)
+    rot_mat = Matrix44.from_eulers(Vector3(
+        [transform.rotation_x, transform.rotation_y, transform.rotation_z]
+    ), dtype=float)
+    # 3. 创建平移矩阵
+    trans_mat = Matrix44.from_translation(Vector3(
+        [transform.position_x, transform.position_y, transform.position_z]
+    ), dtype=float)
+    # 4. 按照 TRS 顺序相乘: Model = T * R * S
+    return trans_mat * rot_mat * scale_mat
 
 
 def Calculate_Camera_View(
@@ -213,7 +262,7 @@ def Calculate_Camera_View(
     local_forward = vector4.create_from_vector3(local_forward)
     world_forward_vec4 = matrix44.apply_to_vector(rot_mat, local_forward)
     world_forward = vector3.create_from_vector4(world_forward_vec4)
-    world_forward = vector.normalise(world_forward[0])
+    world_forward = world_forward[0]
     target = pos + world_forward
     up = Vector3(camera.up_vector)
     return matrix44.create_look_at(pos, target, up)
@@ -226,12 +275,11 @@ def Calculate_Camera_Proj(
     """根据摄像机投影参数计算投影矩阵"""
     near = camera.near_plane
     far = camera.far_plane
+    fov = camera.fov
     if camera.projection_type == ProjectionType.PERSPECTIVE:
-        # fov 需要弧度（假设 camera.fov 是度数）
-        import math
-        fov_rad = math.radians(camera.fov)
+        fov_rad = math.radians(fov)
         return matrix44.create_perspective_projection(
-            fov_rad,
+            fov,
             aspect_ratio,
             near,
             far

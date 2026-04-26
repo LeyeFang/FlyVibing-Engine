@@ -66,27 +66,12 @@ class SceneManager:
         return entity_id_list
 
     @classmethod
-    def GetRenderableEntitiesMeshMaterial(
-        cls
-    ) -> list:
-        entity_mesh_material_id = []
-        for entity_id, rend in esper.get_component(MeshRenderer):
-            if rend.visible:
-                mesh_id = rend.mesh_id
-                material_id = rend.material_id
-                entity_mesh_material_id.append((entity_id, mesh_id, material_id))
-        return entity_mesh_material_id
-
-    @classmethod
     def GetEntityTransform(
         cls,
         entity_id
-    ) -> tuple:
+    ) -> Transform:
         transform = esper.component_for_entity(entity_id, Transform)
-        return (
-            transform.position_x, transform.position_y, transform.position_z,
-            transform.rotation_x, transform.rotation_y, transform.rotation_z,
-            transform.scale_x, transform.scale_y, transform.scale_z)
+        return transform
 
     @classmethod
     def GetEntityMesh(
@@ -105,3 +90,40 @@ class SceneManager:
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
         material_id = mesh_rend.material_id
         return material_id
+
+
+    #
+    # Modified Entities Components
+    #
+    @classmethod
+    def SetEntityTransfrom(
+        cls,
+        entity_id: int = None,
+        position_xyz: tuple = None,
+        rotation_xyz: tuple = None,
+        scale_xyz: tuple = None
+    ) -> None:
+        if entity_id is None:
+            raise ("Must specific entity ID")
+        if position_xyz is not None:
+            transform = esper.component_for_entity(entity_id, Transform)
+            transform.position_x, transform.position_y, transform.position_z = position_xyz
+        if rotation_xyz is not None:
+            transform = esper.component_for_entity(entity_id, Transform)
+            transform.rotation_x, transform.rotation_y, transform.rotation_z = rotation_xyz
+        if scale_xyz is not None:
+            transform = esper.component_for_entity(entity_id, Transform)
+            transform.scale_x, transform.scale_y, transform.scale_z = scale_xyz
+
+    @classmethod
+    def SetMainCameraTransfrom(
+        cls,
+        position_xyz: tuple = None,
+        rotation_xyz: tuple = None
+    ) -> None:
+        if position_xyz is not None:
+            transform = esper.component_for_entity(cls.main_camera_id, Transform)
+            transform.position_x, transform.position_y, transform.position_z = position_xyz
+        if rotation_xyz is not None:
+            transform = esper.component_for_entity(cls.main_camera_id, Transform)
+            transform.rotation_x, transform.rotation_y, transform.rotation_z = rotation_xyz

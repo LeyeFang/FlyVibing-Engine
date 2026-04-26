@@ -46,9 +46,17 @@ class Transform:
 
 @component
 class MeshRenderer:
-    model_id: int
-    shader_id: int = 1
+    mesh_id: int
+    material_id: int
     visible: bool = True
+
+    def __init__(
+        self,
+        mesh_id: int = 1,
+        material_id: int = 1
+    ) -> None:
+        self.mesh_id = mesh_id
+        self.material_id = material_id
 
 
 class ProjectionType(Enum):

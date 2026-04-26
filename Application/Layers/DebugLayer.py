@@ -10,12 +10,12 @@ class DebugLayer(Layer):
         cls,
         app
     ):
-        model_id = ResourceManager.GetDefaultModel("Square")
+        mesh_id = ResourceManager.GetDefaultModel("Square")
         entity_id = SceneManager.AddEntity()
         SceneManager.AddComponentToEntity(
             entity_id=entity_id,
-            component_instance=MeshRenderer(model_id=model_id))
-        print(model_id, entity_id)
+            component_instance=MeshRenderer(mesh_id=mesh_id))
+        print(mesh_id, entity_id)
 
     @classmethod
     def OnEvent(

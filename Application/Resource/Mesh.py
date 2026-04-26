@@ -1,13 +1,17 @@
 import numpy as np
 from OpenGL.GL import *
 
+from dataclasses import dataclass, field
 
+
+@dataclass
 class Mesh:
 
     vertices: np.ndarray = None
     indices: np.ndarray = None
     uvs: np.ndarray = None
     normals: np.ndarray = None
+    vao_config: dict = field(default_factory=dict)
 
     def __init__(
         self,

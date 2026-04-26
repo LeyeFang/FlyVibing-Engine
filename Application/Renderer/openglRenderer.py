@@ -8,6 +8,7 @@ from Application.Events.WindowEvent import WindowResizeEvent
 from Application.Renderer.Renderer import Renderer
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Resource.Mesh import Mesh
+from Application.Resource.Material import Material
 from Application.Scene.SceneManager import SceneManager
 from Application.Scene.BasicComponents import *
 
@@ -17,8 +18,7 @@ class openglRenderer(Renderer):
     aspect_ratio: float = 4/3
     registered_entities: dict[dict] = {}
     registered_mesh: dict[dict] = {}
-    registered_shader: dict[dict] = {}
-    registered_transform: dict[dict] = {}
+    registered_material: dict[dict] = {}
 
     @classmethod
     def Create(
@@ -39,12 +39,9 @@ class openglRenderer(Renderer):
         view = Calculate_Camera_View(camera, transform)
         proj = Calculate_Camera_Proj(camera, cls.aspect_ratio)
         # About Mesh and Shader
-        renderable_entities = SceneManager.GetRenderableEntitiesModelShader()
-        for entity_id, model_id, shader_id in renderable_entities:
-            mesh = ResourceManager.GetMesh(model_id)
-            cls._register_mesh(mesh, model_id)
-            vs, fs = ResourceManager.GetShader(shader_id)
-            cls._register_shader(vs, fs, shader_id)
+        renderable_entities = SceneManager.GetRenderableEntities()
+        for entity_id in renderable_entities:
+            cls._register_entity(entity_id)
 
     @classmethod
     def EndFrame(
@@ -69,7 +66,27 @@ class openglRenderer(Renderer):
             glViewport(0, 0, width, height)
             cls.aspect_ratio = width / height
 
+
+    # =========================================================================
     # Interface only for this class
+
+    @classmethod
+    def _register_entity(
+        cls,
+        entity_id: int
+    ) -> None:
+        #
+        # Get mesh and material resource
+        mesh_id = SceneManager.GetEntityMesh(entity_id)
+        material_id = SceneManager.GetEntityMaterial(entity_id)
+        mesh = ResourceManager.GetMesh(mesh_id)
+        material = ResourceManager.GetMaterial(material_id)
+        #
+        # Upload mesh and material to Graphic-Device like GPU
+        cls._register_mesh(mesh, mesh_id)
+        cls._register_material(material, material_id)
+
+
     @classmethod
     def _register_mesh(
         cls,
@@ -116,17 +133,19 @@ class openglRenderer(Renderer):
         # print(current_mesh['counts'])
 
     @classmethod
-    def _register_shader(
+    def _register_material(
         cls,
-        vertex_shader_source: str,
-        fragment_shader_source: str,
-        shader_id: int
+        material: Material,
+        material_id: int
     ) -> None:
-        if shader_id not in cls.registered_shader.keys():
+        if material_id not in cls.registered_material.keys():
             return
         # 编译顶点着色器
+        vs_src = material.vs_src
+        fs_src = material.fs_src
+        uniform = material.uniforms
         vertex_shader = glCreateShader(GL_VERTEX_SHADER)
-        glShaderSource(vertex_shader, vertex_shader_source)
+        glShaderSource(vertex_shader, vs_src)
         glCompileShader(vertex_shader)
         # 检查编译状态
         success = glGetShaderiv(vertex_shader, GL_COMPILE_STATUS)
@@ -136,7 +155,7 @@ class openglRenderer(Renderer):
             raise RuntimeError(f"Vertex shader compilation failed:\n{log}")
         # 编译片段着色器
         fragment_shader = glCreateShader(GL_FRAGMENT_SHADER)
-        glShaderSource(fragment_shader, fragment_shader_source)
+        glShaderSource(fragment_shader, fs_src)
         glCompileShader(fragment_shader)
         success = glGetShaderiv(fragment_shader, GL_COMPILE_STATUS)
         if not success:
@@ -161,15 +180,22 @@ class openglRenderer(Renderer):
         glDeleteShader(vertex_shader)
         glDeleteShader(fragment_shader)
         # 存储到 registered_shader 字典中（与 mesh 类似）
-        cls.registered_shader[f"{shader_id}"] = {
+        cls.registered_material[f"{material_id}"] = {
             'program': program
             # 如果需要，可以在这里缓存 uniform 位置等
             # 'uniform_locations': {}
         }
 
 
+#
 # Math
 # ======================================================================================
+def Calculate_Entity_Model(
+    entity_id: int
+) -> Matrix44:
+    pass
+
+
 def Calculate_Camera_View(
     camera: Camera,
     transform: Transform

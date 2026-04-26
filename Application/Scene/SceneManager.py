@@ -56,16 +56,26 @@ class SceneManager:
         return camera, transform
 
     @classmethod
-    def GetRenderableEntitiesModelShader(
+    def GetRenderableEntities(
         cls
     ) -> list:
-        entity_model_shader_id = []
+        entity_id_list = []
         for entity_id, rend in esper.get_component(MeshRenderer):
             if rend.visible:
-                model_id = rend.model_id
-                shader_id = rend.shader_id
-                entity_model_shader_id.append((entity_id, model_id, shader_id))
-        return entity_model_shader_id
+                entity_id_list.append(entity_id)
+        return entity_id_list
+
+    @classmethod
+    def GetRenderableEntitiesMeshMaterial(
+        cls
+    ) -> list:
+        entity_mesh_material_id = []
+        for entity_id, rend in esper.get_component(MeshRenderer):
+            if rend.visible:
+                mesh_id = rend.mesh_id
+                material_id = rend.material_id
+                entity_mesh_material_id.append((entity_id, mesh_id, material_id))
+        return entity_mesh_material_id
 
     @classmethod
     def GetEntityTransform(
@@ -77,3 +87,21 @@ class SceneManager:
             transform.position_x, transform.position_y, transform.position_z,
             transform.rotation_x, transform.rotation_y, transform.rotation_z,
             transform.scale_x, transform.scale_y, transform.scale_z)
+
+    @classmethod
+    def GetEntityMesh(
+        cls,
+        entity_id: int
+    ) -> int:
+        mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+        mesh_id = mesh_rend.mesh_id
+        return mesh_id
+
+    @classmethod
+    def GetEntityMaterial(
+        cls,
+        entity_id: int
+    ) -> int:
+        mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+        material_id = mesh_rend.material_id
+        return material_id

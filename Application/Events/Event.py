@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from typing import Any
 
 
 app_callback_func: callable = None
@@ -28,12 +29,12 @@ class Event(metaclass=MetaEvent):
 
     @classmethod
     @abstractmethod
-    def Pack(cls):
+    def Pack(cls) -> None:
         app_callback_func(cls)
 
     @classmethod
     @abstractmethod
-    def UnPack(cls):
+    def UnPack(cls) -> Any:
         ...
 
 

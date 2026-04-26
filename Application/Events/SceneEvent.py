@@ -60,3 +60,24 @@ class NewComponentEvent(Event):
         cls
     ) -> tuple:
         return cls.entity_id, cls.new_comp
+
+
+class UpdateShaderUniformsEvent(Event):
+
+    entity_id: int
+    uniforms: dict
+    log_info: str = ''
+
+    @classmethod
+    def Pack(
+        cls,
+        entity_id: int,
+        uniforms: dict
+    ) -> None:
+        cls.entity_id = entity_id
+        cls.uniforms = uniforms
+        super().Pack()
+
+    @classmethod
+    def UnPack(cls):
+        pass

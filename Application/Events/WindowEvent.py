@@ -2,13 +2,15 @@ from Application.Events.Event import Event
 
 
 class WindowCloseEvent(Event):
-    ...
+
+    log_info = "Window Close !!"
 
 
 class WindowResizeEvent(Event):
 
     width: int = None
     height: int = None
+    log_info = f"Window Size: (width, height) = ({width}, {height})"
 
     @classmethod
     def Pack(
@@ -18,6 +20,7 @@ class WindowResizeEvent(Event):
     ) -> None:
         cls.width = width
         cls.height = height
+        cls.log_info = f"Window Size: (width, height) = ({width}, {height})"
 
     @classmethod
     def UnPack(

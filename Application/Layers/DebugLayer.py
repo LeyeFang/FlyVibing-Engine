@@ -18,14 +18,13 @@ class DebugLayer(Layer):
         SceneManager.SetEntityTransfrom(
             entity_id,
             position_xyz=(0, 0.0, -50),
-            scale_xyz=(1, 1, 1))
+            scale_xyz=(10, 10, 10))
         SceneManager.SetMainCameraTransfrom(
             position_xyz=(0, 0, 0))
-        print(mesh_id, entity_id)
 
     @classmethod
     def OnEvent(
         cls,
         event
     ):
-        print(event.UnPack())
+        print(event)

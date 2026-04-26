@@ -1,10 +1,10 @@
 import glfw
 
-from Application.Window.Window import Window
-
 from Application.Events.Event import Event
 from Application.Events.WindowEvent import WindowCloseEvent
 from Application.Events.WindowEvent import WindowResizeEvent
+
+from Application.Window.Window import Window
 
 
 class glfwWindow(Window):
@@ -27,7 +27,6 @@ class glfwWindow(Window):
         glfw.swap_buffers(cls.glfw_window)
         if glfw.window_should_close(cls.glfw_window):
             cls.app.SetEvent(WindowCloseEvent)
-            print("Window Close")
             glfw.terminate()
 
     @classmethod
@@ -45,12 +44,6 @@ class glfwWindow(Window):
     ) -> None:
         if event is WindowCloseEvent:
             cls.Therminate()
-
-    @classmethod
-    def ResizeCallback(
-        cls
-    ):
-        pass
 
     def _create_window():
         # 1. 初始化 GLFW
@@ -75,6 +68,9 @@ class glfwWindow(Window):
         glfw.make_context_current(glfw_window)
         return glfw_window
 
+    #
+    #
+    # Above is callback functions --------------------------------------------
     @classmethod
     def _window_resize_event_callback(
         cls,
@@ -83,4 +79,4 @@ class glfwWindow(Window):
         height
     ):
         WindowResizeEvent.Pack(width, height)
-        cls.app.SetEvent(WindowResizeEvent())
+        cls.app.SetEvent(WindowResizeEvent)

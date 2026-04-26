@@ -1,6 +1,9 @@
 from abc import ABCMeta, abstractmethod
 
 
+app_callback_func: callable = None
+
+
 class MetaEvent(ABCMeta):
     """元类：让 Event 的子类在 print 时显示其 log_info"""
 
@@ -15,7 +18,7 @@ class MetaEvent(ABCMeta):
     def __repr__(cls):
         log_info = getattr(cls, 'log_info', None)
         if log_info is not None:
-            return f"{log_info}"
+            return f"Event: {cls}, {log_info}"
         return super().__repr__()
 
 
@@ -25,10 +28,17 @@ class Event(metaclass=MetaEvent):
 
     @classmethod
     @abstractmethod
-    def Pack():
-        ...
+    def Pack(cls):
+        app_callback_func(cls)
 
     @classmethod
     @abstractmethod
     def UnPack(cls):
         ...
+
+
+def BindUnpackCallback(
+    cb_func: callable
+):
+    global app_callback_func
+    app_callback_func = cb_func

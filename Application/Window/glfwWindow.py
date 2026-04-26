@@ -26,12 +26,7 @@ class glfwWindow(Window):
         glfw.poll_events()
         glfw.swap_buffers(cls.glfw_window)
         if glfw.window_should_close(cls.glfw_window):
-            cls.app.SetEvent(WindowCloseEvent)
-            glfw.terminate()
-
-    @classmethod
-    def Thermite():
-        glfw.terminate()
+            WindowCloseEvent.Pack()
 
     @classmethod
     def GetSize(cls):
@@ -79,4 +74,3 @@ class glfwWindow(Window):
         height
     ):
         WindowResizeEvent.Pack(width, height)
-        cls.app.SetEvent(WindowResizeEvent)

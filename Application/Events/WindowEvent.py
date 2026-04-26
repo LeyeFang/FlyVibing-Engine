@@ -5,6 +5,10 @@ class WindowCloseEvent(Event):
 
     log_info = "Window Close !!"
 
+    @classmethod
+    def Pack(cls):
+        super().Pack()
+
 
 class WindowResizeEvent(Event):
 
@@ -21,6 +25,7 @@ class WindowResizeEvent(Event):
         cls.width = width
         cls.height = height
         cls.log_info = f"Window Size: (width, height) = ({width}, {height})"
+        super().Pack()
 
     @classmethod
     def UnPack(

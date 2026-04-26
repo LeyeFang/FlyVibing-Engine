@@ -3,6 +3,11 @@ from enum import Enum
 
 
 @component
+class Component:
+    pass
+
+
+@component
 class ObjectInfo:
     name: str
     obj_id: int

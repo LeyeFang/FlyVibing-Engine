@@ -1,10 +1,11 @@
 import numpy as np
 from OpenGL.GL import *
-from pyrr import matrix44, matrix33, vector3, vector4, vector
-from pyrr import Matrix44, Vector3, Vector4
+from pyrr import matrix44, vector3, vector4
+from pyrr import Matrix44, Vector3
 
 from Application.Events.Event import Event
 from Application.Events.WindowEvent import WindowResizeEvent
+from Application.Events.SceneEvent import NewComponentEvent, ComponentModifiedEvent
 from Application.Renderer.Renderer import Renderer
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Resource.Mesh import Mesh
@@ -85,10 +86,20 @@ class openglRenderer(Renderer):
         cls,
         event: Event
     ):
-        if isinstance(event, WindowResizeEvent):
+        if event is WindowResizeEvent:
             width, height = event.UnPack()
             glViewport(0, 0, width, height)
             cls.aspect_ratio = width / height
+        if any([
+            event is NewComponentEvent,
+            event is ComponentModifiedEvent
+        ]):
+            entity_id, comp = event.UnPack()
+            if comp is MeshRenderer:
+                if comp.visible:
+                    cls._register_entity(entity_id)
+                else:
+                    cls._unregister_entity(entity_id)
 
 
     #
@@ -219,6 +230,27 @@ class openglRenderer(Renderer):
             'uniform_locs': uniform_locs
         }
 
+    @classmethod
+    def _unregister_entity(
+        cls,
+        entity_id: int
+    ) -> None:
+        del cls.registered_entities[f"{entity_id}"]
+
+    @classmethod
+    def _unregister_mesh(
+        cls,
+        mesh_id: int
+    ) -> None:
+        del cls.registered_mesh[f"{mesh_id}"]
+
+    @classmethod
+    def _unregister_material(
+        cls,
+        material_id: int
+    ) -> None:
+        del cls.registered_material[f"{material_id}"]
+
 
 #
 # Math
@@ -277,7 +309,6 @@ def Calculate_Camera_Proj(
     far = camera.far_plane
     fov = camera.fov
     if camera.projection_type == ProjectionType.PERSPECTIVE:
-        fov_rad = math.radians(fov)
         return matrix44.create_perspective_projection(
             fov,
             aspect_ratio,

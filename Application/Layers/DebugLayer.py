@@ -5,11 +5,14 @@ from Application.Scene.BasicComponents import MeshRenderer
 from Application.Timer.Timer import GetRunTime
 
 
+visible = 4
+
+
 class DebugLayer(Layer):
     @classmethod
     def OnAttach(
         cls,
-        app
+        app=None
     ):
         mesh_id = ResourceManager.GetDefaultModel("Square")
         cls.entity_id_1 = SceneManager.AddEntity()
@@ -36,7 +39,8 @@ class DebugLayer(Layer):
         cls,
         event
     ):
-        print(f"Time: {GetRunTime():.4f}, Event: {event}")
+        # print(f"Time: {GetRunTime():.4f}, Event: {event}")
+        pass
 
     @classmethod
     def OnUpdate(

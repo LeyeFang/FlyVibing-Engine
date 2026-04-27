@@ -3,7 +3,7 @@ import numpy as np
 
 from Application.Resource._resource_utils import parse_shader_file
 from Application.Resource.Mesh import Mesh
-from Application.Resource.Material import Material
+from Application.Resource.Material import *
 
 from os.path import join
 import re
@@ -26,6 +26,8 @@ DEFAULT_SHADER_FILE = [
 class ResourceManager:
 
     loaded_mesh: dict[dict] = {}
+    loaded_shader: dict[dict] = {}
+    loaded_texture: dict[dict] = {}
     loaded_material: dict[dict] = {}
     mesh_count: int = 0
     material_count: int = 0
@@ -36,8 +38,9 @@ class ResourceManager:
         app
     ) -> int:
         cls.app = app
-        cls.__load_default_model()
+        cls.__load_default_mesh()
         cls.__load_default_shader()
+        cls.__load_default_material()
 
 
     # User Interface
@@ -91,7 +94,7 @@ class ResourceManager:
     # Functions that only used in this class
     # ==============================================================
     @classmethod
-    def __load_default_model(
+    def __load_default_mesh(
         cls
     ) -> None:
         default_model_dir = 'Resource/DefaultObjects'
@@ -107,7 +110,7 @@ class ResourceManager:
             # Registe
             cls.mesh_count += 1
             current_mesh_id = cls.mesh_count
-            cls.loaded_mesh[f'{current_mesh_id}'] = {}
+            cls.loaded_mesh[f'{current_mesh_id}'] = {'data', 'name'}
             cls.loaded_mesh[f'{current_mesh_id}']['name'] = mesh_name
             cls.loaded_mesh[f'{current_mesh_id}']['data'] = save_mesh
 
@@ -116,14 +119,20 @@ class ResourceManager:
         cls
     ) -> None:
         default_shader_dir = 'Resource/DefaultShaders'
-        for material_name, file_name in zip(DEFAULT_SHADER_NAME, DEFAULT_SHADER_FILE):
+        for shader_name, file_name in zip(DEFAULT_SHADER_NAME, DEFAULT_SHADER_FILE):
             # Create Shader
             shader_file_path = join(default_shader_dir, file_name)
             vs_src, fs_src, uniforms = parse_shader_file(shader_file_path)
-            save_material = Material(vs_src, fs_src, uniforms)
+            save_shader = Shader(vs_src, fs_src, uniforms)
             # Save
             cls.material_count += 1
             current_shader_id = cls.material_count
-            cls.loaded_material[f'{current_shader_id}'] = {}
-            cls.loaded_material[f'{current_shader_id}']['data'] = save_material
-            cls.loaded_material[f'{current_shader_id}']['name'] = material_name
+            cls.loaded_shader[f'{current_shader_id}'] = {'data', 'name'}
+            cls.loaded_shader[f'{current_shader_id}']['data'] = save_shader
+            cls.loaded_shader[f'{current_shader_id}']['name'] = shader_name
+
+    @classmethod
+    def __load_default_material(
+        cls
+    ) -> None:
+        pass

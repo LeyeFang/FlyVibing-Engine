@@ -7,7 +7,7 @@ class Layer(ABC):
     @abstractmethod
     def OnAttach(
         cls,
-        app
+        app=None
     ):
         pass
 

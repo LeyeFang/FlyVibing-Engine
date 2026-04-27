@@ -33,6 +33,7 @@ class Application:
     @classmethod
     def Run(cls):
         try:
+            FrameProfiler.Start(1)
             cls.run_state = True
             while cls.run_state:
                 # Update Application
@@ -41,6 +42,7 @@ class Application:
                     layer.OnUpdate()
                 cls.renderer.EndFrame()
                 cls.window.Update()
+                FrameProfiler.Tick()
         finally:
             pass
 

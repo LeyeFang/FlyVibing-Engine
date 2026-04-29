@@ -15,22 +15,35 @@ class DebugLayer(Layer):
         app=None
     ):
         mesh_id = ResourceManager.GetDefaultMesh("Square")
+        ssvep_shader_id = ResourceManager.LoadAssets("Resource/DefaultShaders/SSVEP.shader")
+        print(ssvep_shader_id)
+        # Entity 1
         cls.entity_id_1 = SceneManager.AddEntity()
-        cls.entity_id_2 = SceneManager.AddEntity()
         SceneManager.AddComponentToEntity(
             entity_id=cls.entity_id_1,
-            component_instance=MeshRenderer(mesh_id=mesh_id))
-        SceneManager.AddComponentToEntity(
-            entity_id=cls.entity_id_2,
             component_instance=MeshRenderer(mesh_id=mesh_id))
         SceneManager.SetEntityTransfrom(
             cls.entity_id_1,
             position_xyz=(-10, 0, -50),
             scale_xyz=(5, 5, 5))
+        # Entity 2
+        cls.entity_id_2 = SceneManager.AddEntity()
+        SceneManager.AddComponentToEntity(
+            entity_id=cls.entity_id_2,
+            component_instance=MeshRenderer(mesh_id=mesh_id))
         SceneManager.SetEntityTransfrom(
             cls.entity_id_2,
             position_xyz=(10, 0, -50),
             scale_xyz=(5, 5, 5))
+        SceneManager.SetEntityShader(
+            cls.entity_id_2,
+            ssvep_shader_id
+        )
+        SceneManager.SetEntityShaderUniforms(
+            cls.entity_id_2,
+            {"freq": 60}
+        )
+        # Camera
         SceneManager.SetMainCameraTransfrom(
             position_xyz=(0, 0, 0))
 
@@ -47,4 +60,6 @@ class DebugLayer(Layer):
         cls
     ):
         run_time = GetRunTime()
-        # SceneManager.SetEntityMeshRenderer(cls.entity_id_2, visible=True)
+        SceneManager.SetEntityShaderUniforms(
+            cls.entity_id_2,
+            {'time': run_time})

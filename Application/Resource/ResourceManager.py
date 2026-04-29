@@ -5,6 +5,7 @@ from Application.Resource._resource_utils import parse_shader_file
 from Application.Resource.Mesh import Mesh
 from Application.Resource.Material import *
 
+import os
 from os.path import join
 from dataclasses import dataclass, field
 
@@ -52,7 +53,18 @@ class ResourceManager:
         cls,
         assets_path: str
     ) -> int:
-        pass
+        base = os.path.basename(assets_path)
+        stem, suffix = os.path.splitext(base)  # 分割
+        if suffix == '.shader':
+            vs_src, fs_src, uniforms_name_type = parse_shader_file(assets_path)
+            cls.shader_count += 1
+            _id = cls.shader_count
+            cls.loaded_shader[f'{_id}'] = {}
+            cls.loaded_shader[f'{_id}']['name'] = stem
+            cls.loaded_shader[f'{_id}']['data'] = Shader(vs_src, fs_src, uniforms_name_type)
+            return _id
+        if suffix == '.obj':
+            pass
 
     @classmethod
     def GetDefaultMesh(

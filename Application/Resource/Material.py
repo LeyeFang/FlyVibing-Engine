@@ -24,7 +24,21 @@ class Material:
                 self.uniforms_data[u_name] = np.float32(0)
             elif u_type == 'double':
                 self.uniforms_data[u_name] = np.float64(0)
-            
+
+    def set_new_shader(
+            self,
+            shader_id: int,
+            uniforms_name_type: dict
+        ) -> None: 
+        self.uniforms_data = {}
+        self.shader_id = shader_id
+        for u_name, u_type in uniforms_name_type.items():
+            if u_type == 'mat4':
+                self.uniforms_data[u_name] = np.zeros((4, 4), dtype=np.float32)
+            elif u_type == 'float':
+                self.uniforms_data[u_name] = np.float32(0)
+            elif u_type == 'double':
+                self.uniforms_data[u_name] = np.float64(0)
 
 
 @dataclass

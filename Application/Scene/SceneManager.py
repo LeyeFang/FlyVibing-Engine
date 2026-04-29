@@ -153,7 +153,7 @@ class SceneManager:
         ComponentModifiedEvent.Pack(entity_id, mesh_rend)
 
     @classmethod
-    def SetEntityMaterialUniforms(
+    def SetEntityShaderUniforms(
         cls,
         entity_id: int,
         uniforms: dict
@@ -161,20 +161,28 @@ class SceneManager:
         if entity_id is None:
             raise ("Must specific entity ID")
 
-        def check_uniform_right(material_id: int, uniforms: dict) -> bool:
-            uniforms_should_be: dict = ResourceManager.GetMaterial(material_id).uniforms_data
-            for u_name, u_value in uniforms.items():
-                if u_name in uniforms_should_be.keys() and \
-                        u_value == uniforms_should_be[u_name]:
-                    pass
-                else:
-                    raise BaseException("Input uniforms and material actual uniforms not match !!")
-
         try:
             mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
             material_id = mesh_rend.material_id
-            check_uniform_right(material_id, uniforms)
+            uniforms_should_be: dict = ResourceManager.GetMaterial(material_id).uniforms_data
             material = ResourceManager.GetMaterial(material_id)
-            material.uniforms_data = uniforms
+            for u_name, u_value in uniforms.items():
+                if u_name in uniforms_should_be.keys():
+                    material.uniforms_data[u_name] = u_value
+                else:
+                    raise BaseException("Input uniforms and material actual uniforms not match !!")
         except KeyError:
             raise BaseException(f"Entity '{entity_id}' do not have mesh renderer")
+
+    @classmethod
+    def SetEntityShader(
+        cls,
+        entity_id: int,
+        shader_id: int
+    ) -> None:
+        mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+        entity_material = ResourceManager.GetMaterial(mesh_rend.material_id)
+        uniforms_name_type = ResourceManager.GetShader(shader_id).uniforms_name_type
+        entity_material.set_new_shader(shader_id, uniforms_name_type)
+        ComponentModifiedEvent.Pack(entity_id, mesh_rend)
+

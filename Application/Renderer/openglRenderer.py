@@ -59,18 +59,10 @@ class openglRenderer(Renderer, RenderResourceManger):
             current_counts = entity_mesh.elements_count
             #
             # Update Shader Program
-            model = Calculate_Entity_Model(SceneManager.GetEntityTransform(entity_id))
-            current_entity: RenderResourceManger.entity_data_struct = cls.registered_entities[f'{entity_id}']
-            entity_shader_id = current_entity.shader_id
-            entity_shader: RenderResourceManger.shader_data_struct = cls.registered_shaders[f'{entity_shader_id}']
-            glUseProgram(entity_shader.program)
-            uniform_locs = entity_shader.uniforms_loc
-            if 'model' in uniform_locs:
-                glUniformMatrix4fv(uniform_locs['model'], 1, GL_FALSE, model.astype('float32'))
-            if 'view' in uniform_locs:
-                glUniformMatrix4fv(uniform_locs['view'], 1, GL_FALSE, view.astype('float32'))
-            if 'projection' in uniform_locs:
-                glUniformMatrix4fv(uniform_locs['projection'], 1, GL_FALSE, proj.astype('float32'))
+            cls.update_uniform(
+                entity_id=entity_id,
+                view=view,
+                proj=proj)
             #
             # Draw
             glBindVertexArray(current_vao)
@@ -107,15 +99,33 @@ class openglRenderer(Renderer, RenderResourceManger):
     @classmethod
     def update_uniform(
         cls,
-        entity_id,
-        uniforms: dict
+        entity_id: int,
+        view: np.ndarray,
+        proj: np.ndarray
     ) -> None:
+        model = Calculate_Entity_Model(SceneManager.GetEntityTransform(entity_id))
         entity: RenderResourceManger.entity_data_struct = cls.registered_entities[f"{entity_id}"]
         entity_material_id = entity.material_id
         material = ResourceManager.GetMaterial(entity_material_id)
-        uniforms = material.uniforms_data
-        for u_name, u_value in uniforms.items():
-            pass
+        uniforms_data = material.uniforms_data
+        entity_shader_id = entity.shader_id
+        entity_shader: RenderResourceManger.shader_data_struct = cls.registered_shaders[f'{entity_shader_id}']
+        glUseProgram(entity_shader.program)
+        for (u_name, u_value), u_type in zip(uniforms_data.items(), entity_shader.uniforms_type):
+            loc = entity_shader.uniforms_loc[u_name]
+            if u_name == 'model':
+                glUniformMatrix4fv(loc, 1, GL_FALSE, model.astype('float32'))
+            elif u_name == 'view':
+                glUniformMatrix4fv(loc, 1, GL_FALSE, view.astype('float32'))
+            elif u_name == 'projection':
+                glUniformMatrix4fv(loc, 1, GL_FALSE, proj.astype('float32'))
+            else:
+                if u_type == 'mat4':
+                    glUniformMatrix4fv(loc, 1, GL_FALSE, u_value)
+                if u_type == 'float':
+                    glUniform1f(loc, u_value)
+                if u_type == 'double':
+                    glUniform1d(loc, u_value)
 
     #
     # Renderer Resource Manage
@@ -125,8 +135,6 @@ class openglRenderer(Renderer, RenderResourceManger):
         cls,
         entity_id: int
     ) -> None:
-        if f"{entity_id}" in cls.registered_entities.keys():
-            return
         #
         # Get mesh and material resource
         mesh_id = SceneManager.GetEntityMesh(entity_id)
@@ -138,16 +146,16 @@ class openglRenderer(Renderer, RenderResourceManger):
         # texture_id_list = material.texture_id_list
         # texture = ResourceManager.GetTexture(texture_id_list)
         #
-        # Upload mesh and material to Graphic-Device like GPU
-        cls.register_mesh(mesh, mesh_id)
-        cls.register_shader(shader, shader_id)
-        #
         # Record mesh and material id that prosibly used by entity
         cls.registered_entities[f'{entity_id}'] = cls.entity_data_struct(
             shader_id=shader_id,
             texture_id=0,
             mesh_id=mesh_id,
             material_id=material_id)
+        #
+        # Upload mesh and material to Graphic-Device like GPU
+        cls.register_mesh(mesh, mesh_id)
+        cls.register_shader(shader, shader_id)
 
     @classmethod
     def register_mesh(

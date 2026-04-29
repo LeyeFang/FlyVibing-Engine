@@ -15,10 +15,6 @@ void main()
 {
     // 应用模型矩阵变换顶点位置
     gl_Position = projection * view * model * vec4(aPos, 1.0);
-    // gl_Position = model * vec4(aPos, 1.0);
-    // gl_Position = view * model * vec4(aPos, 1.0);
-    // gl_Position = projection * model * vec4(aPos, 1.0);
-    // gl_Position = vec4(aPos, 1.0);
     TexCoord = aTexCoord;
 }
 

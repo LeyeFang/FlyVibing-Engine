@@ -162,7 +162,7 @@ class SceneManager:
             raise ("Must specific entity ID")
 
         def check_uniform_right(material_id: int, uniforms: dict) -> bool:
-            uniforms_should_be: dict = ResourceManager.GetMaterial(material_id).uniforms
+            uniforms_should_be: dict = ResourceManager.GetMaterial(material_id).uniforms_data
             for u_name, u_value in uniforms.items():
                 if u_name in uniforms_should_be.keys() and \
                         u_value == uniforms_should_be[u_name]:
@@ -174,5 +174,7 @@ class SceneManager:
             mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
             material_id = mesh_rend.material_id
             check_uniform_right(material_id, uniforms)
+            material = ResourceManager.GetMaterial(material_id)
+            material.uniforms_data = uniforms
         except KeyError:
             raise BaseException(f"Entity '{entity_id}' do not have mesh renderer")

@@ -8,12 +8,12 @@ from Application.Events.SceneEvent import NewComponentEvent, ComponentModifiedEv
 # Resource
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Resource.Mesh import Mesh
-from Application.Resource.Material import Material
+from Application.Resource.Material import Material, Shader, Texture
 # Scene
 from Application.Scene.SceneManager import SceneManager
 from Application.Scene.BasicComponents import *
 # Renderer
-from Application.Renderer.Renderer import Renderer
+from Application.Renderer.Renderer import Renderer, RenderResourceManger
 from Application.Renderer._renderer_math_utils import (
     Calculate_Camera_Proj,
     Calculate_Camera_View,
@@ -21,12 +21,7 @@ from Application.Renderer._renderer_math_utils import (
 )
 
 
-class openglRenderer(Renderer):
-
-    aspect_ratio: float = 4/3
-    registered_entities: dict[dict] = {}
-    registered_mesh: dict[dict] = {}
-    registered_material: dict[dict] = {}
+class openglRenderer(Renderer, RenderResourceManger):
 
     @classmethod
     def Create(
@@ -37,7 +32,6 @@ class openglRenderer(Renderer):
         glViewport(0, 0, window_size[0], window_size[1])
         cls.aspect_ratio = window_size[0] / window_size[1]
         return cls
-
 
     @classmethod
     def StartFrame(
@@ -55,20 +49,22 @@ class openglRenderer(Renderer):
         for entity_id in renderable_entities:
             #
             # Try Register Entity
-            cls._register_entity(entity_id)
+            cls.register_entity(entity_id)
             #
             # Get Mesh Info
-            entity_mesh_id = cls.registered_entities[f'{entity_id}']['mesh_id']
-            entity_mesh = cls.registered_mesh[f'{entity_mesh_id}']
-            current_vao = entity_mesh['vao']
-            current_counts = entity_mesh['counts']
+            entity: RenderResourceManger.entity_data_struct = cls.registered_entities[f'{entity_id}']
+            entity_mesh_id = entity.mesh_id
+            entity_mesh: RenderResourceManger.mesh_data_struct = cls.registered_meshes[f'{entity_mesh_id}']
+            current_vao = entity_mesh.vao
+            current_counts = entity_mesh.elements_count
             #
             # Update Shader Program
             model = Calculate_Entity_Model(SceneManager.GetEntityTransform(entity_id))
-            entity_material_id = cls.registered_entities[f'{entity_id}']['material_id']
-            entity_material = cls.registered_material[f'{entity_material_id}']
-            glUseProgram(entity_material['program'])
-            uniform_locs = entity_material['uniform_locs']
+            current_entity: RenderResourceManger.entity_data_struct = cls.registered_entities[f'{entity_id}']
+            entity_shader_id = current_entity.shader_id
+            entity_shader: RenderResourceManger.shader_data_struct = cls.registered_shaders[f'{entity_shader_id}']
+            glUseProgram(entity_shader.program)
+            uniform_locs = entity_shader.uniforms_loc
             if 'model' in uniform_locs:
                 glUniformMatrix4fv(uniform_locs['model'], 1, GL_FALSE, model.astype('float32'))
             if 'view' in uniform_locs:
@@ -102,18 +98,30 @@ class openglRenderer(Renderer):
             event is ComponentModifiedEvent
         ]):
             entity_id, comp = event.UnPack()
-            if comp is MeshRenderer:
+            if isinstance(comp, MeshRenderer):
                 if comp.visible:
-                    cls._register_entity(entity_id)
+                    cls.register_entity(entity_id)
                 else:
-                    cls._unregister_entity(entity_id)
+                    cls.unregister_entity(entity_id)
 
+    @classmethod
+    def update_uniform(
+        cls,
+        entity_id,
+        uniforms: dict
+    ) -> None:
+        entity: RenderResourceManger.entity_data_struct = cls.registered_entities[f"{entity_id}"]
+        entity_material_id = entity.material_id
+        material = ResourceManager.GetMaterial(entity_material_id)
+        uniforms = material.uniforms_data
+        for u_name, u_value in uniforms.items():
+            pass
 
     #
     # Renderer Resource Manage
     # ================================================================================================
     @classmethod
-    def _register_entity(
+    def register_entity(
         cls,
         entity_id: int
     ) -> None:
@@ -125,71 +133,77 @@ class openglRenderer(Renderer):
         material_id = SceneManager.GetEntityMaterial(entity_id)
         mesh = ResourceManager.GetMesh(mesh_id)
         material = ResourceManager.GetMaterial(material_id)
+        shader_id = material.shader_id
+        shader = ResourceManager.GetShader(shader_id)
+        # texture_id_list = material.texture_id_list
+        # texture = ResourceManager.GetTexture(texture_id_list)
         #
         # Upload mesh and material to Graphic-Device like GPU
-        cls._register_mesh(mesh, mesh_id)
-        cls._register_material(material, material_id)
+        cls.register_mesh(mesh, mesh_id)
+        cls.register_shader(shader, shader_id)
         #
         # Record mesh and material id that prosibly used by entity
-        cls.registered_entities[f'{entity_id}'] = {'mesh_id': mesh_id, 'material_id': material_id}
+        cls.registered_entities[f'{entity_id}'] = cls.entity_data_struct(
+            shader_id=shader_id,
+            texture_id=0,
+            mesh_id=mesh_id,
+            material_id=material_id)
 
     @classmethod
-    def _register_mesh(
+    def register_mesh(
         cls,
         mesh: Mesh,
         mesh_id: int
     ):
-        if f"{mesh_id}" in cls.registered_mesh.keys():
+        if f"{mesh_id}" in cls.registered_meshes.keys():
+            cls.registered_meshes[f"{mesh_id}"].ref_count += 1
             return
-        cls.registered_mesh[f'{mesh_id}'] = {}
-        current_mesh = cls.registered_mesh[f'{mesh_id}']
         vertices: np.ndarray = mesh.vertices
         uvs: np.ndarray = mesh.uvs
         normals: np.ndarray = mesh.normals
         ver_uv_nor = np.hstack((vertices, uvs, normals))
         indices: np.ndarray = mesh.indices
         # VBO
-        # ---------------------
-        current_mesh['vbo'] = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, current_mesh['vbo'])
+        vbo = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, vbo)
         glBufferData(GL_ARRAY_BUFFER, ver_uv_nor.nbytes, ver_uv_nor, GL_STATIC_DRAW)
         # VAO
-        # ---------------------
-        current_mesh['vao'] = glGenVertexArrays(1)
-        glBindVertexArray(current_mesh['vao'])
+        vao = glGenVertexArrays(1)
+        glBindVertexArray(vao)
         stride = (3+2+3) * sizeof(GLfloat)
-        # 顶点位置属性 (location = 0)
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))  # 顶点位置属性 (location = 0)
         glEnableVertexAttribArray(0)
-        # 纹理坐标属性 (location = 1)
         tex_offset = 3 * sizeof(GLfloat)
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(tex_offset))
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(tex_offset))  # 纹理坐标属性 (location = 1)
         glEnableVertexAttribArray(1)
-        # 法线属性 (location = 2)
         normal_offset = (3 + 2) * sizeof(GLfloat)
-        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(normal_offset))
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(normal_offset))  # 法线属性 (location = 2)
         glEnableVertexAttribArray(2)
         # EBO
-        # ---------------------
-        current_mesh['ebo'] = glGenBuffers(1)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, current_mesh['ebo'])
+        ebo = glGenBuffers(1)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.nbytes, indices, GL_STATIC_DRAW)
-        # Counts
-        current_mesh['counts'] = indices.size
-        # print(current_mesh['counts'])
+        # New Mesh
+        cls.registered_meshes[f'{mesh_id}'] = cls.mesh_data_struct(
+            vbo,
+            vao,
+            ebo,
+            indices.size
+        )
 
     @classmethod
-    def _register_material(
+    def register_shader(
         cls,
-        material: Material,
-        material_id: int
+        shader: Shader,
+        shader_id: int
     ) -> None:
-        if f"{material_id}" in cls.registered_material.keys():
+        if f"{shader_id}" in cls.registered_shaders.keys():
+            cls.registered_shaders[f"{shader_id}"].ref_count += 1
             return
         # 编译顶点着色器
-        vs_src = material.vs_src
-        fs_src = material.fs_src
-        uniforms = material.uniforms
+        vs_src = shader.vs_src
+        fs_src = shader.fs_src
+        uniforms_name_type = shader.uniforms_name_type
         vertex_shader = glCreateShader(GL_VERTEX_SHADER)
         glShaderSource(vertex_shader, vs_src)
         glCompileShader(vertex_shader)
@@ -226,34 +240,63 @@ class openglRenderer(Renderer):
         glDeleteShader(vertex_shader)
         glDeleteShader(fragment_shader)
         # 获取所有 uniform 的位置 (location)
-        uniform_locs = {}
-        for name, typ in uniforms.items():
-            loc = glGetUniformLocation(program, name)
+        u_type_list = []
+        u_loc_dict = {}
+        for u_name, u_type in uniforms_name_type.items():
+            u_type_list.append(u_type)
+            loc = glGetUniformLocation(program, u_name)
             if loc != -1:
-                uniform_locs[name] = loc
-        cls.registered_material[f'{material_id}'] = {
-            'program': program,
-            'uniforms': uniforms,        # 保留类型信息以备扩展
-            'uniform_locs': uniform_locs
-        }
+                u_loc_dict[u_name] = loc
+        cls.registered_shaders[f'{shader_id}'] = cls.shader_data_struct(
+            program,
+            u_type_list,
+            u_loc_dict
+        )
 
     @classmethod
-    def _unregister_entity(
+    def unregister_entity(
         cls,
         entity_id: int
     ) -> None:
+        target_entity: dict = cls.registered_entities[f"entity_id"]
+        target_entity["mesh_id"]["ref_count"] -= 1
+        target_entity["shader_id"]["ref_count"] -= 1
+        target_entity["texture_id"]["ref_count"] -= 1
+        cls.unregister_mesh(target_entity["mesh_id"])
+        cls.unregister_shader(target_entity["shader_id"])
+        cls.unregister_texture(target_entity["texture_id"])
         del cls.registered_entities[f"{entity_id}"]
 
     @classmethod
-    def _unregister_mesh(
+    def unregister_mesh(
         cls,
         mesh_id: int
     ) -> None:
-        del cls.registered_mesh[f"{mesh_id}"]
+        target_mesh: RenderResourceManger.mesh_data_struct = cls.registered_meshes[f"{mesh_id}"]
+        if target_mesh.ref_count == 0:
+            glDeleteVertexArrays(1, [target_mesh.vao])
+            glDeleteBuffers(1, [target_mesh.vbo])
+            glDeleteBuffers(1, [target_mesh.ebo])
+            del cls.registered_meshes[f"{mesh_id}"]
+        else:
+            pass
 
     @classmethod
-    def _unregister_material(
+    def unregister_shader(
         cls,
-        material_id: int
+        shader_id: int
     ) -> None:
-        del cls.registered_material[f"{material_id}"]
+        if cls.registered_shaders[f"{shader_id}"]["ref_count"] == 0:
+            del cls.registered_shaders[f"{shader_id}"]
+        else:
+            pass
+
+    @classmethod
+    def unregister_texture(
+        cls,
+        texture_id: int
+    ) -> None:
+        if cls.registered_textures[f"{texture_id}"]["ref_count"] == 0:
+            del cls.registered_textures[f"{texture_id}"]
+        else:
+            pass

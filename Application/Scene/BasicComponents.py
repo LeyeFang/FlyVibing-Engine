@@ -1,6 +1,8 @@
 from dataclasses import dataclass as component
 from enum import Enum
 
+from Application.Resource.ResourceManager import ResourceManager
+
 
 @component
 class Component:
@@ -57,11 +59,10 @@ class MeshRenderer:
 
     def __init__(
         self,
-        mesh_id: int = 1,
-        material_id: int = 1
+        mesh_id: int = 1
     ) -> None:
         self.mesh_id = mesh_id
-        self.material_id = material_id
+        self.material_id = ResourceManager.NewMaterial()
 
 
 class ProjectionType(Enum):

@@ -11,9 +11,9 @@ class PerformanceStatsEvent(Event):
         cls,
         fps: float
     ) -> None:
-        super().Pack()
         cls.fps = fps
         cls.log_info = f"Avg FPS: {fps:.2f}"
+        super().Pack()
 
     @classmethod
     def Unpack(

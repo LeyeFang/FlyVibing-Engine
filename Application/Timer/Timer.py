@@ -43,7 +43,8 @@ class FrameProfiler:
     ) -> None:
         cls.interval = interval
         cls.frame_count = 0
-        cls.last_report = time.perf_counter()
+        cls.need_report = 1
+        cls.start_time = time.perf_counter()
         cls.fps = 0.0
 
     @classmethod
@@ -51,9 +52,9 @@ class FrameProfiler:
         cls
     ) -> None:
         cls.frame_count += 1
-        now = time.perf_counter()
-        if now - cls.last_report >= cls.interval:
-            cls.fps = cls.frame_count / (now - cls.last_report)
+        run_time = time.perf_counter() - cls.start_time
+        if run_time >= cls.need_report:
+            cls.fps = cls.frame_count
             PerformanceStatsEvent.Pack(cls.fps)
             cls.frame_count = 0
-            cls.last_report = now
+            cls.need_report += cls.interval

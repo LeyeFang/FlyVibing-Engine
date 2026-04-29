@@ -1,7 +1,9 @@
 import re
 
 
-def parse_shader_file(filepath: str):
+def parse_shader_file(
+    filepath: str
+) -> tuple:
     """
     从 .shader 文件中读取内容，分离出顶点着色器和片段着色器的源代码，
     并提取所有 uniform 变量的名称和类型。

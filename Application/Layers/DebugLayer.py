@@ -14,7 +14,7 @@ class DebugLayer(Layer):
         cls,
         app=None
     ):
-        mesh_id = ResourceManager.GetDefaultModel("Square")
+        mesh_id = ResourceManager.GetDefaultMesh("Square")
         cls.entity_id_1 = SceneManager.AddEntity()
         cls.entity_id_2 = SceneManager.AddEntity()
         SceneManager.AddComponentToEntity(
@@ -39,7 +39,7 @@ class DebugLayer(Layer):
         cls,
         event
     ):
-        # print(f"Time: {GetRunTime():.4f}, Event: {event}")
+        print(f"Time: {GetRunTime():.4f}, Event: {event}")
         pass
 
     @classmethod
@@ -47,4 +47,4 @@ class DebugLayer(Layer):
         cls
     ):
         run_time = GetRunTime()
-        SceneManager.SetEntityMeshRenderer(cls.entity_id_2, visible=True)
+        # SceneManager.SetEntityMeshRenderer(cls.entity_id_2, visible=True)

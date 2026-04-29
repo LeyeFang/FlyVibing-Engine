@@ -6,7 +6,7 @@ from Application.Resource.Mesh import Mesh
 from Application.Resource.Material import *
 
 from os.path import join
-import re
+from dataclasses import dataclass, field
 
 
 DEFAULT_MODEL_NAME = [
@@ -30,6 +30,8 @@ class ResourceManager:
     loaded_texture: dict[dict] = {}
     loaded_material: dict[dict] = {}
     mesh_count: int = 0
+    shader_count: int = 0
+    texture_count: int = 0
     material_count: int = 0
 
     @classmethod
@@ -40,37 +42,30 @@ class ResourceManager:
         cls.app = app
         cls.__load_default_mesh()
         cls.__load_default_shader()
-        cls.__load_default_material()
+        cls.__load_default_texture()
 
 
     # User Interface
     # ==============================================================
     @classmethod
-    def LoadModel(
+    def LoadAssets(
         cls,
         assets_path: str
     ) -> int:
-        return cls.mesh_count
+        pass
 
     @classmethod
-    def GetModel(
+    def GetDefaultMesh(
         cls,
-        asset_id: int
+        mesh_name: list[str]
     ) -> dict:
-        return cls.loaded_mesh[f'{asset_id}']
-
-    @classmethod
-    def GetDefaultModel(
-        cls,
-        model_name: list[str]
-    ) -> dict:
-        if model_name in DEFAULT_MODEL_NAME:
+        if mesh_name in DEFAULT_MODEL_NAME:
             for id, model in cls.loaded_mesh.items():
-                if model['name'] == model_name:
+                if model['name'] == mesh_name:
                     return int(id)
         else:
             raise_info = f"""
-                There is no model named '{model_name}',
+                There is no model named '{mesh_name}',
                 Available Models: {DEFAULT_MODEL_NAME}
             """
             raise raise_info
@@ -83,12 +78,36 @@ class ResourceManager:
         return cls.loaded_mesh[f"{mesh_id}"]['data']
 
     @classmethod
+    def GetShader(
+        cls,
+        shader_id: int
+    ) -> Shader:
+        return cls.loaded_shader[f"{shader_id}"]['data']
+
+    @classmethod
+    def GetTexture(
+        cls,
+        texture_id: int
+    ) -> Texture:
+        return cls.loaded_texture[f"{texture_id}"]['data']
+
+    @classmethod
     def GetMaterial(
         cls,
         material_id: int
     ) -> Material:
-        return cls.loaded_material[f"{material_id}"]['data']
+        return cls.loaded_material[f"{material_id}"]
 
+    @classmethod
+    def NewMaterial(
+        cls
+    ) -> int:
+        cls.material_count += 1
+        current_material_id = cls.material_count
+        shader: Shader = cls.loaded_shader[f'{1}']['data']
+        uniforms_name_type = shader.uniforms_name_type
+        cls.loaded_material[f"{current_material_id}"] = Material(1, uniforms_name_type)
+        return current_material_id
 
 
     # Functions that only used in this class
@@ -110,7 +129,7 @@ class ResourceManager:
             # Registe
             cls.mesh_count += 1
             current_mesh_id = cls.mesh_count
-            cls.loaded_mesh[f'{current_mesh_id}'] = {'data', 'name'}
+            cls.loaded_mesh[f'{current_mesh_id}'] = {}
             cls.loaded_mesh[f'{current_mesh_id}']['name'] = mesh_name
             cls.loaded_mesh[f'{current_mesh_id}']['data'] = save_mesh
 
@@ -122,17 +141,17 @@ class ResourceManager:
         for shader_name, file_name in zip(DEFAULT_SHADER_NAME, DEFAULT_SHADER_FILE):
             # Create Shader
             shader_file_path = join(default_shader_dir, file_name)
-            vs_src, fs_src, uniforms = parse_shader_file(shader_file_path)
-            save_shader = Shader(vs_src, fs_src, uniforms)
+            vs_src, fs_src, uniforms_info = parse_shader_file(shader_file_path)
+            save_shader = Shader(vs_src, fs_src, uniforms_info)
             # Save
-            cls.material_count += 1
-            current_shader_id = cls.material_count
-            cls.loaded_shader[f'{current_shader_id}'] = {'data', 'name'}
+            cls.shader_count += 1
+            current_shader_id = cls.shader_count
+            cls.loaded_shader[f'{current_shader_id}'] = {}
             cls.loaded_shader[f'{current_shader_id}']['data'] = save_shader
             cls.loaded_shader[f'{current_shader_id}']['name'] = shader_name
 
     @classmethod
-    def __load_default_material(
+    def __load_default_texture(
         cls
     ) -> None:
         pass

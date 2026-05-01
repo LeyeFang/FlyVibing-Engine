@@ -1,15 +1,22 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
+
 from Application.Events.Event import Event
+if TYPE_CHECKING:
+    from Application.Application import Application
 
 
 class Layer(ABC):
+
+    app: Application
+
     @classmethod
     @abstractmethod
     def OnAttach(
-        cls,
-        app=None
+        cls
     ):
-        pass
+        cls.app = Application.GetApplication()
 
     @classmethod
     @abstractmethod
@@ -33,3 +40,4 @@ class Layer(ABC):
         event: Event
     ):
         pass
+

@@ -11,10 +11,12 @@ from dataclasses import dataclass, field
 
 
 DEFAULT_MODEL_NAME = [
-    'Square'
+    'Square',
+    'Cube'
 ]
 DEFAULT_MODEL_FILE = [
-    'Square.obj'
+    'Square.obj',
+    'Cube.obj'
 ]
 DEFAULT_SHADER_NAME = [
     'Basic'

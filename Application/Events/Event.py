@@ -29,7 +29,9 @@ class Event(metaclass=MetaEvent):
 
     @classmethod
     @abstractmethod
-    def Pack(cls) -> None:
+    def Pack(
+        cls
+    ) -> None:
         app_callback_func(cls)
 
     @classmethod
@@ -38,7 +40,7 @@ class Event(metaclass=MetaEvent):
         ...
 
 
-def BindUnpackCallback(
+def BindPackCallback(
     cb_func: callable
 ):
     global app_callback_func

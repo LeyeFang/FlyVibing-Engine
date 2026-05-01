@@ -31,6 +31,7 @@ class openglRenderer(Renderer, RenderResourceManger):
         window_size = app.window.GetSize()
         glViewport(0, 0, window_size[0], window_size[1])
         cls.aspect_ratio = window_size[0] / window_size[1]
+        glEnable(GL_DEPTH_TEST)
         return cls
 
     @classmethod
@@ -38,7 +39,6 @@ class openglRenderer(Renderer, RenderResourceManger):
         cls
     ) -> None:
         glClearColor(0.2, 0.2, 0.2, 1.0)
-        glEnable(GL_DEPTH_TEST)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         # About Camera
         camera, transform = SceneManager.GetSceneCamera()

@@ -1,14 +1,13 @@
 from Application.Layers.Layer import Layer
-from Application.Events.Event import Event, BindUnpackCallback
+from Application.Events.Event import Event, BindPackCallback
 from Application.Events.WindowEvent import WindowCloseEvent
-from Application.Events.StatsEvent import PerformanceStatsEvent
 from Application.Window.Window import Window
 from Application.Window.glfwWindow import glfwWindow
 from Application.Renderer.Renderer import Renderer
 from Application.Renderer.openglRenderer import openglRenderer
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Scene.SceneManager import SceneManager
-from Application.Timer.Timer import _start_timer, FrameProfiler, GetRunTime
+from Application.Timer.Timer import FrameProfiler
 
 
 class Application:
@@ -22,12 +21,11 @@ class Application:
 
     @classmethod
     def Create(cls):
-        _start_timer()
         ResourceManager.Init(cls)
         SceneManager.Init(cls)
         cls.window = glfwWindow.Create(cls)
         cls.renderer = openglRenderer.Create(cls)
-        BindUnpackCallback(cls.OnEvent)
+        BindPackCallback(cls.OnEvent)
         return cls
 
     @classmethod
@@ -58,7 +56,7 @@ class Application:
         layer: Layer
     ):
         cls.layer_stack.append(layer)
-        layer.OnAttach(cls)
+        layer.OnAttach()
 
     @classmethod
     def PopLayer(

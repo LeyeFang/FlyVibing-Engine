@@ -1,8 +1,8 @@
 import glfw
 
 from Application.Events.Event import Event
-from Application.Events.WindowEvent import WindowCloseEvent
-from Application.Events.WindowEvent import WindowResizeEvent
+from Application.Events.WindowEvent import *
+from Application.Events.InputEvent import *
 
 from Application.Window.Window import Window
 
@@ -19,6 +19,9 @@ class glfwWindow(Window):
         cls.app = app
         cls.glfw_window = cls._create_window()
         glfw.set_window_size_callback(cls.glfw_window, cls._window_resize_event_callback)
+        glfw.set_scroll_callback(cls.glfw_window, cls._scroll_callback)
+        glfw.set_mouse_button_callback(cls.glfw_window, cls._mouse_callback)
+        glfw.set_key_callback(cls.glfw_window, cls._key_callback)
         return cls
 
     @classmethod
@@ -74,3 +77,35 @@ class glfwWindow(Window):
         height
     ):
         WindowResizeEvent.Pack(width, height)
+
+    @classmethod
+    def _key_callback(
+        cls,
+        window,
+        key,
+        scancode,
+        action,
+        mods
+    ) -> None:
+        if key == glfw.KEY_ESCAPE and action == glfw.RELEASE:
+            WindowCloseEvent.Pack()
+        KeyboardButtonEvent.Pack(key, scancode, action, mods)
+
+    @classmethod
+    def _mouse_callback(
+        cls,
+        window,
+        button,
+        action,
+        mods
+    ) -> None:
+        MouseButtonEvent.Pack(button=button, action=action, mods=mods)
+
+    @classmethod
+    def _scroll_callback(
+        cls,
+        window,
+        x_offset,
+        y_offset
+    ) -> None:
+        ScrollerEvent.Pack(x_offset=x_offset, y_offset=y_offset)

@@ -1,8 +1,8 @@
-from Application.Layers.Layer import Layer
+from Application.Core.Layers.Layer import Layer
 from Application.Resource.ResourceManager import ResourceManager
-from Application.Scene.SceneManager import SceneManager
-from Application.Scene.BasicComponents import MeshRenderer
-from Application.Timer.Timer import GetRunTime
+from Application.Core.Scene.SceneManager import SceneManager
+from Application.Core.Scene.BasicComponents import MeshRenderer
+from Application.Core.Timer.Timer import GetRunTime
 
 
 class DebugLayer(Layer):
@@ -12,7 +12,8 @@ class DebugLayer(Layer):
     ):
         square_mesh_id = ResourceManager.GetDefaultMesh("Square")
         cube_mesh_id = ResourceManager.GetDefaultMesh("Cube")
-        ssvep_shader_id = ResourceManager.LoadAssets("Resource/DefaultShaders/SSVEP.shader")
+        # ssvep_shader_id = ResourceManager.LoadAssets("Resource/DefaultShaders/SSVEP.shader")
+        ssvep_shader_id = ResourceManager.GetDefaultShader("SSVEP")
         print(ssvep_shader_id)
         # Entity 1
         cls.entity_id_1 = SceneManager.AddEntity()

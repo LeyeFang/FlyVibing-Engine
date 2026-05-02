@@ -1,20 +1,25 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from Application.Application import Application
+
 import numpy as np
 from OpenGL.GL import *
 
 # Event
-from Application.Events.Event import Event
-from Application.Events.WindowEvent import WindowResizeEvent
-from Application.Events.SceneEvent import NewComponentEvent, ComponentModifiedEvent
+from Application.Core.Events.Event import Event
+from Application.Core.Events.WindowEvent import WindowResizeEvent
+from Application.Core.Events.SceneEvent import NewComponentEvent, ComponentModifiedEvent
 # Resource
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Resource.Mesh import Mesh
 from Application.Resource.Material import Material, Shader, Texture
 # Scene
-from Application.Scene.SceneManager import SceneManager
-from Application.Scene.BasicComponents import *
+from Application.Core.Scene.SceneManager import SceneManager
+from Application.Core.Scene.BasicComponents import *
 # Renderer
-from Application.Renderer.Renderer import Renderer, RenderResourceManger
-from Application.Renderer._renderer_math_utils import (
+from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
+from Application.Core.Renderer._renderer_math_utils import (
     Calculate_Camera_Proj,
     Calculate_Camera_View,
     Calculate_Entity_Model
@@ -26,11 +31,12 @@ class openglRenderer(Renderer, RenderResourceManger):
     @classmethod
     def Create(
         cls,
-        app
+        app: Application
     ):
         window_size = app.window.GetSize()
         glViewport(0, 0, window_size[0], window_size[1])
         cls.aspect_ratio = window_size[0] / window_size[1]
+        # About GL Functions
         glEnable(GL_DEPTH_TEST)
         return cls
 

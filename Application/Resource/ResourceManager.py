@@ -1,13 +1,13 @@
+import os
+from os.path import join
+from dataclasses import dataclass, field
+
 import trimesh
 import numpy as np
 
 from Application.Resource._resource_utils import parse_shader_file
 from Application.Resource.Mesh import Mesh
 from Application.Resource.Material import *
-
-import os
-from os.path import join
-from dataclasses import dataclass, field
 
 
 DEFAULT_MODEL_NAME = [
@@ -19,10 +19,12 @@ DEFAULT_MODEL_FILE = [
     'Cube.obj'
 ]
 DEFAULT_SHADER_NAME = [
-    'Basic'
+    'Basic',
+    'SSVEP'
 ]
 DEFAULT_SHADER_FILE = [
-    'Basic.shader'
+    'Basic.shader',
+    'SSVEP.shader'
 ]
 
 
@@ -83,6 +85,22 @@ class ResourceManager:
                 Available Models: {DEFAULT_MODEL_NAME}
             """
             raise raise_info
+
+    @classmethod
+    def GetDefaultShader(
+        cls,
+        shader_name: list[str]
+    ) -> dict:
+        if shader_name in DEFAULT_SHADER_NAME:
+            for id, shader in cls.loaded_shader.items():
+                if shader['name'] == shader_name:
+                    return int(id)
+        else:
+            raise_info = f"""
+                There is no shader named '{shader_name}',
+                Available Shaders: {DEFAULT_SHADER_NAME}
+            """
+            raise BaseException(raise_info)
 
     @classmethod
     def GetMesh(

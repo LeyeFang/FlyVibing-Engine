@@ -1,10 +1,13 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from Application.Application import Application
+from Application.Core.Events.Event import Event
+from Application.Core.Events.WindowEvent import *
+from Application.Core.Events.InputEvent import *
+from Application.Core.Window.Window import Window
+
 import glfw
-
-from Application.Events.Event import Event
-from Application.Events.WindowEvent import *
-from Application.Events.InputEvent import *
-
-from Application.Window.Window import Window
 
 
 class glfwWindow(Window):
@@ -14,9 +17,8 @@ class glfwWindow(Window):
     @classmethod
     def Create(
         cls,
-        app
+        app: Application
     ):
-        cls.app = app
         cls.glfw_window = cls._create_window()
         glfw.set_window_size_callback(cls.glfw_window, cls._window_resize_event_callback)
         glfw.set_scroll_callback(cls.glfw_window, cls._scroll_callback)
@@ -42,6 +44,10 @@ class glfwWindow(Window):
     ) -> None:
         if event is WindowCloseEvent:
             cls.Therminate()
+
+    @classmethod
+    def Therminate(cls):
+        glfw.terminate()
 
     def _create_window():
         # 1. 初始化 GLFW

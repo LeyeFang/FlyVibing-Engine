@@ -1,6 +1,8 @@
-from abc import ABC, abstractmethod
+from __future__ import annotations
+from Application import Application
+from Application.Core.Events.Event import Event
 
-# from Application import Application
+from abc import ABC, abstractmethod
 
 
 class Window(ABC):
@@ -10,7 +12,7 @@ class Window(ABC):
 
     @classmethod
     @abstractmethod
-    def Create(cls, app):
+    def Create(cls, app: Application):
         ...
 
     @classmethod
@@ -30,5 +32,5 @@ class Window(ABC):
 
     @classmethod
     @abstractmethod
-    def OnEvent(cls):
+    def OnEvent(cls, event: Event):
         ...

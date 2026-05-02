@@ -1,6 +1,6 @@
 import time
 
-from Application.Events.StatsEvent import PerformanceStatsEvent
+from Application.Core.Events.StatsEvent import PerformanceStatsEvent
 
 
 start_time: float = 0

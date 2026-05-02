@@ -1,4 +1,4 @@
-from Application.Events import Event
+from Application.Core.Events import Event
 
 
 class RendererMeshReleaseEvent(Event):

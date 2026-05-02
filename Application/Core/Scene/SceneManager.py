@@ -1,8 +1,8 @@
 import esper
 
 from Application.Resource.ResourceManager import ResourceManager
-from Application.Scene.BasicComponents import *
-from Application.Events.SceneEvent import *
+from Application.Core.Scene.BasicComponents import *
+from Application.Core.Events.SceneEvent import *
 
 
 class SceneManager:

@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 
-from Application.Events.Event import Event
+from Application.Core.Events.Event import Event
 if TYPE_CHECKING:
     from Application.Application import Application
 

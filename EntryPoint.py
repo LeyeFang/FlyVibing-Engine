@@ -1,7 +1,7 @@
 from Application.Application import Application
-from Application.Layers.DebugLayer import DebugLayer
+from Application.Core.Layers.DebugLayer import DebugLayer
 
 
-Application.Create()
+Application.Create(window_type='SDL2')
 Application.PushLayer(DebugLayer)
 Application.Run()

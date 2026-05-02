@@ -1,5 +1,5 @@
-from Application.Scene.BasicComponents import Component
-from Application.Events.Event import Event
+from Application.Core.Scene.BasicComponents import Component
+from Application.Core.Events.Event import Event
 
 
 #

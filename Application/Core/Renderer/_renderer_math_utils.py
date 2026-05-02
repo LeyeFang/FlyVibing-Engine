@@ -1,7 +1,7 @@
 import numpy as np
 from pyrr import matrix44, vector3, vector4
 from pyrr import Matrix44, Vector3
-from Application.Scene.BasicComponents import *
+from Application.Core.Scene.BasicComponents import *
 #
 # Math
 # ======================================================================================

@@ -1,6 +1,6 @@
-from Application.Events.Event import Event
+from Application.Core.Events.Event import Event
 
-from Application.Events.Enum.InputEnum import *
+from Application.Core.Events.Enum.InputEnum import *
 
 
 #

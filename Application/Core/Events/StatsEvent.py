@@ -9,10 +9,12 @@ class PerformanceStatsEvent(Event):
     @classmethod
     def Pack(
         cls,
-        fps: float
+        fps: float,
+        p10_low_fps: float,
+        p1_low_fps: float
     ) -> None:
         cls.fps = fps
-        cls.log_info = f"FPS={fps:.2f}"
+        cls.log_info = f"Average FPS={fps:.2f}, 10%-low-FPS={p10_low_fps:.2f}, 1%-low-FPS={p1_low_fps:.2f}"
         super().Pack()
 
     @classmethod

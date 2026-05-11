@@ -15,9 +15,9 @@ from Application.Core.Scene.SceneManager import SceneManager
 # # Resource & Scene
 from Application.Resource.ResourceManager import ResourceManager
 # # Timer
-from Application.Core.Timer.Timer import FrameProfiler, _start_timer
+from Application.Core.Timer.Timer import FrameProfiler
 
-from typing import Literal, Optional
+from typing import Literal
 
 
 RendererType = Literal['OpenGL', 'Vulkan']
@@ -44,7 +44,6 @@ class Application:
         cls.window_type = window_type
         cls.renderer_type = renderer_type
         BindPackCallback(cls.OnEvent)
-        _start_timer()
         # Setup Resource & Scene System
         ResourceManager.Init(cls)
         SceneManager.Init(cls)

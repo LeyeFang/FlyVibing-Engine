@@ -5,10 +5,38 @@ from Application.Core.Events.Enum.InputEnum import *
 
 #
 #
+# Mouse State
+left_is_press: bool = False
+right_is_press: bool = False
+mid_is_press: bool = False
+current_mouse_button_code: int = None
+button_press_pos_x: int = 0
+button_press_pos_y: int = 0
+
+
+#
+#
 # Input Events
-class MouseMoveEvent(Event):
-    pos_x: int = 0
-    pos_y: int = 0
+class MouseGragEvent(Event):
+    last_x: int = 0
+    last_y: int = 0
+    offset_x: int = 0
+    offset_y: int = 0
+
+    @classmethod
+    def Pack(
+        cls,
+        pos_x: int,
+        pos_y: int
+    ) -> None:
+        global current_mouse_button_code
+        if current_mouse_button_code is not None:
+            cls.log_info = f"Mouse Grag Button={MouseButtonCode[current_mouse_button_code]}, Offset=({cls.offset_x, cls.offset_y})"
+            cls.offset_x = pos_x - cls.last_x
+            cls.offset_y = pos_y - cls.last_y
+            cls.last_x = pos_x
+            cls.last_y = pos_y
+            super().Pack()
 
     @classmethod
     def UnPack(
@@ -18,6 +46,8 @@ class MouseMoveEvent(Event):
 
 
 class MouseButtonEvent(Event):
+    pos_x: int = 0
+    pos_y: int = 0
     button: int = 0
     action: int = 0
     mods: int = 0
@@ -27,12 +57,23 @@ class MouseButtonEvent(Event):
         cls,
         button: int,
         action: int,
-        mods: int
+        mods: int,
+        pos_x: int,
+        pos_y: int
     ) -> None:
+        global current_mouse_button_code, button_press_pos_y, button_press_pos_x
         cls.button = button
         cls.action = action
         cls.mods = mods
         cls.log_info = f"Mouse Button={MouseButtonCode[button]}, Action={MouseActionCode[action]}"
+        if action == MouseActionCode.Press:
+            current_mouse_button_code = button
+            button_press_pos_x = pos_x
+            button_press_pos_y = pos_y
+            MouseGragEvent.last_x = pos_x
+            MouseGragEvent.last_y = pos_y
+        elif action == MouseActionCode.Release:
+            current_mouse_button_code = None
         super().Pack()
 
     @classmethod

@@ -9,7 +9,6 @@ def GetRunTime():
     return time.perf_counter() - FrameProfiler._start_time
 
 
-
 class FrameProfiler:
     # 类变量（全局状态）
     _interval: float = 1.0                 # 上报间隔（秒）
@@ -43,6 +42,7 @@ class FrameProfiler:
         cls._frame_times_ms = deque(maxlen=window_size)
         cls._last_tick_time = None
         cls._last_report_time = time.perf_counter()
+        cls._next_report_time = 3
         cls._frame_count_since_report = 0
         cls._start_time = time.perf_counter()
         cls._is_started = True
@@ -66,18 +66,21 @@ class FrameProfiler:
         cls._last_tick_time = now
         cls._frame_count_since_report += 1
         # 判断是否需要上报
-        elapsed = now - cls._last_report_time
-        if elapsed >= cls._interval:
-            cls._report_and_reset(now)
+        if now - cls._start_time >= cls._next_report_time:
+            elapsed = now - cls._last_report_time
+            cls._report_and_reset(now, elapsed)
+            cls._next_report_time += 1
+            cls._last_report_time = now
 
     @classmethod
     def _report_and_reset(
         cls,
-        now: float
+        now: float,
+        elapsed: float
     ) -> None:
         """计算百分位数据，通过事件发送，然后重置区间计数器（不清除窗口）"""
         # 1. 平均 FPS（本区间内）
-        avg_fps = cls._frame_count_since_report / cls._interval
+        avg_fps = cls._frame_count_since_report / elapsed
         # 2. 1% low 和 10% low 帧时间（毫秒）
         p1_ms, p10_ms = cls._compute_percentiles()
         # 转换为 FPS
@@ -94,7 +97,6 @@ class FrameProfiler:
         # PerformanceStatsEvent.Pack(p1_fps)
         # 重置区间计数器（窗口数据保留）
         cls._frame_count_since_report = 0
-        cls._last_report_time = now
 
     @classmethod
     def _compute_percentiles(
@@ -127,3 +129,6 @@ class FrameProfiler:
             "p1_low_fps": 1000.0 / p1_ms if p1_ms > 0 else 0.0,
             "p10_low_fps": 1000.0 / p10_ms if p10_ms > 0 else 0.0,
         }
+
+
+FrameProfiler._start_time = time.perf_counter()

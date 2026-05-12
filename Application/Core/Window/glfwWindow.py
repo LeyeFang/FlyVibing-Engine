@@ -24,6 +24,7 @@ class glfwWindow(Window):
         glfw.set_scroll_callback(cls.glfw_window, cls._scroll_callback)
         glfw.set_mouse_button_callback(cls.glfw_window, cls._mouse_callback)
         glfw.set_key_callback(cls.glfw_window, cls._key_callback)
+        glfw.set_cursor_pos_callback(cls.glfw_window, cls._mouse_move_callbakc)
         return cls
 
     @classmethod
@@ -105,7 +106,22 @@ class glfwWindow(Window):
         action,
         mods
     ) -> None:
-        MouseButtonEvent.Pack(button=button, action=action, mods=mods)
+        pos_x, pos_y = glfw.get_cursor_pos(cls.glfw_window)
+        MouseButtonEvent.Pack(
+            button=button,
+            action=action,
+            mods=mods,
+            pos_x=pos_x,
+            pos_y=pos_y)
+
+    @classmethod
+    def _mouse_move_callbakc(
+        cls,
+        window,
+        pos_x,
+        pos_y
+    ) -> None:
+        MouseGragEvent.Pack(pos_x, pos_y)
 
     @classmethod
     def _scroll_callback(

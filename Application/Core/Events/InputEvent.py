@@ -6,12 +6,11 @@ from Application.Core.Events.Enum.InputEnum import *
 #
 #
 # Mouse State
-left_is_press: bool = False
-right_is_press: bool = False
-mid_is_press: bool = False
 current_mouse_button_code: int = None
 button_press_pos_x: int = 0
 button_press_pos_y: int = 0
+button_release_pos_x: int = 0
+button_release_pos_y: int = 0
 
 
 #
@@ -20,6 +19,7 @@ button_press_pos_y: int = 0
 class MouseGragEvent(Event):
     last_x: int = 0
     last_y: int = 0
+    press_button: int = 0
     offset_x: int = 0
     offset_y: int = 0
 
@@ -41,8 +41,8 @@ class MouseGragEvent(Event):
     @classmethod
     def UnPack(
         cls
-    ) -> tuple[int]:
-        return cls.pos_x, cls.pos_y
+    ) -> tuple[int, int, int]:
+        return cls.press_button, cls.offset_x, cls.offset_y
 
 
 class MouseButtonEvent(Event):
@@ -61,7 +61,9 @@ class MouseButtonEvent(Event):
         pos_x: int,
         pos_y: int
     ) -> None:
-        global current_mouse_button_code, button_press_pos_y, button_press_pos_x
+        global current_mouse_button_code
+        global button_press_pos_y, button_press_pos_x
+        global button_release_pos_y, button_release_pos_x
         cls.button = button
         cls.action = action
         cls.mods = mods
@@ -74,6 +76,8 @@ class MouseButtonEvent(Event):
             MouseGragEvent.last_y = pos_y
         elif action == MouseActionCode.Release:
             current_mouse_button_code = None
+            button_release_pos_x = pos_x
+            button_release_pos_y = pos_y
         super().Pack()
 
     @classmethod

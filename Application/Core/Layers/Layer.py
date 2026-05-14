@@ -30,11 +30,6 @@ class Layer(ABC):
 
     @classmethod
     @abstractmethod
-    def OnMessage(cls):
-        pass
-
-    @classmethod
-    @abstractmethod
     def OnEvent(
         cls,
         event: Event

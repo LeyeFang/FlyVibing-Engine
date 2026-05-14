@@ -19,4 +19,5 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gui = ["dearpygui"]
+gui = [
+]

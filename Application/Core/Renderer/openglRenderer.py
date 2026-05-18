@@ -3,9 +3,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from Application.Application import Application
 
-import numpy as np
-from OpenGL.GL import *
-
 # Event
 from Application.Core.Events.Event import Event
 from Application.Core.Events.WindowEvent import WindowResizeEvent
@@ -24,6 +21,10 @@ from Application.Core.Renderer._renderer_math_utils import (
     Calculate_Camera_View,
     Calculate_Entity_Model
 )
+
+import numpy as np
+from imgui_bundle import imgui
+from OpenGL.GL import *
 
 
 class openglRenderer(Renderer, RenderResourceManger):

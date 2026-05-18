@@ -8,6 +8,7 @@ from Application.Core.Events.InputEvent import *
 from Application.Core.Window.Window import Window
 
 import glfw
+from imgui_bundle import imgui
 
 
 class glfwWindow(Window):
@@ -25,6 +26,13 @@ class glfwWindow(Window):
         glfw.set_mouse_button_callback(cls.glfw_window, cls._mouse_callback)
         glfw.set_key_callback(cls.glfw_window, cls._key_callback)
         glfw.set_cursor_pos_callback(cls.glfw_window, cls._mouse_move_callbakc)
+        # Init for Imgui
+        imgui.create_context()
+        imgui.style_colors_dark()
+        import ctypes
+        window_address = ctypes.cast(cls.glfw_window, ctypes.c_void_p).value
+        imgui.backends.glfw_init_for_opengl(window_address, True)
+        imgui.backends.opengl3_init("#version 150")
         return cls
 
     @classmethod

@@ -8,7 +8,6 @@ from Application.Core.Events.InputEvent import *
 from Application.Core.Window.Window import Window
 
 import glfw
-from imgui_bundle import imgui
 
 
 class glfwWindow(Window):
@@ -26,25 +25,33 @@ class glfwWindow(Window):
         glfw.set_mouse_button_callback(cls.glfw_window, cls._mouse_callback)
         glfw.set_key_callback(cls.glfw_window, cls._key_callback)
         glfw.set_cursor_pos_callback(cls.glfw_window, cls._mouse_move_callbakc)
-        # Init for Imgui
-        imgui.create_context()
-        imgui.style_colors_dark()
-        import ctypes
-        window_address = ctypes.cast(cls.glfw_window, ctypes.c_void_p).value
-        imgui.backends.glfw_init_for_opengl(window_address, True)
-        imgui.backends.opengl3_init("#version 150")
         return cls
 
     @classmethod
-    def Update(cls):
+    def Update(
+        cls
+    ) -> None:
         glfw.poll_events()
-        glfw.swap_buffers(cls.glfw_window)
         if glfw.window_should_close(cls.glfw_window):
             WindowCloseEvent.Pack()
 
     @classmethod
-    def GetSize(cls):
+    def SwapBuffer(
+        cls
+    ) -> None:
+        glfw.swap_buffers(cls.glfw_window)
+
+    @classmethod
+    def GetSize(
+        cls
+    ) -> tuple[int, int]:
         return glfw.get_framebuffer_size(cls.glfw_window)
+
+    @classmethod
+    def Therminate(
+        cls
+    ):
+        glfw.terminate()
 
     @classmethod
     def OnEvent(
@@ -55,9 +62,12 @@ class glfwWindow(Window):
             cls.Therminate()
 
     @classmethod
-    def Therminate(cls):
-        glfw.terminate()
+    def MakeContextCurrent(cls):
+        glfw.make_context_current(cls.glfw_window)
 
+    #
+    #
+    # Internal functions --------------------------------------------
     def _create_window():
         # 1. 初始化 GLFW
         if not glfw.init():
@@ -78,7 +88,7 @@ class glfwWindow(Window):
             print("无法创建窗口")
             glfw.terminate()
             return
-        glfw.make_context_current(glfw_window)
+        # glfw.make_context_current(glfw_window)
         return glfw_window
 
     #

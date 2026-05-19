@@ -54,10 +54,9 @@ class DebugLayer(Layer):
         pass
 
     @classmethod
-    def OnUpdate(
+    def OnRender(
         cls
     ):
-        
         run_time = GetRunTime()
         SceneManager.SetEntityShaderUniforms(
             cls.entity_id_2,

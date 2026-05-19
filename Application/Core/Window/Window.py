@@ -32,5 +32,16 @@ class Window(ABC):
 
     @classmethod
     @abstractmethod
+    def SwapBuffer(cls):
+        ...
+
+    @classmethod
+    @abstractmethod
     def OnEvent(cls, event: Event):
         ...
+
+    @classmethod
+    @abstractmethod
+    def MakeContextCurrent(cls):
+        ...
+

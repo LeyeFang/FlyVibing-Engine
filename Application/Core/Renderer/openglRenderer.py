@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 
 # Event
 from Application.Core.Events.Event import Event
-from Application.Core.Events.WindowEvent import WindowResizeEvent
+from Application.Core.Events.WindowEvent import *
 from Application.Core.Events.SceneEvent import NewComponentEvent, ComponentModifiedEvent
 # Resource
 from Application.Resource.ResourceManager import ResourceManager
@@ -23,7 +23,6 @@ from Application.Core.Renderer._renderer_math_utils import (
 )
 
 import numpy as np
-from imgui_bundle import imgui
 from OpenGL.GL import *
 
 
@@ -88,6 +87,8 @@ class openglRenderer(Renderer, RenderResourceManger):
         cls,
         event: Event
     ):
+        if event is WindowCloseEvent:
+            pass
         if event is WindowResizeEvent:
             width, height = event.UnPack()
             glViewport(0, 0, width, height)

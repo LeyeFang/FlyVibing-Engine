@@ -17,11 +17,20 @@ from Application.Resource.ResourceManager import ResourceManager
 # # Timer
 from Application.Core.Timer.Timer import FrameProfiler
 
-from typing import Literal
+from enum import Enum
+from typing import Union
+import threading
+from threading import Thread
 
 
-RendererType = Literal['OpenGL', 'Vulkan']
-WindowType = Literal['GLFW', 'SDL2']
+class RendererType(Enum):
+    OpenGL = "OpenGL"
+    Vulkan = "Vulkan"
+
+
+class WindowType(Enum):
+    GLFW = "GLFW"
+    SDL2 = "SDL2"
 
 
 class Application:
@@ -33,14 +42,20 @@ class Application:
     layer_stack: list[Layer] = []
     event: Event = None
     event_stack: list[Event] = []
-    run_time: float
+    run_state: bool = True
+    renderer_ready = threading.Event()
+    run_ready = threading.Event()
 
     @classmethod
     def Create(
         cls,
-        window_type: WindowType = 'GLFW',
-        renderer_type: RendererType = 'OpenGL'
+        window_type: Union[WindowType, str] = WindowType.GLFW,
+        renderer_type: Union[RendererType, str] = RendererType.OpenGL
     ) -> None:
+        if isinstance(window_type, str):
+            window_type = WindowType(window_type)
+        if isinstance(renderer_type, str):
+            renderer_type = RendererType(renderer_type)
         cls.window_type = window_type
         cls.renderer_type = renderer_type
         BindPackCallback(cls.OnEvent)
@@ -48,30 +63,24 @@ class Application:
         ResourceManager.Init(cls)
         SceneManager.Init(cls)
         # Create Window
-        if window_type == 'GLFW':
+        if window_type == WindowType.GLFW:
             cls.window = glfwWindow.Create(cls)
-        elif window_type == 'SDL2':
+        elif window_type == WindowType.SDL2:
             cls.window = sdl2Window.Create(cls)
-        # Create Renderer
-        if renderer_type == 'OpenGL':
-            cls.renderer = openglRenderer.Create(cls)
-        elif renderer_type == 'Vulkan':
-            pass
+        cls.run_state = True
+        renderer_thread = Thread(target=cls.render_loop, daemon=True)
+        renderer_thread.start()
+        cls.renderer_ready.wait()
         return cls
 
     @classmethod
     def Run(cls):
         try:
-            FrameProfiler.Start(1)
-            cls.run_state = True
+            cls.run_ready.set()
             while cls.run_state:
-                # Update Application
-                cls.renderer.StartFrame()
+                cls.window.Update()
                 for layer in cls.layer_stack:
                     layer.OnUpdate()
-                cls.renderer.EndFrame()
-                cls.window.Update()
-                FrameProfiler.Tick()
         finally:
             pass
 
@@ -85,15 +94,15 @@ class Application:
     def PushLayer(
         cls,
         layer: Layer
-    ):
+    ) -> None:
         cls.layer_stack.append(layer)
-        layer.OnAttach()
+        # layer.OnAttach()
 
     @classmethod
     def PopLayer(
         cls,
         layer: Layer
-    ):
+    ) -> None:
         cls.layer_stack.pop(-1)
         layer.OnDetach()
 
@@ -102,7 +111,6 @@ class Application:
         cls,
         event: Event
     ) -> None:
-        # Pass Events
         if event is not None:
             for layer in cls.layer_stack:
                 layer.OnEvent(event)
@@ -111,8 +119,47 @@ class Application:
         if event is WindowCloseEvent:
             cls.run_state = False
 
+    # For multi-thread
     @classmethod
-    def _single_loop(
+    def render_loop(
         cls
     ) -> None:
-        pass
+        try:
+            # Create Renderer
+            if cls.renderer_type == RendererType.OpenGL:
+                cls.window.MakeContextCurrent()
+                cls.renderer = openglRenderer.Create(cls)
+            elif cls.renderer_type == RendererType.Vulkan:
+                pass
+            cls.renderer_ready.set()
+            # Run only when start
+            cls.run_ready.wait()
+            for layer in cls.layer_stack:
+                layer.OnAttach()
+            cls.renderer.StartFrame()
+            cls.renderer.EndFrame()
+            cls.window.SwapBuffer()
+            FrameProfiler.Start(1)
+            while cls.run_state:
+                cls.renderer.StartFrame()
+                for layer in cls.layer_stack:
+                    layer.OnRender()
+                cls.renderer.EndFrame()
+                cls.window.SwapBuffer()
+                FrameProfiler.Tick()
+        except Exception as e:
+            raise e
+        finally:
+            pass
+
+
+def GetWindow() -> Window:
+    return Application.window
+
+
+def GetWindowBackend() -> WindowType:
+    return Application.window_type
+
+
+def GetRendererBackend() -> RendererType:
+    return Application.renderer_type

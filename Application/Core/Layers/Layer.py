@@ -33,6 +33,13 @@ class Layer(ABC):
     def OnEvent(
         cls,
         event: Event
-    ):
+    ) -> None:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def OnRender(
+        cls
+    ) -> None:
         pass
 

@@ -20,7 +20,7 @@ class DebugLayer(Layer):
         SceneManager.AddComponentToEntity(
             entity_id=cls.entity_id_1,
             component_instance=MeshRenderer(mesh_id=cube_mesh_id))
-        SceneManager.SetEntityTransfrom(
+        SceneManager.SetEntityTransform(
             cls.entity_id_1,
             position_xyz=(-10, 0, -50),
             scale_xyz=(8, 8, 8))
@@ -29,7 +29,7 @@ class DebugLayer(Layer):
         SceneManager.AddComponentToEntity(
             entity_id=cls.entity_id_2,
             component_instance=MeshRenderer(mesh_id=square_mesh_id))
-        SceneManager.SetEntityTransfrom(
+        SceneManager.SetEntityTransform(
             cls.entity_id_2,
             position_xyz=(10, 0, -50),
             scale_xyz=(5, 5, 5))
@@ -42,8 +42,8 @@ class DebugLayer(Layer):
             {"freq": 40}
         )
         # Camera
-        SceneManager.SetMainCameraTransfrom(
-            position_xyz=(-3, 0, 0))
+        SceneManager.SetMainCameraTransform(
+            position_z=-3)
 
     @classmethod
     def OnEvent(

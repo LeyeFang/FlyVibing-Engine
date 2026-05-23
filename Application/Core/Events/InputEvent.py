@@ -36,6 +36,7 @@ class MouseGragEvent(Event):
             cls.offset_y = pos_y - cls.last_y
             cls.last_x = pos_x
             cls.last_y = pos_y
+            cls.press_button = current_mouse_button_code
             super().Pack()
 
     @classmethod
@@ -131,4 +132,10 @@ class ScrollerEvent(Event):
         cls.y_offset = y_offset
         cls.log_info = f"Scroll offset x={x_offset}, y={y_offset}"
         super().Pack()
+
+    @classmethod
+    def UnPack(
+        cls
+    ) -> tuple[int, int]:
+        return cls.x_offset, cls.y_offset
 

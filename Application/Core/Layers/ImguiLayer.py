@@ -7,6 +7,8 @@ from Application.Application import (
     GetWindow
 )
 from Application.Core.Events.Event import Event
+from Application.Core.Events.InputEvent import *
+from Application.Core.Scene.SceneManager import SceneManager
 
 import ctypes
 
@@ -60,7 +62,31 @@ class ImguiLayer(Layer):
         cls,
         event: Event
     ) -> None:
-        pass
+        if event is ScrollerEvent:
+            _, y_offset = ScrollerEvent.UnPack()
+            _, transform = SceneManager.GetSceneCamera()
+            z_current = transform.position_z
+            z_next = z_current - y_offset
+            SceneManager.SetMainCameraTransform(position_z=z_next)
+        elif event is MouseGragEvent:
+            bt, offset_x, offset_y = MouseGragEvent.UnPack()
+            _, transform = SceneManager.GetSceneCamera()
+            pos_x_current = transform.position_x
+            pos_y_current = transform.position_y
+            rot_x_current = transform.rotation_x
+            rot_z_current = transform.rotation_z
+            if bt == MouseButtonCode.Middle:
+                pos_x_next = pos_x_current - 0.1*offset_x
+                pos_y_next = pos_y_current + 0.1*offset_y
+                SceneManager.SetMainCameraTransform(
+                    position_x=pos_x_next,
+                    position_y=pos_y_next)
+            if bt == MouseButtonCode.Left:
+                rot_z_next = rot_z_current - 0.01*offset_x
+                rot_x_next = rot_x_current - 0.01*offset_y
+                SceneManager.SetMainCameraTransform(
+                    rotation_z=rot_z_next,
+                    rotation_x=rot_x_next)
 
     @classmethod
     def OnUpdate(cls):

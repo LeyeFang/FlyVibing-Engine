@@ -98,7 +98,7 @@ class SceneManager:
     # Modified Entities Components
     #
     @classmethod
-    def SetEntityTransfrom(
+    def SetEntityTransform(
         cls,
         entity_id: int = None,
         position_xyz: tuple = None,
@@ -119,17 +119,28 @@ class SceneManager:
         ComponentModifiedEvent.Pack(entity_id, transform)
 
     @classmethod
-    def SetMainCameraTransfrom(
+    def SetMainCameraTransform(
         cls,
-        position_xyz: tuple = None,
-        rotation_xyz: tuple = None
+        position_x: float = None,
+        position_y: float = None,
+        position_z: float = None,
+        rotation_x: float = None,
+        rotation_y: float = None,
+        rotation_z: float = None
     ) -> None:
-        if position_xyz is not None:
-            transform = esper.component_for_entity(cls.main_camera_id, Transform)
-            transform.position_x, transform.position_y, transform.position_z = position_xyz
-        if rotation_xyz is not None:
-            transform = esper.component_for_entity(cls.main_camera_id, Transform)
-            transform.rotation_x, transform.rotation_y, transform.rotation_z = rotation_xyz
+        transform = esper.component_for_entity(cls.main_camera_id, Transform)
+        if position_x is not None:
+            transform.position_x = position_x
+        if position_y is not None:
+            transform.position_y = position_y
+        if position_z is not None:
+            transform.position_z = position_z
+        if rotation_x is not None:
+            transform.rotation_x = rotation_x
+        if rotation_y is not None:
+            transform.rotation_y = rotation_y
+        if rotation_z is not None:
+            transform.rotation_z = rotation_z
 
     @classmethod
     def SetEntityMeshRenderer(

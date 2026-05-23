@@ -1,11 +1,11 @@
 @echo off
-echo 正在激活 Python 3.12 环境...
+echo Activating Python 3.12 environment...
 call .venv-py312\Scripts\activate.bat
 if %errorlevel% neq 0 (
-    echo 错误：无法激活 .venv-py312 环境，请先运行 Scripts\setup.bat
+    echo Error: failed to activate .venv-py312, please run Scripts\setup.bat first
     pause
     exit /b %errorlevel%
 )
-echo 运行 EntryPoint.py...
+echo Running EntryPoint.py...
 python EntryPoint.py
 pause

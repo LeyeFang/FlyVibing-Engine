@@ -13,6 +13,8 @@ from Application.Core.Scene.SceneManager import SceneManager
 import ctypes
 
 from imgui_bundle import imgui
+# 文件顶部新增一行导入
+from Application.Core.Math.RendererMath import get_world_forward
 
 
 class ImguiLayer(Layer):
@@ -64,10 +66,14 @@ class ImguiLayer(Layer):
     ) -> None:
         if event is ScrollerEvent:
             _, y_offset = ScrollerEvent.UnPack()
-            _, transform = SceneManager.GetSceneCamera()
-            z_current = transform.position_z
-            z_next = z_current - y_offset
-            SceneManager.SetMainCameraTransform(position_z=z_next)
+            camera, transform = SceneManager.GetSceneCamera()
+            world_forward = get_world_forward(camera, transform)
+            speed = 0.5
+            SceneManager.SetMainCameraTransform(
+                position_x=transform.position_x + world_forward[0] * y_offset * speed,
+                position_y=transform.position_y + world_forward[1] * y_offset * speed,
+                position_z=transform.position_z + world_forward[2] * y_offset * speed
+            )
         elif event is MouseGragEvent:
             bt, offset_x, offset_y = MouseGragEvent.UnPack()
             _, transform = SceneManager.GetSceneCamera()
@@ -97,6 +103,6 @@ class ImguiLayer(Layer):
     def OnRender(cls):
         imgui.backends.opengl3_new_frame()
         imgui.new_frame()
-        imgui.show_demo_window()
+        # imgui.show_demo_window()
         imgui.render()
         imgui.backends.opengl3_render_draw_data(imgui.get_draw_data())

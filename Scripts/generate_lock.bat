@@ -55,7 +55,7 @@ echo 处理 Python 3.14t 环境
 echo ========================================
 if exist "%VENV_314%\Scripts\activate.bat" (
     echo 正在更新环境并生成锁文件...
-    cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --active && uv lock"
+    cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --extra device --active && uv lock"
     if !errorlevel! equ 0 (
         if exist "%PROJECT_ROOT%\uv.lock" (
             copy /Y "%PROJECT_ROOT%\uv.lock" "%SCRIPT_DIR%\uv-py314t.lock"

@@ -59,7 +59,7 @@ class glfwWindow(Window):
         event: Event
     ) -> None:
         if event is WindowCloseEvent:
-            cls.Therminate()
+            pass
 
     @classmethod
     def MakeContextCurrent(cls):

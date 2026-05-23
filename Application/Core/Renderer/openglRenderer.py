@@ -16,10 +16,10 @@ from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Scene.BasicComponents import *
 # Renderer
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
-from Application.Core.Renderer._renderer_math_utils import (
-    Calculate_Camera_Proj,
-    Calculate_Camera_View,
-    Calculate_Entity_Model
+from Application.Core.Math.RendererMath import (
+    calculate_view_matrix,
+    calculate_projection_matrix,
+    calculate_entity_model
 )
 
 import numpy as np
@@ -33,6 +33,9 @@ class openglRenderer(Renderer, RenderResourceManger):
         cls,
         app: Application
     ):
+        print(f"GPU Vendor: {glGetString(GL_VENDOR).decode()}")
+        print(f"GPU Renderer: {glGetString(GL_RENDERER).decode()}")
+
         window_size = app.window.GetSize()
         glViewport(0, 0, window_size[0], window_size[1])
         cls.aspect_ratio = window_size[0] / window_size[1]
@@ -48,14 +51,11 @@ class openglRenderer(Renderer, RenderResourceManger):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         # About Camera
         camera, transform = SceneManager.GetSceneCamera()
-        view = Calculate_Camera_View(camera, transform)
-        proj = Calculate_Camera_Proj(camera, cls.aspect_ratio)
+        view = calculate_view_matrix(camera, transform)
+        proj = calculate_projection_matrix(camera, cls.aspect_ratio)
         # About Mesh and Shader
         renderable_entities = SceneManager.GetRenderableEntities()
         for entity_id in renderable_entities:
-            #
-            # Try Register Entity
-            cls.register_entity(entity_id)
             #
             # Get Mesh Info
             entity: RenderResourceManger.entity_data_struct = cls.registered_entities[f'{entity_id}']
@@ -111,7 +111,7 @@ class openglRenderer(Renderer, RenderResourceManger):
         view: np.ndarray,
         proj: np.ndarray
     ) -> None:
-        model = Calculate_Entity_Model(SceneManager.GetEntityTransform(entity_id))
+        model = calculate_entity_model(SceneManager.GetEntityTransform(entity_id))
         entity: RenderResourceManger.entity_data_struct = cls.registered_entities[f"{entity_id}"]
         entity_material_id = entity.material_id
         material = ResourceManager.GetMaterial(entity_material_id)

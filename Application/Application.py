@@ -11,6 +11,7 @@ from Application.Core.Window.sdl2Window import sdl2Window
 # # Renderer
 from Application.Core.Renderer.Renderer import Renderer
 from Application.Core.Renderer.openglRenderer import openglRenderer
+from Application.Core.Renderer.modernGLRenderer import modernGLRenderer
 from Application.Core.Scene.SceneManager import SceneManager
 # # Resource & Scene
 from Application.Resource.ResourceManager import ResourceManager
@@ -26,6 +27,7 @@ from threading import Thread
 class RendererType(Enum):
     OpenGL = "OpenGL"
     Vulkan = "Vulkan"
+    ModernGL = "ModernGL"
 
 
 class WindowType(Enum):
@@ -81,6 +83,7 @@ class Application:
                 cls.window.Update()
                 for layer in cls.layer_stack:
                     layer.OnUpdate()
+                pass
         finally:
             pass
 
@@ -129,6 +132,9 @@ class Application:
             if cls.renderer_type == RendererType.OpenGL:
                 cls.window.MakeContextCurrent()
                 cls.renderer = openglRenderer.Create(cls)
+            elif cls.renderer_type == RendererType.ModernGL:
+                cls.window.MakeContextCurrent()
+                cls.renderer = modernGLRenderer.Create(cls)
             elif cls.renderer_type == RendererType.Vulkan:
                 pass
             cls.renderer_ready.set()

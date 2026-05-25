@@ -7,6 +7,8 @@ from Application.Core.Events.Event import Event
 class Renderer(ABC):
 
     app = None
+    viewport_width: int
+    viewport_height: int
     aspect_ratio: float
     camera_id: int
 
@@ -35,6 +37,9 @@ class Renderer(ABC):
 
 
 class RenderResourceManger(ABC):
+
+    view_matrix = None
+    proj_matrix = None
 
     @dataclass
     class entity_data_struct:

@@ -1,4 +1,4 @@
-from Application.Core.Scene.BasicComponents import Component
+from Application.Core.Scene.BasicComponents import *
 from Application.Core.Events.Event import Event
 
 
@@ -81,3 +81,24 @@ class UpdateShaderUniformsEvent(Event):
     @classmethod
     def UnPack(cls):
         pass
+
+
+class SceneCameraUpdateEvent(Event):
+
+    camera_id: int
+    new_camera: Camera = None
+    log_info: str = ''
+
+    @classmethod
+    def Pack(
+        cls
+    ):
+        cls.log_info = f"Scene Camera Update"
+        super().Pack()
+
+    @classmethod
+    def UnPack(
+        cls
+    ) -> tuple:
+        return cls.camera_id, cls.new_camera
+

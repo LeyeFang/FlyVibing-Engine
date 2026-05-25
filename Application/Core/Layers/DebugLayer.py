@@ -39,7 +39,7 @@ class DebugLayer(Layer):
         )
         SceneManager.SetEntityShaderUniforms(
             cls.entity_id_2,
-            {"freq": 40}
+            {"freq": 3}
         )
         # Camera
         SceneManager.SetMainCameraTransform(

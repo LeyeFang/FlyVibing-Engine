@@ -8,6 +8,7 @@ from Application.Application import (
 )
 from Application.Core.Events.Event import Event
 from Application.Core.Events.InputEvent import *
+from Application.Core.Events.SceneEvent import *
 from Application.Core.Scene.SceneManager import SceneManager
 
 import ctypes
@@ -27,6 +28,11 @@ class ImguiLayer(Layer):
         app_window_type = GetWindowBackend()
         match (app_window_type, app_renderer_type):
             case (WindowType.GLFW, RendererType.OpenGL):
+                app_window = GetWindow().glfw_window
+                window_address = ctypes.cast(app_window, ctypes.c_void_p).value
+                imgui.backends.glfw_init_for_opengl(window_address, True)
+                imgui.backends.opengl3_init("#version 150")
+            case (WindowType.GLFW, RendererType.ModernGL):
                 app_window = GetWindow().glfw_window
                 window_address = ctypes.cast(app_window, ctypes.c_void_p).value
                 imgui.backends.glfw_init_for_opengl(window_address, True)
@@ -74,6 +80,7 @@ class ImguiLayer(Layer):
                 position_y=transform.position_y + world_forward[1] * y_offset * speed,
                 position_z=transform.position_z + world_forward[2] * y_offset * speed
             )
+            SceneCameraUpdateEvent.Pack()
         elif event is MouseGragEvent:
             bt, offset_x, offset_y = MouseGragEvent.UnPack()
             _, transform = SceneManager.GetSceneCamera()
@@ -93,6 +100,7 @@ class ImguiLayer(Layer):
                 SceneManager.SetMainCameraTransform(
                     rotation_z=rot_z_next,
                     rotation_x=rot_x_next)
+            SceneCameraUpdateEvent.Pack()
 
     @classmethod
     def OnUpdate(cls):

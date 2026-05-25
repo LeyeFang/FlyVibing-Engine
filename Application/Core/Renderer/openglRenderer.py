@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 # Event
 from Application.Core.Events.Event import Event
 from Application.Core.Events.WindowEvent import *
-from Application.Core.Events.SceneEvent import NewComponentEvent, ComponentModifiedEvent
+from Application.Core.Events.SceneEvent import *
 # Resource
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Resource.Mesh import Mesh
@@ -38,21 +38,24 @@ class openglRenderer(Renderer, RenderResourceManger):
 
         window_size = app.window.GetSize()
         glViewport(0, 0, window_size[0], window_size[1])
+        cls.viewport_width = window_size[0]
+        cls.viewport_height = window_size[1]
         cls.aspect_ratio = window_size[0] / window_size[1]
         # About GL Functions
         glEnable(GL_DEPTH_TEST)
+        # About Camera
+        camera, transform = SceneManager.GetSceneCamera()
+        cls.view_matrix = calculate_view_matrix(camera, transform)
+        cls.proj_matrix = calculate_projection_matrix(camera, cls.aspect_ratio)
         return cls
 
     @classmethod
     def StartFrame(
         cls
     ) -> None:
+        glViewport(0, 0, cls.viewport_width, cls.viewport_height)
         glClearColor(0.2, 0.2, 0.2, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        # About Camera
-        camera, transform = SceneManager.GetSceneCamera()
-        view = calculate_view_matrix(camera, transform)
-        proj = calculate_projection_matrix(camera, cls.aspect_ratio)
         # About Mesh and Shader
         renderable_entities = SceneManager.GetRenderableEntities()
         for entity_id in renderable_entities:
@@ -66,9 +69,7 @@ class openglRenderer(Renderer, RenderResourceManger):
             #
             # Update Shader Program
             cls.update_uniform(
-                entity_id=entity_id,
-                view=view,
-                proj=proj)
+                entity_id=entity_id)
             #
             # Draw
             glBindVertexArray(current_vao)
@@ -91,7 +92,8 @@ class openglRenderer(Renderer, RenderResourceManger):
             pass
         if event is WindowResizeEvent:
             width, height = event.UnPack()
-            glViewport(0, 0, width, height)
+            cls.viewport_width = width
+            cls.viewport_height = height
             cls.aspect_ratio = width / height
         if any([
             event is NewComponentEvent,
@@ -103,13 +105,13 @@ class openglRenderer(Renderer, RenderResourceManger):
                     cls.register_entity(entity_id)
                 else:
                     cls.unregister_entity(entity_id)
+        if event is SceneCameraUpdateEvent:
+            cls._camera_update_callback()
 
     @classmethod
     def update_uniform(
         cls,
-        entity_id: int,
-        view: np.ndarray,
-        proj: np.ndarray
+        entity_id: int
     ) -> None:
         model = calculate_entity_model(SceneManager.GetEntityTransform(entity_id))
         entity: RenderResourceManger.entity_data_struct = cls.registered_entities[f"{entity_id}"]
@@ -124,9 +126,9 @@ class openglRenderer(Renderer, RenderResourceManger):
             if u_name == 'model':
                 glUniformMatrix4fv(loc, 1, GL_FALSE, model.astype('float32'))
             elif u_name == 'view':
-                glUniformMatrix4fv(loc, 1, GL_FALSE, view.astype('float32'))
+                glUniformMatrix4fv(loc, 1, GL_FALSE, cls.view_matrix.astype('float32'))
             elif u_name == 'projection':
-                glUniformMatrix4fv(loc, 1, GL_FALSE, proj.astype('float32'))
+                glUniformMatrix4fv(loc, 1, GL_FALSE, cls.proj_matrix.astype('float32'))
             else:
                 if u_type == 'mat4':
                     glUniformMatrix4fv(loc, 1, GL_FALSE, u_value)
@@ -316,3 +318,15 @@ class openglRenderer(Renderer, RenderResourceManger):
             del cls.registered_textures[f"{texture_id}"]
         else:
             pass
+
+    #
+    # Event callback
+    # ================================================================================================
+    @classmethod
+    def _camera_update_callback(
+        cls
+    ):
+        # About Camera
+        camera, transform = SceneManager.GetSceneCamera()
+        cls.view_matrix = calculate_view_matrix(camera, transform)
+        cls.proj_matrix = calculate_projection_matrix(camera, cls.aspect_ratio)

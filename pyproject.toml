@@ -23,6 +23,9 @@ dependencies = [
 gui = [
     "imgui-bundle; python_version < '3.13'"
 ]
+gui-314 = [
+    "imgui-bundle @ git+https://github.com/pthom/imgui_bundle@e58ff91"
+]
 device = [
     "econexg[lsl,usb]",
     "gpype; python_version < '3.14'"

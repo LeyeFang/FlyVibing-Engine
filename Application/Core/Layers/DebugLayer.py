@@ -12,10 +12,9 @@ class DebugLayer(Layer):
     ):
         square_mesh_id = ResourceManager.GetDefaultMesh("Square")
         cube_mesh_id = ResourceManager.GetDefaultMesh("Cube")
-        # ssvep_shader_id = ResourceManager.LoadAssets("Resource/DefaultShaders/SSVEP.shader")
+        tex_id = ResourceManager.GetDefaultTexture('Checkerboard')
         ssvep_shader_id = ResourceManager.GetDefaultShader("SSVEP")
-        print(ssvep_shader_id)
-        # Entity 1
+        # Entity 1 Cube
         cls.entity_id_1 = SceneManager.AddEntity()
         SceneManager.AddComponentToEntity(
             entity_id=cls.entity_id_1,
@@ -24,7 +23,10 @@ class DebugLayer(Layer):
             cls.entity_id_1,
             position_xyz=(-10, 0, -50),
             scale_xyz=(8, 8, 8))
-        # Entity 2
+        SceneManager.SetEntityTexture(
+            cls.entity_id_1,
+            tex_id)       # ★ 绑定棋盘格纹理
+        # Entity 2 SSVEP
         cls.entity_id_2 = SceneManager.AddEntity()
         SceneManager.AddComponentToEntity(
             entity_id=cls.entity_id_2,
@@ -37,9 +39,9 @@ class DebugLayer(Layer):
             cls.entity_id_2,
             ssvep_shader_id
         )
-        SceneManager.SetEntityShaderUniforms(
+        SceneManager.SetMaterialParams(
             cls.entity_id_2,
-            {"freq": 3}
+            {"freq": 60}
         )
         # Camera
         SceneManager.SetMainCameraTransform(
@@ -58,6 +60,6 @@ class DebugLayer(Layer):
         cls
     ):
         run_time = GetRunTime()
-        SceneManager.SetEntityShaderUniforms(
+        SceneManager.SetMaterialParams(
             cls.entity_id_2,
             {'time': run_time})

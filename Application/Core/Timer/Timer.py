@@ -5,6 +5,24 @@ from typing import Optional
 from Application.Core.Events.StatsEvent import PerformanceStatsEvent
 
 
+tik_tok_time = time.perf_counter()
+def tic():
+    global tik_tok_time
+    tik_tok_time = time.perf_counter()
+
+
+def toc():
+    global tik_tok_time
+    return time.perf_counter() - tik_tok_time
+
+
+def sleep(time_in_s: float):
+    start_time = time.perf_counter()
+    # time.sleep(time_in_s)
+    while (time.perf_counter()-start_time) < time_in_s:
+        pass
+
+
 def GetRunTime():
     return time.perf_counter() - FrameProfiler._start_time
 
@@ -30,7 +48,7 @@ class FrameProfiler:
     def Start(
         cls,
         interval: float = 1.0,
-        window_size: int = 1500
+        window_size: int = 1000
     ) -> None:
         """
         初始化性能分析器（在进入主循环前调用一次）

@@ -26,6 +26,10 @@ DEFAULT_SHADER_FILE = [
     'Basic.shader',
     'SSVEP.shader'
 ]
+DEFAULT_TEXTURE_NAME = [
+    'Default',
+    'Checkerboard',
+]
 
 
 class ResourceManager:
@@ -103,6 +107,20 @@ class ResourceManager:
             raise BaseException(raise_info)
 
     @classmethod
+    def GetDefaultTexture(
+        cls,
+        texture_name: str
+    ) -> int:
+        if texture_name in DEFAULT_TEXTURE_NAME:
+            for id_str, tex in cls.loaded_texture.items():
+                if tex['name'] == texture_name:
+                    return int(id_str)
+        raise KeyError(
+            f"没有名为 '{texture_name}' 的默认纹理，"
+            f"可用: {DEFAULT_TEXTURE_NAME}"
+        )
+
+    @classmethod
     def GetMesh(
         cls,
         mesh_id: int
@@ -138,7 +156,10 @@ class ResourceManager:
         current_material_id = cls.material_count
         shader: Shader = cls.loaded_shader[f'{1}']['data']
         uniforms_name_type = shader.uniforms_name_type
-        cls.loaded_material[f"{current_material_id}"] = Material(1, uniforms_name_type)
+        material = Material(1, uniforms_name_type)
+        # ★ 新建 material 自动绑定默认白色纹理，保证渲染始终有纹理可用
+        material.texture_id_list = [cls.GetDefaultTexture('Default')]
+        cls.loaded_material[f"{current_material_id}"] = material
         return current_material_id
 
 
@@ -186,4 +207,16 @@ class ResourceManager:
     def __load_default_texture(
         cls
     ) -> None:
-        pass
+        """加载默认纹理（程序化生成，无需外部文件）"""
+        # --- 白色占位纹理 ---
+        cls.texture_count += 1
+        cls.loaded_texture[f'{cls.texture_count}'] = {
+            'name': 'Default',
+            'data': Texture.CreateWhiteTexture(),
+        }
+        # --- 棋盘格调试纹理 ---
+        cls.texture_count += 1
+        cls.loaded_texture[f'{cls.texture_count}'] = {
+            'name': 'Checkerboard',
+            'data': Texture.CreateCheckerboard(),
+        }

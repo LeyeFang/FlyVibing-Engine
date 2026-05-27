@@ -21,11 +21,13 @@ void main()
 
 #version 330 core
 
-in vec2 TexCoord;   // 添加这一行
-out vec4 FragColor;      // 最终输出颜色
+in vec2 TexCoord;
+
+uniform sampler2D uTexture;
+
+out vec4 FragColor;
 
 void main()
 {
-    // 纯白色，不透明
-    FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    FragColor = texture(uTexture, TexCoord);
 }

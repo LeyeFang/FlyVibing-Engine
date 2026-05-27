@@ -14,6 +14,9 @@ class SceneManager:
     scene_camera_id: int = None
     main_camera_id: int = None
 
+    # ============================================================
+    # 生命周期 / Lifecycle
+    # ============================================================
     @classmethod
     def Init(
         cls,
@@ -32,6 +35,9 @@ class SceneManager:
     ) -> None:
         cls.scene[new_scene_name] = new_scene_name
 
+    # ============================================================
+    # 实体管理 / Entity Management
+    # ============================================================
     @classmethod
     def AddEntity(
         cls
@@ -49,6 +55,10 @@ class SceneManager:
         esper.add_component(entity_id, component_instance)
         NewComponentEvent.Pack(entity_id, component_instance)
 
+    # ============================================================
+    # 查询接口 / Query Interface
+    # ============================================================
+    # --- 相机 / Camera ---
     @classmethod
     def GetSceneCamera(
         cls
@@ -57,6 +67,7 @@ class SceneManager:
         transform = esper.component_for_entity(cls.scene_camera_id, Transform)
         return camera, transform
 
+    # --- 渲染 / Rendering ---
     @classmethod
     def GetRenderableEntities(
         cls
@@ -67,6 +78,7 @@ class SceneManager:
                 entity_id_list.append(entity_id)
         return entity_id_list
 
+    # --- 组件查询 / Component Queries ---
     @classmethod
     def GetEntityTransform(
         cls,
@@ -93,10 +105,23 @@ class SceneManager:
         material_id = mesh_rend.material_id
         return material_id
 
+    @classmethod
+    def GetEntityTexture(
+        cls,
+        entity_id: int,
+        slot: int = 0
+    ) -> int:
+        """获取 entity 当前使用的纹理 ID"""
+        mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+        material = ResourceManager.GetMaterial(mesh_rend.material_id)
+        if slot < len(material.texture_id_list):
+            return material.texture_id_list[slot]
+        return 0
 
-    #
-    # Modified Entities Components
-    #
+    # ============================================================
+    # 修改接口 / Modification Interface
+    # ============================================================
+    # --- 变换 / Transform ---
     @classmethod
     def SetEntityTransform(
         cls,
@@ -142,14 +167,14 @@ class SceneManager:
         if rotation_z is not None:
             transform.rotation_z = rotation_z
 
+    # --- 网格渲染器 / Mesh Renderer ---
     @classmethod
     def SetEntityMeshRenderer(
         cls,
         entity_id: int,
         visible: bool = None,
         mesh_id: int = None,
-        material_id: int = None,
-        uniforms: dict = None
+        material_id: int = None
     ) -> None:
         if entity_id is None:
             raise ("Must specific entity ID")
@@ -163,27 +188,68 @@ class SceneManager:
             mesh_rend.material_id = material_id
         ComponentModifiedEvent.Pack(entity_id, mesh_rend)
 
+    # --- 材质 / Material & Shader ---
     @classmethod
-    def SetEntityShaderUniforms(
+    def NewEntityMaterial(
         cls,
         entity_id: int,
-        uniforms: dict
-    ):
-        if entity_id is None:
-            raise ("Must specific entity ID")
+        shader_id: int = None
+    ) -> int:
+        """为 entity 创建一个全新的独立 material，返回 material_id
 
-        try:
-            mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
-            material_id = mesh_rend.material_id
-            uniforms_should_be: dict = ResourceManager.GetMaterial(material_id).uniforms_data
-            material = ResourceManager.GetMaterial(material_id)
-            for u_name, u_value in uniforms.items():
-                if u_name in uniforms_should_be.keys():
-                    material.uniforms_data[u_name] = u_value
-                else:
-                    raise BaseException("Input uniforms and material actual uniforms not match !!")
-        except KeyError:
-            raise BaseException(f"Entity '{entity_id}' do not have mesh renderer")
+        调用时机：当你希望某个 entity 拥有不和别人共享的材质时。
+        之后可以 SetEntityTexture / SetMaterialParams 进一步定制。
+        """
+        if shader_id is not None:
+            # 创建指定 shader 的 material
+            new_material_id = ResourceManager.NewMaterial()
+            material = ResourceManager.GetMaterial(new_material_id)
+            uniforms_name_type = ResourceManager.GetShader(shader_id).uniforms_name_type
+            material.set_new_shader(shader_id, uniforms_name_type)
+        else:
+            new_material_id = ResourceManager.NewMaterial()
+
+        mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+        mesh_rend.material_id = new_material_id
+        ComponentModifiedEvent.Pack(entity_id, mesh_rend)
+        return new_material_id
+
+    @classmethod
+    def SetEntityMaterial(
+        cls,
+        entity_id: int,
+        material_id: int
+    ) -> None:
+        """直接将 entity 的 material 切换为已有的 material_id
+
+        适用场景：多个 entity 共享同一个材质（节省 GPU 资源）。
+        """
+        mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+        mesh_rend.material_id = material_id
+        ComponentModifiedEvent.Pack(entity_id, mesh_rend)
+
+    @classmethod
+    def SetEntityTexture(
+        cls,
+        entity_id: int,
+        texture_id: int,
+        slot: int = 0
+    ) -> None:
+        """为 entity 的 material 设置纹理
+
+        Args:
+            entity_id:  目标实体
+            texture_id: 纹理资源 ID（通过 ResourceManager.GetDefaultTexture 或 LoadAssets 获得）
+            slot:       纹理槽位，0=diffuse/albedo, 1=normal, 2=specular, ...
+                        当前只用了 slot 0，预留多纹理支持
+        """
+        mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+        material = ResourceManager.GetMaterial(mesh_rend.material_id)
+        # 确保 texture_id_list 够长
+        while len(material.texture_id_list) <= slot:
+            material.texture_id_list.append(0)
+        material.texture_id_list[slot] = texture_id
+        ComponentModifiedEvent.Pack(entity_id, mesh_rend)
 
     @classmethod
     def SetEntityShader(
@@ -197,3 +263,30 @@ class SceneManager:
         entity_material.set_new_shader(shader_id, uniforms_name_type)
         ComponentModifiedEvent.Pack(entity_id, mesh_rend)
 
+    @classmethod
+    def SetMaterialParams(
+        cls,
+        entity_id: int,
+        params: dict
+    ):
+        """批量设置 entity 材质的着色器参数（uniform）
+
+        Args:
+            entity_id:  目标实体
+            params:     参数名 → 值的字典，如 {"freq": 60, "time": 0.5}
+        """
+        if entity_id is None:
+            raise ("Must specific entity ID")
+
+        try:
+            mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+            material_id = mesh_rend.material_id
+            uniforms_should_be: dict = ResourceManager.GetMaterial(material_id).uniforms_data
+            material = ResourceManager.GetMaterial(material_id)
+            for u_name, u_value in params.items():
+                if u_name in uniforms_should_be.keys():
+                    material.uniforms_data[u_name] = u_value
+                else:
+                    raise BaseException("Input params and material actual params not match !!")
+        except KeyError:
+            raise BaseException(f"Entity '{entity_id}' do not have mesh renderer")

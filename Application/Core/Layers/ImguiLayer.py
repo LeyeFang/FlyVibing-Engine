@@ -14,6 +14,7 @@ from Application.Core.Scene.SceneManager import SceneManager
 import ctypes
 
 from imgui_bundle import imgui
+from imgui_bundle import imgui_node_editor
 # 文件顶部新增一行导入
 from Application.Core.Math.RendererMath import get_world_forward
 
@@ -104,13 +105,12 @@ class ImguiLayer(Layer):
 
     @classmethod
     def OnUpdate(cls):
-        imgui.backends.glfw_new_frame()
         pass
 
     @classmethod
     def OnRender(cls):
+        imgui.backends.glfw_new_frame()
         imgui.backends.opengl3_new_frame()
         imgui.new_frame()
-        # imgui.show_demo_window()
         imgui.render()
         imgui.backends.opengl3_render_draw_data(imgui.get_draw_data())

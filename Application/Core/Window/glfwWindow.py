@@ -68,7 +68,7 @@ class glfwWindow(Window):
     #
     #
     # Internal functions --------------------------------------------
-    def _create_window():
+    def _create_window() -> glfwWindow:
         # 1. 初始化 GLFW
         if not glfw.init():
             print("无法初始化 GLFW")

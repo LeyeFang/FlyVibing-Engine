@@ -16,7 +16,12 @@ from Application.Core.Scene.SceneManager import SceneManager
 # # Resource & Scene
 from Application.Resource.ResourceManager import ResourceManager
 # # Timer
-from Application.Core.Timer.Timer import FrameProfiler
+from Application.Core.Timer.Timer import (
+    FrameProfiler,
+    tic,
+    toc,
+    sleep
+)
 
 from enum import Enum
 from typing import Union
@@ -47,6 +52,7 @@ class Application:
     run_state: bool = True
     renderer_ready = threading.Event()
     run_ready = threading.Event()
+    target_frame_time: float = 1 / 1200
 
     @classmethod
     def Create(
@@ -147,11 +153,14 @@ class Application:
             cls.window.SwapBuffer()
             FrameProfiler.Start(1)
             while cls.run_state:
+                tic()
                 cls.renderer.StartFrame()
                 for layer in cls.layer_stack:
                     layer.OnRender()
                 cls.renderer.EndFrame()
                 cls.window.SwapBuffer()
+                if toc() < cls.target_frame_time:
+                    sleep(cls.target_frame_time-toc())
                 FrameProfiler.Tick()
         except Exception as e:
             raise e
@@ -169,3 +178,6 @@ def GetWindowBackend() -> WindowType:
 
 def GetRendererBackend() -> RendererType:
     return Application.renderer_type
+
+def SetTargetFrame(frame: int) -> None:
+    Application.target_frame_time = float(1 / frame)

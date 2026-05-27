@@ -66,11 +66,16 @@ class RenderResourceManger(ABC):
     @dataclass
     class texture_data_struct:
         ref_count: int = 0
-
+        # 子类 upload 后填充:
+        #   modernGL → mgl.Texture 对象
+        #   opengl   → GL uint (纹理 ID)
+        gl_handle: any = None
+        texture_unit: int = -1   # 分配的纹理单元
 
     registered_entities: dict[entity_data_struct] = {}
     registered_meshes: dict[mesh_data_struct] = {}
     registered_shaders: dict[shader_data_struct] = {}
+    registered_textures: dict[int, texture_data_struct]
     registered_textures: dict = {}
 
     @classmethod

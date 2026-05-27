@@ -57,10 +57,19 @@ class modernGLRenderer(Renderer, RenderResourceManger):
         program: object = None   # mgl.Program
         ref_count: int = 0
 
-    registered_entities: dict = {}
-    registered_meshes: dict = {}
-    registered_shaders: dict = {}
-    registered_textures: dict = {}
+    @dataclass
+    class texture_data_struct:
+        ref_count: int = 0
+        # 子类 upload 后填充:
+        #   modernGL → mgl.Texture 对象
+        #   opengl   → GL uint (纹理 ID)
+        gl_handle: any = None
+        texture_unit: int = -1   # 分配的纹理单元
+
+    registered_entities: dict[str, entity_data_struct] = {}
+    registered_meshes: dict[str, mesh_data_struct] = {}
+    registered_shaders: dict[str, shader_data_struct] = {}
+    registered_textures: dict[str, texture_data_struct] = {}
 
     # ============================================================
     # Lifecycle
@@ -92,24 +101,28 @@ class modernGLRenderer(Renderer, RenderResourceManger):
             w, h = cls._pending_resize
             cls.ctx.viewport = (0, 0, w, h)
             cls._pending_resize = None
-
         cls.ctx.clear(0.2, 0.2, 0.2, 1.0)
-        # 使用缓存的相机矩阵（仅 SceneCameraUpdateEvent 时刷新）
         view = cls._cached_view
         proj = cls._cached_proj
-
         renderable_entities = SceneManager.GetRenderableEntities()
         for entity_id in renderable_entities:
             entity = cls.registered_entities[entity_id]
             entity_shader = cls.registered_shaders[entity.shader_id]
             program = entity_shader.program
-
             # 1. 先算并上传模型矩阵
             model = calculate_entity_model(SceneManager.GetEntityTransform(entity_id))
             program['model'].write(np.ascontiguousarray(model.astype('float32')).tobytes())
             program['view'].write(np.ascontiguousarray(view.astype('float32')).tobytes())
             program['projection'].write(np.ascontiguousarray(proj.astype('float32')).tobytes())
-
+            # --- 绑定纹理 ---
+            if entity.texture_id and entity.texture_id > 0:
+                tex_data = cls.registered_textures.get(entity.texture_id)
+                if tex_data and tex_data.gl_handle is not None:
+                    tex_data.gl_handle.use(location=0)
+                    try:
+                        program['uTexture'] = 0
+                    except KeyError:
+                        pass  # shader 里没有 sampler2D
             # 2. 上传材料的其他 uniform，跳过已经传过的三个矩阵
             material = ResourceManager.GetMaterial(entity.material_id)
             for u_name, u_value in material.uniforms_data.items():
@@ -124,7 +137,6 @@ class modernGLRenderer(Renderer, RenderResourceManger):
                         program[u_name] = u_value
                 except KeyError:
                     pass  # uniform 被 shader 编译器优化掉了
-
             entity.vao.render(mgl.TRIANGLES)
 
     @classmethod
@@ -179,13 +191,20 @@ class modernGLRenderer(Renderer, RenderResourceManger):
         mesh_id = SceneManager.GetEntityMesh(entity_id)
         material_id = SceneManager.GetEntityMaterial(entity_id)
         mesh = ResourceManager.GetMesh(mesh_id)
-        material = ResourceManager.GetMaterial(material_id)
+        material: Material = ResourceManager.GetMaterial(material_id)
         shader_id = material.shader_id
         shader = ResourceManager.GetShader(shader_id)
         cls.register_mesh(mesh, mesh_id)
         cls.register_shader(shader, shader_id)
         mesh_data = cls.registered_meshes[mesh_id]
         shader_data = cls.registered_shaders[shader_id]
+        # --- 注册纹理 ---
+        if material.texture_id_list:
+            tex_id = material.texture_id_list[0]  # 取第一张作为 diffuse
+            texture = ResourceManager.GetTexture(tex_id)
+            cls.register_texture(texture, tex_id)
+        else:
+            tex_id = 0
         program = shader_data.program
         # skip_errors=True: 自动跳过 shader 中不存在的 attribute（如被优化掉的 aNormal）
         vao = cls.ctx.vertex_array(
@@ -196,7 +215,7 @@ class modernGLRenderer(Renderer, RenderResourceManger):
         )
         cls.registered_entities[entity_id] = cls.entity_data_struct(
             shader_id=shader_id,
-            texture_id=0,
+            texture_id=tex_id,
             mesh_id=mesh_id,
             material_id=material_id,
             vao=vao,
@@ -238,6 +257,40 @@ class modernGLRenderer(Renderer, RenderResourceManger):
         cls.registered_shaders[shader_id] = cls.shader_data_struct(
             program=program,
             ref_count=1,
+        )
+
+    @classmethod
+    def register_texture(
+        cls,
+        texture: Texture,
+        texture_id: int
+    ) -> None:
+        """将 CPU 纹理上传到 GPU（ModernGL）"""
+        if texture_id in cls.registered_textures:
+            cls.registered_textures[texture_id].ref_count += 1
+            return
+        # 确定内部格式和数据类型
+        if texture.channels == 1:
+            fmt = 'R8'
+        elif texture.channels == 3:
+            fmt = 'RGB8'
+        elif texture.channels == 4:
+            fmt = 'RGBA8'
+        else:
+            raise ValueError(f"不支持的纹理通道数: {texture.channels}")
+        # 创建 ModernGL 纹理
+        mgl_tex = cls.ctx.texture(
+            (texture.width, texture.height),
+            texture.channels,
+            texture.image_data.tobytes(),
+            dtype='f1',  # 8-bit unsigned normalized
+        )
+        mgl_tex.filter = (mgl.LINEAR_MIPMAP_LINEAR, mgl.LINEAR)
+        mgl_tex.build_mipmaps()
+        cls.registered_textures[texture_id] = cls.texture_data_struct(
+            ref_count=1,
+            gl_handle=mgl_tex,
+            texture_unit=-1,
         )
 
     @classmethod
@@ -316,4 +369,11 @@ class modernGLRenderer(Renderer, RenderResourceManger):
         cls,
         texture_id: int
     ) -> None:
-        pass  # 纹理未实现，预留
+        if texture_id not in cls.registered_textures:
+            return
+        data = cls.registered_textures[texture_id]
+        data.ref_count -= 1
+        if data.ref_count <= 0:
+            if data.gl_handle is not None:
+                data.gl_handle.release()
+            del cls.registered_textures[texture_id]

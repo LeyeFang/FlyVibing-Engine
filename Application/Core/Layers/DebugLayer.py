@@ -3,6 +3,13 @@ from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Scene.BasicComponents import MeshRenderer
 from Application.Core.Timer.Timer import GetRunTime
+from Application.Core.Events.InputEvent import *
+from Application.Core.Events.SceneEvent import *
+
+mask_events = [
+    MouseGragEvent,
+    SceneCameraUpdateEvent
+]
 
 
 class DebugLayer(Layer):
@@ -52,7 +59,9 @@ class DebugLayer(Layer):
         cls,
         event
     ):
-        print(f"Time: {GetRunTime():.4f}, Event: {event}")
+        global mask_events
+        if event not in mask_events:
+            print(f"Time: {GetRunTime():.4f}, Event: {event}")
         pass
 
     @classmethod

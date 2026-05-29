@@ -1,0 +1,107 @@
+from imgui_bundle import imgui
+from imgui_bundle import imgui_node_editor as node_ed
+
+from Application.Core.UI.BasePanel import BasePanel
+
+
+class NodeEditorPanel(BasePanel):
+    """节点编辑器画布 — 目前为空白画布 + 右键菜单占位"""
+
+    name = "Node Editor"
+    flags = imgui.WindowFlags_.none
+
+    def __init__(
+        self
+    ) -> None:
+        super().__init__()
+        self.visible = True
+        # imgui_node_editor 上下文
+        self._editor_context: node_ed.EditorContext | None = None
+        # 是否已完成初始化
+        self._editor_initialized: bool = False
+
+    # ============================================================
+    # 生命周期
+    # ============================================================
+
+    def on_attach(
+        self
+    ) -> None:
+        """面板注册时创建节点编辑器上下文"""
+        if not self._editor_initialized:
+            try:
+                self._editor_context = node_ed.create_editor()
+                self._editor_initialized = True
+            except Exception:
+                self._editor_context = None
+
+    def on_detach(
+        self
+    ) -> None:
+        """面板移除时销毁节点编辑器上下文"""
+        if self._editor_context is not None:
+            try:
+                node_ed.destroy_editor(self._editor_context)
+            except Exception:
+                pass
+            self._editor_context = None
+            self._editor_initialized = False
+
+    # ============================================================
+    # 绘制
+    # ============================================================
+
+    def draw(
+        self
+    ) -> None:
+        """绘制节点编辑画布及右键菜单"""
+        # 节点编辑器不可用时的降级提示
+        if self._editor_context is None:
+            imgui.text_colored(
+                imgui.ImVec4(1.0, 0.3, 0.3, 1.0),
+                "Node Editor not available"
+            )
+            imgui.text_disabled(
+                "Ensure imgui_bundle is compiled with node editor support."
+            )
+            return
+
+        canvas_pos = imgui.get_cursor_screen_pos()
+        canvas_size = imgui.get_content_region_avail()
+
+        # 激活当前编辑器上下文并开始绘制
+        node_ed.set_current_editor(self._editor_context)
+        node_ed.begin("NodeEditor", canvas_size)
+
+        # ── 空画布提示（居中显示） ──
+        imgui.set_cursor_screen_pos((
+            canvas_pos.x + canvas_size.x / 2 - 80,
+            canvas_pos.y + canvas_size.y / 2 - 10
+        ))
+        imgui.text_colored(
+            imgui.ImVec4(0.447, 0.463, 0.490, 1.00),
+            "Right-click canvas to add nodes"
+        )
+
+        # ── 右键菜单 ──
+        # suspend/resume 是 imgui_node_editor 的固定模式
+        node_ed.suspend()
+        if node_ed.show_background_context_menu():
+            imgui.open_popup("Create Node")
+        node_ed.resume()
+
+        if imgui.begin_popup("Create Node"):
+            imgui.text_disabled("Add Node...")
+            imgui.separator()
+            # 未来：这些菜单项将创建真实节点
+            if imgui.menu_item("SSVEP Stimulus")[0]:
+                pass
+            if imgui.menu_item("Image Stimulus")[0]:
+                pass
+            if imgui.menu_item("EEG Device")[0]:
+                pass
+            if imgui.menu_item("PyTorch Inference")[0]:
+                pass
+            imgui.end_popup()
+
+        node_ed.end()

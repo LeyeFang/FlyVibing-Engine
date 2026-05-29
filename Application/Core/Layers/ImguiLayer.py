@@ -10,6 +10,11 @@ from Application.Core.Events.Event import Event
 from Application.Core.Events.InputEvent import *
 from Application.Core.Events.SceneEvent import *
 from Application.Core.Scene.SceneManager import SceneManager
+from Application.Core.UI.UIManager import UIManager
+from Application.Core.UI.panels import (
+    ScenePanel,
+    NodeEditorPanel,
+)
 
 import ctypes
 
@@ -20,6 +25,17 @@ from Application.Core.Math.RendererMath import get_world_forward
 
 
 class ImguiLayer(Layer):
+
+    @classmethod
+    def _mouse_in_any_panel(cls) -> bool:
+        """检查鼠标是否落在任意面板窗口内（线程安全：只读 UIManager._panel_rects）"""
+        io = imgui.get_io()
+        mx, my = io.mouse_pos
+        for x, y, w, h in UIManager._panel_rects:
+            if x <= mx <= x + w and y <= my <= y + h:
+                return True
+        return False
+
     @classmethod
     def OnAttach(cls):
         # Init for Imgui
@@ -48,6 +64,16 @@ class ImguiLayer(Layer):
         io = imgui.get_io()
         w, h = GetWindow().GetSize()
         io.display_size = (float(w), float(h))
+        # 在末尾追加：
+        cls._init_ui_panels()
+
+    @classmethod
+    def _init_ui_panels(cls):
+        """注册所有 UI 面板（只执行一次）"""
+        if not hasattr(cls, '_panels_registered'):
+            UIManager.register(ScenePanel())
+            UIManager.register(NodeEditorPanel())
+            cls._panels_registered = True
 
     @classmethod
     def OnDetach(cls):
@@ -71,6 +97,11 @@ class ImguiLayer(Layer):
         cls,
         event: Event
     ) -> None:
+        # 🛑 鼠标落在面板窗口内时，不处理场景视角操作
+        #     通过 UIManager._panel_rects 检测（渲染线程写入，主线程只读）
+        if cls._mouse_in_any_panel():
+            return
+
         if event is ScrollerEvent:
             _, y_offset = ScrollerEvent.UnPack()
             camera, transform = SceneManager.GetSceneCamera()
@@ -112,5 +143,9 @@ class ImguiLayer(Layer):
         imgui.backends.glfw_new_frame()
         imgui.backends.opengl3_new_frame()
         imgui.new_frame()
+
+        # ⭐ 由 UIManager 绘制所有面板
+        UIManager.draw_all()
+
         imgui.render()
         imgui.backends.opengl3_render_draw_data(imgui.get_draw_data())

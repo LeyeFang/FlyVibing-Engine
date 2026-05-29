@@ -6,6 +6,8 @@ from Application.Core.Timer.Timer import GetRunTime
 from Application.Core.Events.InputEvent import *
 from Application.Core.Events.SceneEvent import *
 
+import math
+
 mask_events = [
     MouseGragEvent,
     SceneCameraUpdateEvent
@@ -53,6 +55,14 @@ class DebugLayer(Layer):
         # Camera
         SceneManager.SetMainCameraTransform(
             position_z=-3)
+        # ── 初始化轨道摄像头状态 ──
+        # 实体位于 z≈-50，轨道原点设在实体群中心
+        SceneManager.SetOrbitTarget(0, 0, -50)
+        SceneManager.SetOrbitDistance(47.0)            # |-3 - (-50)| = 47
+        # 初始方位角设为 π，使摄像机在 z=-3 一侧、面朝 z=-50 方向
+        SceneManager.SetMainCameraTransform(rotation_y=math.pi)
+        SceneManager.ApplyOrbitToCamera()
+        SceneCameraUpdateEvent.Pack()
 
     @classmethod
     def OnEvent(

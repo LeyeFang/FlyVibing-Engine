@@ -5,10 +5,20 @@ from Application.Core.Scene.BasicComponents import Camera, Transform, Projection
 
 def calculate_view_matrix(
     camera: Camera,
-    transform: Transform
+    transform: Transform,
+    target: np.ndarray = None     # ← 轨道摄像头：指定 look-at 目标点
 ) -> np.ndarray:
-    """根据摄像机和 Transform 计算视图矩阵"""
+    """根据摄像机和 Transform 计算视图矩阵
+
+    当 target 不为 None 时，直接使用 target 作为 look-at 目标（轨道摄像头模式）。
+    否则使用旋转矩阵 + local_forward 计算目标（自由摄像头模式）。
+    """
     pos = Vector3([transform.position_x, transform.position_y, transform.position_z])
+    up = Vector3(camera.up_vector)
+
+    if target is not None:
+        return matrix44.create_look_at(pos, Vector3(target), up)
+
     # 构建旋转矩阵
     rot_mat = matrix44.create_from_eulers([
         transform.rotation_x,   # pitch
@@ -21,9 +31,8 @@ def calculate_view_matrix(
     world_forward_vec4 = matrix44.apply_to_vector(rot_mat, local_forward_h)
     world_forward = vector3.create_from_vector4(world_forward_vec4)
     # ✅ 修复: 使用完整 3D 向量，而非只取 X 分量
-    target = pos + world_forward[0]
-    up = Vector3(camera.up_vector)
-    return matrix44.create_look_at(pos, target, up)
+    target_from_rot = pos + world_forward[0]
+    return matrix44.create_look_at(pos, target_from_rot, up)
 
 
 def calculate_projection_matrix(

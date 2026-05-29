@@ -20,8 +20,6 @@ import ctypes
 
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor
-# 文件顶部新增一行导入
-from Application.Core.Math.RendererMath import get_world_forward
 
 
 class ImguiLayer(Layer):
@@ -103,36 +101,60 @@ class ImguiLayer(Layer):
             return
 
         if event is ScrollerEvent:
+            # ── 滚轮：缩放（改变轨道距离）──
             _, y_offset = ScrollerEvent.UnPack()
-            camera, transform = SceneManager.GetSceneCamera()
-            world_forward = get_world_forward(camera, transform)
-            speed = 0.5
-            SceneManager.SetMainCameraTransform(
-                position_x=transform.position_x + world_forward[0] * y_offset * speed,
-                position_y=transform.position_y + world_forward[1] * y_offset * speed,
-                position_z=transform.position_z + world_forward[2] * y_offset * speed
-            )
+            dist = SceneManager.GetOrbitDistance()
+            # 指数缩放，手感更自然
+            zoom_speed = 0.1
+            new_dist = dist * (1.0 - y_offset * zoom_speed)
+            SceneManager.SetOrbitDistance(new_dist)
+            SceneManager.ApplyOrbitToCamera()
             SceneCameraUpdateEvent.Pack()
+
         elif event is MouseGragEvent:
+            import numpy as np
             bt, offset_x, offset_y = MouseGragEvent.UnPack()
             _, transform = SceneManager.GetSceneCamera()
-            pos_x_current = transform.position_x
-            pos_y_current = transform.position_y
-            rot_x_current = transform.rotation_x
-            rot_z_current = transform.rotation_z
+
             if bt == MouseButtonCode.Middle:
-                pos_x_next = pos_x_current - 0.1*offset_x
-                pos_y_next = pos_y_current + 0.1*offset_y
-                SceneManager.SetMainCameraTransform(
-                    position_x=pos_x_next,
-                    position_y=pos_y_next)
+                # ── 中键拖动：平移轨道原点（Pan）──
+                # 根据当前旋转角计算摄像机的世界空间 right/up 向量
+                azimuth = transform.rotation_y
+                elevation = transform.rotation_x
+                # right = (cos(azimuth), 0, sin(azimuth))
+                rx = np.cos(azimuth)
+                rz = np.sin(azimuth)
+                # up 近似：垂直方向 (0, 1, 0)，不做复杂叉积
+                ux = -np.sin(elevation) * np.sin(azimuth)
+                uy = np.cos(elevation)
+                uz = np.sin(elevation) * np.cos(azimuth)
+
+                pan_speed = 0.01
+                tx, ty, tz = SceneManager.GetOrbitTarget()
+                tx += rx * (-offset_x * pan_speed) + ux * (offset_y * pan_speed)
+                ty += uy * (offset_y * pan_speed)
+                tz += rz * (-offset_x * pan_speed) + uz * (offset_y * pan_speed)
+                SceneManager.SetOrbitTarget(tx, ty, tz)
+                SceneManager.ApplyOrbitToCamera()
+                SceneCameraUpdateEvent.Pack()
+
             if bt == MouseButtonCode.Left:
-                rot_z_next = rot_z_current - 0.01*offset_x
-                rot_x_next = rot_x_current - 0.01*offset_y
+                # ── 左键拖动：绕轨道原点旋转（Orbit）──
+                rot_x_current = transform.rotation_x
+                rot_y_current = transform.rotation_y
+
+                orbit_speed = 0.005
+                rot_y_next = rot_y_current - offset_x * orbit_speed   # 水平环绕
+                rot_x_next = rot_x_current - offset_y * orbit_speed   # 垂直俯仰
+
+                # 限制俯仰角，防止翻转（-89° ~ +89°）
+                rot_x_next = np.clip(rot_x_next, -np.pi/2 + 0.01, np.pi/2 - 0.01)
+
                 SceneManager.SetMainCameraTransform(
-                    rotation_z=rot_z_next,
-                    rotation_x=rot_x_next)
-            SceneCameraUpdateEvent.Pack()
+                    rotation_x=rot_x_next,
+                    rotation_y=rot_y_next)
+                SceneManager.ApplyOrbitToCamera()
+                SceneCameraUpdateEvent.Pack()
 
     @classmethod
     def OnUpdate(cls):

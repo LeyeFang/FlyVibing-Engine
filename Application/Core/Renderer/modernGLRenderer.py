@@ -90,7 +90,8 @@ class modernGLRenderer(Renderer, RenderResourceManger):
         cls.ctx.enable(mgl.DEPTH_TEST)
         # 初始化相机矩阵缓存
         camera, transform = SceneManager.GetSceneCamera()
-        cls._cached_view = calculate_view_matrix(camera, transform)
+        target = SceneManager.GetOrbitTarget()
+        cls._cached_view = calculate_view_matrix(camera, transform, target)
         cls._cached_proj = calculate_projection_matrix(camera, cls.aspect_ratio)
         return cls
 
@@ -177,7 +178,8 @@ class modernGLRenderer(Renderer, RenderResourceManger):
     ):
         """仅缓存矩阵，不碰任何 GL 调用（GL 上下文在渲染线程）"""
         camera, transform = SceneManager.GetSceneCamera()
-        cls._cached_view = calculate_view_matrix(camera, transform)
+        target = SceneManager.GetOrbitTarget()
+        cls._cached_view = calculate_view_matrix(camera, transform, target)
         cls._cached_proj = calculate_projection_matrix(camera, cls.aspect_ratio)
 
     # ============================================================

@@ -45,7 +45,8 @@ class openglRenderer(Renderer, RenderResourceManger):
         glEnable(GL_DEPTH_TEST)
         # About Camera
         camera, transform = SceneManager.GetSceneCamera()
-        cls.view_matrix = calculate_view_matrix(camera, transform)
+        target = SceneManager.GetOrbitTarget()
+        cls.view_matrix = calculate_view_matrix(camera, transform, target)
         cls.proj_matrix = calculate_projection_matrix(camera, cls.aspect_ratio)
         return cls
 
@@ -328,5 +329,6 @@ class openglRenderer(Renderer, RenderResourceManger):
     ):
         # About Camera
         camera, transform = SceneManager.GetSceneCamera()
-        cls.view_matrix = calculate_view_matrix(camera, transform)
+        target = SceneManager.GetOrbitTarget()
+        cls.view_matrix = calculate_view_matrix(camera, transform, target)
         cls.proj_matrix = calculate_projection_matrix(camera, cls.aspect_ratio)

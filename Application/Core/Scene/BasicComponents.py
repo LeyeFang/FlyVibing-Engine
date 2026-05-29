@@ -81,7 +81,7 @@ class Camera:
     ortho_size: float = 5.0
     # 通用裁剪平面
     near_plane: float = 0.1
-    far_plane: float = 100.0
+    far_plane: float = 1000.0
     # 视图辅助参数（用于计算视图矩阵，但实际位置/旋转来自 Transform）
     # 默认观察方向：局部坐标系中的前方（通常为 +Z 或 -Z，这里按 OpenGL 习惯设 -Z）
     local_forward: tuple = (0.0, 0.0, -1.0)

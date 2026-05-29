@@ -10,13 +10,14 @@ class ToolbarPanel(BasePanel):
     """播放控制工具栏 — 共享 SimulationController"""
 
     name = "##Toolbar"
-    flags = (imgui.WindowFlags_.no_title_bar
-             | imgui.WindowFlags_.no_collapse
-             | imgui.WindowFlags_.no_resize
-             | imgui.WindowFlags_.no_move
-             | imgui.WindowFlags_.no_scrollbar
-             | imgui.WindowFlags_.no_docking
-             | imgui.WindowFlags_.always_auto_resize)
+    flags = (
+        imgui.WindowFlags_.no_title_bar
+        | imgui.WindowFlags_.no_collapse
+        | imgui.WindowFlags_.no_resize
+        | imgui.WindowFlags_.no_move
+        | imgui.WindowFlags_.no_scrollbar
+        | imgui.WindowFlags_.no_docking
+        | imgui.WindowFlags_.always_auto_resize)
 
     def __init__(self):
         super().__init__()

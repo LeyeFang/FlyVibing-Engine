@@ -14,6 +14,12 @@ class SceneManager:
     scene_camera_id: int = None
     main_camera_id: int = None
 
+    # ── 编辑器轨道摄像头状态 ──
+    camera_orbit_target_x: float = 0.0
+    camera_orbit_target_y: float = 0.0
+    camera_orbit_target_z: float = 0.0
+    camera_orbit_distance: float = 5.0     # 摄像机到轨道原点的距离
+
     # ============================================================
     # 生命周期 / Lifecycle
     # ============================================================
@@ -66,6 +72,75 @@ class SceneManager:
         camera = esper.component_for_entity(cls.scene_camera_id, Camera)
         transform = esper.component_for_entity(cls.scene_camera_id, Transform)
         return camera, transform
+
+    @classmethod
+    def GetOrbitTarget(
+        cls
+    ) -> tuple[float, float, float]:
+        """返回轨道原点坐标 (x, y, z)"""
+        return (
+            cls.camera_orbit_target_x,
+            cls.camera_orbit_target_y,
+            cls.camera_orbit_target_z,
+        )
+
+    @classmethod
+    def SetOrbitTarget(
+        cls,
+        x: float = None,
+        y: float = None,
+        z: float = None
+    ) -> None:
+        """设置轨道原点"""
+        if x is not None:
+            cls.camera_orbit_target_x = x
+        if y is not None:
+            cls.camera_orbit_target_y = y
+        if z is not None:
+            cls.camera_orbit_target_z = z
+
+    @classmethod
+    def GetOrbitDistance(cls) -> float:
+        return cls.camera_orbit_distance
+
+    @classmethod
+    def SetOrbitDistance(cls, d: float) -> None:
+        cls.camera_orbit_distance = max(d, 0.1)  # 防止非正
+
+    @classmethod
+    def ApplyOrbitToCamera(
+        cls
+    ) -> None:
+        """根据 orbit target / distance / 当前旋转角度 计算并应用摄像机位置。
+
+        约定：
+          - rotation_y  → 水平环绕角 (azimuth / yaw)
+          - rotation_x  → 垂直俯仰角 (elevation / pitch)
+          摄像机位置 = orbit_target + distance * (由 rotation_x/y 决定的方向)
+        """
+        import numpy as np
+        from pyrr import matrix44, Vector3
+
+        transform = esper.component_for_entity(cls.main_camera_id, Transform)
+
+        azimuth = transform.rotation_y      # 水平角
+        elevation = transform.rotation_x    # 俯仰角
+
+        # 球坐标 → 笛卡尔偏移
+        #   X = sin(azimuth) * cos(elevation)  (Right)
+        #   Y = sin(elevation)                  (Up)
+        #   Z = -cos(azimuth) * cos(elevation)  (Forward, OpenGL -Z)
+        dx = np.sin(azimuth) * np.cos(elevation)
+        dy = np.sin(elevation)
+        dz = -np.cos(azimuth) * np.cos(elevation)
+
+        pos_x = cls.camera_orbit_target_x + dx * cls.camera_orbit_distance
+        pos_y = cls.camera_orbit_target_y + dy * cls.camera_orbit_distance
+        pos_z = cls.camera_orbit_target_z + dz * cls.camera_orbit_distance
+
+        transform.position_x = pos_x
+        transform.position_y = pos_y
+        transform.position_z = pos_z
 
     # --- 渲染 / Rendering ---
     @classmethod

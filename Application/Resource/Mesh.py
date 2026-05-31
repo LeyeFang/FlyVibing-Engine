@@ -1,5 +1,4 @@
 import numpy as np
-from OpenGL.GL import *
 
 from dataclasses import dataclass, field
 

@@ -3,8 +3,8 @@ from imgui_bundle import imgui
 # DockBuilder API 在 imgui.internal 命名空间
 from imgui_bundle import imgui as imgui_internal
 
-from Application.Core.UI.BasePanel import BasePanel
-from Application.Core.UI.PanelStyle import apply_custom_style
+from Application.Editor.UI.BasePanel import BasePanel
+from Application.Editor.UI.PanelStyle import apply_custom_style
 
 
 class UIManager:
@@ -104,11 +104,12 @@ class UIManager:
         cls._panel_rects.clear()
         for panel in cls._panels:
             if panel.visible:
-                if panel.begin_panel():
-                    # 📸 记录面板窗口矩形，供下一帧事件处理判断鼠标归属
-                    pos = imgui.get_window_pos()
-                    size = imgui.get_window_size()
-                    cls._panel_rects.append((pos.x, pos.y, size.x, size.y))
+                expanded = panel.begin_panel()
+                # 📸 无论展开还是折叠，都记录窗口矩形，防止摄像头穿透
+                pos = imgui.get_window_pos()
+                size = imgui.get_window_size()
+                cls._panel_rects.append((pos.x, pos.y, size.x, size.y))
+                if expanded:
                     panel.draw()
                 panel.end_panel()
 

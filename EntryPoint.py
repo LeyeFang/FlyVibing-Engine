@@ -2,7 +2,7 @@ import sys
 
 from Application.Application import Application
 from Application.Core.Layers.DebugLayer import DebugLayer
-from Application.Core.Layers.ImguiLayer import ImguiLayer
+from Application.Editor.ImguiLayer import ImguiLayer
 
 
 Application.Create(renderer_type='ModernGL')

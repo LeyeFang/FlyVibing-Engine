@@ -1,13 +1,13 @@
 from imgui_bundle import imgui
 
-from Application.Core.UI.BasePanel import BasePanel
-from Application.Core.UI.controllers.SimulationController import (
+from Application.Editor.UI.BasePanel import BasePanel
+from Application.Editor.UI.controllers.SimulationController import (
     SimulationController,
 )
-from Application.Core.UI.controllers.SceneBrowserController import (
+from Application.Editor.UI.controllers.SceneBrowserController import (
     SceneBrowserController,
 )
-from Application.Core.UI.controllers.ResourceBrowserController import (
+from Application.Editor.UI.controllers.ResourceBrowserController import (
     ResourceBrowserController,
 )
 

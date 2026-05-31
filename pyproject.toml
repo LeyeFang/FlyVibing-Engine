@@ -10,8 +10,6 @@ dependencies = [
     "numpy==2.4.4",
     "pycparser==3.0",
     "moderngl==5.12.0",
-    "pyopengl==3.1.10",
-    "pyopengl-accelerate==3.1.10",
     "pyrr==0.10.3",
     "pysdl2==0.9.17",
     "pysdl2-dll==2.32.0",

@@ -35,8 +35,8 @@ class sdl2Window(Window):
             match event.type:
                 case sdl2.SDL_QUIT:
                     WindowCloseEvent.Pack()
-        # **关键3：如果是 OpenGL，交换缓冲区**
-        if cls.app.renderer_type == 'OpenGL':
+        # ModernGL / OpenGL 交换缓冲区
+        if cls.app.renderer_type in ('ModernGL',):
             sdl2.SDL_GL_SwapWindow(cls.sdl2_window)
 
     @classmethod
@@ -71,7 +71,8 @@ class sdl2Window(Window):
     ) -> SDL_Window:
         renderer_type = cls.app.renderer_type
         sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)
-        if renderer_type == 'OpenGL':
+        if renderer_type in ('ModernGL',):
+            # ModernGL 需要 OpenGL 上下文
             cls.sdl2_window: SDL_Window = sdl2.SDL_CreateWindow(
                 b"SDL2 window",
                 sdl2.SDL_WINDOWPOS_UNDEFINED,
@@ -83,7 +84,7 @@ class sdl2Window(Window):
             if not gl_context:
                 sdl2.SDL_DestroyWindow(cls.sdl2_window)
                 sdl2.SDL_Quit()
-                raise RuntimeError("OpenGL 上下文创建失败")
+                raise RuntimeError("OpenGL context creation failed")
         elif renderer_type == 'Vulkan':
             cls.sdl2_window: SDL_Window = sdl2.SDL_CreateWindow(
                 b"SDL2 window",

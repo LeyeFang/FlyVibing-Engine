@@ -10,7 +10,6 @@ from Application.Core.Window.glfwWindow import glfwWindow
 from Application.Core.Window.sdl2Window import sdl2Window
 # # Renderer
 from Application.Core.Renderer.Renderer import Renderer
-from Application.Core.Renderer.openglRenderer import openglRenderer
 from Application.Core.Renderer.modernGLRenderer import modernGLRenderer
 from Application.Core.Scene.SceneManager import SceneManager
 # # Resource & Scene
@@ -30,9 +29,8 @@ from threading import Thread
 
 
 class RendererType(Enum):
-    OpenGL = "OpenGL"
-    Vulkan = "Vulkan"
     ModernGL = "ModernGL"
+    Vulkan = "Vulkan"
 
 
 class WindowType(Enum):
@@ -58,7 +56,7 @@ class Application:
     def Create(
         cls,
         window_type: Union[WindowType, str] = WindowType.GLFW,
-        renderer_type: Union[RendererType, str] = RendererType.OpenGL
+        renderer_type: Union[RendererType, str] = RendererType.ModernGL
     ) -> None:
         if isinstance(window_type, str):
             window_type = WindowType(window_type)
@@ -135,11 +133,8 @@ class Application:
     ) -> None:
         try:
             # Create Renderer
-            if cls.renderer_type == RendererType.OpenGL:
-                cls.window.MakeContextCurrent()
-                cls.renderer = openglRenderer.Create(cls)
-            elif cls.renderer_type == RendererType.ModernGL:
-                cls.window.MakeContextCurrent()
+            cls.window.MakeContextCurrent()
+            if cls.renderer_type == RendererType.ModernGL:
                 cls.renderer = modernGLRenderer.Create(cls)
             elif cls.renderer_type == RendererType.Vulkan:
                 pass

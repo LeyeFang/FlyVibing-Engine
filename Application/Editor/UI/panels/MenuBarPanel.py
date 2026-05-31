@@ -1,7 +1,7 @@
 from imgui_bundle import imgui
 
-from Application.Core.UI.BasePanel import BasePanel
-from Application.Core.UI.UIManager import UIManager
+from Application.Editor.UI.BasePanel import BasePanel
+from Application.Editor.UI.UIManager import UIManager
 
 
 class MenuBarPanel(BasePanel):

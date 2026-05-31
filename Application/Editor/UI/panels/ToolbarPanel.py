@@ -1,7 +1,7 @@
 from imgui_bundle import imgui
 
-from Application.Core.UI.BasePanel import BasePanel
-from Application.Core.UI.controllers.SimulationController import (
+from Application.Editor.UI.BasePanel import BasePanel
+from Application.Editor.UI.controllers.SimulationController import (
     SimulationController,
 )
 

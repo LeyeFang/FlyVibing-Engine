@@ -1,7 +1,7 @@
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as node_ed
 
-from Application.Core.UI.BasePanel import BasePanel
+from Application.Editor.UI.BasePanel import BasePanel
 
 
 class NodeEditorPanel(BasePanel):

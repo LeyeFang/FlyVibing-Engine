@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import trimesh
 import numpy as np
 
-from Application.Resource._resource_utils import parse_shader_file
+from Application.Resource._resource_utils import parse_shader_files
 from Application.Resource.Mesh import Mesh
 from Application.Resource.Material import *
 
@@ -23,8 +23,8 @@ DEFAULT_SHADER_NAME = [
     'SSVEP'
 ]
 DEFAULT_SHADER_FILE = [
-    'Basic.shader',
-    'SSVEP.shader'
+    ('Basic.vert', 'Basic.frag'),
+    ('SSVEP.vert', 'SSVEP.frag'),
 ]
 DEFAULT_TEXTURE_NAME = [
     'Default',
@@ -62,15 +62,32 @@ class ResourceManager:
         assets_path: str
     ) -> int:
         base = os.path.basename(assets_path)
-        stem, suffix = os.path.splitext(base)  # 分割
-        if suffix == '.shader':
-            vs_src, fs_src, uniforms_name_type = parse_shader_file(assets_path)
+        stem, suffix = os.path.splitext(base)
+        # 新版: .vert → 自动查找配套 .frag + .spv
+        if suffix == '.vert':
+            frag_path = assets_path.replace('.vert', '.frag')
+            spv_v = assets_path + '.spv'
+            spv_f = frag_path + '.spv'
+            vs_src, fs_src, vs_spv, fs_spv, uniforms = parse_shader_files(
+                assets_path, frag_path, spv_v, spv_f
+            )
             cls.shader_count += 1
-            _id = cls.shader_count
-            cls.loaded_shader[f'{_id}'] = {}
-            cls.loaded_shader[f'{_id}']['name'] = stem
-            cls.loaded_shader[f'{_id}']['data'] = Shader(vs_src, fs_src, uniforms_name_type)
-            return _id
+            cls.loaded_shader[f'{cls.shader_count}'] = {
+                'name': stem,
+                'data': Shader(vs_src=vs_src, fs_src=fs_src,
+                               vs_spv=vs_spv, fs_spv=fs_spv,
+                               uniforms_name_type=uniforms)
+            }
+            return cls.shader_count
+        # 旧版兼容: .shader 单文件
+        if suffix == '.shader':
+            vs_src, fs_src, uniforms = parse_shader_file(assets_path)
+            cls.shader_count += 1
+            cls.loaded_shader[f'{cls.shader_count}'] = {
+                'name': stem,
+                'data': Shader(vs_src=vs_src, fs_src=fs_src, uniforms_name_type=uniforms)
+            }
+            return cls.shader_count
         if suffix == '.obj':
             pass
 
@@ -191,12 +208,20 @@ class ResourceManager:
         cls
     ) -> None:
         default_shader_dir = 'Resource/DefaultShaders'
-        for shader_name, file_name in zip(DEFAULT_SHADER_NAME, DEFAULT_SHADER_FILE):
-            # Create Shader
-            shader_file_path = join(default_shader_dir, file_name)
-            vs_src, fs_src, uniforms_info = parse_shader_file(shader_file_path)
-            save_shader = Shader(vs_src, fs_src, uniforms_info)
-            # Save
+        for shader_name, (vert_file, frag_file) in zip(DEFAULT_SHADER_NAME, DEFAULT_SHADER_FILE):
+            vert_path = join(default_shader_dir, vert_file)
+            frag_path = join(default_shader_dir, frag_file)
+            vert_spv_path = join(default_shader_dir, vert_file + '.spv')
+            frag_spv_path = join(default_shader_dir, frag_file + '.spv')
+
+            vs_src, fs_src, vs_spv, fs_spv, uniforms_info = parse_shader_files(
+                vert_path, frag_path, vert_spv_path, frag_spv_path
+            )
+            save_shader = Shader(
+                vs_src=vs_src, fs_src=fs_src,
+                vs_spv=vs_spv, fs_spv=fs_spv,
+                uniforms_name_type=uniforms_info
+            )
             cls.shader_count += 1
             current_shader_id = cls.shader_count
             cls.loaded_shader[f'{current_shader_id}'] = {}

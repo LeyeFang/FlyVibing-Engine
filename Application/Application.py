@@ -10,16 +10,14 @@ from Application.Core.Window.glfwWindow import glfwWindow
 from Application.Core.Window.sdl2Window import sdl2Window
 # # Renderer
 from Application.Core.Renderer.Renderer import Renderer
-from Application.Core.Renderer.modernGLRenderer import modernGLRenderer
+from Application.Core.Renderer.ModernGL.modernGLRenderer import modernGLRenderer
+from Application.Core.Renderer.Vulkan.vulkanRenderer import vulkanRenderer
 from Application.Core.Scene.SceneManager import SceneManager
 # # Resource & Scene
 from Application.Resource.ResourceManager import ResourceManager
 # # Timer
 from Application.Core.Timer.Timer import (
-    FrameProfiler,
-    tic,
-    toc,
-    sleep
+    FrameProfiler
 )
 
 from enum import Enum
@@ -133,29 +131,30 @@ class Application:
     ) -> None:
         try:
             # Create Renderer
-            cls.window.MakeContextCurrent()
             if cls.renderer_type == RendererType.ModernGL:
+                cls.window.MakeContextCurrent()
                 cls.renderer = modernGLRenderer.Create(cls)
             elif cls.renderer_type == RendererType.Vulkan:
-                pass
+                cls.renderer = vulkanRenderer.Create(cls)
             cls.renderer_ready.set()
             # Run only when start
             cls.run_ready.wait()
             for layer in cls.layer_stack:
                 layer.OnAttach()
+            # Safe render
             cls.renderer.StartFrame()
             cls.renderer.EndFrame()
-            cls.window.SwapBuffer()
+            if cls.renderer_type == RendererType.ModernGL:
+                cls.window.SwapBuffer()
+            # Render loop
             FrameProfiler.Start(1)
             while cls.run_state:
-                tic()
                 cls.renderer.StartFrame()
                 for layer in cls.layer_stack:
                     layer.OnRender()
                 cls.renderer.EndFrame()
-                cls.window.SwapBuffer()
-                if toc() < cls.target_frame_time:
-                    sleep(cls.target_frame_time-toc())
+                if cls.renderer_type == RendererType.ModernGL:
+                    cls.window.SwapBuffer()
                 FrameProfiler.Tick()
         except Exception as e:
             raise e

@@ -1,6 +1,7 @@
 import time
 from collections import deque
 from typing import Optional
+import math
 
 from Application.Core.Events.StatsEvent import PerformanceStatsEvent
 
@@ -30,7 +31,7 @@ def GetRunTime():
 class FrameProfiler:
     # 类变量（全局状态）
     _interval: float = 1.0                 # 上报间隔（秒）
-    _window_size: int = 1500               # 滑动窗口大小（保留最近1500帧）
+    _window_size: int = 1000               # 滑动窗口大小（保留最近1500帧）
     _frame_times_ms: Optional[deque] = None   # 存储帧耗时（毫秒）
     _last_tick_time: Optional[float] = None   # 上一帧的时间点
     _last_report_time: float = 0.0            # 上次上报的时间点
@@ -71,7 +72,7 @@ class FrameProfiler:
     ) -> None:
         """
         每帧调用一次（在游戏循环的每帧末尾调用）。
-        记录帧耗时，并每隔 interval 秒计算并上报 1% low / 10% low 数据。
+        记录帧耗时，并每隔 interval 秒计算并上报 1% low FPS / 1% low 帧标准差 数据。
         """
         if not cls._is_started:
             return  # 未初始化，忽略
@@ -96,56 +97,75 @@ class FrameProfiler:
         now: float,
         elapsed: float
     ) -> None:
-        """计算百分位数据，通过事件发送，然后重置区间计数器（不清除窗口）"""
+        """计算百分位数据和帧时间标准差，通过事件发送，然后重置区间计数器（不清除窗口）"""
         # 1. 平均 FPS（本区间内）
         avg_fps = cls._frame_count_since_report / elapsed
-        # 2. 1% low 和 10% low 帧时间（毫秒）
-        p1_ms, p10_ms = cls._compute_percentiles()
+        # 2. 1% low 帧时间（毫秒）
+        p1_ms = cls._compute_percentile_1p()
         # 转换为 FPS
         p1_fps = 1000.0 / p1_ms if p1_ms > 0 else 0.0
-        p10_fps = 1000.0 / p10_ms if p10_ms > 0 else 0.0
-        # 3. 发送事件（你可以根据需要调整参数格式）
-        #    方案A：发送一个包含所有统计信息的字典
+        # 3. 1% low 帧的标准差（毫秒）
+        std_ms = cls._compute_1p_low_std()
+        # 4. 发送事件
         PerformanceStatsEvent.Pack(
             fps=avg_fps,
-            p10_low_fps=p10_fps,
+            frame_time_std_ms=std_ms,
             p1_low_fps=p1_fps,
         )
-        # 方案B（如果你希望保持旧的简单接口，只发送 1% low FPS）：
-        # PerformanceStatsEvent.Pack(p1_fps)
         # 重置区间计数器（窗口数据保留）
         cls._frame_count_since_report = 0
 
     @classmethod
-    def _compute_percentiles(
+    def _compute_percentile_1p(
         cls
-    ) -> tuple[float, float]:
+    ) -> float:
         """
-        对当前窗口内的帧时间升序排序，返回 (1% low 帧时间ms, 10% low 帧时间ms)
-        若窗口不足 2 帧，返回 (0, 0)
+        对当前窗口内的帧时间升序排序，返回 1% low 帧时间（毫秒）
+        若窗口不足 2 帧，返回 0.0
         """
         if cls._frame_times_ms is None or len(cls._frame_times_ms) < 2:
-            return 0.0, 0.0
+            return 0.0
         frames = list(cls._frame_times_ms)
         frames.sort()  # 升序
         n = len(frames)
         # 1% low → 第 99% 分位点（最差的那 1% 帧的上限）
         idx_p1 = min(int(0.99 * n), n - 1)
-        # 10% low → 第 90% 分位点
-        idx_p10 = min(int(0.90 * n), n - 1)
-        return frames[idx_p1], frames[idx_p10]
+        return frames[idx_p1]
+
+    @classmethod
+    def _compute_1p_low_std(
+        cls
+    ) -> float:
+        """
+        计算窗口内最差 1% 帧时间（即 ≥ 99% 分位点的那 1% 帧）的标准差（毫秒）
+        若窗口不足 2 帧，返回 0.0
+        """
+        if cls._frame_times_ms is None or len(cls._frame_times_ms) < 2:
+            return 0.0
+        frames = list(cls._frame_times_ms)
+        frames.sort()  # 升序
+        n = len(frames)
+        # 取最差的 1% 帧：索引从 99% 分位点 到 末尾
+        idx_p1 = min(int(0.99 * n), n - 1)
+        worst_frames = frames[idx_p1:]  # 最差 1% 帧
+        k = len(worst_frames)
+        if k < 2:
+            return 0.0
+        mean = sum(worst_frames) / k
+        variance = sum((x - mean) ** 2 for x in worst_frames) / k
+        return math.sqrt(variance)
 
     # ---------- 可选：调试用 ----------
     @classmethod
     def GetCurrentStats(cls) -> dict:
         """立即返回当前统计（用于调试，不触发上报）"""
-        p1_ms, p10_ms = cls._compute_percentiles()
+        p1_ms = cls._compute_percentile_1p()
+        std_ms = cls._compute_1p_low_std()
         return {
             "window_frames": len(cls._frame_times_ms) if cls._frame_times_ms else 0,
             "p1_low_ms": p1_ms,
-            "p10_low_ms": p10_ms,
+            "frame_time_std_ms": std_ms,
             "p1_low_fps": 1000.0 / p1_ms if p1_ms > 0 else 0.0,
-            "p10_low_fps": 1000.0 / p10_ms if p10_ms > 0 else 0.0,
         }
 
 

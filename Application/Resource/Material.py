@@ -43,10 +43,12 @@ class Material:
 
 @dataclass
 class Shader:
-
-    vs_src: str
-    fs_src: str
-    uniforms_name_type: dict
+    """着色器资源 — 同时持有 GLSL 源码 (OpenGL) 和 SPIR-V 二进制 (Vulkan)。"""
+    vs_src: str = ""          # GLSL vertex shader 源码
+    fs_src: str = ""          # GLSL fragment shader 源码
+    vs_spv: bytes = b""       # SPIR-V vertex shader 二进制
+    fs_spv: bytes = b""       # SPIR-V fragment shader 二进制
+    uniforms_name_type: dict = field(default_factory=dict)
 
 
 @dataclass

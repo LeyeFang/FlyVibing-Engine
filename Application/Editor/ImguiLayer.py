@@ -1,8 +1,10 @@
 from Application.Core.Layers.Layer import Layer
 from Application.Application import (
     WindowType,
+    RendererType,
     GetWindowBackend,
-    GetWindow
+    GetWindow,
+    GetRendererBackend,
 )
 from Application.Core.Events.Event import Event
 from Application.Core.Events.InputEvent import *
@@ -24,7 +26,6 @@ class ImguiLayer(Layer):
 
     @classmethod
     def _mouse_in_any_panel(cls) -> bool:
-        """检查鼠标是否落在任意面板窗口内（线程安全：只读 UIManager._panel_rects）"""
         io = imgui.get_io()
         mx, my = io.mouse_pos
         for x, y, w, h in UIManager._panel_rects:
@@ -34,22 +35,23 @@ class ImguiLayer(Layer):
 
     @classmethod
     def OnAttach(cls):
-        """初始化 ImGui + 后端绑定 + UI 面板注册。"""
         imgui.create_context()
         imgui.style_colors_dark()
-        app_window_type = GetWindowBackend()
 
-        match app_window_type:
-            case WindowType.GLFW:
-                # ModernGL 基于 OpenGL 上下文，imgui 使用相同的 glfw + opengl3 后端
-                app_window = GetWindow().glfw_window
-                window_address = ctypes.cast(app_window, ctypes.c_void_p).value
-                imgui.backends.glfw_init_for_opengl(window_address, True)
-                imgui.backends.opengl3_init("#version 150")
-            case WindowType.SDL2:
-                raise NotImplementedError
+        renderer_type = GetRendererBackend()
+        app_window = GetWindow().glfw_window
+        window_address = ctypes.cast(app_window, ctypes.c_void_p).value
 
-        # 手动设置 DisplaySize
+        if renderer_type == RendererType.Vulkan:
+            # Vulkan 后端: GLFW + Vulkan (需要 int 地址)
+            imgui.backends.glfw_init_for_vulkan(window_address, True)
+            from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
+            VulkanCore.init_imgui()
+        else:
+            # OpenGL 后端: GLFW + OpenGL3
+            imgui.backends.glfw_init_for_opengl(window_address, True)
+            imgui.backends.opengl3_init("#version 150")
+
         io = imgui.get_io()
         w, h = GetWindow().GetSize()
         io.display_size = (float(w), float(h))
@@ -58,7 +60,6 @@ class ImguiLayer(Layer):
 
     @classmethod
     def _init_ui_panels(cls):
-        """注册所有 UI 面板（只执行一次）"""
         if not hasattr(cls, '_panels_registered'):
             UIManager.register(ScenePanel())
             UIManager.register(NodeEditorPanel())
@@ -66,25 +67,18 @@ class ImguiLayer(Layer):
 
     @classmethod
     def OnDetach(cls):
-        """清理 ImGui 上下文。"""
         imgui.destroy_context()
 
     @classmethod
-    def OnEvent(
-        cls,
-        event: Event
-    ) -> None:
-        # 🛑 鼠标落在面板窗口内时，不处理场景视角操作
+    def OnEvent(cls, event: Event) -> None:
         if cls._mouse_in_any_panel():
             return
-
         cam = EditorCamera.get_instance()
 
         if event is ScrollerEvent:
             _, y_offset = ScrollerEvent.UnPack()
             cam.on_scroll(y_offset)
             SceneCameraUpdateEvent.Pack()
-
         elif event is MouseGragEvent:
             bt, offset_x, offset_y = MouseGragEvent.UnPack()
             cam.on_mouse_drag(bt, offset_x, offset_y)
@@ -96,12 +90,21 @@ class ImguiLayer(Layer):
 
     @classmethod
     def OnRender(cls):
-        imgui.backends.glfw_new_frame()
-        imgui.backends.opengl3_new_frame()
+        renderer_type = GetRendererBackend()
+
+        if renderer_type == RendererType.Vulkan:
+            pass
+        else:
+            imgui.backends.glfw_new_frame()
+            imgui.backends.opengl3_new_frame()
+
         imgui.new_frame()
-
-        # ⭐ 由 UIManager 绘制所有面板
         UIManager.draw_all()
-
         imgui.render()
-        imgui.backends.opengl3_render_draw_data(imgui.get_draw_data())
+
+        if renderer_type == RendererType.Vulkan:
+            from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
+            draw_data = imgui.get_draw_data()
+            VulkanCore.render_imgui(draw_data, VulkanCore._current_image_index)
+        else:
+            imgui.backends.opengl3_render_draw_data(imgui.get_draw_data())

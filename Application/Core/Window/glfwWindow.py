@@ -19,7 +19,7 @@ class glfwWindow(Window):
         cls,
         app: Application
     ):
-        cls.glfw_window = cls._create_window()
+        cls.glfw_window = cls._create_window(app)
         glfw.set_window_size_callback(cls.glfw_window, cls._window_resize_event_callback)
         glfw.set_scroll_callback(cls.glfw_window, cls._scroll_callback)
         glfw.set_mouse_button_callback(cls.glfw_window, cls._mouse_callback)
@@ -65,18 +65,23 @@ class glfwWindow(Window):
     def MakeContextCurrent(cls):
         glfw.make_context_current(cls.glfw_window)
 
-    #
-    #
-    # Internal functions --------------------------------------------
-    def _create_window() -> glfwWindow:
+    @classmethod
+    def _create_window(cls, app: Application):
         # 1. 初始化 GLFW
         if not glfw.init():
             print("无法初始化 GLFW")
             return
-        # 配置 OpenGL 版本（3.3 核心模式）
-        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 4)
-        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 4)
-        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+
+        from Application.Application import RendererType
+        if app.renderer_type == RendererType.Vulkan:
+            # Vulkan: 不需要 OpenGL 上下文
+            glfw.window_hint(glfw.CLIENT_API, glfw.NO_API)
+        else:
+            # OpenGL 4.4 核心模式
+            glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 4)
+            glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 4)
+            glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+
         # 2. 创建窗口
         glfw_window = glfw.create_window(
             800, 600,
@@ -88,7 +93,6 @@ class glfwWindow(Window):
             print("无法创建窗口")
             glfw.terminate()
             return
-        # glfw.make_context_current(glfw_window)
         return glfw_window
 
     #

@@ -6,8 +6,8 @@
   - RenderResourceManger : GPU 资源注册/卸载接口 (Mesh / Shader / Texture / Entity)
 
 子类实现:
-  - modernGLRenderer  : 基于 moderngl 的现代 OpenGL 后端 (当前唯一实现)
-  - vulkanRenderer    : Vulkan 后端 (待实现)
+  - modernGLRenderer  : ModernGL/ — 基于 moderngl 的现代 OpenGL 后端
+  - vulkanRenderer    : Vulkan/   — Vulkan 低级图形 API 后端
 """
 
 from abc import ABC, abstractmethod

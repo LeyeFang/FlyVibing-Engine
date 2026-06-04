@@ -45,8 +45,11 @@ class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderRe
     _pending_resize: tuple = None
 
     @classmethod
-    def Create(cls, app: Application) -> "modernGLRenderer":
-        window_size = app.window.GetSize()
+    def Create(
+        cls
+    ) -> "modernGLRenderer":
+        from Application.Application import Application
+        window_size = Application.editor_window.GetSize()
         ModernGLCore.init_core(window_size)
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]

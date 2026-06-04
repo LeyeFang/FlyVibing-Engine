@@ -1,10 +1,6 @@
 from Application.Core.Layers.Layer import Layer
 from Application.Application import (
-    WindowType,
-    RendererType,
-    GetWindowBackend,
-    GetWindow,
-    GetRendererBackend,
+    GetEditorWindow,
 )
 from Application.Core.Events.Event import Event
 from Application.Core.Events.InputEvent import *
@@ -19,7 +15,6 @@ from Application.Editor.EditorCamera import EditorCamera
 import ctypes
 
 from imgui_bundle import imgui
-from imgui_bundle import imgui_node_editor
 
 
 class ImguiLayer(Layer):
@@ -37,25 +32,14 @@ class ImguiLayer(Layer):
     def OnAttach(cls):
         imgui.create_context()
         imgui.style_colors_dark()
-
-        renderer_type = GetRendererBackend()
-        app_window = GetWindow().glfw_window
-        window_address = ctypes.cast(app_window, ctypes.c_void_p).value
-
-        if renderer_type == RendererType.Vulkan:
-            # Vulkan 后端: GLFW + Vulkan (需要 int 地址)
-            imgui.backends.glfw_init_for_vulkan(window_address, True)
-            from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
-            VulkanCore.init_imgui()
-        else:
-            # OpenGL 后端: GLFW + OpenGL3
-            imgui.backends.glfw_init_for_opengl(window_address, True)
-            imgui.backends.opengl3_init("#version 150")
-
+        editor_window = GetEditorWindow()
+        window_address = ctypes.cast(editor_window.glfw_window, ctypes.c_void_p).value
+        # OpenGL 后端: GLFW + OpenGL3
+        imgui.backends.glfw_init_for_opengl(window_address, True)
+        imgui.backends.opengl3_init("#version 150")
         io = imgui.get_io()
-        w, h = GetWindow().GetSize()
+        w, h = editor_window.GetSize()
         io.display_size = (float(w), float(h))
-
         cls._init_ui_panels()
 
     @classmethod
@@ -90,21 +74,9 @@ class ImguiLayer(Layer):
 
     @classmethod
     def OnRender(cls):
-        renderer_type = GetRendererBackend()
-
-        if renderer_type == RendererType.Vulkan:
-            pass
-        else:
-            imgui.backends.glfw_new_frame()
-            imgui.backends.opengl3_new_frame()
-
+        imgui.backends.glfw_new_frame()
+        imgui.backends.opengl3_new_frame()
         imgui.new_frame()
         UIManager.draw_all()
         imgui.render()
-
-        if renderer_type == RendererType.Vulkan:
-            from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
-            draw_data = imgui.get_draw_data()
-            VulkanCore.render_imgui(draw_data, VulkanCore._current_image_index)
-        else:
-            imgui.backends.opengl3_render_draw_data(imgui.get_draw_data())
+        imgui.backends.opengl3_render_draw_data(imgui.get_draw_data())

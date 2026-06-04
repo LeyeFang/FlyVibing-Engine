@@ -6,8 +6,8 @@ from Application.Core.Events.Event import Event, BindPackCallback
 from Application.Core.Events.WindowEvent import WindowCloseEvent
 # # Window
 from Application.Core.Window.Window import Window
-from Application.Core.Window.glfwWindow import glfwWindow
-from Application.Core.Window.sdl2Window import sdl2Window
+# # Editor
+from Application.Editor.EditorWindow import EditorWindow
 # # Renderer
 from Application.Core.Renderer.Renderer import Renderer
 from Application.Core.Renderer.ModernGL.modernGLRenderer import modernGLRenderer
@@ -15,10 +15,8 @@ from Application.Core.Renderer.Vulkan.vulkanRenderer import vulkanRenderer
 from Application.Core.Scene.SceneManager import SceneManager
 # # Resource & Scene
 from Application.Resource.ResourceManager import ResourceManager
-# # Timer
-from Application.Core.Timer.Timer import (
-    FrameProfiler
-)
+# # Stats
+from Application.Core.Stats.FrameProfiler import FrameProfiler
 
 from enum import Enum
 from typing import Union
@@ -38,17 +36,20 @@ class WindowType(Enum):
 
 class Application:
 
-    window: Window = None
+    # editor window
+    editor_window: EditorWindow = None
     window_type: WindowType = None
-    renderer: Renderer = None
+    # editor renderer
+    editor_renderer: Renderer = None
     renderer_type: RendererType = None
+    # preview runtime
+    preview_runtime_window = None
+    preview_runtime_renderer: Renderer = None
+    # application
     layer_stack: list[Layer] = []
-    event: Event = None
-    event_stack: list[Event] = []
     run_state: bool = True
     renderer_ready = threading.Event()
     run_ready = threading.Event()
-    target_frame_time: float = 1 / 1200
 
     @classmethod
     def Create(
@@ -67,10 +68,7 @@ class Application:
         ResourceManager.Init(cls)
         SceneManager.Init(cls)
         # Create Window
-        if window_type == WindowType.GLFW:
-            cls.window = glfwWindow.Create(cls)
-        elif window_type == WindowType.SDL2:
-            cls.window = sdl2Window.Create(cls)
+        cls.editor_window = EditorWindow.Create()
         cls.run_state = True
         renderer_thread = Thread(target=cls.render_loop, daemon=True)
         renderer_thread.start()
@@ -82,7 +80,7 @@ class Application:
         try:
             cls.run_ready.set()
             while cls.run_state:
-                cls.window.Update()
+                cls.editor_window.Update()
                 for layer in cls.layer_stack:
                     layer.OnUpdate()
                 pass
@@ -119,8 +117,8 @@ class Application:
         if event is not None:
             for layer in cls.layer_stack:
                 layer.OnEvent(event)
-            cls.renderer.OnEvent(event)
-            cls.window.OnEvent(event)
+            cls.editor_renderer.OnEvent(event)
+            cls.editor_window.OnEvent(event)
         if event is WindowCloseEvent:
             cls.run_state = False
 
@@ -132,29 +130,29 @@ class Application:
         try:
             # Create Renderer
             if cls.renderer_type == RendererType.ModernGL:
-                cls.window.MakeContextCurrent()
-                cls.renderer = modernGLRenderer.Create(cls)
+                cls.editor_window.MakeContextCurrent()
+                cls.editor_renderer = modernGLRenderer.Create()
             elif cls.renderer_type == RendererType.Vulkan:
-                cls.renderer = vulkanRenderer.Create(cls)
+                cls.editor_renderer = vulkanRenderer.Create()
             cls.renderer_ready.set()
             # Run only when start
             cls.run_ready.wait()
             for layer in cls.layer_stack:
                 layer.OnAttach()
             # Safe render
-            cls.renderer.StartFrame()
-            cls.renderer.EndFrame()
+            cls.editor_renderer.StartFrame()
+            cls.editor_renderer.EndFrame()
             if cls.renderer_type == RendererType.ModernGL:
-                cls.window.SwapBuffer()
+                cls.editor_window.SwapBuffer()
             # Render loop
             FrameProfiler.Start(1)
             while cls.run_state:
-                cls.renderer.StartFrame()
+                cls.editor_renderer.StartFrame()
                 for layer in cls.layer_stack:
                     layer.OnRender()
-                cls.renderer.EndFrame()
+                cls.editor_renderer.EndFrame()
                 if cls.renderer_type == RendererType.ModernGL:
-                    cls.window.SwapBuffer()
+                    cls.editor_window.SwapBuffer()
                 FrameProfiler.Tick()
         except Exception as e:
             raise e
@@ -162,8 +160,8 @@ class Application:
             pass
 
 
-def GetWindow() -> Window:
-    return Application.window
+def GetEditorWindow() -> Window:
+    return Application.editor_window
 
 
 def GetWindowBackend() -> WindowType:

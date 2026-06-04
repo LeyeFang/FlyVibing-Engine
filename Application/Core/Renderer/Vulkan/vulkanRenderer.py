@@ -51,10 +51,11 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
     _pending_resize: tuple = None         # (width, height) or None
 
     @classmethod
-    def Create(cls, app: Application) -> "vulkanRenderer":
+    def Create(cls) -> "vulkanRenderer":
         """初始化 Vulkan 渲染器。"""
-        window_size = app.window.GetSize()
-        VulkanCore.init_core(app.window.glfw_window, window_size)
+        from Application.Application import Application
+        window_size = Application.editor_window.GetSize()
+        VulkanCore.init_core(Application.editor_window.glfw_window, window_size)
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]
         cls.aspect_ratio = window_size[0] / window_size[1]

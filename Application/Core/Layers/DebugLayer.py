@@ -63,7 +63,7 @@ class DebugLayer(Layer):
     ):
         global mask_events
         if event not in mask_events:
-            print(f"Time: {GetRunTime():.4f}, Event: {event}")
+            print(event)
         pass
 
     @classmethod

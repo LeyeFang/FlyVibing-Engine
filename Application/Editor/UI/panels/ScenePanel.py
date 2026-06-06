@@ -49,7 +49,7 @@ class ScenePanel(BasePanel):
         imgui.text("Scene: ")
         imgui.same_line()
         imgui.text_colored(
-            imgui.ImVec4(0.192, 0.404, 0.643, 1.00), "default"
+            imgui.ImVec4(0.878, 0.416, 0.153, 1.00), "default"
         )
         imgui.separator()
 
@@ -64,42 +64,48 @@ class ScenePanel(BasePanel):
         av = imgui.get_content_region_avail().x
         btn_w = (av - imgui.get_style().item_spacing.x * 2) / 3.0
 
-        # ▶ Run（绿色）
+        # ▶ Run（Blender 风格 — 灰底橙字）
         imgui.push_style_color(
-            imgui.Col_.button, imgui.ImVec4(0.173, 0.545, 0.271, 0.60))
+            imgui.Col_.button, imgui.ImVec4(0.176, 0.176, 0.176, 0.90))
         imgui.push_style_color(
-            imgui.Col_.button_hovered, imgui.ImVec4(0.173, 0.545, 0.271, 0.85))
+            imgui.Col_.button_hovered, imgui.ImVec4(0.227, 0.227, 0.227, 1.00))
         imgui.push_style_color(
-            imgui.Col_.button_active, imgui.ImVec4(0.118, 0.420, 0.216, 1.00))
+            imgui.Col_.button_active, imgui.ImVec4(0.290, 0.290, 0.290, 1.00))
+        imgui.push_style_color(
+            imgui.Col_.text, imgui.ImVec4(0.471, 0.714, 0.471, 1.00))
         if imgui.button("▶ Run", (btn_w, 0)):
             SimulationController.play()
-        imgui.pop_style_color(3)
+        imgui.pop_style_color(4)
 
         imgui.same_line()
 
-        # ⏸ Pause（黄色，仅在运行时可用）
+        # ⏸ Pause（仅在运行时可用）
         imgui.push_style_color(
-            imgui.Col_.button, imgui.ImVec4(0.698, 0.588, 0.110, 0.40))
+            imgui.Col_.button, imgui.ImVec4(0.176, 0.176, 0.176, 0.50))
         imgui.push_style_color(
-            imgui.Col_.button_hovered, imgui.ImVec4(0.698, 0.588, 0.110, 0.70))
+            imgui.Col_.button_hovered, imgui.ImVec4(0.227, 0.227, 0.227, 0.70))
+        imgui.push_style_color(
+            imgui.Col_.text, imgui.ImVec4(0.788, 0.722, 0.471, 1.00))
         imgui.begin_disabled(not SimulationController.is_running())
         if imgui.button("⏸ Pause", (btn_w, 0)):
             SimulationController.pause()
         imgui.end_disabled()
-        imgui.pop_style_color(2)
+        imgui.pop_style_color(3)
 
         imgui.same_line()
 
-        # ■ Stop（红色，仅在运行时可用）
+        # ■ Stop（仅在未停止时可用）
         imgui.push_style_color(
-            imgui.Col_.button, imgui.ImVec4(0.631, 0.173, 0.173, 0.40))
+            imgui.Col_.button, imgui.ImVec4(0.176, 0.176, 0.176, 0.50))
         imgui.push_style_color(
-            imgui.Col_.button_hovered, imgui.ImVec4(0.631, 0.173, 0.173, 0.70))
+            imgui.Col_.button_hovered, imgui.ImVec4(0.227, 0.227, 0.227, 0.70))
+        imgui.push_style_color(
+            imgui.Col_.text, imgui.ImVec4(0.788, 0.471, 0.471, 1.00))
         imgui.begin_disabled(SimulationController.is_stopped())
         if imgui.button("■ Stop", (btn_w, 0)):
             SimulationController.stop()
         imgui.end_disabled()
-        imgui.pop_style_color(2)
+        imgui.pop_style_color(3)
 
         # 状态提示
         imgui.text_disabled(SimulationController.get_state_label())
@@ -144,17 +150,17 @@ class ScenePanel(BasePanel):
 
         if not entity_ids:
             imgui.text_colored(
-                imgui.ImVec4(0.447, 0.463, 0.490, 1.00), "(empty scene)"
+                imgui.ImVec4(0.400, 0.400, 0.400, 1.00), "(empty scene)"
             )
             return
 
         # 遍历当前帧的可渲染实体
         selected = SceneBrowserController.get_selected()
         for eid in entity_ids:
-            _, is_selected = imgui.selectable(
+            clicked, _ = imgui.selectable(
                 f"Entity #{eid}", selected == eid
             )
-            if is_selected:
+            if clicked:
                 SceneBrowserController.select(eid)
 
         # 底部显示选中实体的组件摘要
@@ -174,7 +180,7 @@ class ScenePanel(BasePanel):
             return
 
         imgui.text_colored(
-            imgui.ImVec4(0.192, 0.404, 0.643, 1.00),
+            imgui.ImVec4(0.878, 0.416, 0.153, 1.00),
             f"Entity #{summary.entity_id}",
         )
         imgui.text(

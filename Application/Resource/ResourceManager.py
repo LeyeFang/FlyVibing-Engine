@@ -4,11 +4,16 @@ from dataclasses import dataclass, field
 
 import trimesh
 import numpy as np
+from PIL import Image
 
-from Application.Resource._resource_utils import parse_shader_files
+from Application.Resource._resource_utils import parse_shader_files, parse_shader_file
 from Application.Resource.Mesh import Mesh
 from Application.Resource.Material import *
 
+
+# ── 支持的资源格式 ─────────────────────────────────────────────
+MESH_EXTENSIONS = {'.obj', '.gltf', '.glb', '.stl', '.ply', '.off', '.fbx', '.dae', '.3ds'}
+TEXTURE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.bmp', '.tga', '.tiff', '.tif', '.hdr', '.exr'}
 
 DEFAULT_MODEL_NAME = [
     'Square',
@@ -54,42 +59,249 @@ class ResourceManager:
         cls.__load_default_texture()
 
 
-    # User Interface
+    # ==============================================================
+    # 资源导入 / Asset Import
     # ==============================================================
     @classmethod
     def LoadAssets(
         cls,
-        assets_path: str
+        assets_path: str,
+        resource_name: str = None
     ) -> int:
+        """统一资源导入入口 — 根据后缀自动分发到对应的加载器。
+
+        Args:
+            assets_path  : 资源文件路径
+            resource_name: 自定义资源名称 (默认取文件名 stem)
+
+        Returns:
+            int: 资源 ID (mesh_id / shader_id / texture_id)
+
+        Raises:
+            FileNotFoundError: 文件不存在
+            ValueError       : 不支持的文件格式
+        """
+        if not os.path.exists(assets_path):
+            raise FileNotFoundError(f"资源文件不存在: {assets_path}")
+
         base = os.path.basename(assets_path)
         stem, suffix = os.path.splitext(base)
-        # 新版: .vert → 自动查找配套 .frag + .spv
-        if suffix == '.vert':
-            frag_path = assets_path.replace('.vert', '.frag')
-            spv_v = assets_path + '.spv'
-            spv_f = frag_path + '.spv'
-            vs_src, fs_src, vs_spv, fs_spv, uniforms = parse_shader_files(
-                assets_path, frag_path, spv_v, spv_f
+        suffix_lower = suffix.lower()
+        name = resource_name or stem
+
+        # ── 着色器 / Shader ──
+        if suffix_lower == '.vert':
+            return cls.__load_shader_from_vert(assets_path, name)
+        if suffix_lower == '.shader':
+            return cls.__load_shader_from_single_file(assets_path, name)
+
+        # ── 网格 / Mesh ──
+        if suffix_lower in MESH_EXTENSIONS:
+            return cls.__load_mesh_from_file(assets_path, name)
+
+        # ── 纹理 / Texture ──
+        if suffix_lower in TEXTURE_EXTENSIONS:
+            return cls.__load_texture_from_file(assets_path, name)
+
+        raise ValueError(
+            f"不支持的资源格式 '{suffix}'，"
+            f"支持的网格格式: {MESH_EXTENSIONS}，"
+            f"支持的纹理格式: {TEXTURE_EXTENSIONS}"
+        )
+
+    @classmethod
+    def ImportMesh(
+        cls,
+        file_path: str,
+        mesh_name: str = None
+    ) -> int:
+        """便捷方法: 导入网格文件。等同于 LoadAssets(file_path, mesh_name)。"""
+        return cls.LoadAssets(file_path, mesh_name)
+
+    @classmethod
+    def ImportTexture(
+        cls,
+        file_path: str,
+        texture_name: str = None
+    ) -> int:
+        """便捷方法: 导入纹理文件。等同于 LoadAssets(file_path, texture_name)。"""
+        return cls.LoadAssets(file_path, texture_name)
+
+    # ==============================================================
+    # 着色器加载 (内部)
+    # ==============================================================
+    @classmethod
+    def __load_shader_from_vert(
+        cls,
+        vert_path: str,
+        name: str
+    ) -> int:
+        """从 .vert 文件加载着色器 (自动查找配套 .frag + .spv)"""
+        frag_path = vert_path.replace('.vert', '.frag')
+        spv_v = vert_path + '.spv'
+        spv_f = frag_path + '.spv'
+        vs_src, fs_src, vs_spv, fs_spv, uniforms = parse_shader_files(
+            vert_path, frag_path, spv_v, spv_f
+        )
+        cls.shader_count += 1
+        cls.loaded_shader[f'{cls.shader_count}'] = {
+            'name': name,
+            'data': Shader(vs_src=vs_src, fs_src=fs_src,
+                           vs_spv=vs_spv, fs_spv=fs_spv,
+                           uniforms_name_type=uniforms),
+            'path': vert_path,
+        }
+        return cls.shader_count
+
+    @classmethod
+    def __load_shader_from_single_file(
+        cls,
+        file_path: str,
+        name: str
+    ) -> int:
+        """从 .shader 单文件加载着色器 (旧版兼容)"""
+        vs_src, fs_src, uniforms = parse_shader_file(file_path)
+        cls.shader_count += 1
+        cls.loaded_shader[f'{cls.shader_count}'] = {
+            'name': name,
+            'data': Shader(vs_src=vs_src, fs_src=fs_src, uniforms_name_type=uniforms),
+            'path': file_path,
+        }
+        return cls.shader_count
+
+    # ==============================================================
+    # 网格加载 (内部)
+    # ==============================================================
+    @classmethod
+    def __load_mesh_from_file(
+        cls,
+        file_path: str,
+        name: str
+    ) -> int:
+        """使用 trimesh 加载网格文件 (OBJ / glTF / STL / PLY / FBX 等)。
+
+        自动处理:
+          - 单网格文件 (Trimesh): 直接提取顶点数据
+          - 场景文件 (Scene, 如 glTF): 合并所有子网格为一个 Mesh
+          - 缺失 UV / 法线: 自动补零
+        """
+        try:
+            loaded = trimesh.load(file_path, force='mesh')
+        except Exception as e:
+            raise RuntimeError(f"trimesh 无法加载 '{file_path}': {e}")
+
+        # ── 场景类型 (glTF / GLB / FBX): 合并所有几何体 ──
+        if isinstance(loaded, trimesh.Scene):
+            all_vertices = []
+            all_normals = []
+            all_uvs = []
+            all_faces = []
+            vertex_offset = 0
+
+            for geo_name, geom in loaded.geometry.items():
+                if not isinstance(geom, trimesh.Trimesh):
+                    continue
+
+                v = np.array(geom.vertices, dtype=np.float32)
+                all_vertices.append(v)
+
+                # 法线: 若缺失则计算
+                n = geom.vertex_normals
+                if n is not None:
+                    all_normals.append(np.array(n, dtype=np.float32))
+                else:
+                    all_normals.append(np.zeros_like(v, dtype=np.float32))
+
+                # UV: 若缺失则补零
+                uv = getattr(geom.visual, 'uv', None)
+                if uv is not None:
+                    all_uvs.append(np.array(uv, dtype=np.float32))
+                else:
+                    all_uvs.append(np.zeros((len(v), 2), dtype=np.float32))
+
+                # 索引
+                f = geom.faces
+                if f is not None and len(f) > 0:
+                    all_faces.append(np.array(f, dtype=np.uint32) + vertex_offset)
+                vertex_offset += len(v)
+
+            if not all_vertices:
+                raise RuntimeError(f"文件中没有可提取的几何体: {file_path}")
+
+            vertices = np.vstack(all_vertices)
+            normals = np.vstack(all_normals)
+            uvs = np.vstack(all_uvs)
+            indices = np.vstack(all_faces) if all_faces else np.array([], dtype=np.uint32)
+
+        # ── 单网格类型 (OBJ / STL / PLY) ──
+        else:
+            vertices = np.array(loaded.vertices, dtype=np.float32)
+            n = loaded.vertex_normals
+            normals = np.array(n, dtype=np.float32) if n is not None else np.zeros_like(vertices, dtype=np.float32)
+            uv = getattr(loaded.visual, 'uv', None)
+            uvs = np.array(uv, dtype=np.float32) if uv is not None else np.zeros((len(vertices), 2), dtype=np.float32)
+            f = loaded.faces
+            indices = np.array(f, dtype=np.uint32) if f is not None else np.array([], dtype=np.uint32)
+
+        # ── 注册 ──
+        mesh = Mesh(vertices, normals, uvs, indices)
+        cls.mesh_count += 1
+        current_id = cls.mesh_count
+        cls.loaded_mesh[f'{current_id}'] = {
+            'name': name,
+            'data': mesh,
+            'path': file_path,
+        }
+        return current_id
+
+    # ==============================================================
+    # 纹理加载 (内部)
+    # ==============================================================
+    @classmethod
+    def __load_texture_from_file(
+        cls,
+        file_path: str,
+        name: str
+    ) -> int:
+        """使用 PIL 加载纹理文件 (PNG / JPG / BMP / TGA / HDR 等)。
+
+        Returns:
+            int: texture_id
+        """
+        try:
+            img = Image.open(file_path)
+            # 统一转为 RGBA 或 RGB
+            if img.mode == 'RGBA':
+                channels = 4
+            elif img.mode == 'RGB':
+                channels = 3
+            elif img.mode == 'L':
+                channels = 1
+            else:
+                img = img.convert('RGBA')
+                channels = 4
+
+            image_data = np.array(img, dtype=np.uint8)
+            width, height = img.size
+
+            texture = Texture(
+                image_data=image_data,
+                width=width,
+                height=height,
+                channels=channels,
+                file_path=file_path,
             )
-            cls.shader_count += 1
-            cls.loaded_shader[f'{cls.shader_count}'] = {
-                'name': stem,
-                'data': Shader(vs_src=vs_src, fs_src=fs_src,
-                               vs_spv=vs_spv, fs_spv=fs_spv,
-                               uniforms_name_type=uniforms)
-            }
-            return cls.shader_count
-        # 旧版兼容: .shader 单文件
-        if suffix == '.shader':
-            vs_src, fs_src, uniforms = parse_shader_file(assets_path)
-            cls.shader_count += 1
-            cls.loaded_shader[f'{cls.shader_count}'] = {
-                'name': stem,
-                'data': Shader(vs_src=vs_src, fs_src=fs_src, uniforms_name_type=uniforms)
-            }
-            return cls.shader_count
-        if suffix == '.obj':
-            pass
+        except Exception as e:
+            raise RuntimeError(f"无法加载纹理 '{file_path}': {e}")
+
+        cls.texture_count += 1
+        current_id = cls.texture_count
+        cls.loaded_texture[f'{current_id}'] = {
+            'name': name,
+            'data': texture,
+            'path': file_path,
+        }
+        return current_id
 
     @classmethod
     def GetDefaultMesh(
@@ -188,20 +400,8 @@ class ResourceManager:
     ) -> None:
         default_model_dir = 'Resource/DefaultObjects'
         for mesh_name, file_name in zip(DEFAULT_MODEL_NAME, DEFAULT_MODEL_FILE):
-            # Create Mesh
             model_file_path = join(default_model_dir, file_name)
-            load_mesh = trimesh.load(model_file_path)
-            vertices = load_mesh.vertices
-            normals = load_mesh.vertex_normals
-            uvs = load_mesh.visual.uv
-            faces = load_mesh.faces
-            save_mesh = Mesh(vertices, normals, uvs, faces)
-            # Registe
-            cls.mesh_count += 1
-            current_mesh_id = cls.mesh_count
-            cls.loaded_mesh[f'{current_mesh_id}'] = {}
-            cls.loaded_mesh[f'{current_mesh_id}']['name'] = mesh_name
-            cls.loaded_mesh[f'{current_mesh_id}']['data'] = save_mesh
+            cls.__load_mesh_from_file(model_file_path, mesh_name)
 
     @classmethod
     def __load_default_shader(
@@ -227,6 +427,7 @@ class ResourceManager:
             cls.loaded_shader[f'{current_shader_id}'] = {}
             cls.loaded_shader[f'{current_shader_id}']['data'] = save_shader
             cls.loaded_shader[f'{current_shader_id}']['name'] = shader_name
+            cls.loaded_shader[f'{current_shader_id}']['path'] = vert_path
 
     @classmethod
     def __load_default_texture(

@@ -160,8 +160,16 @@ class Application:
             pass
 
 
+def GetApplication() -> Application:
+    return Application
+
+
 def GetEditorWindow() -> Window:
     return Application.editor_window
+
+
+def GetEditorRenderer() -> Window:
+    return Application.editor_renderer
 
 
 def GetWindowBackend() -> WindowType:
@@ -170,6 +178,7 @@ def GetWindowBackend() -> WindowType:
 
 def GetRendererBackend() -> RendererType:
     return Application.renderer_type
+
 
 def SetTargetFrame(frame: int) -> None:
     Application.target_frame_time = float(1 / frame)

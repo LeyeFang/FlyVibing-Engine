@@ -66,42 +66,43 @@ class NodeEditorPanel(BasePanel):
             )
             return
 
-        canvas_pos = imgui.get_cursor_screen_pos()
         canvas_size = imgui.get_content_region_avail()
 
         # 激活当前编辑器上下文并开始绘制
         node_ed.set_current_editor(self._editor_context)
         node_ed.begin("NodeEditor", canvas_size)
 
-        # ── 空画布提示（居中显示） ──
-        imgui.set_cursor_screen_pos((
-            canvas_pos.x + canvas_size.x / 2 - 80,
-            canvas_pos.y + canvas_size.y / 2 - 10
-        ))
-        imgui.text_colored(
-            imgui.ImVec4(0.447, 0.463, 0.490, 1.00),
-            "Right-click canvas to add nodes"
-        )
-
-        # ── 右键菜单 ──
-        # suspend/resume 是 imgui_node_editor 的固定模式
+        # ── 右键菜单检测（node editor 函数，需在 suspend 外调用） ──
         node_ed.suspend()
         if node_ed.show_background_context_menu():
             imgui.open_popup("Create Node")
         node_ed.resume()
 
+        # ── 空画布提示 & 右键菜单绘制（必须在 suspend 内进行普通 imgui 绘制） ──
+        node_ed.suspend()
+        canvas_pos = imgui.get_cursor_screen_pos()
+        imgui.set_cursor_screen_pos((
+            canvas_pos.x + canvas_size.x / 2 - 80,
+            canvas_pos.y + canvas_size.y / 2 - 10
+        ))
+        imgui.text_colored(
+            imgui.ImVec4(0.400, 0.400, 0.400, 1.00),
+            "Right-click canvas to add nodes"
+        )
+
         if imgui.begin_popup("Create Node"):
             imgui.text_disabled("Add Node...")
             imgui.separator()
             # 未来：这些菜单项将创建真实节点
-            if imgui.menu_item("SSVEP Stimulus")[0]:
+            if imgui.menu_item("SSVEP Stimulus", "", False)[0]:
                 pass
-            if imgui.menu_item("Image Stimulus")[0]:
+            if imgui.menu_item("Image Stimulus", "", False)[0]:
                 pass
-            if imgui.menu_item("EEG Device")[0]:
+            if imgui.menu_item("EEG Device", "", False)[0]:
                 pass
-            if imgui.menu_item("PyTorch Inference")[0]:
+            if imgui.menu_item("PyTorch Inference", "", False)[0]:
                 pass
             imgui.end_popup()
+        node_ed.resume()
 
         node_ed.end()

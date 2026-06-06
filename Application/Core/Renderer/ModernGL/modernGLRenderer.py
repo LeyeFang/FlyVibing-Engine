@@ -57,6 +57,7 @@ class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderRe
         cam = EditorCamera.get_instance()
         cls._cached_view = cam.get_view_matrix()
         cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
+
         return cls
 
     @classmethod
@@ -106,6 +107,9 @@ class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderRe
                     pass
 
             entity.vao.render(mgl.TRIANGLES)
+
+        # ── Overlay 回调 (编辑器网格/Gizmo/轮廓, 由 Layer 注册) ──
+        cls._render_overlays(view, proj)
 
     @classmethod
     def EndFrame(cls) -> None:

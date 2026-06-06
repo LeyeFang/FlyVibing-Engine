@@ -12,6 +12,9 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Callable
+
+import numpy as np
 
 from Application.Core.Events.Event import Event
 
@@ -78,6 +81,37 @@ class Renderer(ABC):
             event: 引擎事件实例 (WindowResizeEvent / SceneCameraUpdateEvent 等)
         """
         ...
+
+    # ════════════════════════════════════════════════════════════
+    # Overlay 回调机制 (编辑器解耦)
+    # ════════════════════════════════════════════════════════════
+
+    _overlay_callbacks: list[Callable] = []
+
+    @classmethod
+    def register_overlay_callback(cls, callback: Callable) -> None:
+        """注册 overlay 渲染回调 — 每帧场景实体之后调用。
+
+        EditorLayer 在 OnAttach 时注册 GridGizmo/Gizmo/Outline 等。
+        渲染器不 import 任何 Editor 代码, 仅持有 Callable 引用。
+
+        Args:
+            callback: fn(view: np.ndarray, proj: np.ndarray) -> None
+        """
+        if callback not in cls._overlay_callbacks:
+            cls._overlay_callbacks.append(callback)
+
+    @classmethod
+    def unregister_overlay_callback(cls, callback: Callable) -> None:
+        """取消注册 overlay 回调。"""
+        if callback in cls._overlay_callbacks:
+            cls._overlay_callbacks.remove(callback)
+
+    @classmethod
+    def _render_overlays(cls, view: np.ndarray, proj: np.ndarray) -> None:
+        """调用所有已注册的 overlay 回调。"""
+        for cb in cls._overlay_callbacks:
+            cb(view, proj)
 
 
 class RenderResourceManger(ABC):

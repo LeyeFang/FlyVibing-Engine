@@ -5,6 +5,8 @@ from imgui_bundle import imgui as imgui_internal
 
 from Application.Editor.UI.BasePanel import BasePanel
 from Application.Editor.UI.PanelStyle import apply_custom_style
+from Application.Editor.UI.FileDialog import FileDialog
+from Application.Editor.Services.ImportService import ImportService
 
 
 class UIManager:
@@ -92,8 +94,10 @@ class UIManager:
         # ── 创建 DockSpace 停靠系统 ──
         dockspace_id = imgui.get_id("MainDockSpace")
         cls._dockspace_id = dockspace_id
-        imgui.dock_space(dockspace_id, (0.0, 0.0),
-                         imgui.DockNodeFlags_.none)
+        imgui.dock_space(
+            dockspace_id,
+            (0.0, 0.0),
+            imgui.DockNodeFlags_.none)
 
         # 首次运行时设置默认停靠布局
         if not cls._dock_layout_done:
@@ -115,6 +119,9 @@ class UIManager:
 
         imgui.end()  # MainDockSpace
 
+        # ── 渲染文件对话框 (在 DockSpace 外部, 独立窗口) ──
+        FileDialog.render()
+
     # ============================================================
     # 菜单栏（内联在 MainDockSpace 中）
     # ============================================================
@@ -131,6 +138,16 @@ class UIManager:
 
             # ── File 菜单 ──
             if imgui.begin_menu("File", True):
+                # Import 子菜单
+                if imgui.begin_menu("Import", True):
+                    if imgui.menu_item("Mesh...", "", False, True)[0]:
+                        FileDialog.open_mesh(ImportService.load_mesh)
+                    if imgui.menu_item("Texture...", "", False, True)[0]:
+                        FileDialog.open_texture(ImportService.load_texture)
+                    if imgui.menu_item("Shader...", "", False, True)[0]:
+                        FileDialog.open_shader(ImportService.load_shader)
+                    imgui.end_menu()
+                imgui.separator()
                 if imgui.menu_item("New Scene", "Ctrl+N", False, False)[0]:
                     pass
                 if imgui.menu_item("Open Scene...", "Ctrl+O", False, False)[0]:

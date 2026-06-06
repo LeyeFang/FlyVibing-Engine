@@ -1,118 +1,117 @@
 @echo off
-chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-:: 获取脚本所在目录（Scripts）和项目根目录
+:: Get script directory (Scripts) and project root
 set SCRIPT_DIR=%~dp0
 set PROJECT_ROOT=%SCRIPT_DIR%..
 
-:: 定义虚拟环境路径
+:: Virtual environment paths
 set VENV_312=%PROJECT_ROOT%\.venv-py312
 set VENV_314=%PROJECT_ROOT%\.venv-py314t
 
-:: 切换到项目根目录
-cd /d "%PROJECT_ROOT%" || (echo 错误：无法进入项目目录 & pause & exit /b 1)
+:: Navigate to project root
+cd /d "%PROJECT_ROOT%" || (echo [ERROR] Cannot enter project directory & pause & exit /b 1)
 
-:: 检查 uv 是否安装
+:: Check if uv is installed
 where uv >nul 2>nul
 if %errorlevel% neq 0 (
-    echo 错误：未找到 uv，请先安装 uv
+    echo [ERROR] uv not found. Please install uv first.
     pause
     exit /b 1
 )
 
 :: ------------------------------------------------------------
-:: Python 3.12 环境：同步依赖（包含 gui 组） + 生成锁文件
+:: Python 3.12: sync deps (with gui group) + generate lock file
 :: ------------------------------------------------------------
 echo ========================================
-echo 处理 Python 3.12 环境
+echo Processing Python 3.12 environment
 echo ========================================
 if exist "%VENV_312%\Scripts\activate.bat" (
-    echo 正在更新环境并生成锁文件...
+    echo Updating environment and generating lock file...
     cmd /c "call "%VENV_312%\Scripts\activate.bat" && uv sync --extra gui --active && uv lock"
     if !errorlevel! equ 0 (
         if exist "%PROJECT_ROOT%\uv.lock" (
             copy /Y "%PROJECT_ROOT%\uv.lock" "%SCRIPT_DIR%\uv-py312.lock"
-            echo [成功] 已保存 uv-py312.lock 到 %SCRIPT_DIR%
+            echo [OK] Saved uv-py312.lock to %SCRIPT_DIR%
             del /Q "%PROJECT_ROOT%\uv.lock"
-            echo [清理] 已删除根目录下的 uv.lock
+            echo [OK] Deleted uv.lock from project root
         ) else (
-            echo [警告] uv.lock 未生成，请检查
+            echo [WARN] uv.lock was not generated, please check
         )
     ) else (
-        echo [失败] uv sync / lock 命令出错，请检查网络或依赖。
+        echo [FAIL] uv sync / lock failed. Check network or dependencies.
     )
 ) else (
-    echo [错误] 找不到虚拟环境：%VENV_312%
+    echo [ERROR] Virtual environment not found: %VENV_312%
 )
 
 echo.
 :: ------------------------------------------------------------
-:: Python 3.14t 环境：同步依赖（含 gui-314，从源码编译） + 生成锁文件
+:: Python 3.14t: sync deps (with gui-314, build from source) + generate lock file
 :: ------------------------------------------------------------
 echo ========================================
-echo 处理 Python 3.14t 环境
+echo Processing Python 3.14t environment
 echo ========================================
-:: imgui-bundle (gui-314) 需要从源码编译，先确保 MSVC 可用
+:: imgui-bundle (gui-314) needs MSVC to build from source
 call :FindMSVC
 if exist "%VENV_314%\Scripts\activate.bat" (
-    echo 正在更新环境并生成锁文件...
+    echo Updating environment and generating lock file...
     cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --extra device --extra gui-314 --active && uv lock"
     if !errorlevel! equ 0 (
         if exist "%PROJECT_ROOT%\uv.lock" (
             copy /Y "%PROJECT_ROOT%\uv.lock" "%SCRIPT_DIR%\uv-py314t.lock"
-            echo [成功] 已保存 uv-py314t.lock 到 %SCRIPT_DIR%
+            echo [OK] Saved uv-py314t.lock to %SCRIPT_DIR%
             del /Q "%PROJECT_ROOT%\uv.lock"
-            echo [清理] 已删除根目录下的 uv.lock
+            echo [OK] Deleted uv.lock from project root
         ) else (
-            echo [警告] uv.lock 未生成，请检查
+            echo [WARN] uv.lock was not generated, please check
         )
     ) else (
-        echo [失败] uv sync / lock 命令出错，请检查网络或依赖。
+        echo [FAIL] uv sync / lock failed. Check network or dependencies.
     )
 ) else (
-    echo [错误] 找不到虚拟环境：%VENV_314%
+    echo [ERROR] Virtual environment not found: %VENV_314%
 )
 
 echo.
-echo 全部完成。按任意键退出...
+echo All done. Press any key to exit...
 pause >nul
 exit /b 0
 
 
 :: ============================================================
-:: :FindMSVC - 自动检测 Visual Studio 并加载 MSVC 环境变量
-:: 搜索顺序: vswhere → 常见安装路径
+:: :FindMSVC - Auto-detect Visual Studio and load MSVC environment
+:: Search order: vswhere -> common install paths
 :: ============================================================
 :FindMSVC
 where cl >nul 2>nul
 if %errorlevel% equ 0 (
-    echo [MSVC] cl.exe 已在 PATH 中，跳过检测
+    echo [MSVC] cl.exe already in PATH, skipping detection
     exit /b 0
 )
 
-set VSWHERE_PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe
-if not exist "%VSWHERE_PATH%" set VSWHERE_PATH=%ProgramFiles%\Microsoft Visual Studio\Installer\vswhere.exe
+set "VSWHERE_PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if not exist "%VSWHERE_PATH%" set "VSWHERE_PATH=%ProgramFiles%\Microsoft Visual Studio\Installer\vswhere.exe"
 
 if exist "%VSWHERE_PATH%" (
-    echo [MSVC] 正在通过 vswhere 查找 Visual Studio 安装...
+    echo [MSVC] Searching for Visual Studio via vswhere...
     for /f "usebackq tokens=*" %%i in (`"%VSWHERE_PATH%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set VSINST=%%i
     if defined VSINST (
-        set VCVARS="%VSINST%\VC\Auxiliary\Build\vcvarsall.bat"
-        if exist !VCVARS! (
-            echo [MSVC] 找到: !VCVARS!
-            call !VCVARS! x64
+        set "VCVARS=%VSINST%\VC\Auxiliary\Build\vcvarsall.bat"
+        if exist "!VCVARS!" (
+            echo [MSVC] Found: !VCVARS!
+            call "!VCVARS!" x64
             if !errorlevel! equ 0 (
-                echo [MSVC] 环境加载成功
+                echo [MSVC] Environment loaded successfully
                 exit /b 0
             )
         )
     )
 ) else (
-    echo [MSVC] vswhere 未找到，尝试常见路径...
+    echo [MSVC] vswhere not found, trying common paths...
 )
 
-:: 备选：遍历常见安装路径
+:: Fallback: iterate over common install paths
 for %%p in (
     "%ProgramFiles%\Microsoft Visual Studio\2022\Community"
     "%ProgramFiles%\Microsoft Visual Studio\2022\Professional"
@@ -128,15 +127,15 @@ for %%p in (
     "%ProgramFiles%\Microsoft Visual Studio\2019\BuildTools"
 ) do (
     if exist "%%p\VC\Auxiliary\Build\vcvarsall.bat" (
-        echo [MSVC] 找到: %%p\VC\Auxiliary\Build\vcvarsall.bat
+        echo [MSVC] Found: %%p\VC\Auxiliary\Build\vcvarsall.bat
         call "%%p\VC\Auxiliary\Build\vcvarsall.bat" x64
         if !errorlevel! equ 0 (
-            echo [MSVC] 环境加载成功
+            echo [MSVC] Environment loaded successfully
             exit /b 0
         )
     )
 )
 
-echo [警告] 未找到 MSVC 编译器！编译 imgui-bundle 可能会失败
-echo        请确保已安装 "使用 C++ 的桌面开发" 工作负载
+echo [WARN] MSVC compiler not found! imgui-bundle build may fail.
+echo        Please install "Desktop development with C++" workload.
 exit /b 0

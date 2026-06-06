@@ -8,13 +8,14 @@ class MenuBarPanel(BasePanel):
     """主菜单栏：File / Edit / View / Help"""
 
     name = "##MainMenu"  # 隐藏窗口标题
-    flags = (imgui.WindowFlags_.no_title_bar
-             | imgui.WindowFlags_.no_collapse
-             | imgui.WindowFlags_.no_resize
-             | imgui.WindowFlags_.no_move
-             | imgui.WindowFlags_.no_scrollbar
-             | imgui.WindowFlags_.no_docking
-             | imgui.WindowFlags_.always_auto_resize)
+    flags = (
+        imgui.WindowFlags_.no_title_bar
+        | imgui.WindowFlags_.no_collapse
+        | imgui.WindowFlags_.no_resize
+        | imgui.WindowFlags_.no_move
+        | imgui.WindowFlags_.no_scrollbar
+        | imgui.WindowFlags_.no_docking
+        | imgui.WindowFlags_.always_auto_resize)
 
     def __init__(self):
         super().__init__()

@@ -1,116 +1,158 @@
 @echo off
-chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-:: 获取脚本所在目录（Scripts）和项目根目录
-set SCRIPT_DIR=%~dp0
-set PROJECT_ROOT=%SCRIPT_DIR%..
+:: ============================================
+:: Script dir (Scripts) and project root
+:: ============================================
+set "SCRIPT_DIR=%~dp0"
+set "PROJECT_ROOT=%SCRIPT_DIR%.."
 
-:: 定义虚拟环境路径
-set VENV_312=%PROJECT_ROOT%\.venv-py312
-set VENV_314=%PROJECT_ROOT%\.venv-py314t
+:: Venv paths
+set "VENV_312=%PROJECT_ROOT%\.venv-py312"
+set "VENV_314=%PROJECT_ROOT%\.venv-py314t"
 
-:: 锁文件路径
-set LOCK_312=%SCRIPT_DIR%\uv-py312.lock
-set LOCK_314=%SCRIPT_DIR%\uv-py314t.lock
+:: Lock file paths
+set "LOCK_312=%SCRIPT_DIR%uv-py312.lock"
+set "LOCK_314=%SCRIPT_DIR%uv-py314t.lock"
 
-:: 切换到项目根目录
-cd /d "%PROJECT_ROOT%" || (echo 错误：无法进入项目目录 & pause & exit /b 1)
+:: Navigate to project root
+cd /d "%PROJECT_ROOT%" || (echo [ERROR] Cannot enter project directory & pause & exit /b 1)
 
-:: 检查 uv 是否安装
+:: ============================================
+:: Check uv is installed
+:: ============================================
 where uv >nul 2>nul
 if %errorlevel% neq 0 (
-    echo 错误：未找到 uv，请先安装 uv (https://docs.astral.sh/uv/getting-started/installation/)
+    echo [ERROR] uv not found. Install: https://docs.astral.sh/uv/getting-started/installation/
     pause
     exit /b 1
 )
 
-:: 检查锁文件是否存在
+echo [INFO] uv found.
+echo.
+
+:: ============================================
+:: Detect installed Python versions
+::   Use 'uv python list --only-installed' to avoid auto-download
+:: ============================================
+echo [INFO] Checking installed Python versions...
+
+set HAS_PY312=0
+set HAS_PY314T=0
+
+:: Use uv to list only installed pythons, then search for versions
+for /f "tokens=1,2" %%a in ('uv python list --only-installed 2^>nul ^| findstr /r /c:"cpython-3\.12" /c:"cpython-3\.14"') do (
+    echo   Found: %%a %%b
+    echo %%a | findstr "3.12" >nul && set HAS_PY312=1
+    echo %%a | findstr "3.14" >nul && set HAS_PY314T=1
+)
+
+:: Fallback: try 'py' launcher if uv list returned nothing
+if !HAS_PY312! equ 0 (
+    py -3.12 --version >nul 2>nul && set HAS_PY312=1
+)
+if !HAS_PY314T! equ 0 (
+    py -3.14t --version >nul 2>nul && set HAS_PY314T=1
+)
+
+echo [INFO] Python 3.12  : !HAS_PY312! (1=found, 0=not found^)
+echo [INFO] Python 3.14t : !HAS_PY314T! (1=found, 0=not found^)
+echo.
+
+:: If neither is found, exit
+if !HAS_PY312! equ 0 if !HAS_PY314T! equ 0 (
+    echo [ERROR] Neither Python 3.12 nor Python 3.14t found.
+    echo   Install with:
+    echo     uv python install 3.12
+    echo     uv python install 3.14t
+    pause
+    exit /b 1
+)
+
+:: ============================================
+:: Setup Python 3.12 venv
+:: ============================================
+if !HAS_PY312! equ 0 (
+    echo [SKIP] Python 3.12 not found, skipping .venv-py312.
+    goto :setup_314
+)
+
 if not exist "%LOCK_312%" (
-    echo 错误：找不到锁文件 %LOCK_312%，请确保仓库包含该文件。
-    pause
-    exit /b 1
-)
-if not exist "%LOCK_314%" (
-    echo 错误：找不到锁文件 %LOCK_314%，请确保仓库包含该文件。
-    pause
-    exit /b 1
+    echo [WARN] Lock file not found: %LOCK_312%, skipping .venv-py312.
+    goto :setup_314
 )
 
 echo ========================================
-echo 初始化 Python 3.12 环境
+echo Setting up .venv-py312 (Python 3.12^)
 echo ========================================
 
-:: 创建 3.12 虚拟环境（如果不存在）
-if not exist "%VENV_312%\Scripts\activate.bat" (
-    echo 创建虚拟环境 .venv-py312 ...
-    uv venv --python 3.12 "%VENV_312%"
-    if !errorlevel! neq 0 (
-        echo 错误：创建虚拟环境失败，请检查 Python 3.12 是否已安装（可用 uv python install 3.12）
-        pause
-        exit /b 1
-    )
-) else (
-    echo 虚拟环境已存在，跳过创建。
+echo [CREATE] Creating .venv-py312 (--clear to replace if exists^)...
+uv venv --clear --python 3.12 "%VENV_312%"
+if !errorlevel! neq 0 (
+    echo [ERROR] Failed to create .venv-py312
+    pause
+    exit /b 1
 )
 
-:: 临时复制锁文件到根目录
+:: Copy lock file and sync
 copy /Y "%LOCK_312%" "%PROJECT_ROOT%\uv.lock" >nul
-
-:: 激活环境并同步依赖
-echo 正在安装依赖（这可能需要几分钟）...
+echo [SYNC] Installing dependencies (may take a few minutes^)...
 cmd /c "call "%VENV_312%\Scripts\activate.bat" && uv sync --locked"
 if !errorlevel! neq 0 (
-    echo 错误：依赖安装失败
+    echo [ERROR] Dependency install failed for .venv-py312
     del /Q "%PROJECT_ROOT%\uv.lock" 2>nul
     pause
     exit /b 1
 )
-
-:: 删除临时锁文件
 del /Q "%PROJECT_ROOT%\uv.lock" 2>nul
-echo [成功] Python 3.12 环境已就绪
-
+echo [OK] .venv-py312 ready.
 echo.
-echo ========================================
-echo 初始化 Python 3.14t 环境
-echo ========================================
 
-:: 创建 3.14t 虚拟环境（如果不存在）
-if not exist "%VENV_314%\Scripts\activate.bat" (
-    echo 创建虚拟环境 .venv-py314t ...
-    uv venv --python 3.14t "%VENV_314%"
-    if !errorlevel! neq 0 (
-        echo 错误：创建虚拟环境失败，请检查 Python 3.14t 是否已安装（可用 uv python install 3.14t）
-        pause
-        exit /b 1
-    )
-) else (
-    echo 虚拟环境已存在，跳过创建。
+:setup_314
+:: ============================================
+:: Setup Python 3.14t venv
+:: ============================================
+if !HAS_PY314T! equ 0 (
+    echo [SKIP] Python 3.14t not found, skipping .venv-py314t.
+    goto :done
 )
 
-:: 临时复制锁文件到根目录
-copy /Y "%LOCK_314%" "%PROJECT_ROOT%\uv.lock" >nul
+if not exist "%LOCK_314%" (
+    echo [WARN] Lock file not found: %LOCK_314%, skipping .venv-py314t.
+    goto :done
+)
 
-:: 激活环境并同步依赖
-echo 正在安装依赖（这可能需要几分钟）...
+echo ========================================
+echo Setting up .venv-py314t (Python 3.14t^)
+echo ========================================
+
+echo [CREATE] Creating .venv-py314t (--clear to replace if exists^)...
+uv venv --clear --python 3.14t "%VENV_314%"
+if !errorlevel! neq 0 (
+    echo [ERROR] Failed to create .venv-py314t
+    pause
+    exit /b 1
+)
+
+:: Copy lock file and sync
+copy /Y "%LOCK_314%" "%PROJECT_ROOT%\uv.lock" >nul
+echo [SYNC] Installing dependencies (may take a few minutes^)...
 cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --locked"
 if !errorlevel! neq 0 (
-    echo 错误：依赖安装失败
+    echo [ERROR] Dependency install failed for .venv-py314t
     del /Q "%PROJECT_ROOT%\uv.lock" 2>nul
     pause
     exit /b 1
 )
-
 del /Q "%PROJECT_ROOT%\uv.lock" 2>nul
-echo [成功] Python 3.14t 环境已就绪
-
+echo [OK] .venv-py314t ready.
 echo.
+
+:done
 echo ========================================
-echo 全部完成！
-echo 使用方法：
-echo   .venv-py312\Scripts\activate     # 激活 3.12 环境
-echo   .venv-py314t\Scripts\activate    # 激活 3.14t 环境
+echo All done!
+echo   Activate: .venv-py312\Scripts\activate
+echo   Activate: .venv-py314t\Scripts\activate
 echo ========================================
 pause
 exit /b 0

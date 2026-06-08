@@ -66,21 +66,17 @@ class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderRe
             w, h = cls._pending_resize
             ModernGLCore.update_viewport(w, h)
             cls._pending_resize = None
-
         ModernGLCore.clear_frame()
         view = cls._cached_view
         proj = cls._cached_proj
-
         for entity_id in SceneManager.GetRenderableEntities():
             entity = cls.registered_entities[entity_id]
             program = cls.registered_shaders[entity.shader_id].program
-
             # MVP 矩阵
             model = calculate_entity_model(SceneManager.GetEntityTransform(entity_id))
             program['model'].write(np.ascontiguousarray(model.astype('float32')).tobytes())
             program['view'].write(np.ascontiguousarray(view.astype('float32')).tobytes())
             program['projection'].write(np.ascontiguousarray(proj.astype('float32')).tobytes())
-
             # 纹理
             if entity.texture_id and entity.texture_id > 0:
                 tex_data = cls.registered_textures.get(entity.texture_id)
@@ -90,7 +86,6 @@ class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderRe
                         program['uTexture'] = 0
                     except KeyError:
                         pass
-
             # 材质 uniform
             material = ResourceManager.GetMaterial(entity.material_id)
             for u_name, u_value in material.uniforms_data.items():
@@ -105,9 +100,7 @@ class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderRe
                         program[u_name] = u_value
                 except KeyError:
                     pass
-
             entity.vao.render(mgl.TRIANGLES)
-
         # ── Overlay 回调 (编辑器网格/Gizmo/轮廓, 由 Layer 注册) ──
         cls._render_overlays(view, proj)
 
@@ -116,27 +109,34 @@ class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderRe
         pass
 
     @classmethod
-    def OnEvent(cls, event: Event) -> None:
+    def OnEvent(
+        cls,
+        event: Event
+    ) -> None:
         if event is WindowResizeEvent:
             width, height = event.UnPack()
             cls._pending_resize = (width, height)
             cls.aspect_ratio = width / height
             cam = EditorCamera.get_instance()
             cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
-
-        if any([event is NewComponentEvent, event is ComponentModifiedEvent]):
+        if any([
+            event is NewComponentEvent,
+            event is ComponentModifiedEvent
+        ]):
             entity_id, comp = event.UnPack()
             if isinstance(comp, MeshRenderer):
                 if comp.visible:
                     cls.register_entity(entity_id)
                 else:
                     cls.unregister_entity(entity_id)
-
         if event is SceneCameraUpdateEvent:
             cls._camera_update_callback(event)
 
     @classmethod
-    def _camera_update_callback(cls, event: SceneCameraUpdateEvent):
+    def _camera_update_callback(
+        cls,
+        event: SceneCameraUpdateEvent
+    ) -> None:
         cam = EditorCamera.get_instance()
         cls._cached_view = cam.get_view_matrix()
         cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)

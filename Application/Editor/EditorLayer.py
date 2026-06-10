@@ -18,6 +18,7 @@ from Application.Editor.EditorCamera import EditorCamera
 from Application.Editor.EditorEvent import (
     SelecteEntityEvent, DeselectEntityEvent, ClearSelectionEvent,
 )
+from Application.Editor.Rendering.Outliner import Outliner
 
 # 模块引用 — 需要访问 InputEvent 中的可变全局状态 (press/release 坐标)
 import Application.Core.Events.InputEvent as _input_event
@@ -44,6 +45,7 @@ class EditorLayer(Layer):
     _selected_ids: set = set()       # 当前选中的实体 ID 集合
     _outline_xray: bool = True       # 轮廓 X-Ray 模式
     _click_threshold: float = 4.0    # 点击判定最大位移 (像素)
+    _outliner: Outliner = None       # 轮廓渲染模块 (自包含 GPU 资源)
 
     # ── 跨线程拾取 (main thread → render thread) ─────────────
     _pending_pick_coords: tuple = None   # (sx, sy) 待处理的拾取请求
@@ -80,8 +82,11 @@ class EditorLayer(Layer):
         from Application.Editor.Rendering.Grid import Grid
         Grid.register_to(cls.editor_renderer)
 
-        # ── 启用 FBO 管线 (轮廓高亮 + 实体拾取) ──
-        cls.editor_renderer.EnableFBOPipeline()
+        # ── 轮廓高亮: 创建 Outliner 并注册到 Renderer ──
+        w, h = editor_window.GetSize()
+        cls._outliner = Outliner()
+        cls._outliner.init(cls.editor_renderer, w, h)
+        cls.editor_renderer.register_outliner(cls._outliner)
         cls._sync_outline_to_renderer()
 
     @classmethod
@@ -118,6 +123,9 @@ class EditorLayer(Layer):
     def OnDetach(cls):
         from Application.Editor.Rendering.Grid import Grid
         Grid.unregister_from(cls.editor_renderer)
+        if cls._outliner is not None:
+            cls.editor_renderer.unregister_outliner()
+            cls._outliner = None
         imgui.destroy_context()
 
     @classmethod
@@ -185,10 +193,13 @@ class EditorLayer(Layer):
         """在渲染线程执行待处理的 FBO 拾取。"""
         if cls._pending_pick_coords is None:
             return
+        if cls._outliner is None:
+            cls._pending_pick_coords = None
+            return
         sx, sy = cls._pending_pick_coords
         cls._pending_pick_coords = None
 
-        entity_id = cls.editor_renderer.PickAt(sx, sy)
+        entity_id = cls._outliner.pick_at(cls.editor_renderer, sx, sy)
 
         if entity_id >= 0:
             # 选中实体
@@ -240,12 +251,13 @@ class EditorLayer(Layer):
 
         对齐 Grid.register_to 的解耦模式:
           编辑器只传数据 (selected_ids, xray), 不碰 GL。
-          渲染器根据数据在 StartFrame 中执行 stencil 轮廓绘制。
+          Outliner 根据数据在渲染时执行 stencil 轮廓绘制。
         """
-        cls.editor_renderer.SetOutlineConfig(
-            selected_ids=cls._selected_ids,
-            xray=cls._outline_xray,
-        )
+        if cls._outliner is not None:
+            cls._outliner.set_config(
+                selected_ids=cls._selected_ids,
+                xray=cls._outline_xray,
+            )
 
     @classmethod
     def OnUpdate(cls):

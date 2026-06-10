@@ -582,6 +582,7 @@ class OpenGLResourceManager:
         draw_mode: int = 0
         depth_test: bool = True
         line_width: float = 1.0
+        blend: bool = False
         uniforms_setup: Callable[[int], None] = field(default=lambda p: None)
 
     # GPU 端 overlay 注册表: key → overlay_gpu_data
@@ -646,6 +647,7 @@ class OpenGLResourceManager:
             draw_mode=draw_mode_gl,
             depth_test=overlay.depth_test,
             line_width=overlay.line_width,
+            blend=overlay.blend,
             uniforms_setup=overlay.uniforms_setup,
         )
 
@@ -702,9 +704,16 @@ class OpenGLResourceManager:
             else:
                 gl.glDisable(gl.GL_DEPTH_TEST)
 
-            # ── 线宽 ──
+            # ── 混合 (淡化边缘等) ──
+            if gpu.blend:
+                gl.glEnable(gl.GL_BLEND)
+                gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+            else:
+                gl.glDisable(gl.GL_BLEND)
+
+            # ── 线宽 (OpenGL 3.3 core 仅保证 1.0 有效, 超过可能触发 GL_INVALID_VALUE) ──
             if gpu.draw_mode == gl.GL_LINES:
-                gl.glLineWidth(gpu.line_width)
+                gl.glLineWidth(min(gpu.line_width, 1.0))
 
             # ── 绘制 ──
             gl.glBindVertexArray(gpu.vao)
@@ -719,3 +728,4 @@ class OpenGLResourceManager:
         # ── 恢复状态 ──
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDepthFunc(gl.GL_LESS)
+        gl.glDisable(gl.GL_BLEND)

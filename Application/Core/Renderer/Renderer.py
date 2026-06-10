@@ -320,6 +320,7 @@ class RenderResourceManger(ABC):
         draw_mode: str = 'lines'
         depth_test: bool = True
         line_width: float = 1.0
+        blend: bool = False
 
     registered_overlays: dict[str, 'overlay_drawable_struct'] = {}
 

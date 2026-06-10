@@ -1,6 +1,8 @@
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as node_ed
 
+import os
+
 from Application.Editor.UI.BasePanel import BasePanel
 
 
@@ -9,6 +11,12 @@ class NodeEditorPanel(BasePanel):
 
     name = "Node Editor"
     flags = imgui.WindowFlags_.none
+
+    # ── 配置文件路径 (与 EditorLayer 共用 Application/Editor/config/) ──
+    _CONFIG_FILE: str = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "config", "NodeEditor.json",
+    )
 
     def __init__(
         self
@@ -30,7 +38,11 @@ class NodeEditorPanel(BasePanel):
         """面板注册时创建节点编辑器上下文"""
         if not self._editor_initialized:
             try:
-                self._editor_context = node_ed.create_editor()
+                # 确保配置目录存在
+                os.makedirs(os.path.dirname(self._CONFIG_FILE), exist_ok=True)
+                config = node_ed.Config()
+                config.settings_file = self._CONFIG_FILE
+                self._editor_context = node_ed.create_editor(config)
                 self._editor_initialized = True
             except Exception:
                 self._editor_context = None

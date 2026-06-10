@@ -59,12 +59,17 @@ class EditorCamera(CameraBase):
     # ════════════════════════════════════════════════════════════
 
     def _init_defaults(self) -> None:
-        """设置默认轨道参数 (仅首次创建时调用)。"""
+        """设置默认轨道参数 (仅首次创建时调用)。
+
+        初始视角: 编辑器 XY 第四象限 (X>0, Y<0) 平面上方 (Z>0),
+        注视世界坐标原点。
+        对应 GL 坐标中摄像机位于 (+, +, +) 看向原点。
+        """
         # ── 轨道参数 ──
-        self.yaw: float = math.pi       # 初始面朝 -Z 方向 (看向实体群)
-        self.pitch: float = 0.0
+        self.yaw: float = math.pi * 0.75    # 3π/4, 摄像机在 GL 第一卦限
+        self.pitch: float = math.pi / 6.0   # 30° 俯角
         self.orbit_target: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-        self.orbit_distance: float = 47.0
+        self.orbit_distance: float = 15
 
         # ── 投影参数 ──
         self.fov: float = 45.0

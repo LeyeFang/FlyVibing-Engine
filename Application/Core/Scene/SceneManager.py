@@ -295,3 +295,85 @@ class SceneManager:
                     raise BaseException("Input params and material actual params not match !!")
         except KeyError:
             raise BaseException(f"Entity '{entity_id}' do not have mesh renderer")
+
+    # ============================================================
+    # 坐标系转换 / Coordinate Conversion
+    # ============================================================
+    # GL 标准坐标系 → 编辑器坐标系:
+    #   编辑器 X = GL X
+    #   编辑器 Y = -GL Z  (GL 的 Z 负半轴 → 编辑器 Y 正半轴)
+    #   编辑器 Z = GL Y   (GL 的 Y 正半轴 → 编辑器 Z 正半轴)
+    #
+    # Transform 内部始终以 GL 坐标存储，编辑器通过以下方法读写。
+
+    @staticmethod
+    def gl_to_editor_position(
+        gl_x: float, gl_y: float, gl_z: float
+    ) -> tuple[float, float, float]:
+        """GL 坐标 → 编辑器坐标"""
+        return (gl_x, -gl_z, gl_y)
+
+    @staticmethod
+    def editor_to_gl_position(
+        editor_x: float, editor_y: float, editor_z: float
+    ) -> tuple[float, float, float]:
+        """编辑器坐标 → GL 坐标"""
+        return (editor_x, editor_z, -editor_y)
+
+    # --- 编辑器坐标读写接口 ---
+
+    @classmethod
+    def GetEntityTransformEditor(
+        cls,
+        entity_id: int
+    ) -> dict:
+        """获取实体 Transform，位置以**编辑器坐标系**返回。
+
+        Returns:
+            dict 包含键:
+              - 'position': (editor_x, editor_y, editor_z)
+              - 'rotation': (rotation_x, rotation_y, rotation_z)  # 欧拉角, 沿用 GL 约定
+              - 'scale':    (scale_x, scale_y, scale_z)
+        """
+        t = esper.component_for_entity(entity_id, Transform)
+        return {
+            'position': cls.gl_to_editor_position(
+                t.position_x, t.position_y, t.position_z
+            ),
+            'rotation': (t.rotation_x, t.rotation_y, t.rotation_z),
+            'scale': (t.scale_x, t.scale_y, t.scale_z),
+        }
+
+    @classmethod
+    def SetEntityTransformEditor(
+        cls,
+        entity_id: int = None,
+        position_xyz: tuple = None,
+        rotation_xyz: tuple = None,
+        scale_xyz: tuple = None
+    ) -> None:
+        """设置实体 Transform，位置以**编辑器坐标系**传入。
+
+        内部自动转换为 GL 坐标后存储。
+        """
+        if entity_id is None:
+            raise ValueError("Must specify entity ID")
+
+        transform = esper.component_for_entity(entity_id, Transform)
+        modified = False
+
+        if position_xyz is not None:
+            gl_x, gl_y, gl_z = cls.editor_to_gl_position(*position_xyz)
+            transform.position_x = gl_x
+            transform.position_y = gl_y
+            transform.position_z = gl_z
+            modified = True
+        if rotation_xyz is not None:
+            transform.rotation_x, transform.rotation_y, transform.rotation_z = rotation_xyz
+            modified = True
+        if scale_xyz is not None:
+            transform.scale_x, transform.scale_y, transform.scale_z = scale_xyz
+            modified = True
+
+        if modified:
+            ComponentModifiedEvent.Pack(entity_id, transform)

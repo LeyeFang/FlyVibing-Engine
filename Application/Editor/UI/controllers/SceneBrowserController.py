@@ -44,10 +44,10 @@ class SceneBrowserController:
     @classmethod
     def get_summary(cls, entity_id: int) -> Optional[EntitySummary]:
         try:
-            t = SceneManager.GetEntityTransform(entity_id)
+            t = SceneManager.GetEntityTransformEditor(entity_id)
             summary = EntitySummary(
                 entity_id=entity_id,
-                position=(t.position_x, t.position_y, t.position_z),
+                position=t['position'],
             )
             try:
                 summary.mesh_id = SceneManager.GetEntityMesh(entity_id)

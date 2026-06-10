@@ -561,29 +561,22 @@ class OpenGLResourceManager:
 
     @dataclass
     class overlay_gpu_data:
-        """Overlay 在 GPU 端的资源记录 (OpenGL 专用)。
-
-        Attributes:
-            vao            : GLuint — 顶点数组对象
-            vbo            : GLuint — 顶点缓冲
-            ebo            : GLuint — 索引缓冲
-            program        : GLuint — 着色器程序
-            elements_count : 索引数量
-            draw_mode      : GL 图元类型 (GL_LINES / GL_TRIANGLES)
-            depth_test     : 是否开启深度测试
-            line_width     : 线宽
-            uniforms_setup : fn(program) — 设置该 overlay 专属 uniform
-        """
+        """Overlay 在 GPU 端的资源记录 (OpenGL 专用)。"""
         vao: int = 0
         vbo: int = 0
         ebo: int = 0
         program: int = 0
+        texture: int = 0
         elements_count: int = 0
         draw_mode: int = 0
         depth_test: bool = True
-        line_width: float = 1.0
         blend: bool = False
+        cull_face: bool = False
+        line_width: float = 1.0
         uniforms_setup: Callable[[int], None] = field(default=lambda p: None)
+        ignore_scene_matrices: bool = False
+        model_matrix_cb: Callable[[int, int], 'np.ndarray'] = None
+        texture_uniform: str = ''
 
     # GPU 端 overlay 注册表: key → overlay_gpu_data
     _overlay_gpu_resources: dict[str, 'overlay_gpu_data'] = {}
@@ -598,9 +591,7 @@ class OpenGLResourceManager:
         cls,
         overlay: 'RenderResourceManger.overlay_drawable_struct'
     ) -> None:
-        """注册编辑器叠加层可绘制对象 — 编译 shader，上传 VBO/EBO，创建 VAO。
-
-        调用时机: 渲染线程，GL 上下文有效。
+        """注册编辑器叠加层可绘制对象 — 编译 shader, 上传 VBO/EBO/纹理, 创建 VAO。
 
         Args:
             overlay: 来自 Editor 层的纯数据载体 (无 GL 依赖)
@@ -608,7 +599,7 @@ class OpenGLResourceManager:
         from Application.Core.Renderer.Renderer import RenderResourceManger
 
         if overlay.key in cls._overlay_gpu_resources:
-            return  # 已注册，幂等
+            return
 
         # ── 编译着色器 ──
         program = cls._compile_program(overlay.vs_src, overlay.fs_src)
@@ -617,15 +608,17 @@ class OpenGLResourceManager:
         vao = gl.glGenVertexArrays(1)
         gl.glBindVertexArray(vao)
 
-        # ── VBO: 仅位置 (location=0, vec3) ──
+        # ── VBO (通用顶点布局) ──
         vbo = gl.glGenBuffers(1)
         verts = np.ascontiguousarray(overlay.vertices.astype('float32'))
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, vbo)
         gl.glBufferData(gl.GL_ARRAY_BUFFER, verts.nbytes,
                         verts.tobytes(), gl.GL_STATIC_DRAW)
-        gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE,
-                                 3 * 4, ctypes.c_void_p(0))
-        gl.glEnableVertexAttribArray(0)
+        for loc, size, offset in overlay.vertex_attrs:
+            gl.glVertexAttribPointer(
+                loc, size, gl.GL_FLOAT, gl.GL_FALSE,
+                overlay.vertex_stride, ctypes.c_void_p(offset))
+            gl.glEnableVertexAttribArray(loc)
 
         # ── EBO ──
         ebo = gl.glGenBuffers(1)
@@ -636,31 +629,46 @@ class OpenGLResourceManager:
 
         gl.glBindVertexArray(0)
 
+        # ── 纹理 (可选) ──
+        texture = 0
+        if overlay.texture_pixels is not None and overlay.texture_pixels.size > 0:
+            texture = gl.glGenTextures(1)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, texture)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE)
+            gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
+            pixels = np.ascontiguousarray(overlay.texture_pixels)
+            h, w = pixels.shape[:2]
+            gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, w, h, 0,
+                            gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, pixels)
+            gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+
         draw_mode_gl = cls._DRAW_MODE_MAP.get(overlay.draw_mode, gl.GL_LINES)
 
         cls._overlay_gpu_resources[overlay.key] = cls.overlay_gpu_data(
-            vao=vao,
-            vbo=vbo,
-            ebo=ebo,
-            program=program,
+            vao=vao, vbo=vbo, ebo=ebo, program=program,
+            texture=texture,
             elements_count=int(indices.size),
             draw_mode=draw_mode_gl,
             depth_test=overlay.depth_test,
             line_width=overlay.line_width,
             blend=overlay.blend,
+            cull_face=overlay.cull_face,
             uniforms_setup=overlay.uniforms_setup,
+            ignore_scene_matrices=overlay.ignore_scene_matrices,
+            model_matrix_cb=overlay.model_matrix_cb,
+            texture_uniform=overlay.texture_uniform,
         )
 
     @classmethod
     def unregister_overlay_drawable(cls, key: str) -> None:
-        """取消注册并释放 overlay 的 GPU 资源。
-
-        Args:
-            key: overlay 唯一标识符
-        """
+        """取消注册并释放 overlay 的 GPU 资源 (含纹理)。"""
         gpu = cls._overlay_gpu_resources.pop(key, None)
         if gpu is None:
             return
+        if gpu.texture:
+            gl.glDeleteTextures([gpu.texture])
         if gpu.vao:
             gl.glDeleteVertexArrays(1, [gpu.vao])
         if gpu.vbo:
@@ -674,28 +682,44 @@ class OpenGLResourceManager:
     def _draw_registered_overlays(cls, view: np.ndarray, proj: np.ndarray) -> None:
         """遍历所有已注册 overlay 并提交绘制命令。
 
-        每帧在场景实体渲染之后调用。
-        渲染器不知道 overlay 的语义 (Grid/Gizmo/...)，仅如实绘制。
-
-        Args:
-            view: 4×4 视图矩阵
-            proj: 4×4 投影矩阵
+        支持: 自定义 model 矩阵 / 纹理 / 面剔除 / 独立 NDC 渲染。
         """
-        for key, gpu in cls._overlay_gpu_resources.items():
+        vp = gl.glGetIntegerv(gl.GL_VIEWPORT)
+        vp_w, vp_h = vp[2], vp[3]
+
+        for _key, gpu in cls._overlay_gpu_resources.items():
             gl.glUseProgram(gpu.program)
 
-            # ── 设置 view/proj uniform (所有 overlay 共享) ──
-            loc_view = gl.glGetUniformLocation(gpu.program, 'uView')
-            loc_proj = gl.glGetUniformLocation(gpu.program, 'uProj')
-            if loc_view >= 0:
-                gl.glUniformMatrix4fv(loc_view, 1, gl.GL_FALSE,
-                                      np.ascontiguousarray(view.astype('float32')))
-            if loc_proj >= 0:
-                gl.glUniformMatrix4fv(loc_proj, 1, gl.GL_FALSE,
-                                      np.ascontiguousarray(proj.astype('float32')))
+            if gpu.ignore_scene_matrices:
+                # 独立 NDC 渲染: 使用自定义 model 矩阵
+                if gpu.model_matrix_cb:
+                    model = gpu.model_matrix_cb(vp_w, vp_h)
+                    loc = gl.glGetUniformLocation(gpu.program, 'uModel')
+                    if loc >= 0:
+                        gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE,
+                                              np.ascontiguousarray(model.astype('float32')))
+            else:
+                # 默认: 使用场景 view/proj
+                loc_view = gl.glGetUniformLocation(gpu.program, 'uView')
+                loc_proj = gl.glGetUniformLocation(gpu.program, 'uProj')
+                if loc_view >= 0:
+                    gl.glUniformMatrix4fv(loc_view, 1, gl.GL_FALSE,
+                                          np.ascontiguousarray(view.astype('float32')))
+                if loc_proj >= 0:
+                    gl.glUniformMatrix4fv(loc_proj, 1, gl.GL_FALSE,
+                                          np.ascontiguousarray(proj.astype('float32')))
 
-            # ── 调用 overlay 专属 uniform 设置 (颜色等) ──
-            gpu.uniforms_setup(gpu.program)
+            # ── 纹理 ──
+            if gpu.texture:
+                gl.glActiveTexture(gl.GL_TEXTURE0)
+                gl.glBindTexture(gl.GL_TEXTURE_2D, gpu.texture)
+                loc_tex = gl.glGetUniformLocation(gpu.program, gpu.texture_uniform or 'uLetterTex')
+                if loc_tex >= 0:
+                    gl.glUniform1i(loc_tex, 0)
+
+            # ── 专属 uniform ──
+            if gpu.uniforms_setup:
+                gpu.uniforms_setup(gpu.program)
 
             # ── 深度测试 ──
             if gpu.depth_test:
@@ -704,14 +728,22 @@ class OpenGLResourceManager:
             else:
                 gl.glDisable(gl.GL_DEPTH_TEST)
 
-            # ── 混合 (淡化边缘等) ──
+            # ── 面剔除 ──
+            if gpu.cull_face:
+                gl.glEnable(gl.GL_CULL_FACE)
+                gl.glCullFace(gl.GL_BACK)
+                gl.glFrontFace(gl.GL_CCW)
+            else:
+                gl.glDisable(gl.GL_CULL_FACE)
+
+            # ── 混合 ──
             if gpu.blend:
                 gl.glEnable(gl.GL_BLEND)
                 gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
             else:
                 gl.glDisable(gl.GL_BLEND)
 
-            # ── 线宽 (OpenGL 3.3 core 仅保证 1.0 有效, 超过可能触发 GL_INVALID_VALUE) ──
+            # ── 线宽 ──
             if gpu.draw_mode == gl.GL_LINES:
                 gl.glLineWidth(min(gpu.line_width, 1.0))
 
@@ -721,7 +753,6 @@ class OpenGLResourceManager:
                               gl.GL_UNSIGNED_INT, None)
             gl.glBindVertexArray(0)
 
-            # ── 恢复线宽默认值 ──
             if gpu.draw_mode == gl.GL_LINES:
                 gl.glLineWidth(1.0)
 
@@ -729,3 +760,4 @@ class OpenGLResourceManager:
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDepthFunc(gl.GL_LESS)
         gl.glDisable(gl.GL_BLEND)
+        gl.glDisable(gl.GL_CULL_FACE)

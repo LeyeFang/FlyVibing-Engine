@@ -22,11 +22,12 @@ from Application.Editor.EditorEvent import (
 )
 from Application.Editor.Rendering.Grid import Grid
 from Application.Editor.Rendering.Outliner import Outliner
+from Application.Editor.Rendering.ViewGizmo import ViewGizmo
 from Application.Editor.UI.UIManager import UIManager
 from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel
 
-# ── 模块引用 (访问 InputEvent 中的可变全局状态 press/release 坐标) ──
-import Application.Core.Events.InputEvent as _input_event
+# ── 模块引用 (访问 InputState 中的可变全局状态 press/release 坐标) ──
+import Application.Core.Input.InputState as _input_state
 
 
 class EditorLayer(Layer):
@@ -83,6 +84,9 @@ class EditorLayer(Layer):
         # ── 编辑器 3D 渲染资源: Grid 注册到 Renderer ──
         Grid.register_to(cls.editor_renderer)
 
+        # ── 视图立方体: 右上角摄像机方向指示器 ──
+        ViewGizmo.register_to(cls.editor_renderer)
+
         # ── 轮廓高亮: 创建 Outliner 并注册到 Renderer ──
         w, h = editor_window.GetSize()
         cls._outliner = Outliner()
@@ -94,6 +98,7 @@ class EditorLayer(Layer):
     def OnDetach(cls):
         """编辑器层销毁 — 注销渲染资源、销毁 ImGui 上下文。"""
         Grid.unregister_from(cls.editor_renderer)
+        ViewGizmo.unregister_from(cls.editor_renderer)
         if cls._outliner is not None:
             cls.editor_renderer.unregister_outliner()
             cls._outliner = None
@@ -228,8 +233,8 @@ class EditorLayer(Layer):
             return
 
         # 计算拖拽距离
-        dx = _input_event.button_release_pos_x - _input_event.button_press_pos_x
-        dy = _input_event.button_release_pos_y - _input_event.button_press_pos_y
+        dx = _input_state.button_release_pos_x - _input_state.button_press_pos_x
+        dy = _input_state.button_release_pos_y - _input_state.button_press_pos_y
         dist = (dx * dx + dy * dy) ** 0.5
 
         if dist >= cls._click_threshold:
@@ -238,8 +243,8 @@ class EditorLayer(Layer):
         # ── 单击 → 延迟到渲染线程执行 FBO 拾取 ──
         # PickAt() 需要 GL 上下文 (render thread), 此处仅记录坐标
         cls._pending_pick_coords = (
-            _input_event.button_release_pos_x,
-            _input_event.button_release_pos_y,
+            _input_state.button_release_pos_x,
+            _input_state.button_release_pos_y,
         )
 
     # ════════════════════════════════════════════════════════════

@@ -300,27 +300,45 @@ class RenderResourceManger(ABC):
         """编辑器叠加层可绘制对象 — 纯数据载体，不依赖任何图形 API。
 
         Attributes:
-            key          : 唯一标识符 (如 "editor_grid_lines", "editor_grid_x_axis")
-            vertices     : 顶点位置数组 (N×3, float32)
-            indices      : 索引数组 (M, uint32)
+            key          : 唯一标识符 (如 "editor_grid_lines")
+            vertices     : 顶点数组 (N×M, float32)
+            indices      : 索引数组 (K, uint32)
             vs_src       : GLSL 顶点着色器源码
             fs_src       : GLSL 片段着色器源码
-            uniforms_setup: Callable[[int], None] — 接收 program handle,
-                            负责设置该 overlay 专属的 uniform (颜色等)
             draw_mode    : 图元类型标识 ('lines' | 'triangles')
             depth_test   : 是否开启深度测试
+            blend        : 是否开启混合
+            cull_face    : 是否开启背面剔除
             line_width   : 线宽 (仅 draw_mode='lines' 时有效)
+            uniforms_setup: fn(program) — 设置专属 uniform (颜色等)
+            ignore_scene_matrices: 不使用场景 view/proj (直接 NDC 渲染)
+            model_matrix_cb: fn(w, h) → 4×4 model 矩阵 (仅 ignore_scene_matrices 时)
+            texture_pixels: RGBA uint8 纹理像素 (H, W, 4)
+            texture_uniform: 片段着色器中 sampler 名称
+            vertex_stride : 每顶点字节数
+            vertex_attrs  : [(location, size_floats, offset_bytes), ...]
         """
         key: str
         vertices: 'np.ndarray'
         indices: 'np.ndarray'
         vs_src: str
         fs_src: str
-        uniforms_setup: 'Callable[[int], None]'
         draw_mode: str = 'lines'
         depth_test: bool = True
-        line_width: float = 1.0
         blend: bool = False
+        cull_face: bool = False
+        line_width: float = 1.0
+        uniforms_setup: 'Callable[[int], None]' = None
+        ignore_scene_matrices: bool = False
+        model_matrix_cb: 'Callable[[int, int], np.ndarray]' = None
+        texture_pixels: 'np.ndarray' = None
+        texture_uniform: str = ''
+        vertex_stride: int = 12
+        vertex_attrs: list = None
+
+        def __post_init__(self):
+            if self.vertex_attrs is None:
+                self.vertex_attrs = [(0, 3, 0)]  # 默认: 仅位置 vec3
 
     registered_overlays: dict[str, 'overlay_drawable_struct'] = {}
 

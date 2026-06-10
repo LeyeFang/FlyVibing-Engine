@@ -8,6 +8,12 @@ from Application.Editor.UI.PanelStyle import apply_custom_style
 from Application.Editor.UI.FileDialog import FileDialog
 from Application.Editor.Services.ImportService import ImportService
 
+# ── 输入状态 (状态栏显示修饰键/组合键) ──
+from Application.Core.Input import (
+    GetModifierMask, GetHeldKeys, GetMouseButtonLabel,
+)
+from Application.Core.Events.Enum.InputEnum import KeyModifier, KeyButtonCode
+
 
 class UIManager:
     """面板注册中心 + DockSpace 布局管理器"""
@@ -20,6 +26,9 @@ class UIManager:
     _dockspace_id: int = 0
     _dock_layout_done: bool = False
     _style_applied: bool = False
+
+    # 底部状态栏高度 (像素)
+    STATUS_BAR_HEIGHT: float = 22.0
 
     # 由渲染线程在 draw_all 中写入，主线程在 ImguiLayer.OnEvent 中读取
     # (x, y, w, h) — 用于判断鼠标是否落在面板区域内
@@ -66,8 +75,10 @@ class UIManager:
 
         # ── 准备全屏 DockSpace 背景窗口 ──
         viewport = imgui.get_main_viewport()
+        # 底部留出状态栏空间
+        dockspace_h = viewport.work_size.y - cls.STATUS_BAR_HEIGHT
         imgui.set_next_window_pos(viewport.work_pos)
-        imgui.set_next_window_size(viewport.work_size)
+        imgui.set_next_window_size(imgui.ImVec2(viewport.work_size.x, dockspace_h))
         imgui.set_next_window_viewport(viewport.id_)
         window_flags = (
             imgui.WindowFlags_.no_title_bar
@@ -121,6 +132,9 @@ class UIManager:
 
         # ── 渲染文件对话框 (在 DockSpace 外部, 独立窗口) ──
         FileDialog.render()
+
+        # ── 底部状态栏 ──
+        cls._draw_status_bar()
 
     # ============================================================
     # 菜单栏（内联在 MainDockSpace 中）
@@ -228,6 +242,86 @@ class UIManager:
         internal.dock_builder_dock_window("Node Editor", dock_center)
 
         internal.dock_builder_finish(dockspace_id)
+
+    # ============================================================
+    # 状态栏
+    # ============================================================
+
+    @classmethod
+    def _draw_status_bar(cls) -> None:
+        """绘制底部状态栏 — 显示当前修饰键/组合键/鼠标按键状态。"""
+        viewport = imgui.get_main_viewport()
+        bar_y = viewport.work_pos.y + viewport.work_size.y - cls.STATUS_BAR_HEIGHT
+
+        imgui.set_next_window_pos(imgui.ImVec2(viewport.work_pos.x, bar_y))
+        imgui.set_next_window_size(imgui.ImVec2(viewport.work_size.x, cls.STATUS_BAR_HEIGHT))
+
+        imgui.push_style_var(imgui.StyleVar_.window_rounding, 0.0)
+        imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
+        imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(10, 3))
+
+        window_flags = (
+            imgui.WindowFlags_.no_title_bar
+            | imgui.WindowFlags_.no_collapse
+            | imgui.WindowFlags_.no_resize
+            | imgui.WindowFlags_.no_move
+            | imgui.WindowFlags_.no_bring_to_front_on_focus
+            | imgui.WindowFlags_.no_nav_focus
+            | imgui.WindowFlags_.no_scrollbar
+            | imgui.WindowFlags_.no_scroll_with_mouse
+        )
+
+        imgui.begin("##StatusBar", False, window_flags)
+
+        # ── 左下: 输入状态文字 ──
+        status_text = cls._build_input_status_text()
+        if status_text:
+            imgui.text(status_text)
+
+        # ── 右下: 可扩展 (FPS / 实体数 / ...) ──
+        # (预留)
+
+        imgui.end()
+        imgui.pop_style_var(3)
+
+    @staticmethod
+    def _build_input_status_text() -> str:
+        """构造状态栏左下角的输入状态文字。
+
+        格式示例:
+            "Ctrl"
+            "Shift"
+            "Ctrl + Shift"
+            "Ctrl + G"
+            "Shift + Mouse Button 1"
+            "Ctrl + Shift + Mouse Button 1"
+        """
+        mod_mask = GetModifierMask()
+        held_keys = GetHeldKeys()
+        mouse_label = GetMouseButtonLabel()
+
+        parts: list[str] = []
+
+        # ── 修饰键部分 ──
+        if mod_mask & KeyModifier.CTRL:
+            parts.append("Ctrl")
+        if mod_mask & KeyModifier.SHIFT:
+            parts.append("Shift")
+        if mod_mask & KeyModifier.ALT:
+            parts.append("Alt")
+
+        # ── 普通按键部分 (取第一个非修饰键) ──
+        if held_keys:
+            key_name = KeyButtonCode[held_keys[0]]  # 枚举名称, 如 "G", "Space", "F1"
+            parts.append(key_name)
+        elif mouse_label:
+            # ── 鼠标按键部分 (仅在无普通按键时显示) ──
+            parts.append(mouse_label)
+
+        if not parts:
+            return ""
+
+        return " + ".join(parts)
 
     # ============================================================
     # 工具方法

@@ -41,6 +41,19 @@ class MouseButtonCode(IntEnum, metaclass=InputEnumMeta):
     Button8 = 7   # GLFW_MOUSE_BUTTON_8
 
 
+class KeyModifier(IntEnum, metaclass=InputEnumMeta):
+    """修饰键位掩码 — 值与 GLFW mod bits 一致，可直接做按位与运算。
+
+    Usage:
+        if GetModifierMask() & KeyModifier.CTRL: ...
+        if GetModifierMask() == (KeyModifier.CTRL | KeyModifier.SHIFT): ...
+    """
+    NONE  = 0
+    SHIFT = 0x0001   # 1 — matches GLFW_MOD_SHIFT
+    CTRL  = 0x0002   # 2 — matches GLFW_MOD_CONTROL
+    ALT   = 0x0004   # 4 — matches GLFW_MOD_ALT
+
+
 class KeyButtonCode(IntEnum, metaclass=InputEnumMeta):
     # Printable keys (based on GLFW standard layout)
     Space = 32

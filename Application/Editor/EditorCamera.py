@@ -63,7 +63,7 @@ class EditorCamera(CameraBase):
         # ── 轨道参数 ──
         self.yaw: float = math.pi       # 初始面朝 -Z 方向 (看向实体群)
         self.pitch: float = 0.0
-        self.orbit_target: np.ndarray = np.array([0.0, 0.0, -50.0], dtype=np.float32)
+        self.orbit_target: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
         self.orbit_distance: float = 47.0
 
         # ── 投影参数 ──

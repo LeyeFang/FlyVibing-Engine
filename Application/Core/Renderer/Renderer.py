@@ -280,3 +280,79 @@ class RenderResourceManger(ABC):
     def unregister_shader(cls):
         """从 GPU 卸载着色器 (基类提供默认空实现)。"""
         ...
+
+    # ════════════════════════════════════════════════════════════
+    # Editor Overlay 资源管理 (编辑器解耦桥梁)
+    # ════════════════════════════════════════════════════════════
+    #
+    # 设计原则:
+    #   - Renderer 不知道 Editor 的存在，只知道有"叠加层可绘制对象"
+    #   - Editor (Grid/Gizmo) 不 import 任何图形 API，只提供纯数据
+    #   - 渲染器负责将注册的 overlay 如实地绘制出来
+    #
+    # 典型流程:
+    #   Grid._build_mesh_data() → 生成 vertices/indices (np.ndarray)
+    #   Grid.register_to(renderer) → 调用 renderer.register_overlay_drawable(...)
+    #   renderer.StartFrame() → 场景实体之后遍历 registered_overlays 绘制
+
+    @dataclass
+    class overlay_drawable_struct:
+        """编辑器叠加层可绘制对象 — 纯数据载体，不依赖任何图形 API。
+
+        Attributes:
+            key          : 唯一标识符 (如 "editor_grid_lines", "editor_grid_x_axis")
+            vertices     : 顶点位置数组 (N×3, float32)
+            indices      : 索引数组 (M, uint32)
+            vs_src       : GLSL 顶点着色器源码
+            fs_src       : GLSL 片段着色器源码
+            uniforms_setup: Callable[[int], None] — 接收 program handle,
+                            负责设置该 overlay 专属的 uniform (颜色等)
+            draw_mode    : 图元类型标识 ('lines' | 'triangles')
+            depth_test   : 是否开启深度测试
+            line_width   : 线宽 (仅 draw_mode='lines' 时有效)
+        """
+        key: str
+        vertices: 'np.ndarray'
+        indices: 'np.ndarray'
+        vs_src: str
+        fs_src: str
+        uniforms_setup: 'Callable[[int], None]'
+        draw_mode: str = 'lines'
+        depth_test: bool = True
+        line_width: float = 1.0
+
+    registered_overlays: dict[str, 'overlay_drawable_struct'] = {}
+
+    @classmethod
+    def register_overlay_drawable(
+        cls,
+        overlay: 'overlay_drawable_struct'
+    ) -> None:
+        """注册编辑器叠加层可绘制对象 (抽象接口，子类实现 GPU 上传)。
+
+        调用时机: EditorLayer.OnAttach() → Grid.register_to(renderer)
+                  (此时已在渲染线程，GL 上下文有效)
+
+        Args:
+            overlay: overlay_drawable_struct 包含所有渲染所需数据
+        """
+        ...
+
+    @classmethod
+    def unregister_overlay_drawable(cls, key: str) -> None:
+        """取消注册并释放 GPU 资源 (抽象接口，子类实现)。
+
+        Args:
+            key: overlay 唯一标识符
+        """
+        ...
+
+    @classmethod
+    def _draw_registered_overlays(cls, view: np.ndarray, proj: np.ndarray) -> None:
+        """遍历 registered_overlays 并提交绘制命令 (抽象接口，子类实现)。
+
+        Args:
+            view: 4×4 视图矩阵
+            proj: 4×4 投影矩阵
+        """
+        ...

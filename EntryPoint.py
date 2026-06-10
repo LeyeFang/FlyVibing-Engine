@@ -5,7 +5,7 @@ from Test.DebugLayer import DebugLayer
 from Application.Editor.EditorLayer import EditorLayer
 
 
-Application.Create(renderer_type='ModernGL')
+Application.Create(renderer_type='OpenGL')
 
 print(sys.version_info[:2])
 Application.PushLayer(EditorLayer)

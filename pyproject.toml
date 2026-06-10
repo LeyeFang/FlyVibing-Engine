@@ -11,6 +11,8 @@ dependencies = [
     "pillow>=10.0.0",
     "pycparser==3.0",
     "moderngl==5.12.0",
+    "PyOpenGL",
+    "PyOpenGL_accelerate",
     "pyrr==0.10.3",
     "pysdl2==0.9.17",
     "pysdl2-dll==2.32.0",

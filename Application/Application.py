@@ -11,6 +11,7 @@ from Application.Editor.EditorWindow import EditorWindow
 # # Renderer
 from Application.Core.Renderer.Renderer import Renderer
 from Application.Core.Renderer.ModernGL.modernGLRenderer import modernGLRenderer
+from Application.Core.Renderer.OpenGL.openGLRenderer import openGLRenderer
 from Application.Core.Renderer.Vulkan.vulkanRenderer import vulkanRenderer
 from Application.Core.Scene.SceneManager import SceneManager
 # # Resource & Scene
@@ -25,6 +26,7 @@ from threading import Thread
 
 
 class RendererType(Enum):
+    OpenGL = "OpenGL"
     ModernGL = "ModernGL"
     Vulkan = "Vulkan"
 
@@ -55,7 +57,7 @@ class Application:
     def Create(
         cls,
         window_type: Union[WindowType, str] = WindowType.GLFW,
-        renderer_type: Union[RendererType, str] = RendererType.ModernGL
+        renderer_type: Union[RendererType, str] = RendererType.OpenGL
     ) -> None:
         if isinstance(window_type, str):
             window_type = WindowType(window_type)
@@ -129,7 +131,10 @@ class Application:
     ) -> None:
         try:
             # Create Renderer
-            if cls.renderer_type == RendererType.ModernGL:
+            if cls.renderer_type == RendererType.OpenGL:
+                cls.editor_window.MakeContextCurrent()
+                cls.editor_renderer = openGLRenderer.Create()
+            elif cls.renderer_type == RendererType.ModernGL:
                 cls.editor_window.MakeContextCurrent()
                 cls.editor_renderer = modernGLRenderer.Create()
             elif cls.renderer_type == RendererType.Vulkan:
@@ -142,7 +147,7 @@ class Application:
             # Safe render
             cls.editor_renderer.StartFrame()
             cls.editor_renderer.EndFrame()
-            if cls.renderer_type == RendererType.ModernGL:
+            if cls.renderer_type in (RendererType.OpenGL, RendererType.ModernGL):
                 cls.editor_window.SwapBuffer()
             # Render loop
             FrameProfiler.Start(1)
@@ -151,7 +156,7 @@ class Application:
                 for layer in cls.layer_stack:
                     layer.OnRender()
                 cls.editor_renderer.EndFrame()
-                if cls.renderer_type == RendererType.ModernGL:
+                if cls.renderer_type in (RendererType.OpenGL, RendererType.ModernGL):
                     cls.editor_window.SwapBuffer()
                 FrameProfiler.Tick()
         except Exception as e:

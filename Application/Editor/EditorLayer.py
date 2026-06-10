@@ -6,14 +6,21 @@ from Application.Application import (
 from Application.Core.Events.Event import Event
 from Application.Core.Events.InputEvent import *
 from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
+from Application.Core.Events.Enum.InputEnum import (
+    MouseButtonCode, MouseActionCode, KeyButtonCode, KeyActionCode,
+)
 from Application.Editor.UI.UIManager import UIManager
 from Application.Editor.UI.panels import (
     ScenePanel,
     NodeEditorPanel,
 )
 from Application.Editor.EditorCamera import EditorCamera
-from Application.Core.Renderer.ModernGL.ModernGLCore import ModernGLCore
-from Application.Editor.Rendering.GridGizmo import GridGizmo
+from Application.Editor.EditorEvent import (
+    SelecteEntityEvent, DeselectEntityEvent, ClearSelectionEvent,
+)
+
+# 模块引用 — 需要访问 InputEvent 中的可变全局状态 (press/release 坐标)
+import Application.Core.Events.InputEvent as _input_event
 
 import os
 import ctypes
@@ -31,6 +38,15 @@ class EditorLayer(Layer):
         "C:/Windows/Fonts/segoeui.ttf",
         "C:/Windows/Fonts/arial.ttf",
     ]
+
+    # ── 选中状态 (编辑器侧, 不 import GL) ─────────────────────────
+    current_selected_entity: int = None
+    _selected_ids: set = set()       # 当前选中的实体 ID 集合
+    _outline_xray: bool = True       # 轮廓 X-Ray 模式
+    _click_threshold: float = 4.0    # 点击判定最大位移 (像素)
+
+    # ── 跨线程拾取 (main thread → render thread) ─────────────
+    _pending_pick_coords: tuple = None   # (sx, sy) 待处理的拾取请求
 
     @classmethod
     def _mouse_in_any_panel(cls) -> bool:
@@ -60,13 +76,13 @@ class EditorLayer(Layer):
         io.display_size = (float(w), float(h))
         cls._init_ui_panels()
 
-        # ── 编辑器 3D 渲染资源 ──
-        GridGizmo.init(ModernGLCore.ctx)
+        # ── 编辑器 3D 渲染资源: Grid 注册到 Renderer ──
+        from Application.Editor.Rendering.Grid import Grid
+        Grid.register_to(cls.editor_renderer)
 
-        # ── 注册 Overlay 回调: 网格/Gizmo 由 StartFrame 在场景实体之后调用 ──
-        cls.editor_renderer.register_overlay_callback(
-            lambda v, p: GridGizmo.render(v, p)
-        )
+        # ── 启用 FBO 管线 (轮廓高亮 + 实体拾取) ──
+        cls.editor_renderer.EnableFBOPipeline()
+        cls._sync_outline_to_renderer()
 
     @classmethod
     def _init_ui_panels(cls):
@@ -100,10 +116,18 @@ class EditorLayer(Layer):
 
     @classmethod
     def OnDetach(cls):
+        from Application.Editor.Rendering.Grid import Grid
+        Grid.unregister_from(cls.editor_renderer)
         imgui.destroy_context()
 
     @classmethod
     def OnEvent(cls, event: Event) -> None:
+        # ── 键盘快捷键 (全局, 不受 ImGui 面板遮挡影响) ──
+        if event is KeyboardButtonEvent:
+            cls._handle_keyboard_event(event)
+            return
+
+        # ── 以下事件仅在鼠标不在 ImGui 面板内时处理 ──
         if cls._mouse_in_any_panel():
             return
         cam = EditorCamera.get_instance()
@@ -112,10 +136,116 @@ class EditorLayer(Layer):
             _, y_offset = ScrollerEvent.UnPack()
             cam.on_scroll(y_offset)
             SceneCameraUpdateEvent.Pack()
+
         elif event is MouseGragEvent:
             bt, offset_x, offset_y = MouseGragEvent.UnPack()
             cam.on_mouse_drag(bt, offset_x, offset_y)
             SceneCameraUpdateEvent.Pack()
+
+        # ── 实体拾取 (左键单击, 非拖拽) ──
+        elif event is MouseButtonEvent:
+            cls._handle_mouse_button_event(event)
+
+    # ════════════════════════════════════════════════════════════
+    # 实体拾取 & 选中管理 (编辑器侧, 不 import GL)
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _handle_mouse_button_event(
+        cls,
+        event: MouseButtonEvent
+    ) -> None:
+        """处理鼠标按键事件 — 区分点击与拖拽。
+
+        单击 (位移 < _click_threshold) → FBO 拾取实体。
+        拖拽已由 MouseGragEvent 处理, 此处忽略。
+        """
+        if event.button != MouseButtonCode.Left:
+            return
+        if event.action != MouseActionCode.Release:
+            return
+
+        # 计算拖拽距离
+        dx = _input_event.button_release_pos_x - _input_event.button_press_pos_x
+        dy = _input_event.button_release_pos_y - _input_event.button_press_pos_y
+        dist = (dx * dx + dy * dy) ** 0.5
+
+        if dist >= cls._click_threshold:
+            return  # 拖拽, 已由 MouseGragEvent 处理
+
+        # ── 单击 → 延迟到渲染线程执行 FBO 拾取 ──
+        # PickAt() 需要 GL 上下文 (render thread), 此处仅记录坐标
+        cls._pending_pick_coords = (
+            _input_event.button_release_pos_x,
+            _input_event.button_release_pos_y,
+        )
+
+    @classmethod
+    def _execute_pending_pick(cls) -> None:
+        """在渲染线程执行待处理的 FBO 拾取。"""
+        if cls._pending_pick_coords is None:
+            return
+        sx, sy = cls._pending_pick_coords
+        cls._pending_pick_coords = None
+
+        entity_id = cls.editor_renderer.PickAt(sx, sy)
+
+        if entity_id >= 0:
+            # 选中实体
+            cls._selected_ids = {entity_id}
+            cls.current_selected_entity = entity_id
+            SelecteEntityEvent.Pack(entity_id)
+        else:
+            # 点击空白 → 清除选中
+            if cls._selected_ids:
+                old = set(cls._selected_ids)
+                cls._selected_ids.clear()
+                cls.current_selected_entity = None
+                for eid in old:
+                    DeselectEntityEvent.Pack(eid)
+
+        cls._sync_outline_to_renderer()
+
+    @classmethod
+    def _handle_keyboard_event(
+        cls,
+        event: KeyboardButtonEvent
+    ) -> None:
+        """处理键盘快捷键。
+
+        Escape : 清除选中
+        X      : 切换轮廓 X-Ray 模式
+        """
+        if event.action != KeyActionCode.Press:
+            return
+
+        if event.key == KeyButtonCode.Escape:
+            if cls._selected_ids:
+                old = set(cls._selected_ids)
+                cls._selected_ids.clear()
+                cls.current_selected_entity = None
+                ClearSelectionEvent.Pack()
+                for eid in old:
+                    DeselectEntityEvent.Pack(eid)
+                cls._sync_outline_to_renderer()
+
+        elif event.key == KeyButtonCode.X:
+            cls._outline_xray = not cls._outline_xray
+            cls._sync_outline_to_renderer()
+            print(f"[EditorLayer] X-Ray={'ON' if cls._outline_xray else 'OFF'}")
+
+    @classmethod
+    def _sync_outline_to_renderer(cls) -> None:
+        """编辑器 → 渲染器: 同步选中状态和轮廓配置。
+
+        对齐 Grid.register_to 的解耦模式:
+          编辑器只传数据 (selected_ids, xray), 不碰 GL。
+          渲染器根据数据在 StartFrame 中执行 stencil 轮廓绘制。
+        """
+        cls.editor_renderer.SetOutlineConfig(
+            selected_ids=cls._selected_ids,
+            xray=cls._outline_xray,
+        )
 
     @classmethod
     def OnUpdate(cls):
@@ -123,6 +253,10 @@ class EditorLayer(Layer):
 
     @classmethod
     def OnRender(cls):
+        # ── 处理待处理的拾取请求 (render thread, GL 上下文有效) ──
+        cls._execute_pending_pick()
+
+        # ── ImGui 渲染 ──
         imgui.backends.glfw_new_frame()
         imgui.backends.opengl3_new_frame()
         imgui.new_frame()

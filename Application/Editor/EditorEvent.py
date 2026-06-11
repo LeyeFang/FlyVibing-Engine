@@ -89,3 +89,30 @@ class ClearSelectionEvent(Event):
     @classmethod
     def UnPack(cls):
         pass
+
+
+# ═══════════════════════════════════════════════════════════════
+# 视图立方体交互事件 / ViewGizmo Interaction Events
+# ═══════════════════════════════════════════════════════════════
+
+class ViewGizmoFaceClickEvent(Event):
+    """视图立方体面点击事件 — 用户点击了视图立方体的某个面。
+
+    Pack 参数:
+        face_name : 被点击的面名称
+                    ('front' / 'back' / 'left' / 'right' / 'top' / 'bottom')
+    UnPack 返回:
+        face_name : str
+    """
+
+    face_name: str = ''
+
+    @classmethod
+    def Pack(cls, face_name: str):
+        cls.face_name = face_name
+        cls.log_info = f"ViewGizmo face clicked: [{face_name}]"
+        super().Pack()
+
+    @classmethod
+    def UnPack(cls) -> str:
+        return cls.face_name

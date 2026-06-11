@@ -8,6 +8,7 @@ from Application.Core.Events.InputEvent import *
 from Application.Core.Window.Window import Window
 
 import glfw
+import Application.Core.Input.InputState as _input_state
 
 
 class glfwWindow(Window):
@@ -132,7 +133,11 @@ class glfwWindow(Window):
         pos_x,
         pos_y
     ) -> None:
-        MouseGragEvent.Pack(pos_x, pos_y)
+        # 分流: 按下按钮 → 拖拽事件, 未按下 → 纯移动事件 (用于拾取预读)
+        if _input_state.current_mouse_button_code is not None:
+            MouseGragEvent.Pack(pos_x, pos_y)
+        else:
+            MouseMoveEvent.Pack(pos_x, pos_y)
 
     @classmethod
     def _scroll_callback(

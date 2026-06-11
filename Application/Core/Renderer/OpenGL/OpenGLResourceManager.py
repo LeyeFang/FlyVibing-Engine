@@ -577,6 +577,8 @@ class OpenGLResourceManager:
         ignore_scene_matrices: bool = False
         model_matrix_cb: Callable[[int, int], 'np.ndarray'] = None
         texture_uniform: str = ''
+        pick_type: int = 0
+        pick_id: int = 0
 
     # GPU 端 overlay 注册表: key → overlay_gpu_data
     _overlay_gpu_resources: dict[str, 'overlay_gpu_data'] = {}
@@ -592,7 +594,6 @@ class OpenGLResourceManager:
         overlay: 'RenderResourceManger.overlay_drawable_struct'
     ) -> None:
         """注册编辑器叠加层可绘制对象 — 编译 shader, 上传 VBO/EBO/纹理, 创建 VAO。
-
         Args:
             overlay: 来自 Editor 层的纯数据载体 (无 GL 依赖)
         """
@@ -603,21 +604,26 @@ class OpenGLResourceManager:
 
         # ── 编译着色器 ──
         program = cls._compile_program(overlay.vs_src, overlay.fs_src)
-
         # ── VAO ──
         vao = gl.glGenVertexArrays(1)
         gl.glBindVertexArray(vao)
-
         # ── VBO (通用顶点布局) ──
         vbo = gl.glGenBuffers(1)
         verts = np.ascontiguousarray(overlay.vertices.astype('float32'))
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, vbo)
-        gl.glBufferData(gl.GL_ARRAY_BUFFER, verts.nbytes,
-                        verts.tobytes(), gl.GL_STATIC_DRAW)
+        gl.glBufferData(
+            gl.GL_ARRAY_BUFFER,
+            verts.nbytes,
+            verts.tobytes(),
+            gl.GL_STATIC_DRAW)
         for loc, size, offset in overlay.vertex_attrs:
             gl.glVertexAttribPointer(
-                loc, size, gl.GL_FLOAT, gl.GL_FALSE,
-                overlay.vertex_stride, ctypes.c_void_p(offset))
+                loc,
+                size,
+                gl.GL_FLOAT,
+                gl.GL_FALSE,
+                overlay.vertex_stride,
+                ctypes.c_void_p(offset))
             gl.glEnableVertexAttribArray(loc)
 
         # ── EBO ──
@@ -626,7 +632,6 @@ class OpenGLResourceManager:
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, ebo)
         gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, indices.nbytes,
                         indices.tobytes(), gl.GL_STATIC_DRAW)
-
         gl.glBindVertexArray(0)
 
         # ── 纹理 (可选) ──
@@ -659,6 +664,8 @@ class OpenGLResourceManager:
             ignore_scene_matrices=overlay.ignore_scene_matrices,
             model_matrix_cb=overlay.model_matrix_cb,
             texture_uniform=overlay.texture_uniform,
+            pick_type=overlay.pick_type,
+            pick_id=overlay.pick_id,
         )
 
     @classmethod
@@ -679,36 +686,46 @@ class OpenGLResourceManager:
             gl.glDeleteProgram(gpu.program)
 
     @classmethod
-    def _draw_registered_overlays(cls, view: np.ndarray, proj: np.ndarray) -> None:
+    def _draw_registered_overlays(
+        cls,
+        view: np.ndarray,
+        proj: np.ndarray
+    ) -> None:
         """遍历所有已注册 overlay 并提交绘制命令。
 
         支持: 自定义 model 矩阵 / 纹理 / 面剔除 / 独立 NDC 渲染。
         """
         vp = gl.glGetIntegerv(gl.GL_VIEWPORT)
         vp_w, vp_h = vp[2], vp[3]
-
         for _key, gpu in cls._overlay_gpu_resources.items():
             gl.glUseProgram(gpu.program)
-
             if gpu.ignore_scene_matrices:
                 # 独立 NDC 渲染: 使用自定义 model 矩阵
                 if gpu.model_matrix_cb:
                     model = gpu.model_matrix_cb(vp_w, vp_h)
                     loc = gl.glGetUniformLocation(gpu.program, 'uModel')
                     if loc >= 0:
-                        gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE,
-                                              np.ascontiguousarray(model.astype('float32')))
+                        gl.glUniformMatrix4fv(
+                            loc,
+                            1,
+                            gl.GL_TRUE,
+                            np.ascontiguousarray(model.astype('float32')))
             else:
                 # 默认: 使用场景 view/proj
                 loc_view = gl.glGetUniformLocation(gpu.program, 'uView')
                 loc_proj = gl.glGetUniformLocation(gpu.program, 'uProj')
                 if loc_view >= 0:
-                    gl.glUniformMatrix4fv(loc_view, 1, gl.GL_FALSE,
-                                          np.ascontiguousarray(view.astype('float32')))
+                    gl.glUniformMatrix4fv(
+                        loc_view,
+                        1,
+                        gl.GL_FALSE,
+                        np.ascontiguousarray(view.astype('float32')))
                 if loc_proj >= 0:
-                    gl.glUniformMatrix4fv(loc_proj, 1, gl.GL_FALSE,
-                                          np.ascontiguousarray(proj.astype('float32')))
-
+                    gl.glUniformMatrix4fv(
+                        loc_proj,
+                        1,
+                        gl.GL_FALSE,
+                        np.ascontiguousarray(proj.astype('float32')))
             # ── 纹理 ──
             if gpu.texture:
                 gl.glActiveTexture(gl.GL_TEXTURE0)
@@ -716,18 +733,15 @@ class OpenGLResourceManager:
                 loc_tex = gl.glGetUniformLocation(gpu.program, gpu.texture_uniform or 'uLetterTex')
                 if loc_tex >= 0:
                     gl.glUniform1i(loc_tex, 0)
-
             # ── 专属 uniform ──
             if gpu.uniforms_setup:
                 gpu.uniforms_setup(gpu.program)
-
             # ── 深度测试 ──
             if gpu.depth_test:
                 gl.glEnable(gl.GL_DEPTH_TEST)
                 gl.glDepthFunc(gl.GL_LESS)
             else:
                 gl.glDisable(gl.GL_DEPTH_TEST)
-
             # ── 面剔除 ──
             if gpu.cull_face:
                 gl.glEnable(gl.GL_CULL_FACE)
@@ -735,27 +749,25 @@ class OpenGLResourceManager:
                 gl.glFrontFace(gl.GL_CCW)
             else:
                 gl.glDisable(gl.GL_CULL_FACE)
-
             # ── 混合 ──
             if gpu.blend:
                 gl.glEnable(gl.GL_BLEND)
                 gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
             else:
                 gl.glDisable(gl.GL_BLEND)
-
             # ── 线宽 ──
             if gpu.draw_mode == gl.GL_LINES:
                 gl.glLineWidth(min(gpu.line_width, 1.0))
-
             # ── 绘制 ──
             gl.glBindVertexArray(gpu.vao)
-            gl.glDrawElements(gpu.draw_mode, gpu.elements_count,
-                              gl.GL_UNSIGNED_INT, None)
+            gl.glDrawElements(
+                gpu.draw_mode,
+                gpu.elements_count,
+                gl.GL_UNSIGNED_INT,
+                None)
             gl.glBindVertexArray(0)
-
             if gpu.draw_mode == gl.GL_LINES:
                 gl.glLineWidth(1.0)
-
         # ── 恢复状态 ──
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDepthFunc(gl.GL_LESS)

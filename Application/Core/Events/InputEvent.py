@@ -19,6 +19,22 @@ from Application.Core.Input.InputState import (
 #
 #
 # Input Events
+class MouseMoveEvent(Event):
+    """鼠标移动事件 — 每次光标位置变化时触发 (无论按钮状态)。"""
+    pos_x: int = 0
+    pos_y: int = 0
+
+    @classmethod
+    def Pack(cls, pos_x: int, pos_y: int) -> None:
+        cls.pos_x = pos_x
+        cls.pos_y = pos_y
+        super().Pack()
+
+    @classmethod
+    def UnPack(cls) -> tuple[int, int]:
+        return cls.pos_x, cls.pos_y
+
+
 class MouseGragEvent(Event):
     last_x: int = 0
     last_y: int = 0

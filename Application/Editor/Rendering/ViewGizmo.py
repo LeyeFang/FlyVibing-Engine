@@ -1,34 +1,31 @@
 """
-ViewGizmo — 摄像机无关的视图方向立方体 (Fusion 360 风格)。
+ViewGizmo — 视图方向立方体 (Fusion 360 风格)，绘制在渲染窗口右上角。
 
 设计原则:
-  - 立方体绘制在渲染窗口右上角，占据恒定的屏幕空间
-  - 无透视投影 (正交投影)，仅 rotation 参与 model 矩阵
-  - 六个面分别代表: 前(Front/编辑器+Y)、后(Back/编辑器-Y)、
-    左(Left/编辑器-X)、右(Right/编辑器+X)、
-    顶(Top/编辑器+Z)、底(Bottom/编辑器-Z)
-  - 立方体跟随世界坐标系旋转 — 当编辑器摄像机轨道旋转时，
-    立方体同步旋转以反映当前视图方向
-  - 鼠标拖拽立方体 → 可以切换摄像机视图 (未来功能)
+  - 正交投影 (无透视)，恒定屏幕空间大小
+  - 立方体跟随摄像机轨道旋转，实时反映当前视图方向
+  - 通过 overlay callback 机制注册到 Renderer，每帧回调计算 model 矩阵
 
-坐标约定:
-  - 编辑器 X 轴 = GL  X 轴  (+X 方向)
-  - 编辑器 Y 轴 = GL -Z 轴  (-Z 方向)
-  - 编辑器 Z 轴 = GL  Y 轴  (+Y 方向)
+坐标约定 (编辑器 ←→ GL):
+  - 编辑器 X  =  GL  X   (+X 右)
+  - 编辑器 Y  =  GL −Z   (−Z 前)
+  - 编辑器 Z  =  GL  Y   (+Y 上)
 
-面方向 (编辑器 → GL):
-  - Front  (编辑器 +Y): GL normal = ( 0,  0, -1)
-  - Back   (编辑器 -Y): GL normal = ( 0,  0,  1)
-  - Right  (编辑器 +X): GL normal = ( 1,  0,  0)
-  - Left   (编辑器 -X): GL normal = (-1,  0,  0)
-  - Top    (编辑器 +Z): GL normal = ( 0,  1,  0)
-  - Bottom (编辑器 -Z): GL normal = ( 0, -1,  0)
+六个面的 GL 几何法线 (与 OBJ 参考 Cube.obj 一致):
+  - Front  (编辑器 +Y) :  GL normal = ( 0,  0, −1)
+  - Back   (编辑器 −Y) :  GL normal = ( 0,  0,  1)
+  - Right  (编辑器 +X) :  GL normal = ( 1,  0,  0)
+  - Left   (编辑器 −X) :  GL normal = (−1,  0,  0)
+  - Top    (编辑器 +Z) :  GL normal = ( 0,  1,  0)
+  - Bottom (编辑器 −Z) :  GL normal = ( 0, −1,  0)
+
+注意: 由于 model 矩阵存在坐标系校正翻转，屏幕上实际显示的面
+与几何面并非一一对应。下方的 FACE_COLORS / face_uv_cells /
+_FACE_UV_XFORM 均按「屏幕可见效果」标注，而非几何归属。
 
 架构:
-  - 使用 overlay callback 机制 (非 overlay_drawable), 因为需要独立的
-    正交投影矩阵和 view 矩阵
-  - 自己管理 GPU 资源: shader / VAO / VBO / EBO
-  - 对齐 Grid 的解耦模式: EditorLayer → ViewGizmo.register_to(renderer)
+  - 零 GL 调用: 注册时仅传递 numpy 数据，GPU 资源由渲染器管理
+  - 与 Grid 相同的解耦模式: EditorLayer → ViewGizmo.register_to(renderer)
 """
 
 from __future__ import annotations
@@ -99,114 +96,166 @@ void main() {
 
 
 # ════════════════════════════════════════════════════════════════
-# ViewGizmo
+# ViewGizmo — 纯数据层 (零 GL, 与 Grid 对齐)
 # ════════════════════════════════════════════════════════════════
 
 class ViewGizmo:
-    """视图方向立方体 — 摄像机无关的屏幕角落定向指示器。
+    """视图方向立方体 — 6 独立面 overlay (纯数据, GL 由 Renderer 管理)。
 
     使用方式:
-      ViewGizmo.register_to(renderer)   # OnAttach
-      ViewGizmo.unregister_from(renderer)  # OnDetach
+      ViewGizmo.register_to(renderer)     # OnAttach (注册 6 面 overlay)
+      ViewGizmo.unregister_from(renderer) # OnDetach
+      ViewGizmo.get_pick_data()           # → Renderer 用于 FBO 拾取
     """
 
-    # ── 屏幕布局 ──────────────────────────────────────────────
-    CUBE_SIZE_NDC: float = 0.10        # 立方体在 NDC 中的半边长
-    SCREEN_OFFSET_X: float = 0.82      # 右上角 NDC X 偏移
-    SCREEN_OFFSET_Y: float = 0.78      # 右上角 NDC Y 偏移
+    # ── 屏幕布局常量 ────────────────────────────────────────
+    CUBE_SIZE_NDC: float = 0.10
+    SCREEN_OFFSET_X: float = 0.82
+    SCREEN_OFFSET_Y: float = 0.78
 
-    # ── 面颜色 (编辑器坐标系) ─────────────────────────────────
-    # 正红/正绿/正蓝 — 分别对应左右/前后/上下视图
+    # ── 六个面名称 (遍历顺序即渲染顺序) ──────────────────────
+    FACE_NAMES: tuple[str, ...] = (
+        'front', 'back', 'left', 'right', 'top', 'bottom',
+    )
+
+    # ── face_name → pick ID (编码到 R 通道, 1~6) ────────────
+    FACE_PICK_IDS: dict[str, int] = {
+        'front': 1, 'back': 2, 'left': 4,
+        'right': 3, 'top': 5, 'bottom': 6,
+    }
+
+    # ── 面颜色 ──────────────────────────────────────────────
+    #       face    几何法线(GL)   编辑器方向   颜色
     FACE_COLORS: dict[str, tuple] = {
-        'front':  (0.15, 0.85, 0.20),   # 前: 正绿  (前后 = 绿)
-        'back':   (0.10, 0.70, 0.15),   # 后: 暗绿
-        'right':  (0.90, 0.15, 0.12),   # 右: 正红  (左右 = 红)
-        'left':   (0.72, 0.10, 0.08),   # 左: 暗红
-        'top':    (0.12, 0.45, 1.00),   # 顶: 正蓝  (上下 = 蓝)
-        'bottom': (0.08, 0.30, 0.80),   # 底: 暗蓝
+        'front':  (0.10, 0.70, 0.15),   # ( 0, 0,-1)  +Y  暗绿
+        'back':   (0.15, 0.85, 0.20),   # ( 0, 0, 1)  −Y  正绿
+        'right':  (0.90, 0.15, 0.12),   # ( 1, 0, 0)  +X  正红
+        'left':   (0.72, 0.10, 0.08),   # (−1, 0, 0)  −X  暗红
+        'top':    (0.08, 0.30, 0.80),   # ( 0, 1, 0)  +Z  暗蓝
+        'bottom': (0.12, 0.45, 1.00),   # ( 0,-1, 0)  −Z  正蓝
     }
 
-    # ── 每面字母 UV 变换 (硬编码, 已验证) ──────────────────────
+    # ── 每面 UV 变换 ────────────────────────────────────────
+    #       面名      UV变换          该面显示的字母
     _FACE_UV_XFORM: dict[str, str] = {
-        'front':  'cw',            # F
-        'back':   'ccw_mirror_u',  # B
-        'left':   'ccw_mirror_u',  # L
-        'right':  'ccw_mirror_u',  # R
-        'top':    'cw_mirror_u',   # U
-        'bottom': 'mirror_u',      # D
+        'front':  'ccw_mirror_u',   # B
+        'back':   'ccw_mirror_u',   # F
+        'right':  'ccw_mirror_u',   # R
+        'left':   'ccw_mirror_u',   # L
+        'top':    'cw_mirror_u',    # D
+        'bottom': 'mirror_u',       # U
     }
 
-    # ── overlay 注册 key ──────────────────────────────────────
-    OVERLAY_KEY: str = "editor_view_gizmo"
+    # ── overlay key 前缀 ────────────────────────────────────
+    OVERLAY_KEY_PREFIX: str = "editor_view_gizmo"
 
     # ════════════════════════════════════════════════════════════
-    # 公共 API (零 GL 调用)
+    # 注册 / 注销 (纯数据, 零 GL)
     # ════════════════════════════════════════════════════════════
 
     @classmethod
     def register_to(cls, renderer: 'Renderer') -> None:
-        """向渲染器注册视图立方体 (纯数据, 零 GL 调用)。
-
-        Args:
-            renderer: 渲染器实例
-        """
+        """注册 6 个面 overlay (纯数据, GPU 资源由 Renderer 管理)。"""
         from Application.Core.Renderer.Renderer import RenderResourceManger as RRM
 
-        vertices, indices = cls._build_cube_geometry()
+        face_geometries = cls._build_face_geometries()
         tex_pixels = cls._build_letter_atlas()
+        shared_cb = cls._compute_cube_model_cb
 
-        overlay = RRM.overlay_drawable_struct(
-            key=cls.OVERLAY_KEY,
-            vertices=vertices,
-            indices=indices,
-            vs_src=_VIEWCUBE_VS,
-            fs_src=_VIEWCUBE_FS,
-            draw_mode='triangles',
-            depth_test=False,
-            blend=True,
-            cull_face=True,
-            ignore_scene_matrices=True,
-            model_matrix_cb=cls._compute_cube_model_cb,
-            texture_pixels=tex_pixels,
-            texture_uniform='uLetterTex',
-            vertex_stride=11 * 4,
-            vertex_attrs=[
-                (0, 3, 0),    # aPos
-                (1, 3, 12),   # aColor
-                (2, 3, 24),   # aNormal
-                (3, 2, 36),   # aTexCoord
-            ],
-        )
-        renderer.register_overlay_drawable(overlay)
-        print("[ViewGizmo] registered (zero GL) — view cube at top-right")
+        for face_name in cls.FACE_NAMES:
+            verts, indices = face_geometries[face_name]
+            overlay = RRM.overlay_drawable_struct(
+                key=f"{cls.OVERLAY_KEY_PREFIX}_{face_name}",
+                vertices=verts,
+                indices=indices,
+                vs_src=_VIEWCUBE_VS,
+                fs_src=_VIEWCUBE_FS,
+                draw_mode='triangles',
+                depth_test=False,
+                blend=True,
+                cull_face=True,
+                ignore_scene_matrices=True,
+                model_matrix_cb=shared_cb,
+                texture_pixels=tex_pixels,
+                texture_uniform='uLetterTex',
+                vertex_stride=11 * 4,
+                vertex_attrs=[
+                    (0, 3, 0),    # aPos
+                    (1, 3, 12),   # aColor
+                    (2, 3, 24),   # aNormal
+                    (3, 2, 36),   # aTexCoord
+                ],
+            )
+            renderer.register_overlay_drawable(overlay)
+
+        print("[ViewGizmo] registered 6 face overlays")
 
     @classmethod
     def unregister_from(cls, renderer: 'Renderer') -> None:
-        """从渲染器取消注册。"""
-        renderer.unregister_overlay_drawable(cls.OVERLAY_KEY)
+        """注销 6 个面 overlay。"""
+        for face_name in cls.FACE_NAMES:
+            renderer.unregister_overlay_drawable(
+                f"{cls.OVERLAY_KEY_PREFIX}_{face_name}"
+            )
         print("[ViewGizmo] unregistered")
 
     # ════════════════════════════════════════════════════════════
-    # Model 矩阵回调 (纯 numpy, 零 GL, 由渲染器每帧调用)
+    # 拾取数据导出 (供 Renderer 使用)
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def get_pick_data(cls) -> dict:
+        """返回 FBO 拾取所需的全部数据 (纯 numpy, 零 GL)。
+
+        Returns:
+            {
+                'face_names':   FACE_NAMES,
+                'pick_ids':     FACE_PICK_IDS,
+                'geometries':   _build_face_geometries() 结果,
+                'model_cb':     _compute_cube_model_cb,
+            }
+        """
+        return {
+            'face_names':  cls.FACE_NAMES,
+            'pick_ids':    cls.FACE_PICK_IDS,
+            'geometries':  cls._build_face_geometries(),
+            'model_cb':    cls._compute_cube_model_cb,
+        }
+
+    # ════════════════════════════════════════════════════════════
+    # Model 矩阵回调 (6 面共享, 纯 numpy)
     # ════════════════════════════════════════════════════════════
 
     @classmethod
     def _compute_cube_model_cb(cls, vp_w: int, vp_h: int) -> np.ndarray:
-        """计算视图立方体的 model 矩阵 (渲染器每帧回调)。
+        """计算视图立方体的 model 矩阵 (6 面共享)。
 
-        Args:
-            vp_w, vp_h: 视口宽高 (像素)
-
-        Returns:
-            4×4 float32 model 矩阵
+        model = T · R_cube · S
         """
+        import math
         from Application.Editor.EditorCamera import EditorCamera
-        cam = EditorCamera.get_instance()
-        view_mat = cam.get_view_matrix()
 
-        R_cube = view_mat[:3, :3].copy()
-        R_cube[2, :] *= -1  # NDC 视线方向矫正
-        R_cube[1, :] *= -1  # 编辑器 Z 轴旋转方向
+        cam = EditorCamera.get_instance()
+        yaw:   float = cam.yaw
+        pitch: float = cam.pitch
+
+        SIGN_PITCH: float = -1.0
+        SIGN_YAW:   float =  1.0
+
+        sp = math.sin(pitch) * SIGN_PITCH
+        cp = math.cos(pitch)
+        sy = math.sin(yaw)   * SIGN_YAW
+        cy = math.cos(yaw)
+
+        R_view = np.array([
+            [ cy,        0.0,      sy    ],
+            [ sy * sp,  -cp,     -cy * sp ],
+            [-sy * cp,  -sp,      cy * cp ],
+        ], dtype=np.float32)
+
+        R_cube = R_view.copy()
+        R_cube[1, :] *= -1.0
+        R_cube[2, :] *= -1.0
 
         rot_mat = np.identity(4, dtype=np.float32)
         rot_mat[:3, :3] = R_cube
@@ -222,23 +271,17 @@ class ViewGizmo:
         return (trans_mat @ rot_mat @ scale_mat).astype(np.float32)
 
     # ════════════════════════════════════════════════════════════
-    # 立方体几何生成 (纯 numpy)
+    # 面几何生成 (纯 numpy, 每面独立)
     # ════════════════════════════════════════════════════════════
 
     @classmethod
-    def _build_cube_geometry(cls) -> tuple[np.ndarray, np.ndarray]:
-        """生成立方体的顶点和索引。
-
-        6 个面，每面 4 个顶点 (位置+颜色+法线+UV)，共 24 顶点，36 索引。
-
-        字母纹理 atlas: 3列×2行 (F/B/L/R/U/D)
-        每面 UV 映射到对应字母区域。
+    def _build_face_geometries(cls) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+        """生成 6 个面的独立 (vertices, indices)。
 
         Returns:
-            (vertices, indices): vertices shape (24, 11), indices shape (36,)
+            dict[face_name → (vertices(4×11), indices(6,))]
         """
-        # 单位立方体 (边长 1, 中心在原点)
-        h = 0.5  # half-size
+        h = 0.5
         corners = {
             '---': np.array([-h, -h, -h], dtype=np.float32),
             '+--': np.array([+h, -h, -h], dtype=np.float32),
@@ -259,19 +302,12 @@ class ViewGizmo:
             'bottom': np.array([ 0.0, -1.0,  0.0], dtype=np.float32),
         }
 
-        # UV atlas 布局: 3列×2行, 每个字母占据 1/3 宽 × 1/2 高
-        # 列: 0=F, 1=L, 2=U  (行0);  0=B, 1=R, 2=D (行1)
         face_uv_cells = {
-            'front':  (0, 0),   # F
-            'back':   (0, 1),   # B
-            'left':   (1, 0),   # L
-            'right':  (1, 1),   # R
-            'top':    (2, 0),   # U
-            'bottom': (2, 1),   # D
+            'front':  (0, 1), 'back':   (0, 0),
+            'left':   (1, 0), 'right':  (1, 1),
+            'top':    (2, 1), 'bottom': (2, 0),
         }
 
-        # ── 每面 UV 角点顺序 (配合字母阅读方向) ──
-        # base: [bl=(u0,v0), br=(u1,v0), tr=(u1,v1), tl=(u0,v1)]
         def _rot90cw(u0, u1, v0, v1):
             return [(u0, v1), (u0, v0), (u1, v0), (u1, v1)]
         def _rot180(u0, u1, v0, v1):
@@ -280,8 +316,6 @@ class ViewGizmo:
             return [(u1, v0), (u1, v1), (u0, v1), (u0, v0)]
         def _mirror_u(uvs):
             return [(u1 + u0 - u, v) for u, v in uvs]
-        def _mirror_v(uvs):
-            return [(u, v1 + v0 - v) for u, v in uvs]
 
         face_defs = [
             ('front',  ['---', '-+-', '++-', '+--']),
@@ -292,18 +326,15 @@ class ViewGizmo:
             ('bottom', ['---', '+--', '+-+', '--+']),
         ]
 
-        verts = []
-        idx_list = []
-        vi = 0
+        result: dict[str, tuple[np.ndarray, np.ndarray]] = {}
 
         for face_name, corner_keys in face_defs:
             color = cls.FACE_COLORS.get(face_name, (0.5, 0.5, 0.5))
             normal = face_normals[face_name]
             col, row = face_uv_cells[face_name]
             u0, u1 = col / 3.0, (col + 1) / 3.0
-            v0, v1 = 1.0 - (row + 1) / 2.0, 1.0 - row / 2.0  # GL 纹理原点在左下
+            v0, v1 = 1.0 - (row + 1) / 2.0, 1.0 - row / 2.0
 
-            # 硬编码 UV 变换 (前后/左右/上下均已对正)
             xf = cls._FACE_UV_XFORM.get(face_name, 'base')
             if xf == 'cw':
                 uv_corners = _rot90cw(u0, u1, v0, v1)
@@ -320,6 +351,11 @@ class ViewGizmo:
             else:
                 uv_corners = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]
 
+            if face_name in ('front', 'back', 'left', 'right'):
+                uv_corners = [uv_corners[2], uv_corners[3],
+                              uv_corners[0], uv_corners[1]]
+
+            verts = []
             for i, ck in enumerate(corner_keys):
                 pos = corners[ck]
                 u, v = uv_corners[i]
@@ -327,14 +363,14 @@ class ViewGizmo:
                               color[0], color[1], color[2],
                               normal[0], normal[1], normal[2],
                               u, v])
-            idx_list.extend([vi, vi + 1, vi + 2,
-                             vi, vi + 2, vi + 3])
-            vi += 4
 
-        return (
-            np.array(verts, dtype=np.float32).reshape(-1, 11),
-            np.array(idx_list, dtype=np.uint32),
-        )
+            indices = np.array([0, 1, 2, 0, 2, 3], dtype=np.uint32)
+            result[face_name] = (
+                np.array(verts, dtype=np.float32).reshape(4, 11),
+                indices,
+            )
+
+        return result
 
     # ════════════════════════════════════════════════════════════
     # 字母纹理 atlas (纯 numpy 像素, 供渲染器上传)

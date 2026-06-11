@@ -317,6 +317,8 @@ class RenderResourceManger(ABC):
             texture_uniform: 片段着色器中 sampler 名称
             vertex_stride : 每顶点字节数
             vertex_attrs  : [(location, size_floats, offset_bytes), ...]
+            pick_type     : 拾取类型 (0=不可拾取, 1=gizmo面, 2=entity, ...)
+            pick_id       : 拾取 ID (该类型内唯一, 0~65535)
         """
         key: str
         vertices: 'np.ndarray'
@@ -335,6 +337,8 @@ class RenderResourceManger(ABC):
         texture_uniform: str = ''
         vertex_stride: int = 12
         vertex_attrs: list = None
+        pick_type: int = 0
+        pick_id: int = 0
 
         def __post_init__(self):
             if self.vertex_attrs is None:

@@ -113,6 +113,31 @@ class Renderer(ABC):
         for cb in cls._overlay_callbacks:
             cb(view, proj)
 
+    @classmethod
+    def _render_overlay_drawables(cls, view: np.ndarray, proj: np.ndarray) -> None:
+        """遍历数据驱动 overlay 并绘制 — 子类 (OpenGL/Vulkan) 实现。
+
+        与 _render_overlays 的区别:
+          - _render_overlays:    回调式, Editor 自行管理 GL 状态 (如轮廓 blit)
+          - _render_overlay_drawables: 声明式, 渲染器管理 GL 状态 (如 Grid/Gizmo)
+
+        基类默认空实现, GL 后端覆盖。
+        """
+        pass
+
+    @classmethod
+    def _render_all_overlays(cls, view: np.ndarray, proj: np.ndarray) -> None:
+        """统一 overlay 渲染入口 — 先回调 (自定义管线), 后 drawable (声明式绘制)。
+
+        渲染顺序保证:
+          1. 回调式 overlay 先执行 (可包含 blit / 后处理)
+          2. 声明式 drawable 后执行 (Grid/Gizmo 绘制在最上层)
+
+        StartFrame 中只需调用此方法, 无需分别调用两者。
+        """
+        cls._render_overlays(view, proj)
+        cls._render_overlay_drawables(view, proj)
+
 
 class RenderResourceManger(ABC):
     """GPU 资源管理器抽象基类 — 管理 Mesh/Shader/Texture 的上传与生命周期。
@@ -371,11 +396,17 @@ class RenderResourceManger(ABC):
         ...
 
     @classmethod
-    def _draw_registered_overlays(cls, view: np.ndarray, proj: np.ndarray) -> None:
-        """遍历 registered_overlays 并提交绘制命令 (抽象接口，子类实现)。
+    def _render_overlay_drawables(cls, view: np.ndarray, proj: np.ndarray) -> None:
+        """遍历 registered_overlays 并提交绘制命令 (子类实现 GPU 绘制)。
 
         Args:
             view: 4×4 视图矩阵
             proj: 4×4 投影矩阵
         """
         ...
+
+    # ── 向后兼容别名 ──
+    @classmethod
+    def _draw_registered_overlays(cls, view: np.ndarray, proj: np.ndarray) -> None:
+        """(已弃用) 请使用 _render_overlay_drawables。"""
+        cls._render_overlay_drawables(view, proj)

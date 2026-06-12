@@ -521,7 +521,6 @@ class OpenGLResourceManager:
             log = gl.glGetShaderInfoLog(vs).decode(errors='replace')
             gl.glDeleteShader(vs)
             raise RuntimeError(f"Vertex shader compilation failed:\n{log}")
-
         # ── 编译片段着色器 ──
         fs = gl.glCreateShader(gl.GL_FRAGMENT_SHADER)
         gl.glShaderSource(fs, fs_src)
@@ -531,7 +530,6 @@ class OpenGLResourceManager:
             gl.glDeleteShader(vs)
             gl.glDeleteShader(fs)
             raise RuntimeError(f"Fragment shader compilation failed:\n{log}")
-
         # ── 链接程序 ──
         program = gl.glCreateProgram()
         gl.glAttachShader(program, vs)
@@ -543,11 +541,9 @@ class OpenGLResourceManager:
             gl.glDeleteShader(fs)
             gl.glDeleteProgram(program)
             raise RuntimeError(f"Shader program linking failed:\n{log}")
-
         # ── 清理 shader 对象 (已链接到 program，不再需要) ──
         gl.glDeleteShader(vs)
         gl.glDeleteShader(fs)
-
         return program
 
     # ════════════════════════════════════════════════════════════
@@ -579,10 +575,8 @@ class OpenGLResourceManager:
         texture_uniform: str = ''
         pick_type: int = 0
         pick_id: int = 0
-
     # GPU 端 overlay 注册表: key → overlay_gpu_data
     _overlay_gpu_resources: dict[str, 'overlay_gpu_data'] = {}
-
     _DRAW_MODE_MAP: dict[str, int] = {
         'lines': gl.GL_LINES,
         'triangles': gl.GL_TRIANGLES,
@@ -598,10 +592,8 @@ class OpenGLResourceManager:
             overlay: 来自 Editor 层的纯数据载体 (无 GL 依赖)
         """
         from Application.Core.Renderer.Renderer import RenderResourceManger
-
         if overlay.key in cls._overlay_gpu_resources:
             return
-
         # ── 编译着色器 ──
         program = cls._compile_program(overlay.vs_src, overlay.fs_src)
         # ── VAO ──
@@ -625,15 +617,16 @@ class OpenGLResourceManager:
                 overlay.vertex_stride,
                 ctypes.c_void_p(offset))
             gl.glEnableVertexAttribArray(loc)
-
         # ── EBO ──
         ebo = gl.glGenBuffers(1)
         indices = np.ascontiguousarray(overlay.indices.astype('uint32'))
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, ebo)
-        gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, indices.nbytes,
-                        indices.tobytes(), gl.GL_STATIC_DRAW)
+        gl.glBufferData(
+            gl.GL_ELEMENT_ARRAY_BUFFER,
+            indices.nbytes,
+            indices.tobytes(),
+            gl.GL_STATIC_DRAW)
         gl.glBindVertexArray(0)
-
         # ── 纹理 (可选) ──
         texture = 0
         if overlay.texture_pixels is not None and overlay.texture_pixels.size > 0:
@@ -645,12 +638,17 @@ class OpenGLResourceManager:
             gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
             pixels = np.ascontiguousarray(overlay.texture_pixels)
             h, w = pixels.shape[:2]
-            gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, w, h, 0,
-                            gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, pixels)
+            gl.glTexImage2D(
+                gl.GL_TEXTURE_2D,
+                0,
+                gl.GL_RGBA,
+                w, h,
+                0,
+                gl.GL_RGBA,
+                gl.GL_UNSIGNED_BYTE,
+                pixels)
             gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
-
         draw_mode_gl = cls._DRAW_MODE_MAP.get(overlay.draw_mode, gl.GL_LINES)
-
         cls._overlay_gpu_resources[overlay.key] = cls.overlay_gpu_data(
             vao=vao, vbo=vbo, ebo=ebo, program=program,
             texture=texture,
@@ -686,12 +684,12 @@ class OpenGLResourceManager:
             gl.glDeleteProgram(gpu.program)
 
     @classmethod
-    def _draw_registered_overlays(
+    def _render_overlay_drawables(
         cls,
         view: np.ndarray,
         proj: np.ndarray
     ) -> None:
-        """遍历所有已注册 overlay 并提交绘制命令。
+        """遍历所有已注册 overlay 并提交绘制命令 (GL 实现)。
 
         支持: 自定义 model 矩阵 / 纹理 / 面剔除 / 独立 NDC 渲染。
         """

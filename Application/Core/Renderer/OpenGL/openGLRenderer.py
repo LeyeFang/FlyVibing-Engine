@@ -5,13 +5,14 @@ openGLRenderer — PyOpenGL 渲染器后端 (继承 OpenGLCore + OpenGLResourceM
   - 使用 PyOpenGL (opengl) 直接管理 GL 对象
   - 相机矩阵缓存机制
   - 延迟 resize 处理
+  - pre-overlay hook 系统 (实体渲染前介入点, 支持 FBO 重定向 + stencil 注入)
 
 架构:
   openGLRenderer 继承:
     - OpenGLCore              : GL 状态 / 视口 / 清屏
     - OpenGLResourceManager   : Mesh / Shader / Texture / Entity 注册与管理
-    - Renderer                : 生命周期接口
-    - RenderResourceManger    : 资源管理抽象接口
+    - Renderer                : 生命周期接口 + overlay 回调 / 统一入口
+    - RenderResourceManger    : 资源管理抽象接口 + overlay drawable 注册
 
 对应关系:
   - modernGLRenderer  →  openGLRenderer (功能等价，不同后端)
@@ -22,7 +23,7 @@ openGLRenderer — PyOpenGL 渲染器后端 (继承 OpenGLCore + OpenGLResourceM
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
     from Application.Application import Application
 
@@ -71,6 +72,49 @@ class openGLRenderer(
     # ── 零延迟拾取: render thread 每帧预读, main thread 即时获取 ──
     _pick_mouse: tuple = (0, 0)  # 鼠标位置, main thread 每帧更新
     _pick_cache: int = -1         # entity_id, render thread 每帧刷新
+
+    # ════════════════════════════════════════════════════════════
+    # Pre-Overlay Hook 系统 (实体渲染前介入点)
+    # ════════════════════════════════════════════════════════════
+    #
+    # 管线: clear → pick_pass → **pre_overlays** → _RenderEntities → _render_all_overlays
+    #
+    #   pre_overlay_callbacks  在实体渲染前运行, 可:
+    #     - 创建 Scene FBO (depth24+stencil8)
+    #     - 设置 stencil 状态
+    #     - 通过 _scene_fbo_override 重定向 _RenderEntities
+    #
+    #   _render_all_overlays (来自 Renderer 基类) 在实体渲染后运行, 按序执行:
+    #     1) 回调式 overlay (轮廓 pass + blit)
+    #     2) 声明式 drawable (Grid/Gizmo)
+
+    _pre_overlay_callbacks: list[Callable] = []
+    """实体渲染前回调列表: fn(view, proj, vp_w, vp_h) → None"""
+
+    _scene_fbo_override: int = 0
+    """非零时 _RenderEntities 绑定此 FBO 而非默认帧缓冲 (由 pre-overlay 设置)"""
+
+    _outline_selected_ids: set[int] = set()
+    """被选实体 ID 集合 (由 OutlineOverlay 注入, _RenderEntities 据此写 stencil=1)"""
+
+    @classmethod
+    def register_pre_overlay_callback(cls, callback: Callable) -> None:
+        """注册实体渲染前回调。
+
+        典型用法: OutlineOverlay 注册 _on_pre_render, 在其中创建 Scene FBO、
+        设置 stencil 状态、并通过 _scene_fbo_override 重定向实体渲染。
+
+        Args:
+            callback: fn(view, proj, vp_w, vp_h) → None
+        """
+        if callback not in cls._pre_overlay_callbacks:
+            cls._pre_overlay_callbacks.append(callback)
+
+    @classmethod
+    def unregister_pre_overlay_callback(cls, callback: Callable) -> None:
+        """取消注册 pre-overlay 回调。"""
+        if callback in cls._pre_overlay_callbacks:
+            cls._pre_overlay_callbacks.remove(callback)
 
     # ── 拾取着色器: ID → RGB24 ──
     _PICK_VS: str = """#version 330 core
@@ -130,11 +174,18 @@ void main() {
             cls._pending_resize = None
         view = cls._cached_view
         proj = cls._cached_proj
-        # ── 场景渲染 ──
+        vp_w, vp_h = cls.viewport_width, cls.viewport_height
+        # ── 1. 清屏 ──
         OpenGLCore.clear_frame()
+        # ── 2. 拾取 pass ──
         cls._render_entities_pick_pass(view, proj)
+        # ── 3. Pre-overlay callbacks (FBO 创建 / stencil 预设) ──
+        for cb in cls._pre_overlay_callbacks:
+            cb(view, proj, vp_w, vp_h)
+        # ── 4. 实体渲染 (可能重定向到 Scene FBO) ──
         cls._RenderEntities(view, proj)
-        cls._draw_registered_overlays(view, proj)
+        # ── 5. 统一 overlay 入口: 先回调, 后 drawable ──
+        cls._render_all_overlays(view, proj)
 
     @classmethod
     def EndFrame(cls) -> None:
@@ -199,7 +250,8 @@ void main() {
             0,
             gl.GL_RGBA,
             gl.GL_UNSIGNED_BYTE,
-            None)
+            None
+        )
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST)
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
         cls._pick_depth = gl.glGenRenderbuffers(1)
@@ -223,7 +275,11 @@ void main() {
         cls._pick_fbo_w, cls._pick_fbo_h = w, h
 
     @classmethod
-    def _render_entities_pick_pass(cls, view: np.ndarray, proj: np.ndarray) -> None:
+    def _render_entities_pick_pass(
+        cls,
+        view: np.ndarray,
+        proj: np.ndarray
+    ) -> None:
         """每帧将实体 ID 渲染到拾取 FBO — 无 glFinish, 零等待。"""
         entities = SceneManager.GetRenderableEntities()
         if not entities:
@@ -260,11 +316,13 @@ void main() {
             gl.glBindVertexArray(gpu.vao)
             mesh_data = cls.registered_meshes[gpu.mesh_id]
             gl.glDrawElements(
-                gl.GL_TRIANGLES, mesh_data.elements_count,
-                gl.GL_UNSIGNED_INT, None)
+                gl.GL_TRIANGLES,
+                mesh_data.elements_count,
+                gl.GL_UNSIGNED_INT,
+                None
+            )
         gl.glBindVertexArray(0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
-
         # ── 每帧预读鼠标位置像素 → _pick_cache (零延迟) ──
         sx, sy = cls._pick_mouse
         px = max(0, min(int(round(sx)), cls._pick_fbo_w - 1))
@@ -293,8 +351,11 @@ void main() {
         return cls._pick_cache
 
     # ════════════════════════════════════════════════════════════
-    # 默认实体渲染 (无 FBO / 无 stencil)
+    # 实体渲染 (支持 FBO 重定向 + stencil 注入)
     # ════════════════════════════════════════════════════════════
+    #
+    # 当没有 pre-overlay 设置 _scene_fbo_override 时, 行为与原版完全一致。
+    # 有 pre-overlay 时: 渲染重定向到 Scene FBO, 被选实体写 stencil=1。
 
     @classmethod
     def _RenderEntities(
@@ -302,11 +363,28 @@ void main() {
         view: np.ndarray,
         proj: np.ndarray
     ) -> None:
-        """默认管线: 直接渲染所有实体到当前绑定的帧缓冲。"""
+        """渲染所有实体 — 支持 FBO 重定向 + stencil 注入。"""
+        # ── FBO 重定向 (由 pre-overlay 控制) ──
+        target_fbo = cls._scene_fbo_override
+        if target_fbo:
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, target_fbo)
+            gl.glViewport(0, 0, cls.viewport_width, cls.viewport_height)
+
+        has_outline = bool(cls._outline_selected_ids)
+
         for entity_id in SceneManager.GetRenderableEntities():
             entity = cls.registered_entities.get(entity_id)
             if entity is None:
                 continue
+
+            # ── Stencil 写入: 被选实体写 stencil=1 (由 OutlineOverlay 注入) ──
+            if has_outline:
+                if entity_id in cls._outline_selected_ids:
+                    gl.glStencilFunc(gl.GL_ALWAYS, 1, 0xFF)
+                    gl.glStencilMask(0xFF)
+                else:
+                    gl.glStencilMask(0x00)
+
             program = cls.registered_shaders[entity.shader_id].program
             # ── 激活 shader ──
             gl.glUseProgram(program)
@@ -334,8 +412,18 @@ void main() {
             gl.glBindVertexArray(entity.vao)
             mesh_data = cls.registered_meshes[entity.mesh_id]
             gl.glDrawElements(
-                gl.GL_TRIANGLES, mesh_data.elements_count,
-                gl.GL_UNSIGNED_INT, None
+                gl.GL_TRIANGLES,
+                mesh_data.elements_count,
+                gl.GL_UNSIGNED_INT,
+                None
             )
             gl.glBindVertexArray(0)
+
+        # ── 恢复 stencil mask ──
+        if has_outline:
+            gl.glStencilMask(0xFF)
+
+        # ── 解绑 FBO (回到默认帧缓冲) ──
+        if target_fbo:
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 

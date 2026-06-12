@@ -19,7 +19,7 @@ from Application.Core.Layers.Layer import Layer
 # ── 应用层: 编辑器 ──
 from Application.Editor.EditorCamera import EditorCamera
 from Application.Editor.Rendering.Grid import Grid
-# from Application.Editor.Rendering.Outliner import Outliner
+from Application.Editor.Rendering.Outliner import Outliner
 from Application.Editor.UI.UIManager import UIManager
 from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel
 
@@ -36,9 +36,6 @@ class EditorLayer(Layer):
         "C:/Windows/Fonts/segoeui.ttf",
         "C:/Windows/Fonts/arial.ttf",
     ]
-
-    # ── 拾取状态 ──
-    _outliner: Outliner = None
 
     # ════════════════════════════════════════════════════════════
     # 生命周期 (Layer 接口)
@@ -66,20 +63,15 @@ class EditorLayer(Layer):
         io.display_size = (float(w), float(h))
         cls._init_ui_panels()
 
-        # ── 渲染器: 注册 Grid overlay ──
+        # ── 渲染器: 注册 Grid + Outliner overlay ──
         cls.renderer = GetEditorRenderer()
         Grid.register_to(cls.renderer)
-
-        # ── Outliner: 编译轮廓着色器 ──
-        # cls._outliner = Outliner()
-        # cls._outliner.init()
+        Outliner.register_to(cls.renderer)
 
     @classmethod
     def OnDetach(cls):
-        if cls._outliner is not None:
-            cls._outliner.release()
-            cls._outliner = None
         if cls.renderer is not None:
+            Outliner.unregister_from(cls.renderer)
             Grid.unregister_from(cls.renderer)
         imgui.destroy_context()
 
@@ -106,8 +98,10 @@ class EditorLayer(Layer):
             dt = (time.perf_counter() - t0) * 1000
             if entity_id >= 0:
                 print(f"[EditorLayer] Click → Entity#{entity_id}  ({dt:.3f}ms)")
+                Outliner.set_selected_entities({entity_id})
             else:
                 print(f"[EditorLayer] Click → no entity  ({dt:.3f}ms)")
+                Outliner.clear()
 
     @classmethod
     def OnUpdate(cls):
@@ -115,6 +109,9 @@ class EditorLayer(Layer):
 
     @classmethod
     def OnRender(cls):
+        # ── 处理待处理的轮廓请求 (render thread, GL 调用) ──
+        Outliner._sync(cls.renderer)
+
         # ── ImGui ──
         imgui.backends.glfw_new_frame()
         imgui.backends.opengl3_new_frame()

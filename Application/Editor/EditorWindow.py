@@ -75,10 +75,8 @@ class EditorWindow(glfwWindow):
     @classmethod
     def _set_window_hints(
         cls,
-        app: Application
     ) -> None:
-        """设置 OpenGL 4.4 核心模式上下文提示。
-
+        """设置 OpenGL 4 核心模式上下文提示。
         在 glfw.create_window 之前由父类 _create_window 调用。
         """
         glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 4)

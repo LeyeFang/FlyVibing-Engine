@@ -61,6 +61,8 @@ class glfwWindow(Window):
         if not glfw.init():
             print("无法初始化 GLFW")
             return
+        # 2. 设置窗口提示 (子类重写 _set_window_hints)
+        cls._set_window_hints()
         # 3. 创建窗口
         glfw_window = glfw.create_window(
             800, 600,

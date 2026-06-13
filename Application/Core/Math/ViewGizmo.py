@@ -35,7 +35,7 @@ SCREEN_OFFSET_Y: float = 0.78
 
 # Sign conventions for mapping editor camera yaw/pitch to cube rotation
 SIGN_PITCH: float = 1.0
-SIGN_YAW: float = 1.0
+SIGN_YAW: float = -1.0
 
 
 def compute_cube_model(
@@ -68,37 +68,30 @@ def compute_cube_model(
     cp = math.cos(pitch)
     sy = math.sin(yaw) * SIGN_YAW
     cy = math.cos(yaw)
-
     # View rotation matrix R_view (3×3)
     R_view = np.array([
         [cy,        0.0,      sy],
         [sy * sp,  -cp,     -cy * sp],
         [-sy * cp, -sp,      cy * cp],
     ], dtype=np.float32)
-
     # Flip Y and Z to get cube rotation
     R_cube = R_view.copy()
     R_cube[1, :] *= -1.0
     R_cube[2, :] *= -1.0
-
     # Build 4×4 rotation matrix
     rot_mat = np.identity(4, dtype=np.float32)
     rot_mat[:3, :3] = R_cube
-
     # Uniform scale — cube stays a cube in 3D
     s = CUBE_SIZE_NDC
     scale_uniform = np.diag([s, s, s, 1.0]).astype(np.float32)
-
     # Aspect‑ratio compensation applied *after* rotation (like a
     # projection matrix), so the cube's 3D proportions are preserved
     # while the on‑screen XY projection appears square.
     aspect = vp_w / max(vp_h, 1)
     scale_aspect = np.diag([1.0 / aspect, 1.0, 1.0, 1.0]).astype(np.float32)
-
     # Translation to screen corner
     trans_mat = np.identity(4, dtype=np.float32)
     trans_mat[0, 3] = SCREEN_OFFSET_X
     trans_mat[1, 3] = SCREEN_OFFSET_Y
-
     # model = T @ (aspect_projection) @ R @ (uniform_cube)
     return (trans_mat @ scale_aspect @ rot_mat @ scale_uniform).astype(np.float32)

@@ -51,14 +51,14 @@ import numpy as np
 from OpenGL import GL as gl
 
 from Application.Core.Scene.SceneManager import SceneManager
-from Application.Core.Math.RendererMath import calculate_entity_model
+from Application.Core.Math.Transform import calculate_entity_model
 
 
 # ════════════════════════════════════════════════════════════════
 # 轮廓资源: 参数常量
 # ════════════════════════════════════════════════════════════════
 
-OUTLINE_COLOR: tuple = (0.976, 0.451, 0.024)      # Blender 橙色 RGB
+OUTLINE_COLOR: tuple = (0.878, 0.416, 0.153)      # Blender 橙色 (与 PanelStyle.BLENDER_ORANGE 一致)
 OUTLINE_SCALE: float = 1.05                         # 轮廓放大系数
 OUTLINE_XRAY: bool = True                           # 默认穿透模式
 

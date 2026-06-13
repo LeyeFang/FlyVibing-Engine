@@ -1,6 +1,12 @@
 from imgui_bundle import imgui
 
 from Application.Editor.UI.BasePanel import BasePanel
+from Application.Editor.UI.PanelStyle import (
+    BLENDER_ORANGE,
+    SUCCESS_GREEN,
+    WARNING_AMBER,
+    ERROR_RED,
+)
 from Application.Editor.UI.controllers.SimulationController import (
     SimulationController,
 )
@@ -49,7 +55,7 @@ class ScenePanel(BasePanel):
         imgui.text("Scene: ")
         imgui.same_line()
         imgui.text_colored(
-            imgui.ImVec4(0.878, 0.416, 0.153, 1.00), "default"
+            imgui.ImVec4(*BLENDER_ORANGE, 1.00), "default"
         )
         imgui.separator()
 
@@ -64,48 +70,34 @@ class ScenePanel(BasePanel):
         av = imgui.get_content_region_avail().x
         btn_w = (av - imgui.get_style().item_spacing.x * 2) / 3.0
 
-        # ▶ Run（Blender 风格 — 灰底橙字）
+        # ▶ Run
         imgui.push_style_color(
-            imgui.Col_.button, imgui.ImVec4(0.176, 0.176, 0.176, 0.90))
-        imgui.push_style_color(
-            imgui.Col_.button_hovered, imgui.ImVec4(0.227, 0.227, 0.227, 1.00))
-        imgui.push_style_color(
-            imgui.Col_.button_active, imgui.ImVec4(0.290, 0.290, 0.290, 1.00))
-        imgui.push_style_color(
-            imgui.Col_.text, imgui.ImVec4(0.471, 0.714, 0.471, 1.00))
+            imgui.Col_.text, imgui.ImVec4(*SUCCESS_GREEN, 1.00))
         if imgui.button("▶ Run", (btn_w, 0)):
             SimulationController.play()
-        imgui.pop_style_color(4)
+        imgui.pop_style_color(1)
 
         imgui.same_line()
 
         # ⏸ Pause（仅在运行时可用）
         imgui.push_style_color(
-            imgui.Col_.button, imgui.ImVec4(0.176, 0.176, 0.176, 0.50))
-        imgui.push_style_color(
-            imgui.Col_.button_hovered, imgui.ImVec4(0.227, 0.227, 0.227, 0.70))
-        imgui.push_style_color(
-            imgui.Col_.text, imgui.ImVec4(0.788, 0.722, 0.471, 1.00))
+            imgui.Col_.text, imgui.ImVec4(*WARNING_AMBER, 1.00))
         imgui.begin_disabled(not SimulationController.is_running())
         if imgui.button("⏸ Pause", (btn_w, 0)):
             SimulationController.pause()
         imgui.end_disabled()
-        imgui.pop_style_color(3)
+        imgui.pop_style_color(1)
 
         imgui.same_line()
 
         # ■ Stop（仅在未停止时可用）
         imgui.push_style_color(
-            imgui.Col_.button, imgui.ImVec4(0.176, 0.176, 0.176, 0.50))
-        imgui.push_style_color(
-            imgui.Col_.button_hovered, imgui.ImVec4(0.227, 0.227, 0.227, 0.70))
-        imgui.push_style_color(
-            imgui.Col_.text, imgui.ImVec4(0.788, 0.471, 0.471, 1.00))
+            imgui.Col_.text, imgui.ImVec4(*ERROR_RED, 1.00))
         imgui.begin_disabled(SimulationController.is_stopped())
         if imgui.button("■ Stop", (btn_w, 0)):
             SimulationController.stop()
         imgui.end_disabled()
-        imgui.pop_style_color(3)
+        imgui.pop_style_color(1)
 
         # 状态提示
         imgui.text_disabled(SimulationController.get_state_label())
@@ -180,7 +172,7 @@ class ScenePanel(BasePanel):
             return
 
         imgui.text_colored(
-            imgui.ImVec4(0.878, 0.416, 0.153, 1.00),
+            imgui.ImVec4(*BLENDER_ORANGE, 1.00),
             f"Entity #{summary.entity_id}",
         )
         imgui.text(

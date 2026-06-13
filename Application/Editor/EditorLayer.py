@@ -20,6 +20,7 @@ from Application.Core.Layers.Layer import Layer
 from Application.Editor.EditorCamera import EditorCamera
 from Application.Editor.Rendering.Grid import Grid
 from Application.Editor.Rendering.Outliner import Outliner
+from Application.Editor.Rendering.ViewGizmo import ViewGizmo
 from Application.Editor.UI.UIManager import UIManager
 from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel
 
@@ -45,7 +46,6 @@ class EditorLayer(Layer):
     def OnAttach(cls):
         """编辑器层初始化 — 创建 ImGui 上下文、注册 3D 渲染资源和 UI 面板。"""
         imgui.create_context()
-        imgui.style_colors_dark()
 
         cls._config_dir = os.path.join(os.path.dirname(__file__), "config")
         os.makedirs(cls._config_dir, exist_ok=True)
@@ -63,15 +63,17 @@ class EditorLayer(Layer):
         io.display_size = (float(w), float(h))
         cls._init_ui_panels()
 
-        # ── 渲染器: 注册 Grid + Outliner overlay ──
+        # ── 渲染器: 注册 Grid + ViewGizmo + Outliner overlay ──
         cls.renderer = GetEditorRenderer()
         Grid.register_to(cls.renderer)
+        ViewGizmo.register_to(cls.renderer)
         Outliner.register_to(cls.renderer)
 
     @classmethod
     def OnDetach(cls):
         if cls.renderer is not None:
             Outliner.unregister_from(cls.renderer)
+            ViewGizmo.unregister_from(cls.renderer)
             Grid.unregister_from(cls.renderer)
         imgui.destroy_context()
 
@@ -94,13 +96,16 @@ class EditorLayer(Layer):
             if MouseButtonEvent.action != MouseActionCode.Release:
                 return
             t0 = time.perf_counter()
-            entity_id = openGLRenderer.get_pick()
+            pick_type, pick_value = openGLRenderer.pick_at(
+                MouseButtonEvent.pos_x, MouseButtonEvent.pos_y)
             dt = (time.perf_counter() - t0) * 1000
-            if entity_id >= 0:
-                print(f"[EditorLayer] Click → Entity#{entity_id}  ({dt:.3f}ms)")
-                Outliner.set_selected_entities({entity_id})
+            if pick_type == 'entity':
+                print(f"[EditorLayer] Click → Entity#{pick_value}  ({dt:.3f}ms)")
+                Outliner.set_selected_entities({pick_value})
+            elif pick_type == 'overlay':
+                print(f"[EditorLayer] Click → Overlay '{pick_value}'  ({dt:.3f}ms)")
             else:
-                print(f"[EditorLayer] Click → no entity  ({dt:.3f}ms)")
+                print(f"[EditorLayer] Click → nothing  ({dt:.3f}ms)")
                 Outliner.clear()
 
     @classmethod

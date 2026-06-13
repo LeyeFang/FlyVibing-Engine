@@ -145,10 +145,13 @@ class EditorCamera(CameraBase):
     # ════════════════════════════════════════════════════════════
 
     def get_view_matrix(self) -> np.ndarray:
-        """生成视图矩阵 — look_at(camera_pos, orbit_target, world_up)。
+        """Generate view matrix — look_at(camera_pos, orbit_target, world_up).
 
         Returns:
-            4x4 float32 列主序视图矩阵
+            4x4 float32 view matrix (pyrr-style, row-vector convention).
+            For OpenGL upload: use glUniformMatrix4fv(..., GL_FALSE, ...).
+
+        See Application/Core/Math/__init__.py for full convention documentation.
         """
         pos = Vector3(self.position.tolist())
         target = Vector3(self.orbit_target.tolist())
@@ -156,13 +159,16 @@ class EditorCamera(CameraBase):
         return matrix44.create_look_at(pos, target, up).astype(np.float32)
 
     def get_projection_matrix(self, aspect_ratio: float) -> np.ndarray:
-        """生成透视投影矩阵。
+        """Generate perspective projection matrix.
 
         Args:
-            aspect_ratio: 视口宽高比 (width / height)
+            aspect_ratio: Viewport aspect ratio (width / height)
 
         Returns:
-            4x4 float32 列主序投影矩阵
+            4x4 float32 projection matrix (pyrr-style, row-vector convention).
+            For OpenGL upload: use glUniformMatrix4fv(..., GL_FALSE, ...).
+
+        See Application/Core/Math/__init__.py for full convention documentation.
         """
         return matrix44.create_perspective_projection(
             self.fov, aspect_ratio, self.near_plane, self.far_plane

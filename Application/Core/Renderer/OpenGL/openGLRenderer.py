@@ -39,7 +39,7 @@ from Application.Core.Scene.BasicComponents import *
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
 from Application.Core.Renderer.OpenGL.OpenGLCore import OpenGLCore
 from Application.Core.Renderer.OpenGL.OpenGLResourceManager import OpenGLResourceManager
-from Application.Core.Math.RendererMath import calculate_entity_model
+from Application.Core.Math.Transform import calculate_entity_model
 from Application.Editor.EditorCamera import EditorCamera
 
 import numpy as np
@@ -139,6 +139,34 @@ void main() {
 }
 """
 
+    # ── Overlay 拾取着色器: R=0(标记), G=type, B=id ──
+    _OVERLAY_PICK_VS: str = """#version 440 core
+layout (location = 0) in vec3 aPos;
+layout (location = 0) uniform int uIsNDC;
+layout (location = 1) uniform mat4 uModel;
+layout (location = 5) uniform mat4 uViewProj;
+void main() {
+    if (uIsNDC == 1)
+        gl_Position = uModel * vec4(aPos, 1.0);
+    else
+        gl_Position = uViewProj * uModel * vec4(aPos, 1.0);
+}
+"""
+
+    _OVERLAY_PICK_FS: str = """#version 440 core
+layout (location = 10) uniform float uPickType;
+layout (location = 11) uniform float uPickID;
+out vec4 fragColor;
+void main() {
+    fragColor = vec4(0.0, uPickType / 255.0, uPickID / 255.0, 1.0);
+}
+"""
+
+    # ── Overlay pick 资源 ──
+    _overlay_pick_prog: int = 0
+    _overlay_pick_key_map: dict[tuple[int, int], str] = {}
+    _pick_overlay_key: str | None = None
+
     # ════════════════════════════════════════════════════════════
     # 生命周期
     # ════════════════════════════════════════════════════════════
@@ -158,6 +186,8 @@ void main() {
         cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
         # ── 编译拾取着色器 + 创建拾取 FBO ──
         cls._pick_prog = cls._compile_program(cls._PICK_VS, cls._PICK_FS)
+        cls._overlay_pick_prog = cls._compile_program(
+            cls._OVERLAY_PICK_VS, cls._OVERLAY_PICK_FS)
         cls._rebuild_pick_fbo(window_size[0], window_size[1])
         return cls
 
@@ -177,8 +207,10 @@ void main() {
         vp_w, vp_h = cls.viewport_width, cls.viewport_height
         # ── 1. 清屏 ──
         OpenGLCore.clear_frame()
-        # ── 2. 拾取 pass ──
+        # ── 2. Entity pick → pick FBO (FBO 不解绑) ──
         cls._render_entities_pick_pass(view, proj)
+        # ── 2b. Overlay pick → pick FBO (最后解绑 + 预读缓存) ──
+        cls._render_overlays_pick_pass(view, proj, vp_w, vp_h)
         # ── 3. Pre-overlay callbacks (FBO 创建 / stencil 预设) ──
         for cb in cls._pre_overlay_callbacks:
             cb(view, proj, vp_w, vp_h)
@@ -322,19 +354,7 @@ void main() {
                 None
             )
         gl.glBindVertexArray(0)
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
-        # ── 每帧预读鼠标位置像素 → _pick_cache (零延迟) ──
-        sx, sy = cls._pick_mouse
-        px = max(0, min(int(round(sx)), cls._pick_fbo_w - 1))
-        py = max(0, min(int(round(sy)), cls._pick_fbo_h - 1))
-        gl_y = cls._pick_fbo_h - 1 - py
-        gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, cls._pick_fbo)
-        gl.glReadBuffer(gl.GL_COLOR_ATTACHMENT0)
-        pixel = (gl.GLubyte * 4)()
-        gl.glReadPixels(px, gl_y, 1, 1, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, pixel)
-        gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, 0)
-        eid = int(pixel[0]) | (int(pixel[1]) << 8) | (int(pixel[2]) << 16)
-        cls._pick_cache = eid if eid > 0 else -1
+        # FBO 保持绑定 → _render_overlays_pick_pass 续用
 
     @classmethod
     def update_pick_mouse(cls, x: float, y: float) -> None:
@@ -349,6 +369,136 @@ void main() {
         因此返回值最多落后 1 帧 (~3ms), 人眼完全不可感知。
         """
         return cls._pick_cache
+
+    # ════════════════════════════════════════════════════════════
+    # 统一拾取缓存 — render thread 每帧写入, main thread 零 GL 读取
+    # ════════════════════════════════════════════════════════════
+
+    _pick_overlay_key: str | None = None  # 当前鼠标下 overlay 的 key
+
+    # ════════════════════════════════════════════════════════════
+    # Overlay Pick Pass (R=0, G=type, B=id, 延续 entity pass FBO)
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _render_overlays_pick_pass(
+        cls, view: np.ndarray, proj: np.ndarray, vp_w: int, vp_h: int
+    ) -> None:
+        """渲染可拾取 overlay → pick FBO, R=0 标记 overlay。"""
+        pickable = [(k, g) for k, g in cls._overlay_gpu_resources.items() if g.pick_type > 0]
+        if not pickable:
+            cls._finalize_pick_read()
+            return
+        vp_mat = np.ascontiguousarray((proj @ view).astype('float32'))
+        gl.glUseProgram(cls._overlay_pick_prog)
+        loc_model = gl.glGetUniformLocation(cls._overlay_pick_prog, 'uModel')
+        loc_ndc  = gl.glGetUniformLocation(cls._overlay_pick_prog, 'uIsNDC')
+        loc_vp   = gl.glGetUniformLocation(cls._overlay_pick_prog, 'uViewProj')
+        loc_type = gl.glGetUniformLocation(cls._overlay_pick_prog, 'uPickType')
+        loc_id   = gl.glGetUniformLocation(cls._overlay_pick_prog, 'uPickID')
+        for _key, gpu in cls._overlay_gpu_resources.items():
+            if gpu.pick_type <= 0:
+                continue
+            if loc_type >= 0:
+                gl.glUniform1f(loc_type, float(gpu.pick_type))
+            if loc_id >= 0:
+                gl.glUniform1f(loc_id, float(gpu.pick_id))
+            if gpu.ignore_scene_matrices and gpu.model_matrix_cb:
+                if loc_ndc >= 0:
+                    gl.glUniform1i(loc_ndc, 1)
+                model = gpu.model_matrix_cb(vp_w, vp_h)
+                if loc_model >= 0:
+                    gl.glUniformMatrix4fv(loc_model, 1, gl.GL_TRUE,
+                        np.ascontiguousarray(model.astype('float32')))
+            else:
+                if loc_ndc >= 0:
+                    gl.glUniform1i(loc_ndc, 0)
+                if loc_vp >= 0:
+                    gl.glUniformMatrix4fv(loc_vp, 1, gl.GL_FALSE, vp_mat)
+                if loc_model >= 0:
+                    gl.glUniformMatrix4fv(loc_model, 1, gl.GL_FALSE,
+                        np.identity(4, dtype='float32'))
+            # ── 面剔除: 与 visual pass 保持一致 ──
+            if gpu.cull_face:
+                gl.glEnable(gl.GL_CULL_FACE)
+                gl.glCullFace(gl.GL_BACK)
+                gl.glFrontFace(gl.GL_CCW)
+            else:
+                gl.glDisable(gl.GL_CULL_FACE)
+            gl.glDepthFunc(gl.GL_LEQUAL)
+            gl.glBindVertexArray(gpu.vao)
+            gl.glDrawElements(gpu.draw_mode, gpu.elements_count,
+                              gl.GL_UNSIGNED_INT, None)
+        gl.glBindVertexArray(0)
+        gl.glDisable(gl.GL_CULL_FACE)
+        gl.glDepthFunc(gl.GL_LESS)
+        # ── 每帧预读 → _pick_cache + _pick_overlay_key ──
+        cls._finalize_pick_read()
+
+    @classmethod
+    def _finalize_pick_read(cls) -> None:
+        """解绑 pick FBO 并预读鼠标位置像素 → 缓存。
+
+        render thread 专用, 包含 glFinish + glReadPixels。
+        main thread 通过 get_pick() / pick_at() 零 GL 读取。
+        """
+        sx, sy = cls._pick_mouse
+        px = max(0, min(int(round(sx)), cls._pick_fbo_w - 1))
+        py = max(0, min(int(round(sy)), cls._pick_fbo_h - 1))
+        gl_y = cls._pick_fbo_h - 1 - py
+        gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, cls._pick_fbo)
+        gl.glReadBuffer(gl.GL_COLOR_ATTACHMENT0)
+        gl.glFinish()
+        pixel = (gl.GLubyte * 4)()
+        gl.glReadPixels(px, gl_y, 1, 1, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, pixel)
+        gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, 0)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+        r, g, b = int(pixel[0]), int(pixel[1]), int(pixel[2])
+        if r > 0:
+            cls._pick_cache = r | (g << 8) | (b << 16)
+            cls._pick_overlay_key = None
+        elif g > 0:
+            cls._pick_cache = -1
+            cls._pick_overlay_key = cls._overlay_pick_key_map.get((g, b))
+        else:
+            cls._pick_cache = -1
+            cls._pick_overlay_key = None
+
+    # ════════════════════════════════════════════════════════════
+    # 统一拾取 API — main thread 安全, 零 GL 调用
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def pick_at(cls, sx: float, sy: float) -> tuple:
+        """统一拾取 → (type, value) — 返回渲染线程预读的缓存结果。
+
+        注意: 当前实现返回的是 _pick_mouse 位置的缓存,
+        不区分 sx,sy (适用于鼠标点击场景, 点击前鼠标已就位)。
+        """
+        if cls._pick_cache >= 0:
+            return ('entity', cls._pick_cache)
+        if cls._pick_overlay_key is not None:
+            return ('overlay', cls._pick_overlay_key)
+        return (None, None)
+
+    # ════════════════════════════════════════════════════════════
+    # Overlay drawable 注册扩展 — 维护 pick_key 查找表
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def register_overlay_drawable(
+        cls, overlay: 'RenderResourceManger.overlay_drawable_struct'
+    ) -> None:
+        super().register_overlay_drawable(overlay)
+        if overlay.pick_type > 0:
+            cls._overlay_pick_key_map[(overlay.pick_type, overlay.pick_id)] = overlay.key
+
+    @classmethod
+    def unregister_overlay_drawable(cls, key: str) -> None:
+        to_remove = [k for k, v in cls._overlay_pick_key_map.items() if v == key]
+        for k in to_remove:
+            del cls._overlay_pick_key_map[k]
+        super().unregister_overlay_drawable(key)
 
     # ════════════════════════════════════════════════════════════
     # 实体渲染 (支持 FBO 重定向 + stencil 注入)

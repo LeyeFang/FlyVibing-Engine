@@ -31,9 +31,7 @@ from Application.Core.Scene.BasicComponents import *
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
 from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
 from Application.Core.Renderer.Vulkan.VulkanResourceManager import VulkanResourceManager
-from Application.Core.Math.RendererMath import (
-    calculate_entity_model
-)
+from Application.Core.Math.Transform import calculate_entity_model
 from Application.Editor.EditorCamera import EditorCamera
 
 import numpy as np

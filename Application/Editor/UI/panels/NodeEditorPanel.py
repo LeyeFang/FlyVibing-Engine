@@ -4,6 +4,7 @@ from imgui_bundle import imgui_node_editor as node_ed
 import os
 
 from Application.Editor.UI.BasePanel import BasePanel
+from Application.Editor.UI.PanelStyle import ERROR_RED
 
 
 class NodeEditorPanel(BasePanel):
@@ -70,7 +71,7 @@ class NodeEditorPanel(BasePanel):
         # 节点编辑器不可用时的降级提示
         if self._editor_context is None:
             imgui.text_colored(
-                imgui.ImVec4(1.0, 0.3, 0.3, 1.0),
+                imgui.ImVec4(*ERROR_RED, 1.00),
                 "Node Editor not available"
             )
             imgui.text_disabled(

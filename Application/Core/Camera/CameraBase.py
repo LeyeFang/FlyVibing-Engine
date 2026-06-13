@@ -1,12 +1,17 @@
 """
-相机统一接口 — 编辑器相机和场景相机的最小公共协议。
+Camera unified interface — minimal protocol for editor and scene cameras.
 
-只定义 renderer 需要的两个方法：
-  - get_view_matrix()        → 视图矩阵 (world → camera space)
-  - get_projection_matrix()  → 投影矩阵 (camera → clip space)
+Defines the two methods renderer needs:
+  - get_view_matrix()        → view matrix (world → camera space)
+  - get_projection_matrix()  → projection matrix (camera → clip space)
 
-所有相机类型 (EditorCamera / SceneCamera / 未来可能的 CinematicCamera)
-都实现此接口即可被渲染器使用。
+All camera types (EditorCamera / SceneCamera / future CinematicCamera)
+implement this interface to be usable by the renderer.
+
+MATRIX CONVENTION:
+  Camera matrices are pyrr-style (row-vector convention internally).
+  For OpenGL upload: use glUniformMatrix4fv(..., GL_FALSE, ...).
+  See Application/Core/Math/__init__.py for complete documentation.
 """
 
 from abc import ABC, abstractmethod
@@ -23,21 +28,23 @@ class CameraBase(ABC):
 
     @abstractmethod
     def get_view_matrix(self) -> np.ndarray:
-        """返回 4x4 视图矩阵 (world space → camera/eye space)。
+        """Return 4x4 view matrix (world space → camera/eye space).
 
         Returns:
-            np.ndarray: shape (4, 4), dtype float32, column-major
+            np.ndarray: shape (4, 4), dtype float32, pyrr row-vector convention.
+            Upload with glUniformMatrix4fv(..., GL_FALSE, ...).
         """
         ...
 
     @abstractmethod
     def get_projection_matrix(self, aspect_ratio: float) -> np.ndarray:
-        """返回 4x4 投影矩阵 (camera space → clip space)。
+        """Return 4x4 projection matrix (camera space → clip space).
 
         Args:
-            aspect_ratio: 视口宽高比 (width / height)
+            aspect_ratio: Viewport aspect ratio (width / height)
 
         Returns:
-            np.ndarray: shape (4, 4), dtype float32, column-major
+            np.ndarray: shape (4, 4), dtype float32, pyrr row-vector convention.
+            Upload with glUniformMatrix4fv(..., GL_FALSE, ...).
         """
         ...

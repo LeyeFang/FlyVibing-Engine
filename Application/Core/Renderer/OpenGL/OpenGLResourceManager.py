@@ -360,18 +360,30 @@ class OpenGLResourceManager:
 
     @classmethod
     def set_uniform_mat4(cls, shader_id: int, name: str, matrix: np.ndarray) -> None:
-        """设置 mat4 uniform。
+        """Set a mat4 uniform.
 
         Args:
-            shader_id: 着色器资源 ID
-            name: uniform 名称
-            matrix: 4×4 矩阵 (pyrr Matrix44 或 numpy ndarray)
+            shader_id: Shader resource ID
+            name: Uniform name
+            matrix: 4x4 matrix (pyrr Matrix44 or numpy ndarray)
+
+        CONVENTION (see Core/Math/__init__.py for full documentation):
+          - pyrr Matrix44: row-vector convention internally. When flattened to
+            numpy C-contiguous bytes, the byte stream becomes column-vector order.
+            Upload with GL_FALSE.  ←  This is what set_uniform_mat4 assumes.
+          - numpy ndarray (standard math): column-vector convention, C-order
+            memory is row-major. Upload with GL_TRUE.  ←  NOT handled here;
+            use glUniformMatrix4fv(..., GL_TRUE, ...) directly for these.
+
+        All engine camera matrices and entity model matrices originate from
+        pyrr (create_look_at, Matrix44.from_eulers, etc.), so GL_FALSE is
+        the universal convention for set_uniform_mat4.
         """
         loc = cls.get_uniform_location(shader_id, name)
         if loc < 0:
             return
-        # pyrr 内部列主序存储 → numpy C 序展平后正好是列主序字节流
-        # 因此使用 GL_FALSE (数据已为列主序)，与 ModernGL 行为一致
+        # pyrr row-vector internal storage -> numpy C-contiguous flattening
+        # produces column-vector byte order -> GL_FALSE is correct
         data = np.ascontiguousarray(matrix.astype('float32'))
         gl.glUniformMatrix4fv(loc, 1, gl.GL_FALSE, data)
 
@@ -591,7 +603,6 @@ class OpenGLResourceManager:
         Args:
             overlay: 来自 Editor 层的纯数据载体 (无 GL 依赖)
         """
-        from Application.Core.Renderer.Renderer import RenderResourceManger
         if overlay.key in cls._overlay_gpu_resources:
             return
         # ── 编译着色器 ──
@@ -689,16 +700,23 @@ class OpenGLResourceManager:
         view: np.ndarray,
         proj: np.ndarray
     ) -> None:
-        """遍历所有已注册 overlay 并提交绘制命令 (GL 实现)。
+        """Render all registered overlay drawables (GL implementation).
 
-        支持: 自定义 model 矩阵 / 纹理 / 面剔除 / 独立 NDC 渲染。
+        Supports: custom model matrices / textures / face culling / NDC rendering.
+
+        CONVENTION for matrix upload:
+          - NDC overlays (ignore_scene_matrices=True):
+              model comes from model_matrix_cb -> numpy ndarray -> GL_TRUE
+          - Scene overlays (ignore_scene_matrices=False):
+              view/proj come from EditorCamera -> pyrr matrices -> GL_FALSE
         """
         vp = gl.glGetIntegerv(gl.GL_VIEWPORT)
         vp_w, vp_h = vp[2], vp[3]
         for _key, gpu in cls._overlay_gpu_resources.items():
             gl.glUseProgram(gpu.program)
             if gpu.ignore_scene_matrices:
-                # 独立 NDC 渲染: 使用自定义 model 矩阵
+                # NDC rendering: custom model matrix from callback
+                # model_matrix_cb returns numpy ndarray (Type B) -> GL_TRUE
                 if gpu.model_matrix_cb:
                     model = gpu.model_matrix_cb(vp_w, vp_h)
                     loc = gl.glGetUniformLocation(gpu.program, 'uModel')
@@ -706,23 +724,24 @@ class OpenGLResourceManager:
                         gl.glUniformMatrix4fv(
                             loc,
                             1,
-                            gl.GL_TRUE,
+                            gl.GL_TRUE,  # numpy ndarray -> GL_TRUE
                             np.ascontiguousarray(model.astype('float32')))
             else:
-                # 默认: 使用场景 view/proj
+                # Scene rendering: use engine view/proj matrices
+                # view/proj come from pyrr (Type A) -> GL_FALSE
                 loc_view = gl.glGetUniformLocation(gpu.program, 'uView')
                 loc_proj = gl.glGetUniformLocation(gpu.program, 'uProj')
                 if loc_view >= 0:
                     gl.glUniformMatrix4fv(
                         loc_view,
                         1,
-                        gl.GL_FALSE,
+                        gl.GL_FALSE,  # pyrr matrix -> GL_FALSE
                         np.ascontiguousarray(view.astype('float32')))
                 if loc_proj >= 0:
                     gl.glUniformMatrix4fv(
                         loc_proj,
                         1,
-                        gl.GL_FALSE,
+                        gl.GL_FALSE,  # pyrr matrix -> GL_FALSE
                         np.ascontiguousarray(proj.astype('float32')))
             # ── 纹理 ──
             if gpu.texture:

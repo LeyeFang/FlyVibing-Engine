@@ -67,7 +67,7 @@ OUTLINE_XRAY: bool = True                           # 默认穿透模式
 # 轮廓资源: 着色器
 # ════════════════════════════════════════════════════════════════
 
-_OUTLINE_VS: str = """#version 330 core
+_OUTLINE_VS: str = """#version 440 core
 layout(location=0) in vec3 aPos;
 uniform mat4 uModel, uView, uProj;
 uniform float uOutlineScale;
@@ -77,7 +77,7 @@ void main() {
 }
 """
 
-_OUTLINE_FS: str = """#version 330 core
+_OUTLINE_FS: str = """#version 440 core
 uniform vec3 uOutlineColor;
 out vec4 fragColor;
 void main() {
@@ -85,7 +85,7 @@ void main() {
 }
 """
 
-_BLIT_VS: str = """#version 330 core
+_BLIT_VS: str = """#version 440 core
 in vec2 aPos;
 out vec2 vUV;
 void main() {
@@ -94,7 +94,7 @@ void main() {
 }
 """
 
-_BLIT_FS: str = """#version 330 core
+_BLIT_FS: str = """#version 440 core
 in vec2 vUV;
 out vec4 fragColor;
 uniform sampler2D uScreenTex;

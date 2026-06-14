@@ -36,7 +36,7 @@ class OpenGLPickSystem:
     # ════════════════════════════════════════════════════════════
 
     # ── Entity 拾取: ID → RGB24 ──
-    _PICK_VS: str = """#version 330 core
+    _PICK_VS: str = """#version 440 core
 layout (location = 0) in vec3 aPos;
 uniform mat4 uModel;
 uniform mat4 uView;
@@ -46,7 +46,7 @@ void main() {
 }
 """
 
-    _PICK_FS: str = """#version 330 core
+    _PICK_FS: str = """#version 440 core
 uniform float uPickID;
 out vec4 fragColor;
 void main() {

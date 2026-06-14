@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 # 内联着色器
 # ════════════════════════════════════════════════════════════════
 
-_VIEWCUBE_VS: str = """#version 330 core
+_VIEWCUBE_VS: str = """#version 440 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aColor;
 layout (location = 2) in vec3 aNormal;
@@ -57,7 +57,7 @@ void main() {
 }
 """
 
-_VIEWCUBE_FS: str = """#version 330 core
+_VIEWCUBE_FS: str = """#version 440 core
 in vec3 vColor;
 in vec3 vNormal;
 in vec3 vLocalPos;

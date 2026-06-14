@@ -57,7 +57,7 @@ class EditorLayer(Layer):
         editor_window = GetEditorWindow()
         window_address = ctypes.cast(editor_window.glfw_window, ctypes.c_void_p).value
         imgui.backends.glfw_init_for_opengl(window_address, True)
-        imgui.backends.opengl3_init("#version 150")
+        imgui.backends.opengl3_init("#version 440 core")
         io = imgui.get_io()
         w, h = editor_window.GetSize()
         io.display_size = (float(w), float(h))
@@ -116,7 +116,6 @@ class EditorLayer(Layer):
     def OnRender(cls):
         # ── 处理待处理的轮廓请求 (render thread, GL 调用) ──
         Outliner._sync(cls.renderer)
-
         # ── ImGui ──
         imgui.backends.glfw_new_frame()
         imgui.backends.opengl3_new_frame()

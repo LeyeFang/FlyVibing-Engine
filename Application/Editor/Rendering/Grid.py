@@ -49,7 +49,7 @@ KEY_Y_AXIS: str = "editor_grid_y_axis"
 # 网格资源: 着色器
 # ════════════════════════════════════════════════════════════════
 
-_OVERLAY_VS: str = """#version 330 core
+_OVERLAY_VS: str = """#version 440 core
 layout (location = 0) in vec3 aPos;
 uniform mat4 uView;
 uniform mat4 uProj;
@@ -60,7 +60,7 @@ void main() {
 }
 """
 
-_OVERLAY_FADE_FS: str = """#version 330 core
+_OVERLAY_FADE_FS: str = """#version 440 core
 in vec3 vWorldPos;
 out vec4 FragColor;
 uniform vec4 uColor;

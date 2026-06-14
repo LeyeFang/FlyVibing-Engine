@@ -11,9 +11,11 @@ from Application.Application import GetEditorWindow, GetEditorRenderer
 from Application.Core.Events.Event import Event
 from Application.Core.Events.InputEvent import *
 from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
+from Application.Core.Events.WindowEvent import WindowResizeEvent
 from Application.Core.Events.Enum.InputEnum import (
     MouseButtonCode, MouseActionCode, KeyButtonCode, KeyActionCode,
 )
+from Application.Core.Input.InputState import IsShiftPressed
 from Application.Core.Layers.Layer import Layer
 
 # ── 应用层: 编辑器 ──
@@ -79,6 +81,11 @@ class EditorLayer(Layer):
 
     @classmethod
     def OnEvent(cls, event: Event) -> None:
+        # ── 窗口 resize 始终处理，不受面板鼠标拦截影响 ──
+        if event is WindowResizeEvent:
+            w, h = WindowResizeEvent.UnPack()
+            io = imgui.get_io()
+            io.display_size = (float(w), float(h))
         if cls._mouse_in_any_panel():
             return
         cam = EditorCamera.get_instance()
@@ -88,7 +95,9 @@ class EditorLayer(Layer):
             SceneCameraUpdateEvent.Pack()
         elif event is MouseGragEvent:
             bt, offset_x, offset_y = MouseGragEvent.UnPack()
-            cam.on_mouse_drag(bt, offset_x, offset_y)
+            if bt == MouseButtonCode.Left:
+                return  # 左键拖动不操作视图，仅用于点选
+            cam.on_mouse_drag(bt, offset_x, offset_y, IsShiftPressed())
             SceneCameraUpdateEvent.Pack()
         elif event is MouseButtonEvent:
             if MouseButtonEvent.button != MouseButtonCode.Left:

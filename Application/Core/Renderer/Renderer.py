@@ -93,8 +93,10 @@ class Renderer(ABC):
 
     @classmethod
     def _on_window_resize(cls, width: int, height: int) -> None:
-        """子类在 WindowResizeEvent 处理中调用 — 更新缓存与宽高比。"""
+        """子类在 WindowResizeEvent 处理中调用 — 更新缓存、宽高比与视口尺寸。"""
         cls._pending_resize = (width, height)
+        cls.viewport_width = width
+        cls.viewport_height = height
         cls.aspect_ratio = width / height
         from Application.Editor.EditorCamera import EditorCamera
         cam = EditorCamera.get_instance()

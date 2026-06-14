@@ -3,13 +3,13 @@
 
 职责:
   - 持有编辑器视角的轨道参数 (yaw / pitch / target / distance)
-  - 处理鼠标输入 (左键旋转 / 中键平移 / 滚轮缩放)
+  - 处理鼠标输入 (中键旋转 / Shift+中键平移 / 滚轮缩放 / 左键仅选中)
   - 生成 view/proj 矩阵供 Renderer 使用
 
 使用方式:
   cam = EditorCamera.get_instance()
   cam.focus_on((0, 0, -50), distance=47)
-  cam.on_mouse_drag(MouseButtonCode.Left, dx, dy)
+  cam.on_mouse_drag(MouseButtonCode.Middle, dx, dy, shift_held=False)
   cam.on_scroll(dy)
   view = cam.get_view_matrix()
 """
@@ -109,37 +109,90 @@ class EditorCamera(CameraBase):
         self._update_position()
 
     # ════════════════════════════════════════════════════════════
-    # 公共 API: 鼠标输入
+    # 公共 API: 鼠标输入 (2D / 3D 各自维护交互逻辑)
     # ════════════════════════════════════════════════════════════
 
     def on_mouse_drag(
         self,
         button: int,
         offset_x: float,
-        offset_y: float
+        offset_y: float,
+        shift_held: bool = False,
     ) -> None:
-        """处理鼠标拖动事件。
+        """处理鼠标拖动事件 — 根据当前 2D/3D 模式分派到特化逻辑。
 
         Args:
-            button:   MouseButtonCode.Left / .Middle / .Right
-            offset_x: 鼠标水平位移 (像素)
-            offset_y: 鼠标垂直位移 (像素)
+            button:     MouseButtonCode.Left / .Middle / .Right
+            offset_x:   鼠标水平位移 (像素)
+            offset_y:   鼠标垂直位移 (像素)
+            shift_held: Shift 修饰键是否按下
+        """
+        if self._orthographic:
+            self._on_mouse_drag_2d(button, offset_x, offset_y, shift_held)
+        else:
+            self._on_mouse_drag_3d(button, offset_x, offset_y, shift_held)
+
+    def _on_mouse_drag_3d(
+        self,
+        button: int,
+        offset_x: float,
+        offset_y: float,
+        shift_held: bool,
+    ) -> None:
+        """3D 透视模式交互:
+            - 左键拖动: 无操作 (左键仅用于点选物体)
+            - 中键拖动: 轨道旋转 (orbit)
+            - Shift+中键拖动: 平移注视点 (pan)
         """
         if button == MouseButtonCode.Left:
-            self._orbit(offset_x, offset_y)
+            return
         elif button == MouseButtonCode.Middle:
-            self._pan(-offset_x, offset_y)
+            if shift_held:
+                self._pan(-offset_x, offset_y)
+            else:
+                self._orbit(offset_x, offset_y)
+
+    def _on_mouse_drag_2d(
+        self,
+        button: int,
+        offset_x: float,
+        offset_y: float,
+        shift_held: bool,
+    ) -> None:
+        """2D 正交模式交互:
+            - 左键拖动: 无操作 (左键仅用于点选物体)
+            - 中键拖动: 屏蔽 (2D 俯视下轨道旋转无意义)
+            - Shift+中键拖动: 平移注视点 (pan)
+        """
+        if button == MouseButtonCode.Left:
+            return
+        elif button == MouseButtonCode.Middle:
+            if shift_held:
+                self._pan(-offset_x, offset_y)
+            # 纯中键拖动在 2D 下屏蔽
 
     def on_scroll(self, y_offset: float) -> None:
-        """处理滚轮缩放。
+        """处理滚轮缩放 — 根据当前 2D/3D 模式分派到特化逻辑。
 
         Args:
             y_offset: 滚轮垂直偏移量 (正值=放大/靠近, 负值=缩小/远离)
         """
-        # 指数缩放，手感更自然
+        if self._orthographic:
+            self._on_scroll_2d(y_offset)
+        else:
+            self._on_scroll_3d(y_offset)
+
+    def _on_scroll_3d(self, y_offset: float) -> None:
+        """3D 透视模式滚轮缩放 — 推拉 orbit_distance。"""
         self.orbit_distance *= (1.0 - y_offset * self.zoom_speed)
         self.orbit_distance = max(self.orbit_distance, 0.01)
         self._update_position()
+
+    def _on_scroll_2d(self, y_offset: float) -> None:
+        """2D 正交模式滚轮缩放 — 调整 ortho_size (正交半高)。"""
+        self._ortho_size *= (1.0 - y_offset * self.zoom_speed)
+        self._ortho_size = max(self._ortho_size, 0.01)
+        # 2D 缩放不需要更新 position, 投影矩阵在下一帧自动使用新 _ortho_size
 
     # ════════════════════════════════════════════════════════════
     # 公共 API: 预设视角 (ViewGizmo 面点击)

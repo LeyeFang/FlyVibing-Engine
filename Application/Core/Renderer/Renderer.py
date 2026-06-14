@@ -36,6 +36,11 @@ class Renderer(ABC):
     aspect_ratio: float
     camera_id: int
 
+    # ── 相机矩阵缓存 (所有后端共享) ──
+    _cached_view: 'np.ndarray' = None       # 4x4 视图矩阵 (float32)
+    _cached_proj: 'np.ndarray' = None       # 4x4 投影矩阵 (float32)
+    _pending_resize: tuple = None           # (width, height) or None
+
     @classmethod
     @abstractmethod
     def Create(cls):
@@ -81,6 +86,27 @@ class Renderer(ABC):
             event: 引擎事件实例 (WindowResizeEvent / SceneCameraUpdateEvent 等)
         """
         ...
+
+    # ════════════════════════════════════════════════════════════
+    # 相机矩阵缓存辅助 (子类 OnEvent 中调用)
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _on_window_resize(cls, width: int, height: int) -> None:
+        """子类在 WindowResizeEvent 处理中调用 — 更新缓存与宽高比。"""
+        cls._pending_resize = (width, height)
+        cls.aspect_ratio = width / height
+        from Application.Editor.EditorCamera import EditorCamera
+        cam = EditorCamera.get_instance()
+        cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
+
+    @classmethod
+    def _on_camera_update(cls) -> None:
+        """子类在 SceneCameraUpdateEvent 处理中调用 — 刷新 view/proj 缓存。"""
+        from Application.Editor.EditorCamera import EditorCamera
+        cam = EditorCamera.get_instance()
+        cls._cached_view = cam.get_view_matrix()
+        cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
 
     # ════════════════════════════════════════════════════════════
     # Overlay 回调机制 (编辑器解耦)

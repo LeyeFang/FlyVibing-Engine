@@ -40,10 +40,6 @@ import moderngl as mgl
 class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderResourceManger):
     """ModernGL 渲染器 — 基于 moderngl 的 GPU 渲染后端。"""
 
-    _cached_view: np.ndarray = None
-    _cached_proj: np.ndarray = None
-    _pending_resize: tuple = None
-
     @classmethod
     def Create(
         cls
@@ -115,10 +111,7 @@ class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderRe
     ) -> None:
         if event is WindowResizeEvent:
             width, height = event.UnPack()
-            cls._pending_resize = (width, height)
-            cls.aspect_ratio = width / height
-            cam = EditorCamera.get_instance()
-            cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
+            cls._on_window_resize(width, height)
         if any([
             event is NewComponentEvent,
             event is ComponentModifiedEvent
@@ -130,13 +123,4 @@ class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderRe
                 else:
                     cls.unregister_entity(entity_id)
         if event is SceneCameraUpdateEvent:
-            cls._camera_update_callback(event)
-
-    @classmethod
-    def _camera_update_callback(
-        cls,
-        event: SceneCameraUpdateEvent
-    ) -> None:
-        cam = EditorCamera.get_instance()
-        cls._cached_view = cam.get_view_matrix()
-        cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
+            cls._on_camera_update()

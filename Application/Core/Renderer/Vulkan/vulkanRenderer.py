@@ -41,13 +41,6 @@ import vulkan as vk
 class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResourceManger):
     """Vulkan 渲染器 — 低级图形 API 后端。"""
 
-    # ── 相机矩阵缓存 ──
-    _cached_view: np.ndarray = None       # 4x4 视图矩阵 (float32)
-    _cached_proj: np.ndarray = None       # 4x4 投影矩阵 (float32)
-
-    # ── 延迟 resize ──
-    _pending_resize: tuple = None         # (width, height) or None
-
     @classmethod
     def Create(cls) -> "vulkanRenderer":
         """初始化 Vulkan 渲染器。"""
@@ -120,10 +113,7 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
     def OnEvent(cls, event: Event) -> None:
         if event is WindowResizeEvent:
             width, height = event.UnPack()
-            cls._pending_resize = (width, height)
-            cls.aspect_ratio = width / height
-            cam = EditorCamera.get_instance()
-            cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
+            cls._on_window_resize(width, height)
 
         if any([event is NewComponentEvent, event is ComponentModifiedEvent]):
             entity_id, comp = event.UnPack()
@@ -134,10 +124,4 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
                     cls.unregister_entity(entity_id)
 
         if event is SceneCameraUpdateEvent:
-            cls._camera_update_callback(event)
-
-    @classmethod
-    def _camera_update_callback(cls, event: SceneCameraUpdateEvent):
-        cam = EditorCamera.get_instance()
-        cls._cached_view = cam.get_view_matrix()
-        cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
+            cls._on_camera_update()

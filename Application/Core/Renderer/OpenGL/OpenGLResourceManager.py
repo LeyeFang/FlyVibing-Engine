@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 from OpenGL import GL as gl
 
+from Application.Core.Renderer.OpenGL.OpenGLUtils import OpenGLUtils
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Resource.Mesh import Mesh
 from Application.Resource.Material import Material, Shader, Texture
@@ -251,7 +252,7 @@ class OpenGLResourceManager:
             cls.registered_shaders[shader_id].ref_count += 1
             return
 
-        program = cls._compile_program(shader.vs_src, shader.fs_src)
+        program = OpenGLUtils.compile_program(shader.vs_src, shader.fs_src)
 
         # ── 预查询所有 uniform location (PyOpenGL 兼容) ──
         uniforms_loc: dict[str, int] = {}
@@ -335,109 +336,36 @@ class OpenGLResourceManager:
         )
 
     # ════════════════════════════════════════════════════════════
-    # Uniform 辅助
+    # Uniform 辅助 — 薄封装，委托到 OpenGLUtils
     # ════════════════════════════════════════════════════════════
 
     @classmethod
     def get_uniform_location(cls, shader_id: int, name: str) -> int:
         """获取 uniform location (带缓存，支持懒查询)。
 
-        Args:
-            shader_id: 着色器资源 ID
-            name: uniform 名称
-
-        Returns:
-            uniform location，-1 表示不存在
+        委托到 OpenGLUtils.get_uniform_location，传入 cls.registered_shaders。
         """
-        shader_data = cls.registered_shaders.get(shader_id)
-        if shader_data is None:
-            return -1
-        if name not in shader_data.uniforms_loc:
-            # 懒查询: 预枚举未覆盖的 uniform
-            loc = gl.glGetUniformLocation(shader_data.program, name)
-            shader_data.uniforms_loc[name] = loc
-        return shader_data.uniforms_loc.get(name, -1)
+        return OpenGLUtils.get_uniform_location(cls.registered_shaders, shader_id, name)
 
     @classmethod
     def set_uniform_mat4(cls, shader_id: int, name: str, matrix: np.ndarray) -> None:
-        """Set a mat4 uniform.
-
-        Args:
-            shader_id: Shader resource ID
-            name: Uniform name
-            matrix: 4x4 matrix (pyrr Matrix44 or numpy ndarray)
-
-        CONVENTION (see Core/Math/__init__.py for full documentation):
-          - pyrr Matrix44: row-vector convention internally. When flattened to
-            numpy C-contiguous bytes, the byte stream becomes column-vector order.
-            Upload with GL_FALSE.  ←  This is what set_uniform_mat4 assumes.
-          - numpy ndarray (standard math): column-vector convention, C-order
-            memory is row-major. Upload with GL_TRUE.  ←  NOT handled here;
-            use glUniformMatrix4fv(..., GL_TRUE, ...) directly for these.
-
-        All engine camera matrices and entity model matrices originate from
-        pyrr (create_look_at, Matrix44.from_eulers, etc.), so GL_FALSE is
-        the universal convention for set_uniform_mat4.
-        """
-        loc = cls.get_uniform_location(shader_id, name)
-        if loc < 0:
-            return
-        # pyrr row-vector internal storage -> numpy C-contiguous flattening
-        # produces column-vector byte order -> GL_FALSE is correct
-        data = np.ascontiguousarray(matrix.astype('float32'))
-        gl.glUniformMatrix4fv(loc, 1, gl.GL_FALSE, data)
+        """Set a mat4 uniform — 委托到 OpenGLUtils。"""
+        OpenGLUtils.set_uniform_mat4(cls.registered_shaders, shader_id, name, matrix)
 
     @classmethod
     def set_uniform_float(cls, shader_id: int, name: str, value: float) -> None:
-        """设置 float uniform。"""
-        loc = cls.get_uniform_location(shader_id, name)
-        if loc < 0:
-            return
-        gl.glUniform1f(loc, float(value))
+        """设置 float uniform — 委托到 OpenGLUtils。"""
+        OpenGLUtils.set_uniform_float(cls.registered_shaders, shader_id, name, value)
 
     @classmethod
     def set_uniform_int(cls, shader_id: int, name: str, value: int) -> None:
-        """设置 int / sampler2D uniform。"""
-        loc = cls.get_uniform_location(shader_id, name)
-        if loc < 0:
-            return
-        gl.glUniform1i(loc, value)
+        """设置 int / sampler2D uniform — 委托到 OpenGLUtils。"""
+        OpenGLUtils.set_uniform_int(cls.registered_shaders, shader_id, name, value)
 
     @classmethod
     def set_uniform_value(cls, shader_id: int, name: str, value) -> None:
-        """根据 shader 中声明的 GLSL 类型自动选择正确的 glUniform* 调用。
-
-        与 isinstance 派发不同，此方法查询 shader_data_struct 中缓存的
-        uniforms_type，避免 Python int 值被错误地当作 GLSL int uniform。
-
-        Args:
-            shader_id: 着色器资源 ID
-            name: uniform 名称
-            value: uniform 值 (numpy array / float / int)
-        """
-        shader_data = cls.registered_shaders.get(shader_id)
-        if shader_data is None:
-            return
-
-        glsl_type = shader_data.uniforms_type.get(name, None)
-
-        if glsl_type == 'mat4' or (isinstance(value, np.ndarray) and value.ndim == 2):
-            cls.set_uniform_mat4(shader_id, name, value)
-        elif glsl_type in ('float', 'double'):
-            cls.set_uniform_float(shader_id, name, float(value))
-        elif glsl_type in ('int', 'sampler2D', 'sampler'):
-            cls.set_uniform_int(shader_id, name, int(value))
-        elif glsl_type is None:
-            # 回退: 未知 uniform 用 isinstance 猜测
-            if isinstance(value, np.ndarray) and value.ndim == 2:
-                cls.set_uniform_mat4(shader_id, name, value)
-            elif isinstance(value, (np.integer, int)):
-                cls.set_uniform_int(shader_id, name, int(value))
-            else:
-                cls.set_uniform_float(shader_id, name, float(value))
-        else:
-            # 未知 GLSL 类型，用 float 兜底
-            cls.set_uniform_float(shader_id, name, float(value))
+        """根据 GLSL 类型自动选择 glUniform* 调用 — 委托到 OpenGLUtils。"""
+        OpenGLUtils.set_uniform_value(cls.registered_shaders, shader_id, name, value)
 
     # ════════════════════════════════════════════════════════════
     # 资源卸载
@@ -508,57 +436,6 @@ class OpenGLResourceManager:
             del cls.registered_textures[texture_id]
 
     # ════════════════════════════════════════════════════════════
-    # 着色器编译辅助
-    # ════════════════════════════════════════════════════════════
-
-    @staticmethod
-    def _compile_program(vs_src: str, fs_src: str) -> int:
-        """编译顶点/片段着色器并链接为程序。
-
-        Args:
-            vs_src: GLSL 顶点着色器源码
-            fs_src: GLSL 片段着色器源码
-
-        Returns:
-            GLuint 着色器程序句柄
-
-        Raises:
-            RuntimeError: 编译或链接失败
-        """
-        # ── 编译顶点着色器 ──
-        vs = gl.glCreateShader(gl.GL_VERTEX_SHADER)
-        gl.glShaderSource(vs, vs_src)
-        gl.glCompileShader(vs)
-        if not gl.glGetShaderiv(vs, gl.GL_COMPILE_STATUS):
-            log = gl.glGetShaderInfoLog(vs).decode(errors='replace')
-            gl.glDeleteShader(vs)
-            raise RuntimeError(f"Vertex shader compilation failed:\n{log}")
-        # ── 编译片段着色器 ──
-        fs = gl.glCreateShader(gl.GL_FRAGMENT_SHADER)
-        gl.glShaderSource(fs, fs_src)
-        gl.glCompileShader(fs)
-        if not gl.glGetShaderiv(fs, gl.GL_COMPILE_STATUS):
-            log = gl.glGetShaderInfoLog(fs).decode(errors='replace')
-            gl.glDeleteShader(vs)
-            gl.glDeleteShader(fs)
-            raise RuntimeError(f"Fragment shader compilation failed:\n{log}")
-        # ── 链接程序 ──
-        program = gl.glCreateProgram()
-        gl.glAttachShader(program, vs)
-        gl.glAttachShader(program, fs)
-        gl.glLinkProgram(program)
-        if not gl.glGetProgramiv(program, gl.GL_LINK_STATUS):
-            log = gl.glGetProgramInfoLog(program).decode(errors='replace')
-            gl.glDeleteShader(vs)
-            gl.glDeleteShader(fs)
-            gl.glDeleteProgram(program)
-            raise RuntimeError(f"Shader program linking failed:\n{log}")
-        # ── 清理 shader 对象 (已链接到 program，不再需要) ──
-        gl.glDeleteShader(vs)
-        gl.glDeleteShader(fs)
-        return program
-
-    # ════════════════════════════════════════════════════════════
     # Editor Overlay 资源管理 (GPU 端实现)
     # ════════════════════════════════════════════════════════════
     #
@@ -606,7 +483,7 @@ class OpenGLResourceManager:
         if overlay.key in cls._overlay_gpu_resources:
             return
         # ── 编译着色器 ──
-        program = cls._compile_program(overlay.vs_src, overlay.fs_src)
+        program = OpenGLUtils.compile_program(overlay.vs_src, overlay.fs_src)
         # ── VAO ──
         vao = gl.glGenVertexArrays(1)
         gl.glBindVertexArray(vao)
@@ -693,100 +570,3 @@ class OpenGLResourceManager:
             gl.glDeleteBuffers(1, [gpu.ebo])
         if gpu.program:
             gl.glDeleteProgram(gpu.program)
-
-    @classmethod
-    def _render_overlay_drawables(
-        cls,
-        view: np.ndarray,
-        proj: np.ndarray
-    ) -> None:
-        """Render all registered overlay drawables (GL implementation).
-
-        Supports: custom model matrices / textures / face culling / NDC rendering.
-
-        CONVENTION for matrix upload:
-          - NDC overlays (ignore_scene_matrices=True):
-              model comes from model_matrix_cb -> numpy ndarray -> GL_TRUE
-          - Scene overlays (ignore_scene_matrices=False):
-              view/proj come from EditorCamera -> pyrr matrices -> GL_FALSE
-        """
-        vp = gl.glGetIntegerv(gl.GL_VIEWPORT)
-        vp_w, vp_h = vp[2], vp[3]
-        for _key, gpu in cls._overlay_gpu_resources.items():
-            gl.glUseProgram(gpu.program)
-            if gpu.ignore_scene_matrices:
-                # NDC rendering: custom model matrix from callback
-                # model_matrix_cb returns numpy ndarray (Type B) -> GL_TRUE
-                if gpu.model_matrix_cb:
-                    model = gpu.model_matrix_cb(vp_w, vp_h)
-                    loc = gl.glGetUniformLocation(gpu.program, 'uModel')
-                    if loc >= 0:
-                        gl.glUniformMatrix4fv(
-                            loc,
-                            1,
-                            gl.GL_TRUE,  # numpy ndarray -> GL_TRUE
-                            np.ascontiguousarray(model.astype('float32')))
-            else:
-                # Scene rendering: use engine view/proj matrices
-                # view/proj come from pyrr (Type A) -> GL_FALSE
-                loc_view = gl.glGetUniformLocation(gpu.program, 'uView')
-                loc_proj = gl.glGetUniformLocation(gpu.program, 'uProj')
-                if loc_view >= 0:
-                    gl.glUniformMatrix4fv(
-                        loc_view,
-                        1,
-                        gl.GL_FALSE,  # pyrr matrix -> GL_FALSE
-                        np.ascontiguousarray(view.astype('float32')))
-                if loc_proj >= 0:
-                    gl.glUniformMatrix4fv(
-                        loc_proj,
-                        1,
-                        gl.GL_FALSE,  # pyrr matrix -> GL_FALSE
-                        np.ascontiguousarray(proj.astype('float32')))
-            # ── 纹理 ──
-            if gpu.texture:
-                gl.glActiveTexture(gl.GL_TEXTURE0)
-                gl.glBindTexture(gl.GL_TEXTURE_2D, gpu.texture)
-                loc_tex = gl.glGetUniformLocation(gpu.program, gpu.texture_uniform or 'uLetterTex')
-                if loc_tex >= 0:
-                    gl.glUniform1i(loc_tex, 0)
-            # ── 专属 uniform ──
-            if gpu.uniforms_setup:
-                gpu.uniforms_setup(gpu.program)
-            # ── 深度测试 ──
-            if gpu.depth_test:
-                gl.glEnable(gl.GL_DEPTH_TEST)
-                gl.glDepthFunc(gl.GL_LESS)
-            else:
-                gl.glDisable(gl.GL_DEPTH_TEST)
-            # ── 面剔除 ──
-            if gpu.cull_face:
-                gl.glEnable(gl.GL_CULL_FACE)
-                gl.glCullFace(gl.GL_BACK)
-                gl.glFrontFace(gl.GL_CCW)
-            else:
-                gl.glDisable(gl.GL_CULL_FACE)
-            # ── 混合 ──
-            if gpu.blend:
-                gl.glEnable(gl.GL_BLEND)
-                gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-            else:
-                gl.glDisable(gl.GL_BLEND)
-            # ── 线宽 ──
-            if gpu.draw_mode == gl.GL_LINES:
-                gl.glLineWidth(min(gpu.line_width, 1.0))
-            # ── 绘制 ──
-            gl.glBindVertexArray(gpu.vao)
-            gl.glDrawElements(
-                gpu.draw_mode,
-                gpu.elements_count,
-                gl.GL_UNSIGNED_INT,
-                None)
-            gl.glBindVertexArray(0)
-            if gpu.draw_mode == gl.GL_LINES:
-                gl.glLineWidth(1.0)
-        # ── 恢复状态 ──
-        gl.glEnable(gl.GL_DEPTH_TEST)
-        gl.glDepthFunc(gl.GL_LESS)
-        gl.glDisable(gl.GL_BLEND)
-        gl.glDisable(gl.GL_CULL_FACE)

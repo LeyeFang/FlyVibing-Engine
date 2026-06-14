@@ -16,6 +16,9 @@ from Application.Editor.UI.controllers.SceneBrowserController import (
 from Application.Editor.UI.controllers.ResourceBrowserController import (
     ResourceBrowserController,
 )
+from Application.Editor.UI.controllers.ViewportController import (
+    ViewportController,
+)
 
 
 class ScenePanel(BasePanel):
@@ -131,6 +134,39 @@ class ScenePanel(BasePanel):
             self._draw_resources_tab()
 
     # ============================================================
+    # 视口模式: 2D / 3D 切换 (在 entity 列表上方)
+    # ============================================================
+
+    def _draw_viewport_mode(
+        self
+    ) -> None:
+        """绘制 2D | 3D 视口模式切换按钮，委托 ViewportController"""
+        av = imgui.get_content_region_avail().x
+        btn_w = (av - imgui.get_style().item_spacing.x) / 2.0
+
+        is_2d = ViewportController.is_2d()
+
+        # 3D 按钮
+        if not is_2d:
+            imgui.push_style_color(
+                imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
+        if imgui.button("3D (Persp)", (btn_w, 0)):
+            ViewportController.switch_to_3d()
+        if not is_2d:
+            imgui.pop_style_color(1)
+
+        imgui.same_line()
+
+        # 2D 按钮
+        if is_2d:
+            imgui.push_style_color(
+                imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
+        if imgui.button("2D (Ortho)", (btn_w, 0)):
+            ViewportController.switch_to_2d()
+        if is_2d:
+            imgui.pop_style_color(1)
+
+    # ============================================================
     # Entities 标签页
     # ============================================================
 
@@ -138,6 +174,10 @@ class ScenePanel(BasePanel):
         self
     ) -> None:
         """列出场景中所有可渲染实体"""
+        # ── 2D / 3D 视口模式切换 (在 entity 列表上方) ──
+        self._draw_viewport_mode()
+        imgui.separator()
+
         entity_ids = SceneBrowserController.get_renderable_entities()
 
         if not entity_ids:

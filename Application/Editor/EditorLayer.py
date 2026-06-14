@@ -102,8 +102,17 @@ class EditorLayer(Layer):
             if pick_type == 'entity':
                 print(f"[EditorLayer] Click → Entity#{pick_value}  ({dt:.3f}ms)")
                 Outliner.set_selected_entities({pick_value})
-            elif pick_type == 'overlay':
-                print(f"[EditorLayer] Click → Overlay '{pick_value}'  ({dt:.3f}ms)")
+            elif pick_type == 'overlay' and pick_value:
+                prefix = ViewGizmo.OVERLAY_KEY_PREFIX
+                if pick_value.startswith(prefix):
+                    face_name = pick_value.rsplit('_', 1)[-1]
+                    direction = ViewGizmo.FACE_LOOK_DIRECTIONS.get(face_name)
+                    if direction is not None:
+                        cam.look_from_direction(direction)
+                        SceneCameraUpdateEvent.Pack()
+                        print(f"[EditorLayer] ViewGizmo → {face_name}  ({dt:.3f}ms)")
+                else:
+                    print(f"[EditorLayer] Click → Overlay '{pick_value}'  ({dt:.3f}ms)")
             else:
                 print(f"[EditorLayer] Click → nothing  ({dt:.3f}ms)")
                 Outliner.clear()

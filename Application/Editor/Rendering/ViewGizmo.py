@@ -115,6 +115,15 @@ class ViewGizmo:
         'left': 3, 'right': 4,
         'top': 5, 'bottom': 6,
     }
+    # ── face_name → GL 摄像机方向 (target → camera, EditorCamera.look_from_direction 用) ──
+    FACE_LOOK_DIRECTIONS: dict[str, np.ndarray] = {
+        'front':  np.array([ 0.0,  0.0,  1.0], dtype=np.float32),  # GL +Z
+        'back':   np.array([ 0.0,  0.0, -1.0], dtype=np.float32),  # GL -Z
+        'right':  np.array([ 1.0,  0.0,  0.0], dtype=np.float32),  # GL +X
+        'left':   np.array([-1.0,  0.0,  0.0], dtype=np.float32),  # GL -X
+        'top':    np.array([ 0.0,  1.0,  0.0], dtype=np.float32),  # GL +Y
+        'bottom': np.array([ 0.0, -1.0,  0.0], dtype=np.float32),  # GL -Y
+    }
     # ── 面颜色 ──────────────────────────────────────────────
     #       face    几何法线(GL)   编辑器方向   颜色
     FACE_COLORS: dict[str, tuple] = {

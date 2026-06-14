@@ -70,16 +70,13 @@ class EditorCamera(CameraBase):
         self.pitch: float = math.pi / 6.0   # 30° 俯角
         self.orbit_target: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
         self.orbit_distance: float = 15
-
         # ── 投影参数 ──
         self.fov: float = 45.0
         self.near_plane: float = 0.1
         self.far_plane: float = 1000.0
-
         # ── 派生: 摄像机世界位置 ──
         self.position: np.ndarray = np.zeros(3, dtype=np.float32)
         self._update_position()
-
         # ── 灵敏度 ──
         self.orbit_speed: float = 0.005
         self.pan_speed: float = 0.01
@@ -141,12 +138,36 @@ class EditorCamera(CameraBase):
         self._update_position()
 
     # ════════════════════════════════════════════════════════════
+    # 公共 API: 预设视角 (ViewGizmo 面点击)
+    # ════════════════════════════════════════════════════════════
+
+    def look_from_preset(self, yaw: float, pitch: float) -> None:
+        """直接设置轨道角度（保留 distance 和 target 不变）。"""
+        self.yaw = yaw
+        self.pitch = pitch
+        self._update_position()
+
+    def look_from_direction(self, forward: np.ndarray) -> None:
+        """从 GL 方向向量设置朝向 — 无万向锁, 允许精确 ±Y。"""
+        d = np.asarray(forward, dtype=np.float32)
+        norm = float(np.linalg.norm(d))
+        if norm < 1e-8:
+            return
+        d = d / norm
+        self.pitch = math.asin(max(-1.0, min(1.0, float(d[1]))))
+        nz = float(-d[2])
+        self.yaw = math.atan2(float(d[0]), 0.0 if nz == 0.0 else nz)
+        # 正顶/正底: yaw 额外转 180° 使 ViewGizmo 字母正向
+        if abs(d[1]) > 0.9999:
+            self.yaw += math.pi
+        self._update_position()
+
+    # ════════════════════════════════════════════════════════════
     # CameraBase 接口: 矩阵
     # ════════════════════════════════════════════════════════════
 
     def get_view_matrix(self) -> np.ndarray:
         """Generate view matrix — look_at(camera_pos, orbit_target, world_up).
-
         Returns:
             4x4 float32 view matrix (pyrr-style, row-vector convention).
             For OpenGL upload: use glUniformMatrix4fv(..., GL_FALSE, ...).
@@ -175,28 +196,77 @@ class EditorCamera(CameraBase):
         ).astype(np.float32)
 
     # ════════════════════════════════════════════════════════════
-    # 内部: 轨道操作
+    # 内部: 方向向量 + 向量旋转
+    # ════════════════════════════════════════════════════════════
+
+    @property
+    def _forward(self) -> np.ndarray:
+        """当前向前方向 (GL 空间, orbit_target → camera, 单位向量)。"""
+        cp = math.cos(self.pitch)
+        return np.array([
+            math.sin(self.yaw) * cp,
+            math.sin(self.pitch),
+            -math.cos(self.yaw) * cp,
+        ], dtype=np.float32)
+
+    @staticmethod
+    def _rotate_vector(v: np.ndarray, axis: np.ndarray, angle: float) -> np.ndarray:
+        """Rodrigues 旋转公式 — v 绕单位轴 axis 旋转 angle 弧度。"""
+        c = math.cos(angle)
+        s = math.sin(angle)
+        k_dot_v = float(np.dot(axis, v))
+        cross = np.cross(axis, v)
+        return v * c + cross * s + axis * (k_dot_v * (1.0 - c))
+
+    _POLE_THRESHOLD: float = math.pi / 2 - 0.05  # ≈ 87°
+
+    # ════════════════════════════════════════════════════════════
+    # 内部: 轨道操作 (混合方案: 极点 yaw-直控, 非极点 Rodrigues)
     # ════════════════════════════════════════════════════════════
 
     def _orbit(self, offset_x: float, offset_y: float) -> None:
-        """绕轨道原点旋转摄像机。
+        """绕轨道原点旋转摄像机 (混合方案, 无万向锁, 无抖动)。"""
+        world_up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+        old_yaw = self.yaw
+        old_pitch = self.pitch
+        near_pole = abs(old_pitch) >= self._POLE_THRESHOLD
+        f = self._forward
 
-        Args:
-            offset_x: 水平位移 → 修改 yaw
-            offset_y: 垂直位移 → 修改 pitch
-        """
-        self.yaw += offset_x * self.orbit_speed
-        self.pitch += offset_y * self.orbit_speed
+        # 垂直旋转
+        right = np.cross(f, world_up)
+        right_norm = float(np.linalg.norm(right))
+        if right_norm < 1e-6:
+            right = np.array([-math.cos(old_yaw), 0.0, math.sin(old_yaw)], dtype=np.float32)
+            rn = float(np.linalg.norm(right))
+            right = right / rn if rn > 1e-6 else np.array([1.0, 0.0, 0.0], dtype=np.float32)
+        else:
+            right /= right_norm
+        f = self._rotate_vector(f, right, offset_y * self.orbit_speed)
 
-        # 限制俯仰角，防止翻转 (≈ ±89°)
-        limit = math.pi / 2 - 0.01
-        self.pitch = max(-limit, min(limit, self.pitch))
+        # 水平旋转 + yaw/pitch 提取
+        if near_pole:
+            self.yaw = old_yaw + offset_x * self.orbit_speed
+            self.pitch = math.asin(max(-1.0, min(1.0, float(f[1]))))
+        else:
+            f = self._rotate_vector(f, world_up, -offset_x * self.orbit_speed)
+            f_norm = float(np.linalg.norm(f))
+            if f_norm < 1e-8:
+                self._update_position()
+                return
+            f /= f_norm
+            self.pitch = math.asin(max(-1.0, min(1.0, float(f[1]))))
+            old_cp = math.cos(old_pitch)
+            ox = math.sin(old_yaw) * old_cp
+            oz = -math.cos(old_yaw) * old_cp
+            nx, nz = float(f[0]), float(f[2])
+            cross_xz = ox * nz - oz * nx
+            dot_xz = ox * nx + oz * nz
+            self.yaw = old_yaw + math.atan2(cross_xz, dot_xz)
 
         self._update_position()
 
     def _pan(self, offset_x: float, offset_y: float) -> None:
         """在屏幕平面内平移轨道原点。
-
         Args:
             offset_x: 水平位移
             offset_y: 垂直位移
@@ -207,23 +277,24 @@ class EditorCamera(CameraBase):
         ux = -math.sin(self.pitch) * math.sin(self.yaw)
         uy = math.cos(self.pitch)
         uz = math.sin(self.pitch) * math.cos(self.yaw)
-
-        self.orbit_target[0] += rx * (-offset_x * self.pan_speed) + ux * (offset_y * self.pan_speed)
-        self.orbit_target[1] += uy * (offset_y * self.pan_speed)
-        self.orbit_target[2] += rz * (-offset_x * self.pan_speed) + uz * (offset_y * self.pan_speed)
-
+        self.orbit_target[0] += \
+            rx * (-offset_x * self.pan_speed) \
+            + ux * (offset_y * self.pan_speed)
+        self.orbit_target[1] += \
+            uy * (offset_y * self.pan_speed)
+        self.orbit_target[2] += \
+            rz * (-offset_x * self.pan_speed) \
+            + uz * (offset_y * self.pan_speed)
         self._update_position()
 
     def _update_position(self) -> None:
         """根据球坐标 (yaw, pitch, distance) 更新摄像机世界位置。
-
         direction = (sin(yaw)*cos(pitch),  sin(pitch),  -cos(yaw)*cos(pitch))
         position  = orbit_target + orbit_distance * direction
         """
         dx = math.sin(self.yaw) * math.cos(self.pitch)
         dy = math.sin(self.pitch)
         dz = -math.cos(self.yaw) * math.cos(self.pitch)
-
         self.position[0] = self.orbit_target[0] + dx * self.orbit_distance
         self.position[1] = self.orbit_target[1] + dy * self.orbit_distance
         self.position[2] = self.orbit_target[2] + dz * self.orbit_distance

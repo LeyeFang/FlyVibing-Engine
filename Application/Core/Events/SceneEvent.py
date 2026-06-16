@@ -6,99 +6,76 @@ from Application.Core.Events.Event import Event
 # Scene Event
 # =========================================
 class NewSceneEvent(Event):
-    pass
+    """新场景创建信号 — 无数据负载。"""
+
+    @classmethod
+    def Pack(cls) -> None:
+        super().Pack()
 
 
 #
 # Component Event
 # =========================================
 class ComponentModifiedEvent(Event):
+    """组件修改通知 — 携带 entity_id + 被修改的组件实例。"""
 
-    entity_id: int = None
-    modified_comp: Component = None
-    args_dict: dict = {}
-    log_info: str = ''
+    def __init__(self, entity_id: int, comp: Component) -> None:
+        super().__init__()
+        self.entity_id: int = entity_id
+        self.modified_comp: Component = comp
 
-    @classmethod
-    def Pack(
-        cls,
-        entity_id: int,
-        comp: Component
-    ):
-        cls.entity_id = entity_id
-        cls.modified_comp = comp
-        cls.log_info: str = f"Modified component '{cls.modified_comp.__class__.__name__}' for entity '{entity_id}'"
-        super().Pack()
+    @property
+    def log_info(self) -> str:
+        return f"Modified component '{self.modified_comp.__class__.__name__}' for entity '{self.entity_id}'"
 
     @classmethod
-    def UnPack(
-        cls
-    ):
-        super().UnPack()
-        return cls.entity_id, cls.modified_comp
+    def Pack(cls, entity_id: int, comp: Component) -> None:
+        super().Pack(entity_id, comp)
+
+    def unpack(self) -> tuple:
+        return self.entity_id, self.modified_comp
 
 
 class NewComponentEvent(Event):
+    """新组件添加通知 — 携带 entity_id + 新组件实例。"""
 
-    entity_id: int = None
-    new_comp: Component = None
-    log_info: str = ''
+    def __init__(self, entity_id: int, comp: Component) -> None:
+        super().__init__()
+        self.entity_id: int = entity_id
+        self.new_comp: Component = comp
 
-    @classmethod
-    def Pack(
-        cls,
-        entity_id: int,
-        comp: Component
-    ):
-        cls.entity_id = entity_id
-        cls.new_comp = comp
-        cls.log_info: str = f"New component '{cls.new_comp.__class__.__name__}' for entity '{entity_id}'"
-        super().Pack()
+    @property
+    def log_info(self) -> str:
+        return f"New component '{self.new_comp.__class__.__name__}' for entity '{self.entity_id}'"
 
     @classmethod
-    def UnPack(
-        cls
-    ) -> tuple:
-        return cls.entity_id, cls.new_comp
+    def Pack(cls, entity_id: int, comp: Component) -> None:
+        super().Pack(entity_id, comp)
+
+    def unpack(self) -> tuple:
+        return self.entity_id, self.new_comp
 
 
 class UpdateShaderUniformsEvent(Event):
+    """Shader Uniform 更新通知 — 携带 entity_id + uniform 字典。"""
 
-    entity_id: int
-    uniforms: dict
-    log_info: str = ''
-
-    @classmethod
-    def Pack(
-        cls,
-        entity_id: int,
-        uniforms: dict
-    ) -> None:
-        cls.entity_id = entity_id
-        cls.uniforms = uniforms
-        super().Pack()
+    def __init__(self, entity_id: int, uniforms: dict) -> None:
+        super().__init__()
+        self.entity_id: int = entity_id
+        self.uniforms: dict = uniforms
 
     @classmethod
-    def UnPack(cls):
-        pass
+    def Pack(cls, entity_id: int, uniforms: dict) -> None:
+        super().Pack(entity_id, uniforms)
+
+    def unpack(self) -> tuple:
+        return self.entity_id, self.uniforms
 
 
 class SceneCameraUpdateEvent(Event):
-
-    camera_id: int
-    new_camera: Camera = None
-    log_info: str = ''
+    """场景摄像机更新信号 — 通知 Renderer 刷新 view/proj 缓存 (无数据负载)。"""
 
     @classmethod
-    def Pack(
-        cls
-    ):
-        cls.log_info = f"Scene Camera Update"
+    def Pack(cls) -> None:
         super().Pack()
-
-    @classmethod
-    def UnPack(
-        cls
-    ) -> tuple:
-        return cls.camera_id, cls.new_camera
 

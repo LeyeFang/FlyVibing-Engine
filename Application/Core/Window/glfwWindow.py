@@ -52,7 +52,7 @@ class glfwWindow(Window):
         cls,
         event: Event
     ) -> None:
-        if event is WindowCloseEvent:
+        if isinstance(event, WindowCloseEvent):
             pass
 
     @classmethod

@@ -159,24 +159,24 @@ class openGLRenderer(
         cls,
         event: Event
     ) -> None:
-        if event is WindowResizeEvent:
-            width, height = event.UnPack()
+        if isinstance(event, WindowResizeEvent):
+            width, height = event.unpack()
             cls._on_window_resize(width, height)
         if any([
-            event is NewComponentEvent,
-            event is ComponentModifiedEvent
+            isinstance(event, NewComponentEvent),
+            isinstance(event, ComponentModifiedEvent)
         ]):
-            entity_id, comp = event.UnPack()
+            entity_id, comp = event.unpack()
             if isinstance(comp, MeshRenderer):
                 if comp.visible:
                     cls.register_entity(entity_id)
                 else:
                     cls.unregister_entity(entity_id)
-        if event is SceneCameraUpdateEvent:
+        if isinstance(event, SceneCameraUpdateEvent):
             cls._on_camera_update()
-        if event is MouseMoveEvent:
+        if isinstance(event, MouseMoveEvent):
             cls.update_pick_mouse(
-                MouseMoveEvent.pos_x, MouseMoveEvent.pos_y)
+                event.pos_x, event.pos_y)
 
     # ════════════════════════════════════════════════════════════
     # Overlay drawable 注册扩展 — 维护 pick_key 查找表

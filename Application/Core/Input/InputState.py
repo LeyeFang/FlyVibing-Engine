@@ -223,4 +223,4 @@ def GetMouseModifiers() -> int:
             snap_to_grid()  # Shift+拖拽 → 吸附
     """
     from Application.Core.Events.InputEvent import MouseButtonEvent
-    return MouseButtonEvent.mods
+    return MouseButtonEvent._last_mods

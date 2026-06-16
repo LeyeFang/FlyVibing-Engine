@@ -13,8 +13,10 @@ from Application.Core.Events.InputEvent import *
 from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
 from Application.Core.Events.WindowEvent import WindowResizeEvent
 from Application.Core.Events.Enum.InputEnum import (
-    MouseButtonCode, MouseActionCode, KeyButtonCode, KeyActionCode,
-)
+    MouseButtonCode, 
+    MouseActionCode,
+    KeyButtonCode,
+    KeyActionCode,)
 from Application.Core.Input.InputState import IsShiftPressed
 from Application.Core.Layers.Layer import Layer
 
@@ -45,14 +47,11 @@ class EditorLayer(Layer):
     def OnAttach(cls):
         """编辑器层初始化 — 创建 ImGui 上下文、注册 3D 渲染资源和 UI 面板。"""
         imgui.create_context()
-
         cls._config_dir = os.path.join(os.path.dirname(__file__), "config")
         os.makedirs(cls._config_dir, exist_ok=True)
         io = imgui.get_io()
         io.set_ini_filename(os.path.join(cls._config_dir, "imgui.ini"))
-
         cls._load_fonts()
-
         editor_window = GetEditorWindow()
         window_address = ctypes.cast(editor_window.glfw_window, ctypes.c_void_p).value
         imgui.backends.glfw_init_for_opengl(window_address, True)
@@ -61,7 +60,6 @@ class EditorLayer(Layer):
         w, h = editor_window.GetSize()
         io.display_size = (float(w), float(h))
         cls._init_ui_panels()
-
         # ── 渲染器: 注入活动相机 + 注册 Grid/ViewGizmo/Outliner overlay ──
         cls.renderer = GetEditorRenderer()
         cam = EditorCamera.get_instance()
@@ -81,31 +79,31 @@ class EditorLayer(Layer):
     @classmethod
     def OnEvent(cls, event: Event) -> None:
         # ── 窗口 resize 始终处理，不受面板鼠标拦截影响 ──
-        if event is WindowResizeEvent:
-            w, h = WindowResizeEvent.UnPack()
+        if isinstance(event, WindowResizeEvent):
+            w, h = event.unpack()
             io = imgui.get_io()
             io.display_size = (float(w), float(h))
         if cls._mouse_in_any_panel():
             return
         cam = EditorCamera.get_instance()
-        if event is ScrollerEvent:
-            _, y_offset = ScrollerEvent.UnPack()
+        if isinstance(event, ScrollerEvent):
+            _, y_offset = event.unpack()
             cam.on_scroll(y_offset)
             SceneCameraUpdateEvent.Pack()
-        elif event is MouseGragEvent:
-            bt, offset_x, offset_y = MouseGragEvent.UnPack()
+        elif isinstance(event, MouseGragEvent):
+            bt, offset_x, offset_y = event.unpack()
             if bt == MouseButtonCode.Left:
                 return  # 左键拖动不操作视图，仅用于点选
             cam.on_mouse_drag(bt, offset_x, offset_y, IsShiftPressed())
             SceneCameraUpdateEvent.Pack()
-        elif event is MouseButtonEvent:
-            if MouseButtonEvent.button != MouseButtonCode.Left:
+        elif isinstance(event, MouseButtonEvent):
+            if event.button != MouseButtonCode.Left:
                 return
-            if MouseButtonEvent.action != MouseActionCode.Release:
+            if event.action != MouseActionCode.Release:
                 return
             t0 = time.perf_counter()
             pick_type, pick_value = cls.renderer.pick_at(
-                MouseButtonEvent.pos_x, MouseButtonEvent.pos_y)
+                event.pos_x, event.pos_y)
             dt = (time.perf_counter() - t0) * 1000
             if pick_type == 'entity':
                 print(f"[EditorLayer] Click → Entity#{pick_value}  ({dt:.3f}ms)")

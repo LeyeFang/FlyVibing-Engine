@@ -121,7 +121,7 @@ class Application:
                 layer.OnEvent(event)
             cls.editor_renderer.OnEvent(event)
             cls.editor_window.OnEvent(event)
-        if event is WindowCloseEvent:
+        if isinstance(event, WindowCloseEvent):
             cls.run_state = False
 
     # For multi-thread

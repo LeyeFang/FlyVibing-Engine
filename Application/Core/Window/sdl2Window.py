@@ -56,7 +56,7 @@ class sdl2Window(Window):
         cls,
         event: Event
     ) -> None:
-        if event is WindowCloseEvent:
+        if isinstance(event, WindowCloseEvent):
             cls.Therminate()
 
     @classmethod

@@ -8,15 +8,22 @@
 子类实现:
   - modernGLRenderer  : ModernGL/ — 基于 moderngl 的现代 OpenGL 后端
   - vulkanRenderer    : Vulkan/   — Vulkan 低级图形 API 后端
+
+相机注入:
+  Renderer 不持有具体相机引用，通过 set_active_camera() 注入 CameraBase 实例。
+  Editor 注入 EditorCamera, Runtime 注入 SceneCamera/OrbitCamera。
 """
 
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
 import numpy as np
 
 from Application.Core.Events.Event import Event
+if TYPE_CHECKING:
+    from Application.Core.Camera.CameraBase import CameraBase
 
 
 class Renderer(ABC):
@@ -40,6 +47,9 @@ class Renderer(ABC):
     _cached_view: 'np.ndarray' = None       # 4x4 视图矩阵 (float32)
     _cached_proj: 'np.ndarray' = None       # 4x4 投影矩阵 (float32)
     _pending_resize: tuple = None           # (width, height) or None
+
+    # ── 活动相机 (由外部注入, 不依赖 Editor/Scene 具体类) ──
+    _active_camera: 'CameraBase' = None
 
     @classmethod
     @abstractmethod
@@ -88,6 +98,26 @@ class Renderer(ABC):
         ...
 
     # ════════════════════════════════════════════════════════════
+    # 相机注入 (Editor / Runtime 各自注入自己的相机)
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def set_active_camera(cls, camera: 'CameraBase') -> None:
+        """注入当前活动相机 — 编辑器注入 EditorCamera, Runtime 注入 SceneCamera。
+
+        调用时机: Layer.OnAttach() 中, 在首次 StartFrame() 之前。
+        Renderer 不 import 任何 Editor 或 Scene 具体相机类。
+
+        Args:
+            camera: 实现 CameraBase 接口的相机实例
+        """
+        cls._active_camera = camera
+        # 立即刷新缓存, 确保首帧矩阵有效
+        if camera is not None:
+            cls._cached_view = camera.get_view_matrix()
+            cls._cached_proj = camera.get_projection_matrix(cls.aspect_ratio)
+
+    # ════════════════════════════════════════════════════════════
     # 相机矩阵缓存辅助 (子类 OnEvent 中调用)
     # ════════════════════════════════════════════════════════════
 
@@ -98,17 +128,39 @@ class Renderer(ABC):
         cls.viewport_width = width
         cls.viewport_height = height
         cls.aspect_ratio = width / height
-        from Application.Editor.EditorCamera import EditorCamera
-        cam = EditorCamera.get_instance()
-        cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
+        if cls._active_camera is not None:
+            cls._cached_proj = cls._active_camera.get_projection_matrix(cls.aspect_ratio)
 
     @classmethod
     def _on_camera_update(cls) -> None:
         """子类在 SceneCameraUpdateEvent 处理中调用 — 刷新 view/proj 缓存。"""
-        from Application.Editor.EditorCamera import EditorCamera
-        cam = EditorCamera.get_instance()
-        cls._cached_view = cam.get_view_matrix()
-        cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
+        if cls._active_camera is not None:
+            cls._cached_view = cls._active_camera.get_view_matrix()
+            cls._cached_proj = cls._active_camera.get_projection_matrix(cls.aspect_ratio)
+
+    # ════════════════════════════════════════════════════════════
+    # 拾取接口 (main thread 安全, 零 GL 调用)
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def pick_at(cls, x: float, y: float) -> tuple:
+        """统一拾取 → (type, value)。
+
+        基类默认返回 (None, None) — 不支持拾取的后端无需覆写。
+        OpenGL 后端通过 OpenGLPickSystem mixin 覆写, 实现 GPU 拾取。
+
+        Returns:
+            ('entity', entity_id) | ('overlay', key) | (None, None)
+        """
+        return (None, None)
+
+    @classmethod
+    def update_pick_mouse(cls, x: float, y: float) -> None:
+        """更新鼠标位置用于拾取预读 (main thread, 可选)。
+
+        基类默认空操作 — 不支持拾取的后端无需覆写。
+        """
+        pass
 
     # ════════════════════════════════════════════════════════════
     # Overlay 回调机制 (编辑器解耦)
@@ -119,10 +171,8 @@ class Renderer(ABC):
     @classmethod
     def register_overlay_callback(cls, callback: Callable) -> None:
         """注册 overlay 渲染回调 — 每帧场景实体之后调用。
-
         EditorLayer 在 OnAttach 时注册 GridGizmo/Gizmo/Outline 等。
         渲染器不 import 任何 Editor 代码, 仅持有 Callable 引用。
-
         Args:
             callback: fn(view: np.ndarray, proj: np.ndarray) -> None
         """
@@ -169,7 +219,6 @@ class Renderer(ABC):
 
 class RenderResourceManger(ABC):
     """GPU 资源管理器抽象基类 — 管理 Mesh/Shader/Texture 的上传与生命周期。
-
     资源注册表 (class-level dict，所有子类实例共享):
         registered_entities  : entity_id → entity_data_struct
         registered_meshes    : mesh_id   → mesh_data_struct
@@ -180,14 +229,12 @@ class RenderResourceManger(ABC):
         每个资源有 ref_count，register 时 +1，unregister 时 -1。
         ref_count == 0 时释放 GPU 资源并从注册表中删除。
     """
-
     view_matrix = None     # 缓存的视图矩阵 (np.ndarray 4x4)
     proj_matrix = None     # 缓存的投影矩阵 (np.ndarray 4x4)
 
     # ════════════════════════════════════════════════════════════
     # 资源数据结构
     # ════════════════════════════════════════════════════════════
-
     @dataclass
     class entity_data_struct:
         """可渲染实体在 GPU 端的资源绑定记录。
@@ -347,11 +394,9 @@ class RenderResourceManger(ABC):
     #   Grid._build_mesh_data() → 生成 vertices/indices (np.ndarray)
     #   Grid.register_to(renderer) → 调用 renderer.register_overlay_drawable(...)
     #   renderer.StartFrame() → 场景实体之后遍历 registered_overlays 绘制
-
     @dataclass
     class overlay_drawable_struct:
         """编辑器叠加层可绘制对象 — 纯数据载体，不依赖任何图形 API。
-
         Attributes:
             key          : 唯一标识符 (如 "editor_grid_lines")
             vertices     : 顶点数组 (N×M, float32)
@@ -408,7 +453,6 @@ class RenderResourceManger(ABC):
 
         调用时机: EditorLayer.OnAttach() → Grid.register_to(renderer)
                   (此时已在渲染线程，GL 上下文有效)
-
         Args:
             overlay: overlay_drawable_struct 包含所有渲染所需数据
         """
@@ -417,7 +461,6 @@ class RenderResourceManger(ABC):
     @classmethod
     def unregister_overlay_drawable(cls, key: str) -> None:
         """取消注册并释放 GPU 资源 (抽象接口，子类实现)。
-
         Args:
             key: overlay 唯一标识符
         """
@@ -426,7 +469,6 @@ class RenderResourceManger(ABC):
     @classmethod
     def _render_overlay_drawables(cls, view: np.ndarray, proj: np.ndarray) -> None:
         """遍历 registered_overlays 并提交绘制命令 (子类实现 GPU 绘制)。
-
         Args:
             view: 4×4 视图矩阵
             proj: 4×4 投影矩阵

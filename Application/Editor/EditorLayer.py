@@ -26,9 +26,6 @@ from Application.Editor.Rendering.ViewGizmo import ViewGizmo
 from Application.Editor.UI.UIManager import UIManager
 from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel
 
-# ── 应用层: 渲染器 ──
-from Application.Core.Renderer.OpenGL.openGLRenderer import openGLRenderer
-
 
 class EditorLayer(Layer):
 
@@ -65,8 +62,10 @@ class EditorLayer(Layer):
         io.display_size = (float(w), float(h))
         cls._init_ui_panels()
 
-        # ── 渲染器: 注册 Grid + ViewGizmo + Outliner overlay ──
+        # ── 渲染器: 注入活动相机 + 注册 Grid/ViewGizmo/Outliner overlay ──
         cls.renderer = GetEditorRenderer()
+        cam = EditorCamera.get_instance()
+        cls.renderer.set_active_camera(cam)
         Grid.register_to(cls.renderer)
         ViewGizmo.register_to(cls.renderer)
         Outliner.register_to(cls.renderer)
@@ -105,7 +104,7 @@ class EditorLayer(Layer):
             if MouseButtonEvent.action != MouseActionCode.Release:
                 return
             t0 = time.perf_counter()
-            pick_type, pick_value = openGLRenderer.pick_at(
+            pick_type, pick_value = cls.renderer.pick_at(
                 MouseButtonEvent.pos_x, MouseButtonEvent.pos_y)
             dt = (time.perf_counter() - t0) * 1000
             if pick_type == 'entity':

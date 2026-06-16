@@ -1,10 +1,20 @@
 """
-编辑器轨道摄像机 — 独立单例，不进入 ECS 系统。
+编辑器轨道摄像机 — 独立单例，继承 OrbitCamera 获得轨道交互能力。
 
 职责:
-  - 持有编辑器视角的轨道参数 (yaw / pitch / target / distance)
-  - 处理鼠标输入 (中键旋转 / Shift+中键平移 / 滚轮缩放 / 左键仅选中)
-  - 生成 view/proj 矩阵供 Renderer 使用
+  - 编辑器视角的轨道参数 (继承自 OrbitCamera)
+  - 2D/3D 投影模式切换
+  - ViewGizmo 预设视角
+  - 单例模式 (编辑器全局唯一)
+
+OrbitCamera 提供:
+  - yaw / pitch / target / distance 轨道参数
+  - orbit(Δyaw, Δpitch) / pan(Δright, Δup) / dolly(factor) 纯操作接口
+  - get_view_matrix / get_projection_matrix (perspective)
+
+EditorCamera 负责:
+  - 输入映射 (像素 → 角度/世界单位, 灵敏度参数)
+  - 2D/3D 输入分派
 
 使用方式:
   cam = EditorCamera.get_instance()
@@ -18,21 +28,19 @@ from __future__ import annotations
 
 import math
 import numpy as np
-from pyrr import matrix44, Vector3
+from pyrr import matrix44
 
-from Application.Core.Camera.CameraBase import CameraBase
+from Application.Core.Camera.OrbitCamera import OrbitCamera
 from Application.Core.Events.Enum.InputEnum import MouseButtonCode
 
 
-class EditorCamera(CameraBase):
-    """编辑器轨道摄像机 — 绕轨道原点旋转、平移、缩放。
+class EditorCamera(OrbitCamera):
+    """编辑器轨道摄像机 — OrbitCamera + 单例 + 2D/3D 切换 + 预设视角。
 
-    球坐标约定:
-      - yaw   (rotation_y): 水平环绕角, 0 = 面朝 -Z
-      - pitch (rotation_x): 垂直俯仰角, 0 = 水平, ±π/2 = 顶/底
-
-    摄像机位置 = orbit_target + orbit_distance * direction(yaw, pitch)
-    direction = (sin(yaw)*cos(pitch),  sin(pitch),  -cos(yaw)*cos(pitch))
+    继承 OrbitCamera 的全部球坐标轨道能力，增加:
+      - 单例模式 (全局唯一, 供 Renderer 注入)
+      - 正交/透视投影切换 (2D 俯视 ↔ 3D 自由视角)
+      - ViewGizmo 预设六面朝向
     """
 
     # ════════════════════════════════════════════════════════════
@@ -44,7 +52,7 @@ class EditorCamera(CameraBase):
     def __new__(cls) -> EditorCamera:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._init_defaults()
+            cls._instance._initialized = False
         return cls._instance
 
     @classmethod
@@ -58,58 +66,27 @@ class EditorCamera(CameraBase):
     # 初始化
     # ════════════════════════════════════════════════════════════
 
-    def _init_defaults(self) -> None:
-        """设置默认轨道参数 (仅首次创建时调用)。
+    def __init__(self) -> None:
+        """防止单例重复初始化 — 仅首次构造时执行 OrbitCamera 初始化 + 编辑器扩展。"""
+        if getattr(self, '_initialized', False):
+            return
+        super().__init__()  # OrbitCamera.__init__ → _init_orbit_defaults()
+        self._init_editor_defaults()
+        self._initialized = True
 
-        初始视角: 编辑器 XY 第四象限 (X>0, Y<0) 平面上方 (Z>0),
-        注视世界坐标原点。
-        对应 GL 坐标中摄像机位于 (+, +, +) 看向原点。
-        """
-        # ── 轨道参数 ──
-        self.yaw: float = math.pi * 0.75    # 3π/4, 摄像机在 GL 第一卦限
-        self.pitch: float = math.pi / 6.0   # 30° 俯角
-        self.orbit_target: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-        self.orbit_distance: float = 15
-        # ── 投影参数 ──
-        self.fov: float = 45.0
-        self.near_plane: float = 0.1
-        self.far_plane: float = 1000.0
-        # ── 正交投影参数 (2D/3D 切换) ──
-        self._orthographic: bool = False        # True=正交, False=透视
-        self._ortho_size: float = 10.0          # 正交半高 (世界单位)
-        self._saved_perspective: dict | None = None  # 保存 3D 视角以便切回
-        # ── 派生: 摄像机世界位置 ──
-        self.position: np.ndarray = np.zeros(3, dtype=np.float32)
-        self._update_position()
-        # ── 灵敏度 ──
+    def _init_editor_defaults(self) -> None:
+        """编辑器特化参数 (输入灵敏度 / 正交投影 / 2D-3D 切换)。"""
+        # ── 输入灵敏度 (像素 → 角度/世界单位 映射) ──
         self.orbit_speed: float = 0.005
         self.pan_speed: float = 0.01
         self.zoom_speed: float = 0.1
+        # ── 正交投影切换 ──
+        self._orthographic: bool = False
+        self._ortho_size: float = 10.0
+        self._saved_perspective: dict | None = None
 
     # ════════════════════════════════════════════════════════════
-    # 公共 API: 聚焦
-    # ════════════════════════════════════════════════════════════
-
-    def focus_on(
-        self,
-        target: tuple[float, float, float],
-        distance: float | None = None
-    ) -> None:
-        """将轨道原点移动到指定位置，可选调整距离。
-
-        使用场景: 双击实体 → 摄像机聚焦到该实体。
-
-        Args:
-            target:   世界坐标目标点 (x, y, z)
-            distance: 新距离 (None 表示保持不变)
-        """
-        self.orbit_target = np.array(target, dtype=np.float32)
-        if distance is not None:
-            self.orbit_distance = max(distance, 0.1)
-        self._update_position()
-
-    # ════════════════════════════════════════════════════════════
-    # 公共 API: 鼠标输入 (2D / 3D 各自维护交互逻辑)
+    # 输入映射: 鼠标/滚轮 → 摄像机操作 (EditorCamera 独有)
     # ════════════════════════════════════════════════════════════
 
     def on_mouse_drag(
@@ -119,12 +96,12 @@ class EditorCamera(CameraBase):
         offset_y: float,
         shift_held: bool = False,
     ) -> None:
-        """处理鼠标拖动事件 — 根据当前 2D/3D 模式分派到特化逻辑。
+        """处理鼠标拖动 — 根据当前 2D/3D 模式分派。
 
         Args:
-            button:     MouseButtonCode.Left / .Middle / .Right
-            offset_x:   鼠标水平位移 (像素)
-            offset_y:   鼠标垂直位移 (像素)
+            button:     MouseButtonCode
+            offset_x:   水平位移 (像素)
+            offset_y:   垂直位移 (像素)
             shift_held: Shift 修饰键是否按下
         """
         if self._orthographic:
@@ -139,18 +116,15 @@ class EditorCamera(CameraBase):
         offset_y: float,
         shift_held: bool,
     ) -> None:
-        """3D 透视模式交互:
-            - 左键拖动: 无操作 (左键仅用于点选物体)
-            - 中键拖动: 轨道旋转 (orbit)
-            - Shift+中键拖动: 平移注视点 (pan)
-        """
+        """3D 透视模式: 像素位移 → OrbitCamera.orbit() / pan()。"""
         if button == MouseButtonCode.Left:
             return
         elif button == MouseButtonCode.Middle:
             if shift_held:
-                self._pan(-offset_x, offset_y)
+                # 屏幕 X 反向映射到摄像机 right 轴
+                self.pan(offset_x * self.pan_speed, offset_y * self.pan_speed)
             else:
-                self._orbit(offset_x, offset_y)
+                self.orbit(offset_x * self.orbit_speed, offset_y * self.orbit_speed)
 
     def _on_mouse_drag_2d(
         self,
@@ -159,23 +133,18 @@ class EditorCamera(CameraBase):
         offset_y: float,
         shift_held: bool,
     ) -> None:
-        """2D 正交模式交互:
-            - 左键拖动: 无操作 (左键仅用于点选物体)
-            - 中键拖动: 屏蔽 (2D 俯视下轨道旋转无意义)
-            - Shift+中键拖动: 平移注视点 (pan)
-        """
+        """2D 正交模式: 纯旋转屏蔽, 仅允许平移。"""
         if button == MouseButtonCode.Left:
             return
         elif button == MouseButtonCode.Middle:
             if shift_held:
-                self._pan(-offset_x, offset_y)
-            # 纯中键拖动在 2D 下屏蔽
+                self.pan(-offset_x * self.pan_speed, offset_y * self.pan_speed)
 
     def on_scroll(self, y_offset: float) -> None:
-        """处理滚轮缩放 — 根据当前 2D/3D 模式分派到特化逻辑。
+        """滚轮映射 — 2D 调 ortho_size, 3D 调 orbit_distance。
 
         Args:
-            y_offset: 滚轮垂直偏移量 (正值=放大/靠近, 负值=缩小/远离)
+            y_offset: 滚轮垂直偏移量 (正值=靠近, 负值=远离)
         """
         if self._orthographic:
             self._on_scroll_2d(y_offset)
@@ -183,16 +152,14 @@ class EditorCamera(CameraBase):
             self._on_scroll_3d(y_offset)
 
     def _on_scroll_3d(self, y_offset: float) -> None:
-        """3D 透视模式滚轮缩放 — 推拉 orbit_distance。"""
-        self.orbit_distance *= (1.0 - y_offset * self.zoom_speed)
-        self.orbit_distance = max(self.orbit_distance, 0.01)
-        self._update_position()
+        """3D 透视模式: 滚轮 → OrbitCamera.dolly()。"""
+        factor = 1.0 - y_offset * self.zoom_speed
+        self.dolly(factor)
 
     def _on_scroll_2d(self, y_offset: float) -> None:
         """2D 正交模式滚轮缩放 — 调整 ortho_size (正交半高)。"""
         self._ortho_size *= (1.0 - y_offset * self.zoom_speed)
         self._ortho_size = max(self._ortho_size, 0.01)
-        # 2D 缩放不需要更新 position, 投影矩阵在下一帧自动使用新 _ortho_size
 
     # ════════════════════════════════════════════════════════════
     # 公共 API: 预设视角 (ViewGizmo 面点击)
@@ -200,9 +167,7 @@ class EditorCamera(CameraBase):
 
     def look_from_preset(self, yaw: float, pitch: float) -> None:
         """直接设置轨道角度（保留 distance 和 target 不变）。"""
-        self.yaw = yaw
-        self.pitch = pitch
-        self._update_position()
+        self.set_orbit(yaw, pitch)
 
     def look_from_direction(self, forward: np.ndarray) -> None:
         """从 GL 方向向量设置朝向 — 无万向锁, 允许精确 ±Y。"""
@@ -220,47 +185,20 @@ class EditorCamera(CameraBase):
         self._update_position()
 
     # ════════════════════════════════════════════════════════════
-    # CameraBase 接口: 矩阵
+    # CameraBase 接口: 投影矩阵 (覆写 OrbitCamera, 增加正交投影)
     # ════════════════════════════════════════════════════════════
-
-    def get_view_matrix(self) -> np.ndarray:
-        """Generate view matrix — look_at(camera_pos, orbit_target, world_up).
-
-        当摄像机近垂直俯视 (|pitch| ≈ π/2) 时使用 yaw 相关的 up 向量:
-          - up = (-sin(yaw), 0, cos(yaw)) — 在 GL XZ 平面内随 yaw 旋转
-          - 解决极点退化: cos(pitch)=0 时 position 与 yaw 无关,
-            但 up 随 yaw 旋转使视图仍可水平旋转
-          - GL +X → 右, GL -Z (编辑器 +Y) → 上 (当 yaw=π 时)
-          - 其他: up=(0,1,0)
-
-        Returns:
-            4x4 float32 view matrix (pyrr-style, row-vector convention).
-            For OpenGL upload: use glUniformMatrix4fv(..., GL_FALSE, ...).
-
-        See Application/Core/Math/__init__.py for full convention documentation.
-        """
-        pos = Vector3(self.position.tolist())
-        target = Vector3(self.orbit_target.tolist())
-        # 当 |pitch| 接近 90° 时, forward 与 (0,1,0) 近平行, 切换 up
-        if abs(self.pitch) > math.pi * 0.49:
-            # ★ yaw 相关 up: 解决极点 yaw 旋转失效问题
-            #    up 在 GL XZ 平面内旋转, yaw 变化 → 视图绕 Y 轴旋转
-            up = Vector3([-math.sin(self.yaw), 0.0, math.cos(self.yaw)])
-        else:
-            up = Vector3([0.0, 1.0, 0.0])
-        return matrix44.create_look_at(pos, target, up).astype(np.float32)
 
     def get_projection_matrix(self, aspect_ratio: float) -> np.ndarray:
         """Generate projection matrix — perspective or orthographic.
+
+        正交模式下覆写父类透视矩阵，返回正交投影矩阵。
+        view 矩阵由 OrbitCamera.get_view_matrix() 提供 (含极点处理)。
 
         Args:
             aspect_ratio: Viewport aspect ratio (width / height)
 
         Returns:
             4x4 float32 projection matrix (pyrr-style, row-vector convention).
-            For OpenGL upload: use glUniformMatrix4fv(..., GL_FALSE, ...).
-
-        See Application/Core/Math/__init__.py for full convention documentation.
         """
         if self._orthographic:
             half_h = self._ortho_size * aspect_ratio
@@ -269,113 +207,7 @@ class EditorCamera(CameraBase):
                 -half_h, half_h, -half_v, half_v,
                 self.near_plane, self.far_plane,
             ).astype(np.float32)
-        return matrix44.create_perspective_projection(
-            self.fov, aspect_ratio, self.near_plane, self.far_plane
-        ).astype(np.float32)
-
-    # ════════════════════════════════════════════════════════════
-    # 内部: 方向向量 + 向量旋转
-    # ════════════════════════════════════════════════════════════
-
-    @property
-    def _forward(self) -> np.ndarray:
-        """当前向前方向 (GL 空间, orbit_target → camera, 单位向量)。"""
-        cp = math.cos(self.pitch)
-        return np.array([
-            math.sin(self.yaw) * cp,
-            math.sin(self.pitch),
-            -math.cos(self.yaw) * cp,
-        ], dtype=np.float32)
-
-    @staticmethod
-    def _rotate_vector(v: np.ndarray, axis: np.ndarray, angle: float) -> np.ndarray:
-        """Rodrigues 旋转公式 — v 绕单位轴 axis 旋转 angle 弧度。"""
-        c = math.cos(angle)
-        s = math.sin(angle)
-        k_dot_v = float(np.dot(axis, v))
-        cross = np.cross(axis, v)
-        return v * c + cross * s + axis * (k_dot_v * (1.0 - c))
-
-    _POLE_THRESHOLD: float = math.pi / 2 - 0.05  # ≈ 87°
-
-    # ════════════════════════════════════════════════════════════
-    # 内部: 轨道操作 (混合方案: 极点 yaw-直控, 非极点 Rodrigues)
-    # ════════════════════════════════════════════════════════════
-
-    def _orbit(self, offset_x: float, offset_y: float) -> None:
-        """绕轨道原点旋转摄像机 (混合方案, 无万向锁, 无抖动)。"""
-        world_up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
-        old_yaw = self.yaw
-        old_pitch = self.pitch
-        near_pole = abs(old_pitch) >= self._POLE_THRESHOLD
-        f = self._forward
-
-        # 垂直旋转
-        right = np.cross(f, world_up)
-        right_norm = float(np.linalg.norm(right))
-        if right_norm < 1e-6:
-            right = np.array([-math.cos(old_yaw), 0.0, math.sin(old_yaw)], dtype=np.float32)
-            rn = float(np.linalg.norm(right))
-            right = right / rn if rn > 1e-6 else np.array([1.0, 0.0, 0.0], dtype=np.float32)
-        else:
-            right /= right_norm
-        f = self._rotate_vector(f, right, offset_y * self.orbit_speed)
-
-        # 水平旋转 + yaw/pitch 提取
-        if near_pole:
-            self.yaw = old_yaw + offset_x * self.orbit_speed
-            self.pitch = math.asin(max(-1.0, min(1.0, float(f[1]))))
-        else:
-            f = self._rotate_vector(f, world_up, -offset_x * self.orbit_speed)
-            f_norm = float(np.linalg.norm(f))
-            if f_norm < 1e-8:
-                self._update_position()
-                return
-            f /= f_norm
-            self.pitch = math.asin(max(-1.0, min(1.0, float(f[1]))))
-            old_cp = math.cos(old_pitch)
-            ox = math.sin(old_yaw) * old_cp
-            oz = -math.cos(old_yaw) * old_cp
-            nx, nz = float(f[0]), float(f[2])
-            cross_xz = ox * nz - oz * nx
-            dot_xz = ox * nx + oz * nz
-            self.yaw = old_yaw + math.atan2(cross_xz, dot_xz)
-
-        self._update_position()
-
-    def _pan(self, offset_x: float, offset_y: float) -> None:
-        """在屏幕平面内平移轨道原点。
-        Args:
-            offset_x: 水平位移
-            offset_y: 垂直位移
-        """
-        # 计算摄像机空间中的 right 和 up 向量
-        rx = math.cos(self.yaw)
-        rz = math.sin(self.yaw)
-        ux = -math.sin(self.pitch) * math.sin(self.yaw)
-        uy = math.cos(self.pitch)
-        uz = math.sin(self.pitch) * math.cos(self.yaw)
-        self.orbit_target[0] += \
-            rx * (-offset_x * self.pan_speed) \
-            + ux * (offset_y * self.pan_speed)
-        self.orbit_target[1] += \
-            uy * (offset_y * self.pan_speed)
-        self.orbit_target[2] += \
-            rz * (-offset_x * self.pan_speed) \
-            + uz * (offset_y * self.pan_speed)
-        self._update_position()
-
-    def _update_position(self) -> None:
-        """根据球坐标 (yaw, pitch, distance) 更新摄像机世界位置。
-        direction = (sin(yaw)*cos(pitch),  sin(pitch),  -cos(yaw)*cos(pitch))
-        position  = orbit_target + orbit_distance * direction
-        """
-        dx = math.sin(self.yaw) * math.cos(self.pitch)
-        dy = math.sin(self.pitch)
-        dz = -math.cos(self.yaw) * math.cos(self.pitch)
-        self.position[0] = self.orbit_target[0] + dx * self.orbit_distance
-        self.position[1] = self.orbit_target[1] + dy * self.orbit_distance
-        self.position[2] = self.orbit_target[2] + dz * self.orbit_distance
+        return super().get_projection_matrix(aspect_ratio)
 
     # ════════════════════════════════════════════════════════════
     # 2D / 3D 模式切换

@@ -32,7 +32,6 @@ from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
 from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
 from Application.Core.Renderer.Vulkan.VulkanResourceManager import VulkanResourceManager
 from Application.Core.Math.Transform import calculate_entity_model
-from Application.Editor.EditorCamera import EditorCamera
 
 import numpy as np
 import vulkan as vk
@@ -50,9 +49,10 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]
         cls.aspect_ratio = window_size[0] / window_size[1]
-        cam = EditorCamera.get_instance()
-        cls._cached_view = cam.get_view_matrix()
-        cls._cached_proj = cam.get_projection_matrix(cls.aspect_ratio)
+        # ── 缓存初始相机矩阵 (由 set_active_camera 在 OnAttach 中设置) ──
+        if cls._active_camera is not None:
+            cls._cached_view = cls._active_camera.get_view_matrix()
+            cls._cached_proj = cls._active_camera.get_projection_matrix(cls.aspect_ratio)
         return cls
 
     @classmethod

@@ -43,7 +43,6 @@ from Application.Core.Stats.FrameProfiler import FrameProfiler
 
 class RendererType(Enum):
     OpenGL = "OpenGL"
-    ModernGL = "ModernGL"
     Vulkan = "Vulkan"
 
 
@@ -129,9 +128,6 @@ class Engine:
         if renderer_type == RendererType.OpenGL:
             from Application.Core.Renderer.OpenGL.openGLRenderer import openGLRenderer
             return openGLRenderer
-        elif renderer_type == RendererType.ModernGL:
-            from Application.Core.Renderer.ModernGL.modernGLRenderer import modernGLRenderer
-            return modernGLRenderer
         elif renderer_type == RendererType.Vulkan:
             from Application.Core.Renderer.Vulkan.vulkanRenderer import vulkanRenderer
             return vulkanRenderer
@@ -338,8 +334,8 @@ class Engine:
             layer.OnRender()
         # ── 帧结束 ──
         renderer.EndFrame()
-        # ── 交换缓冲区 (OpenGL/ModernGL 需要; Vulkan 由 SwapChain 管理) ──
-        if cls.renderer_type in (RendererType.OpenGL, RendererType.ModernGL):
+        # ── 交换缓冲区 (OpenGL 需要; Vulkan 由 SwapChain 管理) ──
+        if cls.renderer_type == RendererType.OpenGL:
             window.SwapBuffer()
         # ── 性能统计 ──
         FrameProfiler.Tick()

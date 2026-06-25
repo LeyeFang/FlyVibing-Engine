@@ -1,5 +1,5 @@
 """
-EditorWindow — 编辑器主窗口，继承自 glfwWindow，专用于 OpenGL (ModernGL) 后端。
+EditorWindow — 编辑器主窗口，继承自 glfwWindow，专用于 OpenGL 后端。
 
 职责:
   - 继承 GLFW 窗口的创建、输入回调、轮询等基础能力

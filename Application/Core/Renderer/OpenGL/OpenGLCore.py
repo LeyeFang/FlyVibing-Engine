@@ -9,7 +9,7 @@ OpenGLCore — PyOpenGL 核心上下文 (GL Context / 视口 / 清屏)。
 
 说明:
   - GL 上下文由 GLFW (EditorWindow) 创建，本模块不负责 Context 创建
-  - 与 ModernGLCore 不同，不需要 mgl.create_context()，只需配置 GL 状态
+  - GL 上下文由 GLFW (EditorWindow) 创建，本模块不负责 Context 创建
 
 所有方法均为 @classmethod，以单例模式运作。
 """
@@ -45,7 +45,7 @@ class OpenGLCore:
         # ── 视口 ──
         gl.glViewport(0, 0, window_size[0], window_size[1])
 
-        # ── 全局渲染状态 (与 ModernGL 保持一致: 仅 DEPTH_TEST) ──
+        # ── 全局渲染状态 (仅 DEPTH_TEST) ──
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDepthFunc(gl.GL_LESS)
 

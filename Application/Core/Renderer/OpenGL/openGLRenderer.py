@@ -31,6 +31,13 @@ from Application.Core.Events.SceneEvent import *
 from Application.Core.Events.InputEvent import MouseMoveEvent
 from Application.Core.Scene.BasicComponents import *
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
+from Application.Core.Renderer.RenderCommand import (
+    ResizeCommand,
+    CameraUpdateCommand,
+    EntityRegistrationCommand,
+    PickMouseMoveCommand,
+)
+from Application.Core.Renderer.CommandQueue import CommandQueue
 from Application.Core.Renderer.OpenGL.OpenGLCore import OpenGLCore
 from Application.Core.Renderer.OpenGL.OpenGLResourceManager import OpenGLResourceManager
 from Application.Core.Renderer.OpenGL.OpenGLPickSystem import OpenGLPickSystem
@@ -120,6 +127,8 @@ class openGLRenderer(
             cls._cached_proj = cls._active_camera.get_projection_matrix(cls.aspect_ratio)
         # ── 初始化拾取系统 ──
         cls.init_pick(window_size[0], window_size[1])
+        # ── 初始化命令队列 ──
+        cls._command_queue = CommandQueue()
         return cls
 
     # ════════════════════════════════════════════════════════════
@@ -127,7 +136,7 @@ class openGLRenderer(
     # ════════════════════════════════════════════════════════════
 
     @classmethod
-    def StartFrame(cls) -> None:
+    def _do_start_frame(cls) -> None:
         if cls._pending_resize is not None:
             w, h = cls._pending_resize
             OpenGLCore.update_viewport(w, h)
@@ -155,28 +164,25 @@ class openGLRenderer(
         pass
 
     @classmethod
-    def OnEvent(
-        cls,
-        event: Event
-    ) -> None:
+    def OnEvent(cls, event: Event) -> None:
+        """事件处理 — enqueue 命令到队列，由 StartFrame 消费。"""
         if isinstance(event, WindowResizeEvent):
             width, height = event.unpack()
-            cls._on_window_resize(width, height)
+            cls.enqueue(ResizeCommand(width, height))
         if any([
             isinstance(event, NewComponentEvent),
             isinstance(event, ComponentModifiedEvent)
         ]):
             entity_id, comp = event.unpack()
             if isinstance(comp, MeshRenderer):
-                if comp.visible:
-                    cls.register_entity(entity_id)
-                else:
-                    cls.unregister_entity(entity_id)
+                cls.enqueue(
+                    EntityRegistrationCommand(entity_id, comp.visible)
+                )
         if isinstance(event, SceneCameraUpdateEvent):
-            cls._on_camera_update()
+            cls.enqueue(CameraUpdateCommand())
         if isinstance(event, MouseMoveEvent):
-            cls.update_pick_mouse(
-                event.pos_x, event.pos_y)
+            cls.enqueue(
+                PickMouseMoveCommand(event.pos_x, event.pos_y))
 
     # ════════════════════════════════════════════════════════════
     # Overlay drawable 注册扩展 — 维护 pick_key 查找表

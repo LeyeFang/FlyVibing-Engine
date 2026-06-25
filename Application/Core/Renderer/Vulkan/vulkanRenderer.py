@@ -3,7 +3,7 @@ vulkanRenderer — Vulkan 渲染器后端 (继承 VulkanCore + VulkanResourceMan
 
 特性:
   - 显式 GPU 内存管理 (VkBuffer / VkImage / VkDeviceMemory)
-  - 引用计数 GPU 资源管理 (同 modernGL 风格)
+  - 引用计数 GPU 资源管理
   - Push constant 传递 MVP 矩阵 (快速更新)
   - View/Proj 矩阵缓存 (仅在 SceneCameraUpdateEvent 时重算)
   - 延迟 resize 处理 (后续扩展)
@@ -29,6 +29,12 @@ from Application.Core.Events.SceneEvent import *
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Scene.BasicComponents import *
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
+from Application.Core.Renderer.RenderCommand import (
+    ResizeCommand,
+    CameraUpdateCommand,
+    EntityRegistrationCommand,
+)
+from Application.Core.Renderer.CommandQueue import CommandQueue
 from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
 from Application.Core.Renderer.Vulkan.VulkanResourceManager import VulkanResourceManager
 from Application.Core.Math.Transform import calculate_entity_model
@@ -53,10 +59,11 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
         if cls._active_camera is not None:
             cls._cached_view = cls._active_camera.get_view_matrix()
             cls._cached_proj = cls._active_camera.get_projection_matrix(cls.aspect_ratio)
+        cls._command_queue = CommandQueue()
         return cls
 
     @classmethod
-    def StartFrame(cls) -> None:
+    def _do_start_frame(cls) -> None:
         """开始一帧渲染 — acquire → draw entities → present。"""
         if cls._pending_resize is not None:
             cls._pending_resize = None
@@ -113,15 +120,14 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
     def OnEvent(cls, event: Event) -> None:
         if isinstance(event, WindowResizeEvent):
             width, height = event.unpack()
-            cls._on_window_resize(width, height)
+            cls.enqueue(ResizeCommand(width, height))
 
         if any([isinstance(event, NewComponentEvent), isinstance(event, ComponentModifiedEvent)]):
             entity_id, comp = event.unpack()
             if isinstance(comp, MeshRenderer):
-                if comp.visible:
-                    cls.register_entity(entity_id)
-                else:
-                    cls.unregister_entity(entity_id)
+                cls.enqueue(
+                    EntityRegistrationCommand(entity_id, comp.visible)
+                )
 
         if isinstance(event, SceneCameraUpdateEvent):
-            cls._on_camera_update()
+            cls.enqueue(CameraUpdateCommand())

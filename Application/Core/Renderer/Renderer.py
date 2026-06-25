@@ -2,12 +2,17 @@
 渲染器抽象基类 — 定义所有渲染后端的统一接口。
 
 架构说明:
-  - Renderer       : 渲染生命周期接口 (Create / StartFrame / EndFrame / OnEvent)
+  - Renderer       : 渲染生命周期 + 命令队列 (Create / StartFrame / EndFrame / enqueue)
   - RenderResourceManger : GPU 资源注册/卸载接口 (Mesh / Shader / Texture / Entity)
 
+RHI 命令模型:
+  - 主线程通过 enqueue(cmd) 提交命令
+  - StartFrame 自动消费命令队列 → _do_start_frame (子类渲染逻辑)
+  - 事件→命令转换由 EditorHost._on_event 负责，渲染器不直接处理 Event
+
 子类实现:
-  - modernGLRenderer  : ModernGL/ — 基于 moderngl 的现代 OpenGL 后端
-  - vulkanRenderer    : Vulkan/   — Vulkan 低级图形 API 后端
+  - openGLRenderer   : OpenGL/  — PyOpenGL 后端
+  - vulkanRenderer   : Vulkan/  — Vulkan 后端
 
 相机注入:
   Renderer 不持有具体相机引用，通过 set_active_camera() 注入 CameraBase 实例。
@@ -21,20 +26,20 @@ from typing import Callable, TYPE_CHECKING
 
 import numpy as np
 
-from Application.Core.Events.Event import Event
+from Application.Core.Renderer.CommandQueue import CommandQueue
+from Application.Core.Renderer.RenderCommand import RenderCommand
+
 if TYPE_CHECKING:
     from Application.Core.Camera.CameraBase import CameraBase
 
 
 class Renderer(ABC):
-    """渲染器抽象基类 — 定义帧循环和事件处理接口。
+    """渲染器抽象基类 — 命令队列 + 帧循环 + 事件处理接口。
 
     Class-level 属性 (所有方法均为 @classmethod，单例模式):
-        app             : Application 实例引用
         viewport_width  : 视口像素宽度
         viewport_height : 视口像素高度
         aspect_ratio    : 宽高比 (width / height)
-        camera_id       : 当前激活的摄像机实体 ID
     """
 
     app = None
@@ -42,6 +47,18 @@ class Renderer(ABC):
     viewport_height: int
     aspect_ratio: float
     camera_id: int
+
+    # ── 命令队列 (主线程安全的渲染通信通道) ──
+    _command_queue: CommandQueue = None
+
+    @classmethod
+    def enqueue(cls, cmd: RenderCommand) -> None:
+        """主线程安全: 提交一条渲染命令。
+
+        替代旧的 renderer.OnEvent(event) 模式中的直接操作。
+        """
+        if cls._command_queue is not None:
+            cls._command_queue.enqueue(cmd)
 
     # ── 相机矩阵缓存 (所有后端共享) ──
     _cached_view: 'np.ndarray' = None       # 4x4 视图矩阵 (float32)
@@ -54,47 +71,36 @@ class Renderer(ABC):
     @classmethod
     @abstractmethod
     def Create(cls):
-        """初始化渲染器。
-
-        在渲染线程调用，此时 GL 上下文已绑定。
-        应完成: GPU 上下文创建、默认状态设置、初始资源加载。
-        """
+        """初始化渲染器 — 在渲染线程调用，GL 上下文已绑定。"""
         ...
+
+    # ════════════════════════════════════════════════════════════
+    # 帧渲染 (两级架构: 基类消费命令 → 子类执行渲染)
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def StartFrame(cls) -> None:
+        """帧开始 — 消费命令队列 → 子类渲染逻辑。
+
+        基类提供编排，子类通过覆写 _do_start_frame() 注入渲染管线。
+        """
+        if cls._command_queue is not None:
+            cls._command_queue.execute_all(cls)
+        cls._do_start_frame()
 
     @classmethod
     @abstractmethod
-    def StartFrame(cls):
-        """开始新一帧的渲染。
+    def _do_start_frame(cls) -> None:
+        """子类渲染管线 (clear → pick → entities → overlays → ...)。
 
-        每帧调用一次，在 Layer.OnRender() 之前执行。
-        应完成: 清屏、视口设置、遍历可渲染实体并提交绘制命令。
+        由 StartFrame 在消费命令后调用。子类必须实现。
         """
         ...
 
     @classmethod
     @abstractmethod
     def EndFrame(cls):
-        """结束当前帧的渲染。
-
-        每帧调用一次，在 Layer.OnRender() 之后执行。
-        可用于: GUI 叠加层绘制、后处理、帧同步。
-        """
-        ...
-
-    @classmethod
-    @abstractmethod
-    def OnEvent(
-        cls,
-        event: Event
-    ):
-        """处理引擎事件。
-
-        在主线程调用 (不可直接调用 GL 函数)。
-        应延迟到 StartFrame 中通过缓存变量处理 GL 操作。
-
-        Args:
-            event: 引擎事件实例 (WindowResizeEvent / SceneCameraUpdateEvent 等)
-        """
+        """帧结束 — 后处理、GPU query、present 等。"""
         ...
 
     # ════════════════════════════════════════════════════════════
@@ -288,7 +294,7 @@ class RenderResourceManger(ABC):
 
         Attributes:
             ref_count    : 引用计数
-            gl_handle    : GPU 纹理句柄 (modernGL → mgl.Texture / OpenGL → GLuint)
+            gl_handle    : GPU 纹理句柄 (OpenGL → GLuint)
             texture_unit : 分配的纹理单元编号 (-1 表示未分配)
         """
         ref_count: int = 0

@@ -35,8 +35,8 @@ class sdl2Window(Window):
             match event.type:
                 case sdl2.SDL_QUIT:
                     WindowCloseEvent.Pack()
-        # ModernGL / OpenGL 交换缓冲区
-        if cls.app.renderer_type in ('ModernGL',):
+        # OpenGL 交换缓冲区
+        if cls.app.renderer_type in ('OpenGL',):
             sdl2.SDL_GL_SwapWindow(cls.sdl2_window)
 
     @classmethod
@@ -71,8 +71,8 @@ class sdl2Window(Window):
     ) -> SDL_Window:
         renderer_type = cls.app.renderer_type
         sdl2.SDL_Init(sdl2.SDL_INIT_VIDEO)
-        if renderer_type in ('ModernGL',):
-            # ModernGL 需要 OpenGL 上下文
+        if renderer_type in ('OpenGL',):
+            # OpenGL 需要 OpenGL 上下文
             cls.sdl2_window: SDL_Window = sdl2.SDL_CreateWindow(
                 b"SDL2 window",
                 sdl2.SDL_WINDOWPOS_UNDEFINED,

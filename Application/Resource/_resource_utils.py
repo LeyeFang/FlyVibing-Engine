@@ -77,7 +77,7 @@ def parse_shader_files(
 def parse_shader_file(
     filepath: str
 ) -> tuple:
-    """兼容旧版 .shader 格式 (保留，ModernGL 加载用)。"""
+    """兼容旧版 .shader 格式 (保留)。"""
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()

@@ -12,11 +12,11 @@ OpenGLResourceManager — PyOpenGL GPU 资源管理器 (Mesh / Shader / Texture 
   - ResourceManager (CPU 端): 提供资源数据
   - SceneManager: 提供实体→资源映射
 
-与 ModernGLResourceManager 的对应关系:
-  - mgl.Buffer      → GLuint (VBO / EBO)
-  - mgl.VertexArray → GLuint (VAO)
-  - mgl.Program     → GLuint (Shader Program)
-  - mgl.Texture     → GLuint (Texture)
+GPU 资源句柄对应关系:
+  - VBO / EBO       → GLuint
+  - VAO              → GLuint
+  - Shader Program   → GLuint
+  - Texture          → GLuint
 
 所有方法均为 @classmethod，以单例模式运作。
 """

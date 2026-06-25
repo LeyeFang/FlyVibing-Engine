@@ -6,6 +6,6 @@ if %errorlevel% neq 0 (
     pause
     exit /b %errorlevel%
 )
-echo Running EntryPoint.py...
-python -Xgil=0 EntryPoint.py
+echo Running Application\EntryPoint.py...
+python -Xgil=0 Application\EntryPoint.py
 pause

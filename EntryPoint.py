@@ -1,14 +1,12 @@
 import sys
 
-from Application.Application import Application
-from Test.DebugLayer import DebugLayer
-from Application.Editor.EditorLayer import EditorLayer
+from Application.Editor.EditorHost import EditorHost
+from Application.Editor.EditorPlugin import EditorPlugin
 
 
-Application.Create(renderer_type='OpenGL')
+EditorHost.init(window_type='GLFW', renderer_type='OpenGL')
 
 print(sys.version_info[:2])
-Application.PushLayer(EditorLayer)
-Application.PushLayer(DebugLayer)
+EditorHost.load_plugin(EditorPlugin())
 
-Application.Run()
+EditorHost.run()

@@ -19,7 +19,7 @@ modernGLRenderer — ModernGL 渲染器后端 (继承 ModernGLCore + ModernGLRes
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from Application.Application import Application
+    from Application.Core.Engine import Engine
 
 from Application.Core.Events.Event import Event
 from Application.Core.Events.WindowEvent import *
@@ -43,8 +43,8 @@ class modernGLRenderer(ModernGLCore, ModernGLResourceManager, Renderer, RenderRe
     def Create(
         cls
     ) -> "modernGLRenderer":
-        from Application.Application import Application
-        window_size = Application.editor_window.GetSize()
+        from Application.Editor.EditorHost import EditorHost
+        window_size = EditorHost.editor_window.GetSize()
         ModernGLCore.init_core(window_size)
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]

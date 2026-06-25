@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from Application.Application import Application
+    from Application.Core.Engine import Engine
 from Application.Core.Window.Window import Window
 from Application.Core.Events.Event import Event
 from Application.Core.Events.WindowEvent import *

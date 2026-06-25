@@ -15,7 +15,7 @@ EditorWindow — 编辑器主窗口，继承自 glfwWindow，专用于 OpenGL (M
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from Application.Application import Application
+    from Application.Core.Engine import Engine
 
 from Application.Core.Window.glfwWindow import glfwWindow
 from Application.Core.Events.Event import Event

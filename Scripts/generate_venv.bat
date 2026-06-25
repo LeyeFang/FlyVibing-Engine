@@ -8,11 +8,9 @@ set "SCRIPT_DIR=%~dp0"
 set "PROJECT_ROOT=%SCRIPT_DIR%.."
 
 :: Venv paths
-set "VENV_312=%PROJECT_ROOT%\.venv-py312"
 set "VENV_314=%PROJECT_ROOT%\.venv-py314t"
 
 :: Lock file paths
-set "LOCK_312=%SCRIPT_DIR%uv-py312.lock"
 set "LOCK_314=%SCRIPT_DIR%uv-py314t.lock"
 
 :: Navigate to project root
@@ -37,76 +35,29 @@ echo.
 :: ============================================
 echo [INFO] Checking installed Python versions...
 
-set HAS_PY312=0
 set HAS_PY314T=0
 
 :: Use uv to list only installed pythons, then search for versions
-for /f "tokens=1,2" %%a in ('uv python list --only-installed 2^>nul ^| findstr /r /c:"cpython-3\.12" /c:"cpython-3\.14"') do (
+for /f "tokens=1,2" %%a in ('uv python list --only-installed 2^>nul ^| findstr /r /c:"cpython-3\.14"') do (
     echo   Found: %%a %%b
-    echo %%a | findstr "3.12" >nul && set HAS_PY312=1
     echo %%a | findstr "3.14" >nul && set HAS_PY314T=1
 )
 
 :: Fallback: try 'py' launcher if uv list returned nothing
-if !HAS_PY312! equ 0 (
-    py -3.12 --version >nul 2>nul && set HAS_PY312=1
-)
 if !HAS_PY314T! equ 0 (
     py -3.14t --version >nul 2>nul && set HAS_PY314T=1
 )
 
-echo [INFO] Python 3.12  : !HAS_PY312! (1=found, 0=not found^)
 echo [INFO] Python 3.14t : !HAS_PY314T! (1=found, 0=not found^)
 echo.
 
-:: If neither is found, exit
-if !HAS_PY312! equ 0 if !HAS_PY314T! equ 0 (
-    echo [ERROR] Neither Python 3.12 nor Python 3.14t found.
-    echo   Install with:
-    echo     uv python install 3.12
-    echo     uv python install 3.14t
+:: If not found, exit
+if !HAS_PY314T! equ 0 (
+    echo [ERROR] Python 3.14t not found.
+    echo   Install with: uv python install 3.14t
     pause
     exit /b 1
 )
-
-:: ============================================
-:: Setup Python 3.12 venv
-:: ============================================
-if !HAS_PY312! equ 0 (
-    echo [SKIP] Python 3.12 not found, skipping .venv-py312.
-    goto :setup_314
-)
-
-if not exist "%LOCK_312%" (
-    echo [WARN] Lock file not found: %LOCK_312%, skipping .venv-py312.
-    goto :setup_314
-)
-
-echo ========================================
-echo Setting up .venv-py312 (Python 3.12^)
-echo ========================================
-
-echo [CREATE] Creating .venv-py312 (--clear to replace if exists^)...
-uv venv --clear --python 3.12 "%VENV_312%"
-if !errorlevel! neq 0 (
-    echo [ERROR] Failed to create .venv-py312
-    pause
-    exit /b 1
-)
-
-:: Copy lock file and sync
-copy /Y "%LOCK_312%" "%PROJECT_ROOT%\uv.lock" >nul
-echo [SYNC] Installing dependencies (may take a few minutes^)...
-cmd /c "call "%VENV_312%\Scripts\activate.bat" && uv sync --locked"
-if !errorlevel! neq 0 (
-    echo [ERROR] Dependency install failed for .venv-py312
-    del /Q "%PROJECT_ROOT%\uv.lock" 2>nul
-    pause
-    exit /b 1
-)
-del /Q "%PROJECT_ROOT%\uv.lock" 2>nul
-echo [OK] .venv-py312 ready.
-echo.
 
 :setup_314
 :: ============================================
@@ -137,13 +88,17 @@ if !errorlevel! neq 0 (
 :: Copy lock file and sync
 copy /Y "%LOCK_314%" "%PROJECT_ROOT%\uv.lock" >nul
 echo [SYNC] Installing dependencies (may take a few minutes^)...
-cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --locked"
+cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --active"
 if !errorlevel! neq 0 (
     echo [ERROR] Dependency install failed for .venv-py314t
     del /Q "%PROJECT_ROOT%\uv.lock" 2>nul
     pause
     exit /b 1
 )
+:: After sync, regenerate lockfile to keep it up-to-date
+cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv lock"
+copy /Y "%PROJECT_ROOT%\uv.lock" "%LOCK_314%" >nul
+echo [OK] Updated %LOCK_314%
 del /Q "%PROJECT_ROOT%\uv.lock" 2>nul
 echo [OK] .venv-py314t ready.
 echo.
@@ -151,7 +106,6 @@ echo.
 :done
 echo ========================================
 echo All done!
-echo   Activate: .venv-py312\Scripts\activate
 echo   Activate: .venv-py314t\Scripts\activate
 echo ========================================
 pause

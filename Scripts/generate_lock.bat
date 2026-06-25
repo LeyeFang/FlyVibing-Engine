@@ -6,7 +6,6 @@ set SCRIPT_DIR=%~dp0
 set PROJECT_ROOT=%SCRIPT_DIR%..
 
 :: Virtual environment paths
-set VENV_312=%PROJECT_ROOT%\.venv-py312
 set VENV_314=%PROJECT_ROOT%\.venv-py314t
 
 :: Navigate to project root
@@ -20,32 +19,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: ------------------------------------------------------------
-:: Python 3.12: sync deps (with gui group) + generate lock file
-:: ------------------------------------------------------------
-echo ========================================
-echo Processing Python 3.12 environment
-echo ========================================
-if exist "%VENV_312%\Scripts\activate.bat" (
-    echo Updating environment and generating lock file...
-    cmd /c "call "%VENV_312%\Scripts\activate.bat" && uv sync --extra gui --active && uv lock"
-    if !errorlevel! equ 0 (
-        if exist "%PROJECT_ROOT%\uv.lock" (
-            copy /Y "%PROJECT_ROOT%\uv.lock" "%SCRIPT_DIR%\uv-py312.lock"
-            echo [OK] Saved uv-py312.lock to %SCRIPT_DIR%
-            del /Q "%PROJECT_ROOT%\uv.lock"
-            echo [OK] Deleted uv.lock from project root
-        ) else (
-            echo [WARN] uv.lock was not generated, please check
-        )
-    ) else (
-        echo [FAIL] uv sync / lock failed. Check network or dependencies.
-    )
-) else (
-    echo [ERROR] Virtual environment not found: %VENV_312%
-)
 
-echo.
 :: ------------------------------------------------------------
 :: Python 3.14t: sync deps (with gui-314, build from source) + generate lock file
 :: ------------------------------------------------------------

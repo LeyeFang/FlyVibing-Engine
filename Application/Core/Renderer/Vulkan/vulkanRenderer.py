@@ -21,7 +21,7 @@ vulkanRenderer — Vulkan 渲染器后端 (继承 VulkanCore + VulkanResourceMan
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from Application.Application import Application
+    from Application.Core.Engine import Engine
 
 from Application.Core.Events.Event import Event
 from Application.Core.Events.WindowEvent import *
@@ -43,9 +43,9 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
     @classmethod
     def Create(cls) -> "vulkanRenderer":
         """初始化 Vulkan 渲染器。"""
-        from Application.Application import Application
-        window_size = Application.editor_window.GetSize()
-        VulkanCore.init_core(Application.editor_window.glfw_window, window_size)
+        from Application.Editor.EditorHost import EditorHost
+        window_size = EditorHost.editor_window.GetSize()
+        VulkanCore.init_core(EditorHost.editor_window.glfw_window, window_size)
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]
         cls.aspect_ratio = window_size[0] / window_size[1]

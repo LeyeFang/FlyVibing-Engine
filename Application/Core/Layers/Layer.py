@@ -4,19 +4,20 @@ from abc import ABC, abstractmethod
 
 from Application.Core.Events.Event import Event
 if TYPE_CHECKING:
-    from Application.Application import Application
+    from Application.Core.Engine import Engine
 
 
 class Layer(ABC):
 
-    app: Application
+    app: 'Engine'
 
     @classmethod
     @abstractmethod
     def OnAttach(
         cls
     ):
-        cls.app = Application.GetApplication()
+        from Application.Core.Engine import Engine
+        cls.app = Engine.get()
 
     @classmethod
     @abstractmethod

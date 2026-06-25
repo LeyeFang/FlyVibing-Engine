@@ -23,7 +23,7 @@ openGLRenderer — PyOpenGL 渲染器 (MRO 编排层)。
 from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
-    from Application.Application import Application
+    from Application.Core.Engine import Engine
 
 from Application.Core.Events.Event import Event
 from Application.Core.Events.WindowEvent import *
@@ -108,8 +108,8 @@ class openGLRenderer(
     def Create(
         cls
     ) -> "openGLRenderer":
-        from Application.Application import Application
-        window_size = Application.editor_window.GetSize()
+        from Application.Editor.EditorHost import EditorHost
+        window_size = EditorHost.editor_window.GetSize()
         OpenGLCore.init_core(window_size)
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]

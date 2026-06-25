@@ -7,7 +7,7 @@ import time
 from imgui_bundle import imgui
 
 # ── 应用层: 核心 ──
-from Application.Application import GetEditorWindow, GetEditorRenderer
+from Application.Editor.EditorHost import EditorHost
 from Application.Core.Events.Event import Event
 from Application.Core.Events.InputEvent import *
 from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
@@ -52,7 +52,7 @@ class EditorLayer(Layer):
         io = imgui.get_io()
         io.set_ini_filename(os.path.join(cls._config_dir, "imgui.ini"))
         cls._load_fonts()
-        editor_window = GetEditorWindow()
+        editor_window = EditorHost.get_editor_window()
         window_address = ctypes.cast(editor_window.glfw_window, ctypes.c_void_p).value
         imgui.backends.glfw_init_for_opengl(window_address, True)
         imgui.backends.opengl3_init("#version 440 core")
@@ -61,7 +61,7 @@ class EditorLayer(Layer):
         io.display_size = (float(w), float(h))
         cls._init_ui_panels()
         # ── 渲染器: 注入活动相机 + 注册 Grid/ViewGizmo/Outliner overlay ──
-        cls.renderer = GetEditorRenderer()
+        cls.renderer = EditorHost.get_editor_renderer()
         cam = EditorCamera.get_instance()
         cls.renderer.set_active_camera(cam)
         Grid.register_to(cls.renderer)

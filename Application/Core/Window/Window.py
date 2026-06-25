@@ -1,5 +1,4 @@
 from __future__ import annotations
-from Application import Application
 from Application.Core.Events.Event import Event
 
 from abc import ABC, abstractmethod

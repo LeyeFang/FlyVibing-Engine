@@ -31,6 +31,9 @@ class OpenGLOverlayRenderer:
         """
         vp = gl.glGetIntegerv(gl.GL_VIEWPORT)
         vp_w, vp_h = vp[2], vp[3]
+        # ★ 清除深度缓冲 — gizmo 等 overlay 始终覆盖 entity
+        #    同时保留深度写入, 使 overlay 部件之间正确遮挡排序
+        gl.glClear(gl.GL_DEPTH_BUFFER_BIT)
         for _key, gpu in cls._overlay_gpu_resources.items():
             gl.glUseProgram(gpu.program)
             if gpu.ignore_scene_matrices:
@@ -45,6 +48,16 @@ class OpenGLOverlayRenderer:
                             1,
                             gl.GL_TRUE,  # numpy ndarray -> GL_TRUE
                             np.ascontiguousarray(model.astype('float32')))
+                    # 设置 uProj (aspect 矫正，新版本 model 不含 aspect)
+                    from Application.Core.Math.ViewGizmo import compute_ortho_proj
+                    op = compute_ortho_proj(vp_w, vp_h)
+                    loc_proj = gl.glGetUniformLocation(gpu.program, 'uProj')
+                    if loc_proj >= 0:
+                        gl.glUniformMatrix4fv(
+                            loc_proj,
+                            1,
+                            gl.GL_TRUE,
+                            np.ascontiguousarray(op.astype('float32')))
             else:
                 # Scene rendering: use engine view/proj matrices
                 # view/proj come from pyrr (Type A) -> GL_FALSE

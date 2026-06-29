@@ -60,5 +60,5 @@ class EditorPlugin(Plugin):
         DebugLayer  → 性能 HUD + 场景调试实体
         """
         from Application.Editor.EditorLayer import EditorLayer
-        from Test.DebugLayer import DebugLayer
+        from Test.Helpers.DebugLayer import DebugLayer
         return [EditorLayer, DebugLayer]

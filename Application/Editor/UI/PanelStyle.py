@@ -115,7 +115,7 @@ def apply_custom_style(
 
     # 停靠 / Docking — 橙色预览
     _set_col(style, imgui.Col_.docking_preview,  0.878, 0.416, 0.153, 0.50)
-    _set_col(style, imgui.Col_.docking_empty_bg, 0.067, 0.067, 0.067, 1.00)
+    _set_col(style, imgui.Col_.docking_empty_bg, 0.000, 0.000, 0.000, 0.00)
 
     # 尺寸调整手柄 / 滑条 / 勾选框（旧版 imgui_bundle 可能没有这些枚举）
     for _col, _val in [

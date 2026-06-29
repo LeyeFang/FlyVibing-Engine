@@ -74,7 +74,7 @@ def compute_cube_model(
         [sy * sp,  -cp,     -cy * sp],
         [-sy * cp, -sp,      cy * cp],
     ], dtype=np.float32)
-    # Flip Y and Z to get cube rotation
+    # 原版: 翻转 Y/Z 轴 (det=-1 反射, 但视觉上相当于绕 X 轴 180°)
     R_cube = R_view.copy()
     R_cube[1, :] *= -1.0
     R_cube[2, :] *= -1.0
@@ -93,5 +93,12 @@ def compute_cube_model(
     trans_mat = np.identity(4, dtype=np.float32)
     trans_mat[0, 3] = SCREEN_OFFSET_X
     trans_mat[1, 3] = SCREEN_OFFSET_Y
-    # model = T @ (aspect_projection) @ R @ (uniform_cube)
-    return (trans_mat @ scale_aspect @ rot_mat @ scale_uniform).astype(np.float32)
+    # model = T @ R @ (uniform_cube)  — 不含 aspect，aspect 由投影矩阵处理
+    return (trans_mat @ rot_mat @ scale_uniform).astype(np.float32)
+
+
+def compute_ortho_proj(vp_w: int, vp_h: int) -> np.ndarray:
+    """返回 ViewGizmo 的正交投影矩阵（仅 aspect 矫正）。"""
+    aspect = vp_w / max(vp_h, 1)
+    proj = np.diag([1.0 / aspect, 1.0, 1.0, 1.0]).astype(np.float32)
+    return proj

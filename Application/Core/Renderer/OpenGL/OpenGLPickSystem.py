@@ -64,9 +64,10 @@ layout (location = 0) in vec3 aPos;
 layout (location = 0) uniform int uIsNDC;
 layout (location = 1) uniform mat4 uModel;
 layout (location = 5) uniform mat4 uViewProj;
+layout (location = 9) uniform mat4 uProj;
 void main() {
     if (uIsNDC == 1)
-        gl_Position = uModel * vec4(aPos, 1.0);
+        gl_Position = uProj * uModel * vec4(aPos, 1.0);
     else
         gl_Position = uViewProj * uModel * vec4(aPos, 1.0);
 }
@@ -265,6 +266,13 @@ void main() {
                 if loc_model >= 0:
                     gl.glUniformMatrix4fv(loc_model, 1, gl.GL_TRUE,
                         np.ascontiguousarray(model.astype('float32')))
+                # 设置 uProj (新版本 model 不含 aspect)
+                from Application.Core.Math.ViewGizmo import compute_ortho_proj
+                op = compute_ortho_proj(vp_w, vp_h)
+                loc_proj = gl.glGetUniformLocation(cls._overlay_pick_prog, 'uProj')
+                if loc_proj >= 0:
+                    gl.glUniformMatrix4fv(loc_proj, 1, gl.GL_TRUE,
+                        np.ascontiguousarray(op.astype('float32')))
             else:
                 if loc_ndc >= 0:
                     gl.glUniform1i(loc_ndc, 0)

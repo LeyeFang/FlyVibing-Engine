@@ -50,6 +50,7 @@ class EditorLayer(Layer):
         cls._config_dir = os.path.join(os.path.dirname(__file__), "config")
         os.makedirs(cls._config_dir, exist_ok=True)
         io = imgui.get_io()
+        io.config_flags |= imgui.ConfigFlags_.docking_enable
         io.set_ini_filename(os.path.join(cls._config_dir, "imgui.ini"))
         cls._load_fonts()
         editor_window = EditorHost.get_editor_window()

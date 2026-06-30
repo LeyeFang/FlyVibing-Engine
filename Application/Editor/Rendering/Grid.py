@@ -156,7 +156,7 @@ class Grid:
                     'uFadeRadius':  'camera.fade_radius',
                 },
                 draw_mode='lines',
-                depth_test=True,
+                depth_test=False,
                 line_width=GRID_LINE_WIDTH,
                 blend=True,
                 pick_type=0

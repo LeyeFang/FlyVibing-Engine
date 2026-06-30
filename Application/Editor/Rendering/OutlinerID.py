@@ -138,7 +138,7 @@ class OutlinerID:
         cls._renderer = renderer
 
         if cls._backend == BACKEND_ZENGL:
-            from Test.Renderer.ZenGL.Engine.ZenGLCore import ZenGLCore
+            from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
             cls._zg_ctx = ZenGLCore.ctx
             cls._zg_create_fbo(
                 renderer.viewport_width, renderer.viewport_height)
@@ -638,8 +638,6 @@ void main() {
         # ══════════════════════════════════════════════════
         # Pass 1: Entity MRT (每个实体一个 ZenGL pipeline)
         # ══════════════════════════════════════════════════
-        # 注意: color 输出不再使用 (使用主场景 _color_image 做合成)
-        # 但仍需要 ID 和 depth 输出用于边缘检测和拾取
         cls._zg_depth_img.clear()
         try:
             cls._zg_id_img.clear()
@@ -667,11 +665,9 @@ void main() {
                 p.uniforms['model'][:] = model.astype('float32').tobytes()
                 p.uniforms['view'][:] = view.astype('float32').tobytes()
                 p.uniforms['projection'][:] = proj.astype('float32').tobytes()
-                # 选中标记 (0/1) — 用于边缘检测
                 p.uniforms['uSelectedFlag'][:] = int(
                     1 if eid in cls._active_ids else 0
                 ).to_bytes(4, 'little')
-                # 实际实体 ID — 用于拾取
                 p.uniforms['uEntityID'][:] = int(eid).to_bytes(4, 'little')
             except Exception:
                 pass
@@ -719,9 +715,8 @@ void main() {
 
         # ══════════════════════════════════════════════════
         # Pass 3: Composite (alpha-blended overlay)
-        #  读 edge_tex → 仅输出轮廓到 color_image, 保留 Grid 等底层内容
         # ══════════════════════════════════════════════════
-        from Test.Renderer.ZenGL.Engine.ZenGLCore import ZenGLCore
+        from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
         comp = ctx.pipeline(
             vertex_shader='''
                 #version 330 core
@@ -766,7 +761,7 @@ void main() {
     @classmethod
     def _zg_build_entity_pipeline(cls, renderer, eid: int) -> None:
         """为实体创建 MRT 场景 pipeline。"""
-        from Test.Renderer.ZenGL.Engine.ZenGLCore import ZenGLCore
+        from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
         ctx = ZenGLCore.ctx
         entity = renderer.registered_entities.get(eid)
         if entity is None:
@@ -776,7 +771,7 @@ void main() {
             return
 
         # 获取该实体的实际纹理
-        from Test.Renderer.ZenGL.Engine.ZenGLResourceManager import ZenGLResourceManager as ZRM
+        from Application.Core.Renderer.ZenGL.ZenGLResourceManager import ZenGLResourceManager as ZRM
         tex_id = entity.texture_id
         tex_resources = []
         tex_layout = []

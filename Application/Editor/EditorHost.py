@@ -61,13 +61,13 @@ class EditorHost(Engine):
 
     @classmethod
     def _create_renderer(cls) -> Renderer:
-        """创建编辑器渲染器 (openGLRenderer)。
+        """创建编辑器渲染器 — 根据 cls.renderer_type 选择后端。
 
         同时赋值 EditorHost.editor_renderer — 提供不依赖子类的稳定访问点。
         """
-        from Application.Core.Renderer.OpenGL.openGLRenderer import openGLRenderer
         cls.window.MakeContextCurrent()
-        EditorHost.editor_renderer = openGLRenderer.Create()
+        renderer_cls = cls._get_renderer_class(cls.renderer_type)
+        EditorHost.editor_renderer = renderer_cls.Create()
         return EditorHost.editor_renderer
 
     # ════════════════════════════════════════════════════════════

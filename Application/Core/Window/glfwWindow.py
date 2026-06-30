@@ -55,6 +55,26 @@ class glfwWindow(Window):
         if isinstance(event, WindowCloseEvent):
             pass
 
+    # ════════════════════════════════════════════════════════════
+    # 系统分辨率查询（GLFW 实现）
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _get_system_resolution(cls) -> tuple[int, int]:
+        """获取主显示器当前分辨率（通过 GLFW）。"""
+        monitor = glfw.get_primary_monitor()
+        if monitor is None:
+            # 回退默认
+            return 1920, 1080
+        video_mode = glfw.get_video_mode(monitor)
+        if video_mode is None:
+            return 1920, 1080
+        return video_mode.size.width, video_mode.size.height
+
+    # ════════════════════════════════════════════════════════════
+    # 窗口创建
+    # ════════════════════════════════════════════════════════════
+
     @classmethod
     def _create_window(cls):
         # 1. 初始化 GLFW
@@ -63,10 +83,12 @@ class glfwWindow(Window):
             return
         # 2. 设置窗口提示 (子类重写 _set_window_hints)
         cls._set_window_hints()
-        # 3. 创建窗口
+        # 3. 取比当前显示器小一圈的常见分辨率（保持同比例）
+        width, height = cls._compute_default_size()
+        # 4. 创建窗口
         glfw_window = glfw.create_window(
-            800, 600,
-            "Test Window",
+            width, height,
+            "MyGameEngine",
             None,
             None
         )

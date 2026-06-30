@@ -197,6 +197,63 @@ class Renderer(ABC):
         for cb in cls._overlay_callbacks:
             cb(view, proj)
 
+    # ════════════════════════════════════════════════════════════
+    # 声明式动态 Uniform 解析 (后端无关)
+    # ════════════════════════════════════════════════════════════
+    #
+    # Overlay 通过 uniforms={'uColor': np.array(...), 'uFadeCenter': 'camera.fade_center'}
+    # 声明 uniform 需求，不感知后端类型。
+    #
+    # 静态值 (np.ndarray / list) → 注册时直接注入 GPU
+    # 动态源 (str) → 每帧由渲染器解析为当前值
+
+    # 已知动态 uniform 源 → 解析函数 (返回 np.ndarray)
+    _DYNAMIC_UNIFORM_SOURCES: dict = {
+        'camera.fade_center':  lambda cls: (
+            cls._active_camera.orbit_target if hasattr(cls._active_camera, 'orbit_target')
+            else cls._active_camera.target if hasattr(cls._active_camera, 'target')
+            else np.zeros(3, 'f4')
+        ),
+        'camera.fade_radius': lambda cls: np.array([
+            cls._active_camera.orbit_distance if hasattr(cls._active_camera, 'orbit_distance')
+            else cls._active_camera.distance if hasattr(cls._active_camera, 'distance')
+            else 10.0
+        ], 'f4'),
+    }
+
+    @classmethod
+    def _resolve_overlay_uniforms(cls, uniforms: dict | None) -> dict[str, 'np.ndarray']:
+        """解析 overlay 的声明式 uniform → 当前帧的 np.ndarray 值。
+
+        后端调用此方法获取每帧的 uniform 值，然后用自己的 API 上传到 GPU。
+        OpenGL: glUniform*    ZenGL: pipeline.uniforms[name][:] = value
+
+        Args:
+            uniforms: overlay.uniforms 字典 (静态值 | 动态源标识符)
+        Returns:
+            {name: np.ndarray} — 全部解析为具体数值
+        """
+        if not uniforms:
+            return {}
+        resolved = {}
+        for name, value in uniforms.items():
+            if isinstance(value, str) and value in cls._DYNAMIC_UNIFORM_SOURCES:
+                try:
+                    resolved[name] = cls._DYNAMIC_UNIFORM_SOURCES[value](cls)
+                except Exception:
+                    resolved[name] = np.zeros(1, 'f4')
+            elif isinstance(value, np.ndarray):
+                resolved[name] = value
+            elif isinstance(value, (list, tuple)):
+                resolved[name] = np.array(value, 'f4')
+            elif callable(value):
+                try:
+                    resolved[name] = value()
+                except Exception:
+                    pass  # 回调失败则跳过, 保留 pipeline 默认值
+            # 其他类型静默跳过
+        return resolved
+
     @classmethod
     def _render_overlay_drawables(cls, view: np.ndarray, proj: np.ndarray) -> None:
         """遍历数据驱动 overlay 并绘制 — 子类 (OpenGL/Vulkan) 实现。
@@ -211,16 +268,30 @@ class Renderer(ABC):
 
     @classmethod
     def _render_all_overlays(cls, view: np.ndarray, proj: np.ndarray) -> None:
-        """统一 overlay 渲染入口 — 先回调 (自定义管线), 后 drawable (声明式绘制)。
+        """统一 overlay 渲染入口 — 三层渲染。
 
-        渲染顺序保证:
-          1. 回调式 overlay 先执行 (可包含 blit / 后处理)
-          2. 声明式 drawable 后执行 (Grid/Gizmo 绘制在最上层)
+        渲染顺序 (bottom→top):
+          Callbacks (Outliner/OutlinerID) — 实体+轮廓 blit 到屏幕
+          Layer 0: scene-space overlay (Grid) — 深度测试 vs 实体, 不额外清深度
+          Clear depth — 为 screen-space overlay 准备
+          Layer 1: screen-space overlay (ViewGizmo, TransformGizmo)
 
-        StartFrame 中只需调用此方法, 无需分别调用两者。
+        注意:
+          - Callbacks 在 Layer 0 之前，因为 Outliner 的 stencil blit
+            全屏覆盖默认帧缓冲，Grid 需在 blit 之后绘制才能显示。
+          - Layer 0 不清深度：Grid 应通过深度测试被实体遮挡，
+            Grid 线跟实体同深度时实体在前。
+          - Layer 1 清深度：屏幕空间覆盖物（Gizmo）始终最前。
         """
         cls._render_overlays(view, proj)
-        cls._render_overlay_drawables(view, proj)
+        cls._render_overlay_drawables(view, proj, layer=0)
+        cls._clear_depth_for_overlays()
+        cls._render_overlay_drawables(view, proj, layer=1)
+
+    @classmethod
+    def _clear_depth_for_overlays(cls) -> None:
+        """子类覆写: 为 screen-space overlay 清理深度缓冲。"""
+        pass
 
 
 class RenderResourceManger(ABC):
@@ -443,6 +514,23 @@ class RenderResourceManger(ABC):
         vertex_attrs: list = None
         pick_type: int = 0
         pick_id: int = 0
+        render_layer: int = 0
+        """渲染层级: 0=场景空间 (vs entity depth), 1=屏幕空间 (depth cleared)
+        渲染顺序 (bottom→top): Outliner callback → 0 → 深度清理 → 1
+        - Outliner:  callback (实体+轮廓 blit, 最先渲染)
+        - Grid:      layer=0 (默认, 在轮廓之上绘制)
+        - ViewGizmo: layer=1 (screen-space, 始终最前)
+        - TransformGizmo: layer=1
+        """
+        uniforms: dict = None
+        """声明式 uniform 初始值 (后端无关): {name: value}
+        value 类型:
+          - np.ndarray / list → 静态值 (颜色, 常量等)，注册时注入 GPU
+          - str → 动态源标识符 (如 'camera.fade_center')，渲染器每帧解析
+        
+        替代 uniforms_setup 回调 — overlay 不应感知后端类型。
+        例如: {'uColor': np.array([0.45,0.45,0.45,1.0], 'f4')}
+        """
 
         def __post_init__(self):
             if self.vertex_attrs is None:
@@ -473,16 +561,11 @@ class RenderResourceManger(ABC):
         ...
 
     @classmethod
-    def _render_overlay_drawables(cls, view: np.ndarray, proj: np.ndarray) -> None:
+    def _render_overlay_drawables(cls, view: np.ndarray, proj: np.ndarray, layer: int = -1) -> None:
         """遍历 registered_overlays 并提交绘制命令 (子类实现 GPU 绘制)。
         Args:
             view: 4×4 视图矩阵
             proj: 4×4 投影矩阵
+            layer: -1=全部, 0=scene, 1=screen
         """
-        ...
-
-    # ── 向后兼容别名 ──
-    @classmethod
-    def _draw_registered_overlays(cls, view: np.ndarray, proj: np.ndarray) -> None:
-        """(已弃用) 请使用 _render_overlay_drawables。"""
-        cls._render_overlay_drawables(view, proj)
+        pass

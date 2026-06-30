@@ -187,6 +187,7 @@ class ViewGizmo:
                 ],
                 pick_type=1,       # 1 = ViewGizmo face
                 pick_id=pick_id,   # 1~6
+                render_layer=1,    # screen-space overlay
             )
             renderer.register_overlay_drawable(overlay)
         print("[ViewGizmo] registered 6 face overlays")

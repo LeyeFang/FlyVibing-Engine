@@ -6,6 +6,7 @@ Editor Grid — 摄像机跟随参考网格 (圆形淡化边缘)。
   - 网格中心跟随 EditorCamera 的注视点 (orbit_target)
   - 网格半径 = 摄像机到注视点的距离 (orbit_distance), 记为 r
   - 0.8r ~ 1r 范围边缘逐渐虚化到透明
+  - ★ 零图形后端依赖 — 不 import OpenGL / ZenGL / Vulkan
 
 坐标约定:
   - 编辑器 X 轴 = GL  X 轴  (+X 方向)
@@ -22,10 +23,8 @@ Editor Grid — 摄像机跟随参考网格 (圆形淡化边缘)。
 from __future__ import annotations
 
 import numpy as np
-from OpenGL import GL as gl
 
 from Application.Core.Renderer.Renderer import RenderResourceManger
-from Application.Editor.EditorCamera import EditorCamera
 
 # ════════════════════════════════════════════════════════════════
 # 网格资源: 参数常量
@@ -133,64 +132,6 @@ def _build_axis_vertices(
 # 网格资源: Uniform 设置回调
 # ════════════════════════════════════════════════════════════════
 
-def _get_grid_params() -> tuple[float, float, float, float]:
-    """从 EditorCamera 获取当前注视点和距离。"""
-    cam = EditorCamera.get_instance()
-    cx, cy, cz = cam.orbit_target
-    return float(cx), float(cy), float(cz), float(cam.orbit_distance)
-
-
-def _grid_uniform_setup(program: int) -> None:
-    """设置网格线 uniform: uColor + uFadeCenter + uFadeRadius。"""
-    cx, cy, cz, r = _get_grid_params()
-
-    loc = gl.glGetUniformLocation(program, 'uColor')
-    if loc >= 0:
-        gl.glUniform4f(loc, *GRID_COLOR)
-
-    loc = gl.glGetUniformLocation(program, 'uFadeCenter')
-    if loc >= 0:
-        gl.glUniform3f(loc, cx, cy, cz)
-
-    loc = gl.glGetUniformLocation(program, 'uFadeRadius')
-    if loc >= 0:
-        gl.glUniform1f(loc, r)
-
-
-def _x_axis_uniform_setup(program: int) -> None:
-    """设置 X 轴 (红色) uniform: uColor + uFadeCenter + uFadeRadius。"""
-    cx, cy, cz, r = _get_grid_params()
-
-    loc = gl.glGetUniformLocation(program, 'uColor')
-    if loc >= 0:
-        gl.glUniform4f(loc, *X_AXIS_COLOR)
-
-    loc = gl.glGetUniformLocation(program, 'uFadeCenter')
-    if loc >= 0:
-        gl.glUniform3f(loc, cx, cy, cz)
-
-    loc = gl.glGetUniformLocation(program, 'uFadeRadius')
-    if loc >= 0:
-        gl.glUniform1f(loc, r)
-
-
-def _y_axis_uniform_setup(program: int) -> None:
-    """设置 Y 轴 (绿色) uniform: uColor + uFadeCenter + uFadeRadius。"""
-    cx, cy, cz, r = _get_grid_params()
-
-    loc = gl.glGetUniformLocation(program, 'uColor')
-    if loc >= 0:
-        gl.glUniform4f(loc, *Y_AXIS_COLOR)
-
-    loc = gl.glGetUniformLocation(program, 'uFadeCenter')
-    if loc >= 0:
-        gl.glUniform3f(loc, cx, cy, cz)
-
-    loc = gl.glGetUniformLocation(program, 'uFadeRadius')
-    if loc >= 0:
-        gl.glUniform1f(loc, r)
-
-
 class Grid:
     """摄像机跟随参考网格 — 仅负责向渲染器注册可绘制对象。"""
 
@@ -199,6 +140,8 @@ class Grid:
         """向渲染器注册网格的所有可绘制对象。"""
 
         # ── 1. 白色网格线 ──
+        # ★ 声明式 uniform: 静态值 (uColor) + 动态源 (uFadeCenter/uFadeRadius)
+        #    渲染器负责解析动态源并上传到 GPU，Grid 不感知后端类型
         grid_v, grid_i = _build_grid_line_vertices()
         renderer.register_overlay_drawable(
             RenderResourceManger.overlay_drawable_struct(
@@ -207,7 +150,11 @@ class Grid:
                 indices=grid_i,
                 vs_src=_OVERLAY_VS,
                 fs_src=_OVERLAY_FADE_FS,
-                uniforms_setup=_grid_uniform_setup,
+                uniforms={
+                    'uColor':       np.array(GRID_COLOR, 'f4'),
+                    'uFadeCenter':  'camera.fade_center',
+                    'uFadeRadius':  'camera.fade_radius',
+                },
                 draw_mode='lines',
                 depth_test=True,
                 line_width=GRID_LINE_WIDTH,
@@ -225,7 +172,11 @@ class Grid:
                 indices=np.array([0, 1], dtype=np.uint32),
                 vs_src=_OVERLAY_VS,
                 fs_src=_OVERLAY_FADE_FS,
-                uniforms_setup=_x_axis_uniform_setup,
+                uniforms={
+                    'uColor':       np.array(X_AXIS_COLOR, 'f4'),
+                    'uFadeCenter':  'camera.fade_center',
+                    'uFadeRadius':  'camera.fade_radius',
+                },
                 draw_mode='lines',
                 depth_test=False,
                 line_width=AXIS_LINE_WIDTH,
@@ -242,7 +193,11 @@ class Grid:
                 indices=np.array([2, 3], dtype=np.uint32),
                 vs_src=_OVERLAY_VS,
                 fs_src=_OVERLAY_FADE_FS,
-                uniforms_setup=_y_axis_uniform_setup,
+                uniforms={
+                    'uColor':       np.array(Y_AXIS_COLOR, 'f4'),
+                    'uFadeCenter':  'camera.fade_center',
+                    'uFadeRadius':  'camera.fade_radius',
+                },
                 draw_mode='lines',
                 depth_test=False,
                 line_width=AXIS_LINE_WIDTH,

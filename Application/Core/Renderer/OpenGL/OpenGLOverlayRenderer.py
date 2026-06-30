@@ -24,17 +24,23 @@ class OpenGLOverlayRenderer:
         cls,
         view: np.ndarray,
         proj: np.ndarray,
+        layer: int = -1,
     ) -> None:
-        """遍历所有已注册 overlay drawable 并提交 GL 绘制命令 (覆写 Renderer 基类 no-op)。
+        """遍历指定层级的 overlay drawable 并提交 GL 绘制命令。
 
-        支持: 自定义 model 矩阵 / 纹理 / 面剔除 / NDC 渲染。
+        Args:
+            view: 4×4 视图矩阵
+            proj: 4×4 投影矩阵
+            layer: -1=全绘制, 0=scene (Grid), 1=screen (Gizmo)
         """
         vp = gl.glGetIntegerv(gl.GL_VIEWPORT)
         vp_w, vp_h = vp[2], vp[3]
-        # ★ 清除深度缓冲 — gizmo 等 overlay 始终覆盖 entity
-        #    同时保留深度写入, 使 overlay 部件之间正确遮挡排序
-        gl.glClear(gl.GL_DEPTH_BUFFER_BIT)
+        # Layer 1 的 depth 清理在 _render_all_overlays 中由 _clear_depth_for_overlays 完成
         for _key, gpu in cls._overlay_gpu_resources.items():
+            if layer >= 0 and getattr(gpu, 'render_layer', 0) != layer:
+                if layer >= 0:
+                    pass  # filtered
+                continue
             gl.glUseProgram(gpu.program)
             if gpu.ignore_scene_matrices:
                 # NDC rendering: custom model matrix from callback
@@ -82,7 +88,27 @@ class OpenGLOverlayRenderer:
                 loc_tex = gl.glGetUniformLocation(gpu.program, gpu.texture_uniform or 'uLetterTex')
                 if loc_tex >= 0:
                     gl.glUniform1i(loc_tex, 0)
-            # ── 专属 uniform ──
+            # ── 声明式 uniform 解析 (替代 uniforms_setup 回调) ──
+            #    overlay.uniforms = {'uColor': np.array(...), 'uFadeCenter': 'camera.fade_center', ...}
+            #    渲染器基类 _resolve_overlay_uniforms 将动态源解析为当前帧值
+            if gpu.uniforms:
+                resolved = cls._resolve_overlay_uniforms(gpu.uniforms)
+                for uname, uval in resolved.items():
+                    loc = gl.glGetUniformLocation(gpu.program, uname)
+                    if loc < 0:
+                        continue
+                    if uval.size == 16:       # mat4
+                        gl.glUniformMatrix4fv(loc, 1, gl.GL_FALSE,
+                            np.ascontiguousarray(uval.astype('float32')))
+                    elif uval.size == 4:      # vec4
+                        gl.glUniform4fv(loc, 1, uval.astype('float32'))
+                    elif uval.size == 3:      # vec3
+                        gl.glUniform3fv(loc, 1, uval.astype('float32'))
+                    elif uval.size == 2:      # vec2
+                        gl.glUniform2fv(loc, 1, uval.astype('float32'))
+                    elif uval.size == 1:      # float / int
+                        gl.glUniform1fv(loc, 1, uval.astype('float32'))
+            # uniforms_setup 保留兼容 (旧 overlay 仍可用)
             if gpu.uniforms_setup:
                 gpu.uniforms_setup(gpu.program)
             # ── 深度测试 ──

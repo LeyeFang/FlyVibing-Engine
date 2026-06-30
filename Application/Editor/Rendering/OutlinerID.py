@@ -301,14 +301,12 @@ void main() {
 }'''
         _COMP_FS = f'''#version 440 core
 in vec2 vUV;
-uniform sampler2D uColorTex;
 uniform sampler2D uEdgeTex;
 uniform vec3 uOutlineColor;
 out vec4 outColor;
 void main() {{
-    vec4 scene = texture(uColorTex, vUV);
     float edge = texture(uEdgeTex, vUV).r;
-    outColor = vec4(mix(scene.rgb, uOutlineColor, edge), 1.0);
+    outColor = vec4(uOutlineColor, edge);
 }}'''
         cls._gl_composite_prog = gls.compileProgram(
             gls.compileShader(_COMP_VS, gl.GL_VERTEX_SHADER),
@@ -468,21 +466,18 @@ void main() {{
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
         # ══════════════════════════════════════════════════
-        # Pass 3: Composite
-        #  读 color_tex + edge_tex → 混合输出到默认帧缓冲
+        # Pass 3: Composite (alpha-blended overlay)
+        #  读 edge_tex → 仅输出轮廓到默认帧缓冲, 保留 Grid 等底层内容
         # ══════════════════════════════════════════════════
         gl.glViewport(0, 0, vp_w, vp_h)
+        gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+        gl.glEnable(gl.GL_BLEND)
         gl.glUseProgram(cls._gl_composite_prog)
-        # color → texture unit 0
+        # edge → texture unit 0
         gl.glActiveTexture(gl.GL_TEXTURE0)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, cls._gl_color_tex)
-        loc_ctex = gl.glGetUniformLocation(cls._gl_composite_prog, 'uColorTex')
-        if loc_ctex >= 0: gl.glUniform1i(loc_ctex, 0)
-        # edge → texture unit 1
-        gl.glActiveTexture(gl.GL_TEXTURE1)
         gl.glBindTexture(gl.GL_TEXTURE_2D, out_edge_tex)
         loc_etex = gl.glGetUniformLocation(cls._gl_composite_prog, 'uEdgeTex')
-        if loc_etex >= 0: gl.glUniform1i(loc_etex, 1)
+        if loc_etex >= 0: gl.glUniform1i(loc_etex, 0)
         # color
         loc_oc = gl.glGetUniformLocation(cls._gl_composite_prog, 'uOutlineColor')
         if loc_oc >= 0:
@@ -491,6 +486,7 @@ void main() {{
         gl.glBindVertexArray(cls._gl_vao_quad)
         gl.glDrawArrays(gl.GL_TRIANGLE_STRIP, 0, 4)
         gl.glBindVertexArray(0)
+        gl.glDisable(gl.GL_BLEND)
 
         # 清理临时纹理
         gl.glDeleteFramebuffers(1, [edge_fbo])
@@ -722,9 +718,10 @@ void main() {
         edge_pipe.render()
 
         # ══════════════════════════════════════════════════
-        # Pass 3: Composite → 覆盖到屏幕
+        # Pass 3: Composite (alpha-blended overlay)
+        #  读 edge_tex → 仅输出轮廓到 color_image, 保留 Grid 等底层内容
         # ══════════════════════════════════════════════════
-        resolved = ctx.image((vp_w, vp_h), 'rgba8unorm')
+        from Test.Renderer.ZenGL.Engine.ZenGLCore import ZenGLCore
         comp = ctx.pipeline(
             vertex_shader='''
                 #version 330 core
@@ -737,33 +734,26 @@ void main() {
             ''',
             fragment_shader='''#version 420 core
 in vec2 vUV;
-layout(binding=0) uniform sampler2D uColorTex;
-layout(binding=1) uniform sampler2D uEdgeTex;
+layout(binding=0) uniform sampler2D uEdgeTex;
 uniform vec3 uOutlineColor;
 layout(location=0) out vec4 outColor;
 void main() {
-    vec4 scene = texture(uColorTex, vUV);
     float edge = texture(uEdgeTex, vUV).r;
-    outColor = vec4(mix(scene.rgb, uOutlineColor, edge), 1.0);
+    outColor = vec4(uOutlineColor, edge);
 }''',
             layout=[
-                {'name': 'uColorTex', 'binding': 0},
-                {'name': 'uEdgeTex', 'binding': 1},
+                {'name': 'uEdgeTex', 'binding': 0},
             ],
             resources=[
-                # 使用主场景颜色图像 (含 ViewGizmo overlay)
-                {'type': 'sampler', 'binding': 0, 'image': __import__('Test.Renderer.ZenGL.Engine.ZenGLCore', fromlist=['ZenGLCore']).ZenGLCore._color_image},
-                {'type': 'sampler', 'binding': 1, 'image': out_edge_img},
+                {'type': 'sampler', 'binding': 0, 'image': out_edge_img},
             ],
             uniforms={'uOutlineColor': list(cls._color)},
-            framebuffer=[resolved],
+            framebuffer=[ZenGLCore._color_image, ZenGLCore._depth_image],
+            blend={'enable': True, 'src_color': 'src_alpha', 'dst_color': 'one_minus_src_alpha'},
             topology='triangles',
             vertex_count=3,
         )
-        resolved.clear()
         comp.render()
-        try: resolved.blit()
-        except Exception: pass
 
     @classmethod
     def _zg_ensure_fbo(cls, w: int, h: int) -> None:

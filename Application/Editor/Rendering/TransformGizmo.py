@@ -47,8 +47,6 @@ if TYPE_CHECKING:
 _GIZMO_VS: str = """#version 440 core
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec3 aColor;
-layout (location = 2) in vec3 aNormal;
-layout (location = 3) in vec2 aTexCoord;
 uniform mat4 uModel;
 out vec3 vColor;
 void main() {
@@ -259,8 +257,6 @@ class TransformGizmo:
             verts.extend([
                 pos[0], pos[1], pos[2],
                 col[0], col[1], col[2],
-                nrm[0], nrm[1], nrm[2],
-                0.0, 0.0,
             ])
 
         # ── 轴杆 (圆柱侧面) ──
@@ -314,7 +310,7 @@ class TransformGizmo:
             # 锥底三角形: 中心 → 边 (注意逆时针以保证法线朝外)
             indices.extend([vi + j, vi + i, base_center_idx])
 
-        vertices = np.array(verts, dtype=np.float32).reshape(-1, 11)
+        vertices = np.array(verts, dtype=np.float32).reshape(-1, 6)
         idx_arr = np.array(indices, dtype=np.uint32)
         return vertices, idx_arr
 
@@ -332,7 +328,7 @@ class TransformGizmo:
             color:      RGB 颜色
 
         Returns:
-            (vertices (4, 11), indices (6,))
+            (vertices (4, 6), indices (6,))
         """
         d1 = dir1.astype(np.float32)
         d1 = d1 / max(np.linalg.norm(d1), 1e-8)
@@ -358,11 +354,9 @@ class TransformGizmo:
             verts.extend([
                 pos[0], pos[1], pos[2],
                 color[0], color[1], color[2],
-                normal[0], normal[1], normal[2],
-                0.0, 0.0,
             ])
 
-        vertices = np.array(verts, dtype=np.float32).reshape(4, 11)
+        vertices = np.array(verts, dtype=np.float32).reshape(4, 6)
         indices = np.array([0, 1, 2, 0, 2, 3], dtype=np.uint32)
         return vertices, indices
 
@@ -390,15 +384,14 @@ class TransformGizmo:
                 cull_face=False,
                 ignore_scene_matrices=True,
                 model_matrix_cb=cls._compute_mvp_cb,
-                vertex_stride=11 * 4,
+                vertex_stride=6 * 4,  # ★ pos(3) + color(3) = 6 floats
                 vertex_attrs=[
                     (0, 3, 0),    # aPos
                     (1, 3, 12),   # aColor
-                    (2, 3, 24),   # aNormal
-                    (3, 2, 36),   # aTexCoord
                 ],
                 pick_type=2,            # 2 = TransformGizmo
                 pick_id=ad['pick_id'],  # 1/2/3
+                render_layer=1,         # screen-space overlay
             )
             renderer.register_overlay_drawable(overlay)
 
@@ -418,15 +411,14 @@ class TransformGizmo:
                 cull_face=False,
                 ignore_scene_matrices=True,
                 model_matrix_cb=cls._compute_mvp_cb,
-                vertex_stride=11 * 4,
+                vertex_stride=6 * 4,  # ★ pos(3) + color(3) = 6 floats
                 vertex_attrs=[
-                    (0, 3, 0),
-                    (1, 3, 12),
-                    (2, 3, 24),
-                    (3, 2, 36),
+                    (0, 3, 0),    # aPos
+                    (1, 3, 12),   # aColor
                 ],
                 pick_type=2,            # 2 = TransformGizmo
                 pick_id=pd['pick_id'],  # 4/5/6
+                render_layer=1,         # screen-space overlay
             )
             renderer.register_overlay_drawable(overlay)
 
@@ -443,7 +435,30 @@ class TransformGizmo:
             renderer.unregister_overlay_drawable(
                 f"{cls.OVERLAY_KEY_PREFIX}_plane_{plane_name}"
             )
+        cls._renderer = None
         print("[TransformGizmo] unregistered")
+
+    _renderer: any = None  # 记录当前绑定的渲染器，供 show/hide 使用
+
+    @classmethod
+    def show(cls, renderer: 'Renderer', entity_id: int) -> None:
+        """在实体位置显示 gizmo — 按需注册。"""
+        from Application.Core.Scene.SceneManager import SceneManager
+        if cls._renderer is None:
+            cls.register_to(renderer)
+            cls._renderer = renderer
+        try:
+            t = SceneManager.GetEntityTransform(entity_id)
+            cls.set_target_position((t.position_x, t.position_y, t.position_z))
+        except Exception:
+            pass
+
+    @classmethod
+    def hide(cls) -> None:
+        """隐藏 gizmo — 注销干净。"""
+        if cls._renderer is not None:
+            cls.unregister_from(cls._renderer)
+            cls._renderer = None
 
     # ════════════════════════════════════════════════════════════
     # 拾取数据导出

@@ -71,7 +71,7 @@
 | 类 | 窗口名称 | 依赖的 Controller | 职责 |
 |----|---------|-------------------|------|
 | `ScenePanel` | `"Scene"` | `SimulationController`、`SceneBrowserController`、`ResourceBrowserController` | 场景层级 + 运行控制 + 资源浏览 |
-| `NodeEditorPanel` | `"Node Editor"` | — | 节点画布 + 右键菜单 |
+| `NodeEditorPanel` | `"Node Editor"` | `NodeEditorController` | 节点画布（Runtime 生命周期节点编辑） |
 | `ToolbarPanel` | `"##Toolbar"` | `SimulationController` | 精简播放控制条 |
 | `MenuBarPanel` | — | — | 保留文件但未注册，视未来需求启用 |
 
@@ -84,6 +84,7 @@
 | `SimulationController` | 模拟状态机 | `play()` / `pause()` / `resume()` / `stop()` / `get_state()` / `is_running()` |
 | `SceneBrowserController` | 实体列表 & 选择 & 检视 | `get_renderable_entities()` / `select()` / `get_selected()` / `get_summary()` |
 | `ResourceBrowserController` | 已加载资源分类查询 | `get_meshes()` / `get_shaders()` / `get_textures()` / `get_materials()` |
+| `NodeEditorController` | 节点编辑器数据层 | `NodeCanvas` (节点/连线 CRUD)、`_TYPES` (类型注册表) |
 
 ---
 
@@ -127,10 +128,11 @@
 - [ ] **ConsolePanel**：引擎日志输出面板
 - [ ] **AnimationPanel**：时间轴动画编辑
 - [ ] **AudioPanel**：音频资源管理与波形预览
+- [x] **NodeEditorPanel** ✅ 已合并 Runtime 生命周期节点（6 种节点 + Pin 拖拽连线）
 - [ ] **EEGPanel**：EEG 设备连接与信号预览
 - [ ] **LayoutManager**：保存/恢复用户自定义 Dock 布局
 - [ ] **SimulationController ↔ Event 集成**：通过 `SceneEvent` 通知渲染线程状态变更
 
 ---
 
-*最后更新: 2026-05-29*
+*最后更新: 2026-06-30*

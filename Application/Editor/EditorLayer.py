@@ -23,7 +23,7 @@ from Application.Core.Layers.Layer import Layer
 # ── 应用层: 编辑器 ──
 from Application.Editor.EditorCamera import EditorCamera
 from Application.Editor.Rendering.Grid import Grid
-from Application.Editor.Rendering.Outliner import Outliner
+from Application.Editor.Rendering.OutlinerID import OutlinerID
 from Application.Editor.Rendering.ViewGizmo import ViewGizmo
 from Application.Editor.UI.UIManager import UIManager
 from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel
@@ -67,12 +67,12 @@ class EditorLayer(Layer):
         cls.renderer.set_active_camera(cam)
         Grid.register_to(cls.renderer)
         ViewGizmo.register_to(cls.renderer)
-        Outliner.register_to(cls.renderer)
+        OutlinerID.register_to(cls.renderer)
 
     @classmethod
     def OnDetach(cls):
         if cls.renderer is not None:
-            Outliner.unregister_from(cls.renderer)
+            OutlinerID.unregister_from(cls.renderer)
             ViewGizmo.unregister_from(cls.renderer)
             Grid.unregister_from(cls.renderer)
         imgui.destroy_context()
@@ -108,7 +108,7 @@ class EditorLayer(Layer):
             dt = (time.perf_counter() - t0) * 1000
             if pick_type == 'entity':
                 print(f"[EditorLayer] Click → Entity#{pick_value}  ({dt:.3f}ms)")
-                Outliner.set_selected_entities({pick_value})
+                OutlinerID.set_selected_entities({pick_value})
             elif pick_type == 'overlay' and pick_value:
                 prefix = ViewGizmo.OVERLAY_KEY_PREFIX
                 if pick_value.startswith(prefix):
@@ -122,7 +122,7 @@ class EditorLayer(Layer):
                     print(f"[EditorLayer] Click → Overlay '{pick_value}'  ({dt:.3f}ms)")
             else:
                 print(f"[EditorLayer] Click → nothing  ({dt:.3f}ms)")
-                Outliner.clear()
+                OutlinerID.clear()
 
     @classmethod
     def OnUpdate(cls):
@@ -131,7 +131,7 @@ class EditorLayer(Layer):
     @classmethod
     def OnRender(cls):
         # ── 处理待处理的轮廓请求 (render thread, GL 调用) ──
-        Outliner._sync(cls.renderer)
+        OutlinerID._sync()
         # ── ImGui ──
         imgui.backends.glfw_new_frame()
         imgui.backends.opengl3_new_frame()

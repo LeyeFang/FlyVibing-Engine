@@ -66,3 +66,8 @@ class OpenGLCore:
         """
         gl.glClearColor(r, g, b, a)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+
+    @classmethod
+    def _clear_depth_for_overlays(cls) -> None:
+        """清理深度缓冲 (为 screen-space overlay 准备)."""
+        gl.glClear(gl.GL_DEPTH_BUFFER_BIT)

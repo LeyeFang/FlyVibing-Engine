@@ -459,6 +459,8 @@ class OpenGLResourceManager:
         cull_face: bool = False
         line_width: float = 1.0
         uniforms_setup: Callable[[int], None] = field(default=lambda p: None)
+        uniforms: dict = None  # 声明式 uniform (后端无关)
+        render_layer: int = 0
         ignore_scene_matrices: bool = False
         model_matrix_cb: Callable[[int, int], 'np.ndarray'] = None
         texture_uniform: str = ''
@@ -547,6 +549,8 @@ class OpenGLResourceManager:
             blend=overlay.blend,
             cull_face=overlay.cull_face,
             uniforms_setup=overlay.uniforms_setup,
+            uniforms=getattr(overlay, 'uniforms', None),
+            render_layer=getattr(overlay, 'render_layer', 0),
             ignore_scene_matrices=overlay.ignore_scene_matrices,
             model_matrix_cb=overlay.model_matrix_cb,
             texture_uniform=overlay.texture_uniform,

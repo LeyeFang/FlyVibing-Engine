@@ -8,7 +8,6 @@ from Application.Core.Events.InputEvent import *
 from Application.Core.Window.Window import Window
 
 import glfw
-import Application.Core.Input.InputState as _input_state
 
 
 class glfwWindow(Window):
@@ -33,7 +32,7 @@ class glfwWindow(Window):
     ) -> None:
         glfw.poll_events()
         if glfw.window_should_close(cls.glfw_window):
-            WindowCloseEvent.Pack()
+            WindowCloseEvent.Pack(engine=cls._engine)
 
     @classmethod
     def GetSize(
@@ -119,7 +118,7 @@ class glfwWindow(Window):
         width,
         height
     ):
-        WindowResizeEvent.Pack(width, height)
+        WindowResizeEvent.Pack(width, height, engine=cls._engine)
 
     @classmethod
     def _key_callback(
@@ -131,8 +130,8 @@ class glfwWindow(Window):
         mods
     ) -> None:
         if key == glfw.KEY_ESCAPE and action == glfw.RELEASE:
-            WindowCloseEvent.Pack()
-        KeyboardButtonEvent.Pack(key, scancode, action, mods)
+            WindowCloseEvent.Pack(engine=cls._engine)
+        KeyboardButtonEvent.Pack(key, scancode, action, mods, engine=cls._engine)
 
     @classmethod
     def _mouse_callback(
@@ -148,7 +147,8 @@ class glfwWindow(Window):
             action=action,
             mods=mods,
             pos_x=pos_x,
-            pos_y=pos_y)
+            pos_y=pos_y,
+            engine=cls._engine)
 
     @classmethod
     def _mouse_move_callbakc(
@@ -158,10 +158,11 @@ class glfwWindow(Window):
         pos_y
     ) -> None:
         # 分流: 按下按钮 → 拖拽事件, 未按下 → 纯移动事件 (用于拾取预读)
-        if _input_state.current_mouse_button_code is not None:
-            MouseGragEvent.Pack(pos_x, pos_y)
+        inp = cls._engine._get_input_state() if cls._engine is not None else None
+        if inp is not None and inp.current_mouse_button_code is not None:
+            MouseGragEvent.Pack(pos_x, pos_y, engine=cls._engine)
         else:
-            MouseMoveEvent.Pack(pos_x, pos_y)
+            MouseMoveEvent.Pack(pos_x, pos_y, engine=cls._engine)
 
     @classmethod
     def _scroll_callback(
@@ -170,4 +171,4 @@ class glfwWindow(Window):
         x_offset,
         y_offset
     ) -> None:
-        ScrollerEvent.Pack(x_offset=x_offset, y_offset=y_offset)
+        ScrollerEvent.Pack(x_offset=x_offset, y_offset=y_offset, engine=cls._engine)

@@ -28,8 +28,9 @@ import threading
 from threading import Thread
 
 from Application.Core.Layers.Layer import Layer
-from Application.Core.Events.Event import Event, BindPackCallback
+from Application.Core.Events.Event import Event, BindPackCallback, _register_engine, _is_first_bind
 from Application.Core.Events.WindowEvent import WindowCloseEvent
+from Application.Core.Input.InputState import InputState, _set_default_input_state
 from Application.Core.Window.Window import Window
 from Application.Core.Renderer.Renderer import Renderer
 from Application.Core.Scene.SceneManager import SceneManager
@@ -64,31 +65,48 @@ class Engine:
       - _create_renderer()  → 返回 Renderer 实例
     """
 
-    # ── 单例 ──────────────────────────────────────────────────
-    _instance: 'Engine' = None
-    _initialized: bool = False
-
     # ── 枚举快捷方式（方便外部 import） ─────────────────────────
     RendererType = RendererType
     WindowType = WindowType
 
-    # ── 核心状态 ──────────────────────────────────────────────
-    window: Window = None               # 抽象窗口（子类决定具体类型）
-    renderer: Renderer = None           # 抽象渲染器（子类决定具体类型）
+    # ── Per-subclass 状态注册表 ────────────────────────────────
+    # 每个 Engine 子类（EditorHost / GameRuntime）拥有独立的状态字典。
+    # 避免 layer_stack / renderer_ready 等可变类变量在子类间意外共享。
+    _registry: dict[str, dict] = {}
+
+    @classmethod
+    def _state(cls) -> dict:
+        """返回当前子类的私有状态字典。
+
+        只有「可变且通过继承共享会有问题」的变量存入此字典。
+        对于通过 cls.x = val 赋值即可自然隔离的变量（window、renderer、run_state 等），
+        仍使用类变量方式，不需进 _state()。
+        """
+        name = cls.__name__
+        if name not in cls._registry:
+            cls._registry[name] = {
+                '_initialized': False,
+                'layer_stack': [],
+                'renderer_ready': threading.Event(),
+                'run_ready': threading.Event(),
+                # True = 逻辑线程模式 (PIE: start() 非阻塞)
+                # False = 内联模式 (导出/编辑器: run() 阻塞)
+                '_logic_thread_enabled': False,
+                # 输入状态 (InputState 实例, 由 _get_input_state 延迟创建)
+                '_input_state': None,
+            }
+        return cls._registry[name]
+
+    # ── 类变量默认值（通过 cls.x = val 写入子类 __dict__，天然隔离） ──
+    window: Window = None
+    renderer: Renderer = None
     window_type: WindowType = None
     renderer_type: RendererType = None
-
-    # ── 层栈 ──────────────────────────────────────────────────
-    layer_stack: list[Layer] = []
-
-    # ── 生命周期控制 ──────────────────────────────────────────
     run_state: bool = True
-    renderer_ready = threading.Event()
-    run_ready = threading.Event()
     renderer_thread: Thread | None = None
-
-    # ── 帧率控制（可选） ───────────────────────────────────────
+    _logic_thread: Thread | None = None
     target_frame_time: float = 0.0
+    _instance: 'Engine' = None
 
     # ════════════════════════════════════════════════════════════
     # 工厂方法（子类覆写）
@@ -138,6 +156,14 @@ class Engine:
         else:
             raise ValueError(f"Unknown renderer type: {renderer_type}")
 
+    @classmethod
+    def _get_input_state(cls) -> InputState:
+        """返回当前 Engine 的 InputState 实例（延迟创建）。"""
+        st = cls._state()
+        if st['_input_state'] is None:
+            st['_input_state'] = InputState()
+        return st['_input_state']
+
     # ════════════════════════════════════════════════════════════
     # 生命周期
     # ════════════════════════════════════════════════════════════
@@ -165,7 +191,7 @@ class Engine:
           5. 启动渲染线程
           6. 阻塞等待渲染器初始化完成
         """
-        if cls._initialized:
+        if cls._state()['_initialized']:
             return cls
         # 1. 规范化枚举
         if isinstance(window_type, str):
@@ -174,58 +200,85 @@ class Engine:
             renderer_type = RendererType(renderer_type)
         cls.window_type = window_type
         cls.renderer_type = renderer_type
-        # 2. 绑定事件回调
-        BindPackCallback(cls._on_event)
+        # 2. 绑定事件回调 — 注册到 Event 的 Engine 回调注册表
+        #    首次初始化的 Engine 同时设置全局回退还（兼容旧代码）
+        _register_engine(cls)
+        if _is_first_bind():
+            BindPackCallback(cls._on_event)
+            # 首个 Engine 设为默认 InputState（供模块级便利函数读取）
+            _set_default_input_state(cls._get_input_state())
         # 3. 初始化子系统
         ResourceManager.Init(cls)
         SceneManager.Init(cls)
         # 4. 创建窗口（子类决定窗口类型）
         cls.window = cls._create_window()
+        cls.window._engine = cls  # 窗口知道谁拥有它，事件路由到正确的 Engine
         # 5. 启动渲染线程
         cls.run_state = True
         cls.renderer_thread = Thread(target=cls._render_loop, daemon=True)
         cls.renderer_thread.start()
+        # 5b. 如果启用逻辑线程模式，一并启动
+        if cls._state()['_logic_thread_enabled']:
+            cls._logic_thread = Thread(target=cls._logic_loop, daemon=True)
+            cls._logic_thread.start()
         # 6. 等待渲染线程准备好
-        cls.renderer_ready.wait()
+        cls._state()['renderer_ready'].wait()
         cls._instance = cls
-        cls._initialized = True
+        cls._state()['_initialized'] = True
         return cls
 
     @classmethod
     def run(cls) -> None:
-        """主循环 — 窗口轮询 → 层更新。
+        """主循环 — 阻塞，直到引擎结束。
 
-        在渲染线程已经启动后调用。
-        主线程负责: 输入轮询、逻辑更新、事件处理。
-        渲染线程负责: 消费命令 → 绘制 → SwapBuffer。
+        逻辑线程模式 (PIE)：_logic_loop 已在后台运行，此处等待线程结束。
+        内联模式 (导出/编辑器)：在本线程上直接跑逻辑循环。
         """
-        try:
-            cls.run_ready.set()
-            while cls.run_state:
-                # ── 窗口轮询（输入事件在此产生） ──
-                cls.window.Update()
-                # ── 层逻辑更新 ──
-                for layer in cls.layer_stack:
-                    layer.OnUpdate()
-                    if not cls.run_state:
-                        break
-        finally:
+        if cls._state()['_logic_thread_enabled']:
+            # 逻辑已在后台线程跑，只需等待 + 清理
+            cls._join_threads()
             cls.shutdown()
+        else:
+            # 传统行为：在调用线程上跑逻辑循环
+            cls._state()['run_ready'].set()
+            try:
+                while cls.run_state:
+                    cls.window.Update()
+                    for layer in cls._state()['layer_stack']:
+                        layer.OnUpdate()
+                        if not cls.run_state:
+                            break
+            finally:
+                cls.shutdown()
+
+    @classmethod
+    def _logic_loop(cls) -> None:
+        """逻辑循环 — 独立线程运行 (PIE 模式)。"""
+        cls._state()['run_ready'].set()
+        while cls.run_state:
+            cls.window.Update()
+            for layer in cls._state()['layer_stack']:
+                layer.OnUpdate()
+                if not cls.run_state:
+                    break
 
     @classmethod
     def shutdown(cls) -> None:
         """引擎关闭 — 逆序清理资源。"""
         cls.run_state = False
         # 等待渲染线程退出
+        if cls._logic_thread is not None and cls._logic_thread.is_alive():
+            cls._logic_thread.join(timeout=1.0)
+        # 等待渲染线程退出
         if cls.renderer_thread is not None and cls.renderer_thread.is_alive():
             cls.renderer_thread.join(timeout=2.0)
         # 逆序 detach 层
-        for layer in reversed(cls.layer_stack):
+        for layer in reversed(cls._state()['layer_stack']):
             try:
                 layer.OnDetach()
             except Exception:
                 pass
-        cls.layer_stack.clear()
+        cls._state()['layer_stack'].clear()
         # 清理窗口
         if cls.window is not None:
             try:
@@ -246,7 +299,7 @@ class Engine:
         Layer.OnAttach() 在渲染线程的 run_ready 之后统一调用，
         不在 push 时立即调用（保持与现有行为一致）。
         """
-        cls.layer_stack.append(layer)
+        cls._state()['layer_stack'].append(layer)
 
     @classmethod
     def pop_layer(
@@ -254,8 +307,8 @@ class Engine:
         layer: Layer
     ) -> None:
         """从栈顶弹出 Layer。"""
-        if layer in cls.layer_stack:
-            cls.layer_stack.remove(layer)
+        if layer in cls._state()['layer_stack']:
+            cls._state()['layer_stack'].remove(layer)
             layer.OnDetach()
 
     # ════════════════════════════════════════════════════════════
@@ -279,7 +332,7 @@ class Engine:
         if event is None:
             return
         # 1. Layer 事件传播（从栈顶到栈底）
-        for layer in reversed(cls.layer_stack):
+        for layer in reversed(cls._state()['layer_stack']):
             if event.consumed:
                 break
             layer.OnEvent(event)
@@ -308,11 +361,11 @@ class Engine:
             # 1. 创建渲染器（包含 GPU 上下文初始化和资源加载）
             cls.renderer = cls._create_renderer()
             # 2. 通知主线程：渲染器已就绪
-            cls.renderer_ready.set()
+            cls._state()['renderer_ready'].set()
             # 3. 等待主线程发令开始
-            cls.run_ready.wait()
+            cls._state()['run_ready'].wait()
             # 4. 层初始化（在渲染线程，GL 上下文可用）
-            for layer in cls.layer_stack:
+            for layer in cls._state()['layer_stack']:
                 layer.OnAttach()
             # 5. 启动帧性能分析器
             FrameProfiler.Start(1)
@@ -334,7 +387,7 @@ class Engine:
         # ── 帧开始 ──
         renderer.StartFrame()
         # ── 层渲染 ──
-        for layer in cls.layer_stack:
+        for layer in cls._state()['layer_stack']:
             layer.OnRender()
         # ── 帧结束 ──
         renderer.EndFrame()
@@ -349,13 +402,30 @@ class Engine:
     # ════════════════════════════════════════════════════════════
 
     @classmethod
+    def _join_threads(cls) -> None:
+        """等待逻辑线程和渲染线程退出。"""
+        if cls._logic_thread is not None and cls._logic_thread.is_alive():
+            cls._logic_thread.join(timeout=2.0)
+        if cls.renderer_thread is not None and cls.renderer_thread.is_alive():
+            cls.renderer_thread.join(timeout=2.0)
+
+    @classmethod
     def get(cls) -> 'Engine':
-        """获取引擎单例。"""
-        if cls._instance is None:
-            raise RuntimeError(
-                "Engine not initialized. Call Engine.init() or a subclass init() first."
-            )
-        return cls._instance
+        """获取引擎单例 — 返回当前子类或最近初始化的 Engine 子类。"""
+        # 优先返回当前子类的 _instance（如 EditorHost.get()）
+        my_instance = cls.__dict__.get('_instance')
+        if my_instance is not None:
+            return my_instance
+        # 回退：扫描 registry 找第一个已初始化的子类
+        for name, st in cls._registry.items():
+            if st.get('_initialized') and name != 'Engine':
+                return st.get('_instance') or cls
+        # 再回退：检查 Engine 自己的 _instance
+        if cls._instance is not None:
+            return cls._instance
+        raise RuntimeError(
+            "Engine not initialized. Call Engine.init() or a subclass init() first."
+        )
 
     @classmethod
     def get_window(cls) -> Window:

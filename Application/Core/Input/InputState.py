@@ -1,37 +1,22 @@
-"""输入状态管理 — 鼠标/键盘全局状态追踪 & 修饰键查询 API。
+"""输入状态管理 — 每个 Engine 持有自己的 InputState 实例。
 
-本模块独立于 Event 系统，只负责:
-  1. 跟踪当前哪些按键/鼠标按钮被按住
-  2. 跟踪修饰键 (Ctrl/Shift/Alt) 的按下/释放状态
-  3. 提供组合键查询工具函数
+原先的模块级全局变量全部移入 InputState 类。
+每个 Engine (EditorHost / GameRuntime) 在 _state() 中持有自己的 InputState 实例。
 
-依赖方向: InputState ← InputEvent.Pack() 更新状态, 不反向依赖。
+模块级便利函数 (IsShiftPressed 等) 读取 _default_input_state（默认为 EditorHost）。
+InputEvent.Pack() 通过 engine= 参数路由到对应 Engine 的 InputState。
 """
+
+from __future__ import annotations
+
+from typing import Optional
 
 from Application.Core.Events.Enum.InputEnum import (
     KeyModifier, KeyButtonCode, KeyActionCode,
 )
 
 
-# ════════════════════════════════════════════════════════════════
-# 鼠标状态 (由 MouseButtonEvent.Pack 更新)
-# ════════════════════════════════════════════════════════════════
-
-current_mouse_button_code: int = None    # 当前按住的鼠标按钮 (MouseButtonCode), None=无
-button_press_pos_x: int = 0
-button_press_pos_y: int = 0
-button_release_pos_x: int = 0
-button_release_pos_y: int = 0
-
-
-# ════════════════════════════════════════════════════════════════
-# 修饰键状态 (由 KeyboardButtonEvent.Pack 更新)
-# ════════════════════════════════════════════════════════════════
-
-_modifier_state: int = KeyModifier.NONE    # 当前按下的修饰键位掩码
-_key_held: dict[int, bool] = {}            # 所有按键的按下状态: key_code → bool
-
-# 修饰键 KeyCode → KeyModifier 掩码映射
+# 修饰键 KeyCode → KeyModifier 掩码映射（与实例无关，保持在模块级）
 _MODIFIER_KEY_MAP: dict[int, int] = {
     KeyButtonCode.LeftControl:  KeyModifier.CTRL,
     KeyButtonCode.RightControl: KeyModifier.CTRL,
@@ -43,159 +28,180 @@ _MODIFIER_KEY_MAP: dict[int, int] = {
 
 
 # ════════════════════════════════════════════════════════════════
-# 内部更新函数 (由 InputEvent 中的 Event.Pack 调用)
+# InputState 类 — 每个 Engine 各自持有一个实例
 # ════════════════════════════════════════════════════════════════
 
-def _update_modifier_state(key: int, pressed: bool) -> None:
-    """内部: 根据修饰键的按下/释放更新全局状态。"""
-    global _modifier_state
-    mask = _MODIFIER_KEY_MAP.get(key)
-    if mask is not None:
-        if pressed:
-            _modifier_state |= mask
-        else:
-            _modifier_state &= ~mask
+class InputState:
+    """每个 Engine 独立的输入状态。
 
+    由 Engine._get_input_state() 创建，存储在 Engine._state()['_input_state'] 中。
+    """
 
-def _set_key_held(key: int, held: bool) -> None:
-    """内部: 更新按键按下状态。"""
-    if held:
-        _key_held[key] = True
-    else:
-        _key_held[key] = False
+    def __init__(self) -> None:
+        # ── 鼠标状态 ──
+        self.current_mouse_button_code: int | None = None
+        self.button_press_pos_x: int = 0
+        self.button_press_pos_y: int = 0
+        self.button_release_pos_x: int = 0
+        self.button_release_pos_y: int = 0
+        # ── 修饰键 & 按键状态 ──
+        self._modifier_state: int = KeyModifier.NONE
+        self._key_held: dict[int, bool] = {}
+
+    # ── 内部更新方法 (由 InputEvent.Pack 调用) ──
+
+    def update_modifier_state(self, key: int, pressed: bool) -> None:
+        """根据修饰键的按下/释放更新状态。"""
+        mask = _MODIFIER_KEY_MAP.get(key)
+        if mask is not None:
+            if pressed:
+                self._modifier_state |= mask
+            else:
+                self._modifier_state &= ~mask
+
+    def set_key_held(self, key: int, held: bool) -> None:
+        """更新按键按下状态。"""
+        self._key_held[key] = held
+
+    def set_mouse_button(self, button: int | None) -> None:
+        """设置当前按住的鼠标按钮。"""
+        self.current_mouse_button_code = button
+
+    def set_button_press_pos(self, x: int, y: int) -> None:
+        """记录鼠标按下位置。"""
+        self.button_press_pos_x = x
+        self.button_press_pos_y = y
+
+    def set_button_release_pos(self, x: int, y: int) -> None:
+        """记录鼠标释放位置。"""
+        self.button_release_pos_x = x
+        self.button_release_pos_y = y
+
+    # ── 修饰键查询 ──
+
+    def is_ctrl_pressed(self) -> bool:
+        return bool(self._modifier_state & KeyModifier.CTRL)
+
+    def is_shift_pressed(self) -> bool:
+        return bool(self._modifier_state & KeyModifier.SHIFT)
+
+    def is_alt_pressed(self) -> bool:
+        return bool(self._modifier_state & KeyModifier.ALT)
+
+    def get_modifier_mask(self) -> int:
+        return self._modifier_state
+
+    def is_key_down(self, key: int) -> bool:
+        return self._key_held.get(key, False)
+
+    def get_held_keys(self) -> list[int]:
+        """返回所有被按住的非修饰键列表。"""
+        return [k for k, v in self._key_held.items() if v and k not in _MODIFIER_KEY_MAP]
+
+    # ── 鼠标状态查询 ──
+
+    def is_mouse_button_down(self) -> bool:
+        return self.current_mouse_button_code is not None
+
+    def get_mouse_button_code(self) -> int | None:
+        return self.current_mouse_button_code
+
+    def get_mouse_button_label(self) -> str:
+        btn = self.current_mouse_button_code
+        if btn is None:
+            return ""
+        return f"Mouse Button {btn + 1}"
+
+    def get_button_press_pos(self) -> tuple[int, int]:
+        return self.button_press_pos_x, self.button_press_pos_y
+
+    def get_button_release_pos(self) -> tuple[int, int]:
+        return self.button_release_pos_x, self.button_release_pos_y
 
 
 # ════════════════════════════════════════════════════════════════
-# 标量状态 setter (供 InputEvent 跨模块修改, 避免 from-import 本地副本)
+# 默认 InputState（由 Engine.init() 设为首个 Engine 的实例）
+# 模块级便利函数从此读取，保证现有的 EditorLayer/UIManager 代码无需改动。
 # ════════════════════════════════════════════════════════════════
 
-def _set_mouse_button(button: int | None) -> None:
-    """内部: 设置当前按住的鼠标按钮。"""
-    global current_mouse_button_code
-    current_mouse_button_code = button
+_default_input_state: Optional[InputState] = None
 
 
-def _set_button_press_pos(x: int, y: int) -> None:
-    """内部: 记录鼠标按下位置。"""
-    global button_press_pos_x, button_press_pos_y
-    button_press_pos_x = x
-    button_press_pos_y = y
+def _set_default_input_state(state: InputState) -> None:
+    """设置默认 InputState（由 Engine.init 调用）。"""
+    global _default_input_state
+    _default_input_state = state
 
 
-def _set_button_release_pos(x: int, y: int) -> None:
-    """内部: 记录鼠标释放位置。"""
-    global button_release_pos_x, button_release_pos_y
-    button_release_pos_x = x
-    button_release_pos_y = y
+def _get_default_input_state() -> Optional[InputState]:
+    """获取默认 InputState（供 InputEvent 等模块使用，避免直接 import 变量）。"""
+    return _default_input_state
 
 
-# ════════════════════════════════════════════════════════════════
-# 修饰键查询 API
-# ════════════════════════════════════════════════════════════════
+# ── 修饰键查询 API ──
 
 def IsCtrlPressed() -> bool:
-    """Ctrl 键当前是否按下。"""
-    return bool(_modifier_state & KeyModifier.CTRL)
+    return _default_input_state.is_ctrl_pressed() if _default_input_state else False
 
 
 def IsShiftPressed() -> bool:
-    """Shift 键当前是否按下。"""
-    return bool(_modifier_state & KeyModifier.SHIFT)
+    return _default_input_state.is_shift_pressed() if _default_input_state else False
 
 
 def IsAltPressed() -> bool:
-    """Alt 键当前是否按下。"""
-    return bool(_modifier_state & KeyModifier.ALT)
+    return _default_input_state.is_alt_pressed() if _default_input_state else False
 
 
 def GetModifierMask() -> int:
-    """返回当前修饰键位掩码 (KeyModifier 组合值)。"""
-    return _modifier_state
+    return _default_input_state.get_modifier_mask() if _default_input_state else KeyModifier.NONE
 
 
 def IsKeyDown(key: int) -> bool:
-    """检查任意按键是否当前被按住。
-
-    Args:
-        key: KeyButtonCode 枚举值
-    """
-    return _key_held.get(key, False)
+    return _default_input_state.is_key_down(key) if _default_input_state else False
 
 
 def IsModifierKey(key: int) -> bool:
-    """判断一个 KeyButtonCode 是否为修饰键 (Ctrl/Shift/Alt)。"""
     return key in _MODIFIER_KEY_MAP
 
 
 def GetHeldKeys() -> list[int]:
-    """返回当前所有被按住的非修饰键列表 (KeyButtonCode 值)。
-
-    修饰键 (Ctrl/Shift/Alt) 会被过滤掉, 用 GetModifierMask() 查询。
-    常用于状态栏显示 "Ctrl + G" 等组合提示。
-    """
-    return [k for k, v in _key_held.items() if v and k not in _MODIFIER_KEY_MAP]
+    return _default_input_state.get_held_keys() if _default_input_state else []
 
 
-# ════════════════════════════════════════════════════════════════
-# 鼠标状态查询 (函数接口, 避免 from-import 标量本地副本)
-# ════════════════════════════════════════════════════════════════
+# ── 鼠标状态查询 API ──
 
 def IsMouseButtonDown() -> bool:
-    """是否有鼠标按钮当前被按住。"""
-    return current_mouse_button_code is not None
+    return _default_input_state.is_mouse_button_down() if _default_input_state else False
 
 
 def GetMouseButtonCode() -> int | None:
-    """返回当前按住的鼠标按钮代码 (MouseButtonCode), 无按下时返回 None。"""
-    return current_mouse_button_code
+    return _default_input_state.get_mouse_button_code() if _default_input_state else None
 
 
 def GetMouseButtonLabel() -> str:
-    """返回当前按住的鼠标按钮的显示名称, 如 "Mouse Button 1"。无按下时返回空字符串。"""
-    btn = current_mouse_button_code
-    if btn is None:
-        return ""
-    return f"Mouse Button {btn + 1}"
+    return _default_input_state.get_mouse_button_label() if _default_input_state else ""
 
 
 def GetButtonPressPos() -> tuple[int, int]:
-    """返回鼠标按下位置的 (x, y), 默认 (0, 0)。"""
-    return button_press_pos_x, button_press_pos_y
+    return _default_input_state.get_button_press_pos() if _default_input_state else (0, 0)
 
 
 def GetButtonReleasePos() -> tuple[int, int]:
-    """返回鼠标释放位置的 (x, y), 默认 (0, 0)。"""
-    return button_release_pos_x, button_release_pos_y
+    return _default_input_state.get_button_release_pos() if _default_input_state else (0, 0)
 
 
 # ════════════════════════════════════════════════════════════════
-# 组合键查询
+# 组合键查询（依赖 InputEvent 类级别缓存）
 # ════════════════════════════════════════════════════════════════
 
 def IsComboJustPressed(key: int, modifiers: int) -> bool:
-    """检查最近一次 KeyboardButtonEvent 是否匹配 键+修饰键 组合按下。
-
-    使用事件自身的 mods 字段 (GLFW 传入), 与 KeyModifier 值兼容。
-    仅在 Press 事件时返回 True, Release/Repeat 返回 False。
-
-    Args:
-        key:       目标键 (KeyButtonCode)
-        modifiers: 期望的修饰键位掩码 (KeyModifier 组合)
-
-    Example:
-        if IsComboJustPressed(KeyButtonCode.Z, KeyModifier.CTRL):
-            undo()  # Ctrl+Z 刚被按下
-        if IsComboJustPressed(KeyButtonCode.W, KeyModifier.CTRL | KeyModifier.SHIFT):
-            close_all()  # Ctrl+Shift+W
-    """
-    # 延迟导入避免循环依赖 (InputState ← InputEvent → InputState)
+    """检查最近一次 KeyboardButtonEvent 是否匹配 键+修饰键 组合按下。"""
     from Application.Core.Events.InputEvent import KeyboardButtonEvent
     ev = KeyboardButtonEvent
     if ev.action != KeyActionCode.Press:
         return False
     if ev.key != key:
         return False
-    # GLFW mods 字段与 KeyModifier 位值一致, 直接比较
     return (ev.mods & (KeyModifier.CTRL | KeyModifier.SHIFT | KeyModifier.ALT)) == modifiers
 
 

@@ -9,8 +9,8 @@ class NewSceneEvent(Event):
     """新场景创建信号 — 无数据负载。"""
 
     @classmethod
-    def Pack(cls) -> None:
-        super().Pack()
+    def Pack(cls, **kwargs) -> None:
+        super().Pack(**kwargs)
 
 
 #
@@ -29,8 +29,8 @@ class ComponentModifiedEvent(Event):
         return f"Modified component '{self.modified_comp.__class__.__name__}' for entity '{self.entity_id}'"
 
     @classmethod
-    def Pack(cls, entity_id: int, comp: Component) -> None:
-        super().Pack(entity_id, comp)
+    def Pack(cls, entity_id: int, comp: Component, **kwargs) -> None:
+        super().Pack(entity_id, comp, **kwargs)
 
     def unpack(self) -> tuple:
         return self.entity_id, self.modified_comp
@@ -49,8 +49,8 @@ class NewComponentEvent(Event):
         return f"New component '{self.new_comp.__class__.__name__}' for entity '{self.entity_id}'"
 
     @classmethod
-    def Pack(cls, entity_id: int, comp: Component) -> None:
-        super().Pack(entity_id, comp)
+    def Pack(cls, entity_id: int, comp: Component, **kwargs) -> None:
+        super().Pack(entity_id, comp, **kwargs)
 
     def unpack(self) -> tuple:
         return self.entity_id, self.new_comp
@@ -65,8 +65,8 @@ class UpdateShaderUniformsEvent(Event):
         self.uniforms: dict = uniforms
 
     @classmethod
-    def Pack(cls, entity_id: int, uniforms: dict) -> None:
-        super().Pack(entity_id, uniforms)
+    def Pack(cls, entity_id: int, uniforms: dict, **kwargs) -> None:
+        super().Pack(entity_id, uniforms, **kwargs)
 
     def unpack(self) -> tuple:
         return self.entity_id, self.uniforms
@@ -76,6 +76,6 @@ class SceneCameraUpdateEvent(Event):
     """场景摄像机更新信号 — 通知 Renderer 刷新 view/proj 缓存 (无数据负载)。"""
 
     @classmethod
-    def Pack(cls) -> None:
-        super().Pack()
+    def Pack(cls, **kwargs) -> None:
+        super().Pack(**kwargs)
 

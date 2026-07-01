@@ -13,5 +13,5 @@ class RendererMeshReleaseEvent(Event):
         return f"Renderer-Mesh '{self.release_mesh_id}' has been released !"
 
     @classmethod
-    def Pack(cls, mesh_id: int) -> None:
-        super().Pack(mesh_id)
+    def Pack(cls, mesh_id: int, **kwargs) -> None:
+        super().Pack(mesh_id, **kwargs)

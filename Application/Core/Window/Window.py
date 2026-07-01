@@ -59,6 +59,9 @@ class Window(ABC):
     app = None
     window = None
 
+    # ── 所属 Engine (由 Engine.init() 在创建窗口后设置) ──
+    _engine: type = None
+
     # ── 窗口默认尺寸（由分辨率选择逻辑覆写） ──
     _window_width: int = 800
     _window_height: int = 600

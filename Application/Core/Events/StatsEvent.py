@@ -14,13 +14,12 @@ class PerformanceStatsEvent(Event):
     def log_info(self) -> str:
         return (
             f"avgFPS={self.fps:.1f}, "
-            f"1%-low-StdDev={self.frame_time_std_ms:.2f}ms, "
             f"1%-low={self.p1_low_fps:.1f}"
         )
 
     @classmethod
-    def Pack(cls, fps: float, frame_time_std_ms: float, p1_low_fps: float) -> None:
-        super().Pack(fps, frame_time_std_ms, p1_low_fps)
+    def Pack(cls, fps: float, frame_time_std_ms: float, p1_low_fps: float, **kwargs) -> None:
+        super().Pack(fps, frame_time_std_ms, p1_low_fps, **kwargs)
 
     def unpack(self) -> float:
         return self.fps

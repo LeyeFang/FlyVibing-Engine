@@ -73,7 +73,6 @@ class EditorHost(Engine):
     # ════════════════════════════════════════════════════════════
     # 事件分发（过渡期: 桥接到 Renderer）
     # ════════════════════════════════════════════════════════════
-
     @classmethod
     def _on_event(cls, event: Event) -> None:
         """编辑器事件分发 — 额外桥接 Renderer.OnEvent。
@@ -83,7 +82,6 @@ class EditorHost(Engine):
         """
         # Engine 标准分发: Layer → Window
         super()._on_event(event)
-
         # 过渡期: 桥接 Renderer（处理 WindowResizeEvent 等）
         if cls.renderer is not None and not event.consumed:
             cls.renderer.OnEvent(event)
@@ -91,7 +89,6 @@ class EditorHost(Engine):
     # ════════════════════════════════════════════════════════════
     # 插件管理
     # ════════════════════════════════════════════════════════════
-
     @classmethod
     def load_plugin(cls, plugin: Plugin) -> None:
         """加载编辑器插件。
@@ -107,11 +104,9 @@ class EditorHost(Engine):
         """
         # 1. 插件初始化（主线程）
         plugin.on_load(cls)
-
         # 2. 推入插件拥有的 Layer
         for layer_cls in plugin.get_layers():
             cls.push_layer(layer_cls)
-
         cls._editor_plugin = plugin
         print(f"[EditorHost] Plugin loaded: {plugin.name} v{plugin.version}")
 

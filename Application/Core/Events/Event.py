@@ -24,6 +24,25 @@ from typing import Any
 
 app_callback_func: callable = None
 
+# ── Engine 事件回调注册表 ──────────────────────────────────────
+# key = Engine 类 (如 EditorHost, GameRuntime)
+# value = 该 Engine 的 _on_event 类方法
+_engine_callbacks: dict[type, callable] = {}
+
+
+def _register_engine(engine_cls: type) -> None:
+    """注册一个 Engine 的 _on_event 回调。
+
+    之后该 Engine 的子类可以通过 Event.Pack(..., engine=engine_cls) 路由事件。
+    """
+    _engine_callbacks[engine_cls] = engine_cls._on_event
+
+
+def _is_first_bind() -> bool:
+    """检查是否尚未绑定全局事件回调。"""
+    global app_callback_func
+    return app_callback_func is None
+
 
 class MetaEvent(ABCMeta):
     """元类：让 Event 的子类在 print 时显示类名。
@@ -61,6 +80,7 @@ class Event(metaclass=MetaEvent):
 
     def __init__(self) -> None:
         self._consumed: bool = False
+        self._source_engine: type | None = None  # 由 Pack/_dispatch 设置
 
     # ── 日志 ──
 
@@ -69,11 +89,19 @@ class Event(metaclass=MetaEvent):
         """子类可覆写为 property 以动态生成日志信息。"""
         return ''
 
+    def _engine_prefix(self) -> str:
+        """返回事件来源 Engine 的前缀标签，如 '[EditorHost] '。"""
+        if self._source_engine is not None:
+            name = self._source_engine.__name__
+            return f"[{name}] "
+        return ''
+
     def __str__(self) -> str:
         info = self.log_info
+        prefix = self._engine_prefix()
         if info:
-            return f"Time: {GetRunTime():.4f}, Event: {type(self).__name__}, {info}"
-        return f"Time: {GetRunTime():.4f}, Event: {type(self).__name__}"
+            return f"{prefix}Time: {GetRunTime():.4f}, Event: {type(self).__name__}, {info}"
+        return f"{prefix}Time: {GetRunTime():.4f}, Event: {type(self).__name__}"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -81,19 +109,33 @@ class Event(metaclass=MetaEvent):
     # ── 派发 ──
 
     @classmethod
-    def Pack(cls, *args, **kwargs) -> None:
-        """创建事件实例并派发到全局回调。
+    def Pack(cls, *args, engine=None, **kwargs) -> None:
+        """创建事件实例并派发到指定 Engine 的回调。
+
+        Args:
+            *args: 传给 __init__ 的位置参数。
+            engine: 目标 Engine 类 (如 EditorHost / GameRuntime)。
+                    为 None 时回退到全局 app_callback_func。
+            **kwargs: 传给 __init__ 的关键字参数。
 
         子类可覆写 (如 MouseGragEvent 需持久状态计算位移),
-        覆写时应在末尾调用 super().Pack() 或直接调用 app_callback_func()。
+        覆写时应在末尾调用 super().Pack(..., engine=engine, **kwargs)。
         """
         instance = cls(*args, **kwargs)
-        app_callback_func(instance)
+        instance._source_engine = engine
+        if engine is not None and engine in _engine_callbacks:
+            _engine_callbacks[engine](instance)
+        else:
+            app_callback_func(instance)
 
     @classmethod
-    def _dispatch(cls, instance: 'Event') -> None:
+    def _dispatch(cls, instance: 'Event', engine=None) -> None:
         """直接派发已创建的事件实例 (供子类 Pack 覆写使用)。"""
-        app_callback_func(instance)
+        instance._source_engine = engine
+        if engine is not None and engine in _engine_callbacks:
+            _engine_callbacks[engine](instance)
+        else:
+            app_callback_func(instance)
 
     # ── 数据读取 ──
 
@@ -123,3 +165,9 @@ def BindPackCallback(
     """绑定全局事件回调 (由 Application.Create 调用)。"""
     global app_callback_func
     app_callback_func = cb_func
+
+
+def _is_first_bind() -> bool:
+    """检查是否尚未绑定事件回调（防止 GameRuntime 覆盖 EditorHost 的回调）。"""
+    global app_callback_func
+    return app_callback_func is None

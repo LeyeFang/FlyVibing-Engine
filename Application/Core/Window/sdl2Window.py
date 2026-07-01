@@ -34,7 +34,7 @@ class sdl2Window(Window):
         while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
             match event.type:
                 case sdl2.SDL_QUIT:
-                    WindowCloseEvent.Pack()
+                    WindowCloseEvent.Pack(engine=cls._engine)
         # OpenGL 交换缓冲区
         if cls.app.renderer_type in ('OpenGL',):
             sdl2.SDL_GL_SwapWindow(cls.sdl2_window)

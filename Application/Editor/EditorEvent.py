@@ -33,14 +33,15 @@ class SelecteEntityEvent(Event):
     def Pack(
         cls,
         entity_id: int,
-        entity_name: str = ''
+        entity_name: str = '',
+        **kwargs
     ):
         cls.entity_id = entity_id
         cls.entity_name = entity_name
         cls.log_info = (
             f"Entity '{entity_name or entity_id}' (ID={entity_id}) selected"
         )
-        super().Pack()
+        super().Pack(**kwargs)
 
     @classmethod
     def UnPack(cls):
@@ -62,11 +63,12 @@ class DeselectEntityEvent(Event):
     @classmethod
     def Pack(
         cls,
-        entity_id: int
+        entity_id: int,
+        **kwargs
     ):
         cls.entity_id = entity_id
         cls.log_info = f"Entity '{entity_id}' deselected"
-        super().Pack()
+        super().Pack(**kwargs)
 
     @classmethod
     def UnPack(cls):
@@ -82,9 +84,9 @@ class ClearSelectionEvent(Event):
     log_info: str = ''
 
     @classmethod
-    def Pack(cls):
+    def Pack(cls, **kwargs):
         cls.log_info = "Selection cleared"
-        super().Pack()
+        super().Pack(**kwargs)
 
     @classmethod
     def UnPack(cls):
@@ -108,10 +110,10 @@ class ViewGizmoFaceClickEvent(Event):
     face_name: str = ''
 
     @classmethod
-    def Pack(cls, face_name: str):
+    def Pack(cls, face_name: str, **kwargs):
         cls.face_name = face_name
         cls.log_info = f"ViewGizmo face clicked: [{face_name}]"
-        super().Pack()
+        super().Pack(**kwargs)
 
     @classmethod
     def UnPack(cls) -> str:

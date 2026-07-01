@@ -10,12 +10,9 @@
 
 from Application.Core.Events.Event import Event
 from Application.Core.Events.Enum.InputEnum import *
-
-# ── 状态层 (所有可变状态 & 查询函数移入此模块) ──
 from Application.Core.Input.InputState import (
-    _key_held,
-    _update_modifier_state, _set_key_held,
-    _set_mouse_button, _set_button_press_pos, _set_button_release_pos,
+    InputState,
+    _get_default_input_state,
 )
 
 
@@ -31,8 +28,8 @@ class MouseMoveEvent(Event):
         self.pos_y: int = pos_y
 
     @classmethod
-    def Pack(cls, pos_x: int, pos_y: int) -> None:
-        super().Pack(pos_x, pos_y)
+    def Pack(cls, pos_x: int, pos_y: int, **kwargs) -> None:
+        super().Pack(pos_x, pos_y, **kwargs)
 
     def unpack(self) -> tuple[int, int]:
         return self.pos_x, self.pos_y
@@ -63,18 +60,20 @@ class MouseGragEvent(Event):
         )
 
     @classmethod
-    def Pack(cls, pos_x: int, pos_y: int) -> None:
-        # current_mouse_button_code 由 MouseButtonEvent 通过 _set_mouse_button 维护
-        from Application.Core.Input.InputState import current_mouse_button_code
-        if current_mouse_button_code is not None:
+    def Pack(cls, pos_x: int, pos_y: int, **kwargs) -> None:
+        # 读取当前 Engine 的 InputState 判断是否有按钮按下
+        engine = kwargs.get('engine')
+        inp = engine._get_input_state() if engine is not None else _get_default_input_state()
+        btn = inp.current_mouse_button_code if inp is not None else None
+        if btn is not None:
             instance = cls(
                 offset_x=pos_x - cls._last_x,
                 offset_y=pos_y - cls._last_y,
-                press_button=current_mouse_button_code,
+                press_button=btn,
             )
             cls._last_x = pos_x
             cls._last_y = pos_y
-            cls._dispatch(instance)
+            cls._dispatch(instance, engine=engine)
 
     def unpack(self) -> tuple[int, int, int]:
         return self.press_button, self.offset_x, self.offset_y
@@ -110,17 +109,21 @@ class MouseButtonEvent(Event):
         mods: int,
         pos_x: int,
         pos_y: int,
+        **kwargs
     ) -> None:
         cls._last_mods = mods
+        # 获取当前 Engine 的 InputState
+        engine = kwargs.get('engine')
+        inp = engine._get_input_state() if engine is not None else _get_default_input_state()
         if action == MouseActionCode.Press:
-            _set_mouse_button(button)
-            _set_button_press_pos(pos_x, pos_y)
+            if inp: inp.set_mouse_button(button)
+            if inp: inp.set_button_press_pos(pos_x, pos_y)
             MouseGragEvent._last_x = pos_x
             MouseGragEvent._last_y = pos_y
         elif action == MouseActionCode.Release:
-            _set_mouse_button(None)
-            _set_button_release_pos(pos_x, pos_y)
-        super().Pack(button, action, mods, pos_x, pos_y)
+            if inp: inp.set_mouse_button(None)
+            if inp: inp.set_button_release_pos(pos_x, pos_y)
+        super().Pack(button, action, mods, pos_x, pos_y, **kwargs)
 
     def unpack(self) -> tuple:
         return self.button, self.action, self.mods, self.pos_x, self.pos_y
@@ -141,16 +144,18 @@ class KeyboardButtonEvent(Event):
         return f"Key Button Code={KeyButtonCode[self.key]} Action={KeyActionCode[self.action]}"
 
     @classmethod
-    def Pack(cls, key: int, scancode: int, action: int, mods: int) -> None:
-        # ── 更新全局按键状态 & 修饰键状态 (委托 InputState) ──
+    def Pack(cls, key: int, scancode: int, action: int, mods: int, **kwargs) -> None:
+        # ── 更新当前 Engine 的按键状态 & 修饰键状态 ──
+        engine = kwargs.get('engine')
+        inp = engine._get_input_state() if engine is not None else _get_default_input_state()
         if action == KeyActionCode.Press:
-            _set_key_held(key, True)
-            _update_modifier_state(key, True)
+            if inp: inp.set_key_held(key, True)
+            if inp: inp.update_modifier_state(key, True)
         elif action == KeyActionCode.Release:
-            _set_key_held(key, False)
-            _update_modifier_state(key, False)
+            if inp: inp.set_key_held(key, False)
+            if inp: inp.update_modifier_state(key, False)
         # Repeat 不改变状态
-        super().Pack(key, scancode, action, mods)
+        super().Pack(key, scancode, action, mods, **kwargs)
 
     def unpack(self) -> tuple:
         return self.key, self.scancode, self.action, self.mods
@@ -169,8 +174,8 @@ class ScrollerEvent(Event):
         return f"Scroll offset x={self.x_offset}, y={self.y_offset}"
 
     @classmethod
-    def Pack(cls, x_offset: int, y_offset: int) -> None:
-        super().Pack(x_offset, y_offset)
+    def Pack(cls, x_offset: int, y_offset: int, **kwargs) -> None:
+        super().Pack(x_offset, y_offset, **kwargs)
 
     def unpack(self) -> tuple[int, int]:
         return self.x_offset, self.y_offset

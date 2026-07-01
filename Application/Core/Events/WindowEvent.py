@@ -12,8 +12,8 @@ class WindowCloseEvent(Event):
         return "Window Close !!"
 
     @classmethod
-    def Pack(cls) -> None:
-        super().Pack()
+    def Pack(cls, **kwargs) -> None:
+        super().Pack(**kwargs)
 
 
 class WindowResizeEvent(Event):
@@ -29,8 +29,8 @@ class WindowResizeEvent(Event):
         return f"Window Size: (width, height) = ({self.width}, {self.height})"
 
     @classmethod
-    def Pack(cls, width: int, height: int) -> None:
-        super().Pack(width, height)
+    def Pack(cls, width: int, height: int, **kwargs) -> None:
+        super().Pack(width, height, **kwargs)
 
     def unpack(self) -> tuple[int, int]:
         return self.width, self.height

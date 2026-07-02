@@ -3,7 +3,15 @@ from __future__ import annotations
 from typing import Callable
 import numpy as np
 
+from Application.Core.Events.Event import Event
+from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
+from Application.Core.Events.InputEvent import MouseMoveEvent
+
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
+from Application.Core.Renderer.RenderCommand import (
+    CameraUpdateCommand,
+    PickMouseMoveCommand,
+)
 from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
 from Application.Core.Renderer.ZenGL.ZenGLResourceManager import ZenGLResourceManager
 from Application.Core.Renderer.ZenGL.ZenGLEntityRenderer import ZenGLEntityRenderer
@@ -79,6 +87,46 @@ class ZenGLRenderer(
     @classmethod
     def EndFrame(cls) -> None: pass
 
+    @classmethod
+    def Shutdown(cls) -> None:
+        """释放所有 ZenGL GPU 资源 — 渲染线程、GL 上下文有效时调用。
+
+        清理顺序:
+          1. 拾取图像
+          2. 实体资源: pipeline/VBO/EBO/Image (级联降引用)
+          3. Overlay 资源: pipeline/VBO/EBO/Image
+          4. 核心: context + 主图像
+          5. 基类: 命令队列 + overlay 回调 + 相机缓存
+        """
+        cls._zg_pick_data = b''
+        cls._zg_overlay_pick_img = None
+        cls._zg_overlay_pick_data = b''
+        cls._zg_overlay_pick_size = (0, 0)
+        cls._unregister_all_entities()
+        cls._unregister_all_overlays()
+        cls._overlay_pick_key_map.clear()
+        cls._pre_overlay_callbacks.clear()
+        cls._outline_selected_ids.clear()
+        cls._scene_fbo_override = 0
+        cls._outliner = None
+        from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
+        ZenGLCore.destroy_core()
+        super().Shutdown()
+
+    @classmethod
+    def OnEvent(cls, event: Event) -> None:
+        """事件处理 — enqueue 命令到队列，由 StartFrame 消费。
+
+        注意:
+          - 窗口 resize 已改为直接 Command (glfwWindow 回调中提交)。
+          - 实体注册/解注册使用 renderer.enqueue(EntityRegistrationCommand(...))。
+        """
+        if isinstance(event, SceneCameraUpdateEvent):
+            cls.enqueue(CameraUpdateCommand())
+        if isinstance(event, MouseMoveEvent):
+            cls.enqueue(
+                PickMouseMoveCommand(event.pos_x, event.pos_y))
+
     # ════════════════════════════════════════════════════════════
     # 拾取系统 (entity + overlay)
     # ════════════════════════════════════════════════════════════
@@ -109,15 +157,12 @@ class ZenGLRenderer(
         img = cls._zg_overlay_pick_img
         if img is None:
             return
-
         pickable = [(k, g) for k, g in cls._overlay_gpu_resources.items() if g.pick_type > 0]
         if not pickable:
             return
-
         img.clear()
         vp_w, vp_h = cls.viewport_width, cls.viewport_height
         ctx = ZenGLCore.ctx
-
         # ★ Pick VS — 极简, 只用 location=0, 根据 overlay 实际声明的矩阵选择变体
         _PICK_FS = """#version 440 core
 uniform float uPickType;
@@ -276,7 +321,3 @@ void main() {
     @classmethod
     def unregister_overlay_drawable(cls, key):
         ZenGLResourceManager.unregister_overlay_drawable(key)
-
-    # 为兼容 Engine.Create() 期望的 start_frame/end_frame
-    @classmethod
-    def StartFrame(cls): cls._do_start_frame()

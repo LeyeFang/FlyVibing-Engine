@@ -6,6 +6,7 @@ from Application.Core.Events.Event import Event
 from Application.Core.Events.WindowEvent import *
 from Application.Core.Events.InputEvent import *
 from Application.Core.Window.Window import Window
+from Application.Core.Renderer.RenderCommand import ResizeCommand
 
 import glfw
 
@@ -44,6 +45,9 @@ class glfwWindow(Window):
     def Therminate(
         cls
     ):
+        if cls.glfw_window is not None:
+            glfw.destroy_window(cls.glfw_window)
+            cls.glfw_window = None
         glfw.terminate()
 
     @classmethod
@@ -118,6 +122,11 @@ class glfwWindow(Window):
         width,
         height
     ):
+        # 直接通知渲染器 (GPU 资源重建走 Command, 不经过 Event)
+        engine = cls._engine
+        if engine is not None and engine.renderer is not None:
+            engine.renderer.enqueue(ResizeCommand(width, height))
+        # 通知其他层 (ImGui display_size 等)
         WindowResizeEvent.Pack(width, height, engine=cls._engine)
 
     @classmethod

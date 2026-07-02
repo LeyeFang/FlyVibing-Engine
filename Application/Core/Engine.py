@@ -25,6 +25,9 @@ from __future__ import annotations
 from enum import Enum
 from typing import Union
 import threading
+import atexit
+import signal
+import traceback
 from threading import Thread
 
 from Application.Core.Layers.Layer import Layer
@@ -35,7 +38,6 @@ from Application.Core.Window.Window import Window
 from Application.Core.Renderer.Renderer import Renderer
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Resource.ResourceManager import ResourceManager
-from Application.Core.Stats.FrameProfiler import FrameProfiler
 
 
 # ════════════════════════════════════════════════════════════════
@@ -94,6 +96,8 @@ class Engine:
                 '_logic_thread_enabled': False,
                 # 输入状态 (InputState 实例, 由 _get_input_state 延迟创建)
                 '_input_state': None,
+                # 帧性能分析器 (FrameProfiler 实例, 由 _get_profiler 延迟创建)
+                '_profiler': None,
             }
         return cls._registry[name]
 
@@ -164,6 +168,15 @@ class Engine:
             st['_input_state'] = InputState()
         return st['_input_state']
 
+    @classmethod
+    def _get_profiler(cls) -> 'FrameProfiler':
+        """返回当前 Engine 的 FrameProfiler 实例（延迟创建）。"""
+        from Application.Core.Stats.FrameProfiler import FrameProfiler
+        st = cls._state()
+        if st['_profiler'] is None:
+            st['_profiler'] = FrameProfiler(engine=cls)
+        return st['_profiler']
+
     # ════════════════════════════════════════════════════════════
     # 生命周期
     # ════════════════════════════════════════════════════════════
@@ -225,7 +238,43 @@ class Engine:
         cls._state()['renderer_ready'].wait()
         cls._instance = cls
         cls._state()['_initialized'] = True
+        # 7. 注册强制终止处理器 (atexit + SIGINT)
+        atexit.register(cls._emergency_shutdown)
+        try:
+            signal.signal(signal.SIGINT, cls._signal_handler)
+        except Exception:
+            pass  # 非主线程或 Windows 限制下可能失败
         return cls
+
+    # ════════════════════════════════════════════════════════════
+    # 强制终止保护
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _signal_handler(cls, signum, frame) -> None:
+        """SIGINT (Ctrl+C) 处理器 — 触发正常关闭流程。"""
+        print(f"\n[Engine] Received signal {signum}, shutting down...")
+        cls.run_state = False
+
+    @classmethod
+    def _emergency_shutdown(cls) -> None:
+        """紧急关闭 — atexit 回调，确保进程退出时资源被释放。
+
+        仅在正常 shutdown() 未被调用时生效。
+        """
+        if not cls._state().get('_initialized', False):
+            return
+        print("[Engine] Emergency shutdown via atexit...")
+        cls.run_state = False
+        # 尝试等待渲染线程 (可能已经死了)
+        if cls.renderer_thread is not None and cls.renderer_thread.is_alive():
+            cls.renderer_thread.join(timeout=0.5)
+        # 尽力清理窗口
+        if cls.window is not None:
+            try:
+                cls.window.Therminate()
+            except Exception:
+                pass
 
     @classmethod
     def run(cls) -> None:
@@ -264,27 +313,46 @@ class Engine:
 
     @classmethod
     def shutdown(cls) -> None:
-        """引擎关闭 — 逆序清理资源。"""
+        """引擎关闭 — 逆序清理资源。
+
+        渲染线程已在 _render_loop() 的 finally 块中完成:
+          - Layer.OnDetach() (含 ImGui backend shutdown)
+          - Renderer.Shutdown() (GPU 资源释放)
+        主线程在此仅需:
+          - 等待线程退出
+          - 销毁窗口
+          - 卸载插件
+        """
         cls.run_state = False
-        # 等待渲染线程退出
+        # 等待逻辑线程退出
         if cls._logic_thread is not None and cls._logic_thread.is_alive():
             cls._logic_thread.join(timeout=1.0)
-        # 等待渲染线程退出
+        # 等待渲染线程退出 (会等待 _render_loop finally 块完成 GPU 清理)
         if cls.renderer_thread is not None and cls.renderer_thread.is_alive():
             cls.renderer_thread.join(timeout=2.0)
-        # 逆序 detach 层
-        for layer in reversed(cls._state()['layer_stack']):
-            try:
-                layer.OnDetach()
-            except Exception:
-                pass
-        cls._state()['layer_stack'].clear()
-        # 清理窗口
+        # 清理窗口 (必须在 GPU 资源释放之后)
         if cls.window is not None:
             try:
                 cls.window.Therminate()
             except Exception:
-                pass
+                traceback.print_exc()
+            cls.window = None
+        # 卸载插件
+        try:
+            cls._unload_plugin()
+        except Exception:
+            traceback.print_exc()
+        # 注销 atexit (避免重复调用)
+        try:
+            atexit.unregister(cls._emergency_shutdown)
+        except Exception:
+            pass
+        cls._state()['_initialized'] = False
+
+    @classmethod
+    def _unload_plugin(cls) -> None:
+        """卸载插件 — 子类 (EditorHost) 可覆写。"""
+        pass
 
     # ════════════════════════════════════════════════════════════
     # 层栈管理
@@ -356,6 +424,7 @@ class Engine:
           3. 等待 run_ready（主线程调用 run() 时设置）
           4. 调用所有 Layer.OnAttach()
           5. 进入渲染循环: StartFrame → Layer.OnRender → EndFrame → SwapBuffer
+          6. 退出时清理所有 GPU 资源 (GL 上下文仍有效)
         """
         try:
             # 1. 创建渲染器（包含 GPU 上下文初始化和资源加载）
@@ -368,14 +437,35 @@ class Engine:
             for layer in cls._state()['layer_stack']:
                 layer.OnAttach()
             # 5. 启动帧性能分析器
-            FrameProfiler.Start(1)
+            cls._get_profiler().start(1)
             # 6. 渲染主循环
             while cls.run_state:
                 cls._render_one_frame()
         except Exception as e:
             # 渲染线程异常 — 设置 run_state=False 让主线程退出
             cls.run_state = False
-            raise e
+            traceback.print_exc()
+        finally:
+            # ── GPU 资源清理 (GL 上下文仍绑定在当前线程) ──
+            # 逆序 detach 层 (ImGui backend shutdown 需 GL 上下文)
+            for layer in reversed(cls._state()['layer_stack']):
+                try:
+                    layer.OnDetach()
+                except Exception:
+                    traceback.print_exc()
+            cls._state()['layer_stack'].clear()
+            # 渲染器 GPU 资源释放
+            if cls.renderer is not None:
+                try:
+                    cls.renderer.Shutdown()
+                except Exception:
+                    traceback.print_exc()
+                cls.renderer = None
+            # 停止帧性能分析器
+            try:
+                cls._get_profiler().stop()
+            except Exception:
+                pass
 
     @classmethod
     def _render_one_frame(
@@ -395,7 +485,7 @@ class Engine:
         if cls.renderer_type in (RendererType.OpenGL, RendererType.ZenGL):
             window.SwapBuffer()
         # ── 性能统计 ──
-        FrameProfiler.Tick()
+        cls._get_profiler().tick()
 
     # ════════════════════════════════════════════════════════════
     # 全局访问入口

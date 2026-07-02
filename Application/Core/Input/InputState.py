@@ -215,7 +215,7 @@ def IsComboDown(key: int, modifiers: int) -> bool:
         key:       目标键 (KeyButtonCode)
         modifiers: 期望的修饰键位掩码 (KeyModifier 组合)
     """
-    return IsKeyDown(key) and (_modifier_state == modifiers)
+    return IsKeyDown(key) and (GetModifierMask() == modifiers)
 
 
 def GetMouseModifiers() -> int:

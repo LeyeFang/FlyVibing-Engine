@@ -25,6 +25,14 @@ from __future__ import annotations
 import numpy as np
 
 from Application.Core.Renderer.Renderer import RenderResourceManger
+from Application.Core.Renderer.RenderCommand import (
+    OverlayRegistrationCommand,
+    OverlayUnregistrationCommand,
+)
+from Application.Editor.EditorEvent import (
+    OverlayRegisteredEvent,
+    OverlayUnregisteredEvent,
+)
 
 # ════════════════════════════════════════════════════════════════
 # 网格资源: 参数常量
@@ -143,7 +151,7 @@ class Grid:
         # ★ 声明式 uniform: 静态值 (uColor) + 动态源 (uFadeCenter/uFadeRadius)
         #    渲染器负责解析动态源并上传到 GPU，Grid 不感知后端类型
         grid_v, grid_i = _build_grid_line_vertices()
-        renderer.register_overlay_drawable(
+        renderer.enqueue(OverlayRegistrationCommand(
             RenderResourceManger.overlay_drawable_struct(
                 key=KEY_GRID_LINES,
                 vertices=grid_v,
@@ -161,11 +169,11 @@ class Grid:
                 blend=True,
                 pick_type=0
             )
-        )
+        ))
 
         # ── 2. X 轴 (红色) ──
         axis_v, axis_i = _build_axis_vertices()
-        renderer.register_overlay_drawable(
+        renderer.enqueue(OverlayRegistrationCommand(
             RenderResourceManger.overlay_drawable_struct(
                 key=KEY_X_AXIS,
                 vertices=axis_v,
@@ -183,10 +191,10 @@ class Grid:
                 blend=True,
                 pick_type=0
             )
-        )
+        ))
 
         # ── 3. Y 轴 (绿色) ──
-        renderer.register_overlay_drawable(
+        renderer.enqueue(OverlayRegistrationCommand(
             RenderResourceManger.overlay_drawable_struct(
                 key=KEY_Y_AXIS,
                 vertices=axis_v,
@@ -204,10 +212,15 @@ class Grid:
                 blend=True,
                 pick_type=0
             )
-        )
+        ))
+
+        from Application.Editor.EditorHost import EditorHost
+        OverlayRegisteredEvent.Pack('Grid', engine=EditorHost)
 
     @classmethod
     def unregister_from(cls, renderer: RenderResourceManger) -> None:
         """从渲染器取消注册网格的所有可绘制对象。"""
         for key in (KEY_GRID_LINES, KEY_X_AXIS, KEY_Y_AXIS):
-            renderer.unregister_overlay_drawable(key)
+            renderer.enqueue(OverlayUnregistrationCommand(key))
+        from Application.Editor.EditorHost import EditorHost
+        OverlayUnregisteredEvent.Pack('Grid', engine=EditorHost)

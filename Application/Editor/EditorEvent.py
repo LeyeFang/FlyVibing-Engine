@@ -118,3 +118,52 @@ class ViewGizmoFaceClickEvent(Event):
     @classmethod
     def UnPack(cls) -> str:
         return cls.face_name
+
+
+# ═══════════════════════════════════════════════════════════════
+# 编辑器 Overlay 注册事件 / Editor Overlay Registration Events
+# ═══════════════════════════════════════════════════════════════
+
+class OverlayRegisteredEvent(Event):
+    """编辑器 Overlay 注册事件 — Grid / ViewGizmo / TransformGizmo 等
+    编辑器 overlay 向 Renderer 注册时触发。
+
+    Pack 参数:
+        overlay_name : overlay 标识名称 (如 'Grid', 'ViewGizmo', 'TransformGizmo')
+    UnPack 返回:
+        overlay_name : str
+    """
+
+    overlay_name: str = ''
+
+    @classmethod
+    def Pack(cls, overlay_name: str, **kwargs):
+        cls.overlay_name = overlay_name
+        cls.log_info = f"Overlay registered: [{overlay_name}]"
+        super().Pack(**kwargs)
+
+    @classmethod
+    def UnPack(cls) -> str:
+        return cls.overlay_name
+
+
+class OverlayUnregisteredEvent(Event):
+    """编辑器 Overlay 注销事件 — Overlay 从 Renderer 注销时触发。
+
+    Pack 参数:
+        overlay_name : overlay 标识名称
+    UnPack 返回:
+        overlay_name : str
+    """
+
+    overlay_name: str = ''
+
+    @classmethod
+    def Pack(cls, overlay_name: str, **kwargs):
+        cls.overlay_name = overlay_name
+        cls.log_info = f"Overlay unregistered: [{overlay_name}]"
+        super().Pack(**kwargs)
+
+    @classmethod
+    def UnPack(cls) -> str:
+        return cls.overlay_name

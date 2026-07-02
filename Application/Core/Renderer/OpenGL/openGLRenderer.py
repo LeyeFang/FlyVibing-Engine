@@ -26,15 +26,11 @@ if TYPE_CHECKING:
     from Application.Core.Engine import Engine
 
 from Application.Core.Events.Event import Event
-from Application.Core.Events.WindowEvent import *
-from Application.Core.Events.SceneEvent import *
+from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
 from Application.Core.Events.InputEvent import MouseMoveEvent
-from Application.Core.Scene.BasicComponents import *
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
 from Application.Core.Renderer.RenderCommand import (
-    ResizeCommand,
     CameraUpdateCommand,
-    EntityRegistrationCommand,
     PickMouseMoveCommand,
 )
 from Application.Core.Renderer.CommandQueue import CommandQueue
@@ -164,20 +160,31 @@ class openGLRenderer(
         pass
 
     @classmethod
+    def Shutdown(cls) -> None:
+        """释放所有 OpenGL GPU 资源 — 渲染线程、GL 上下文有效时调用。
+
+        清理顺序 (逆 MRO):
+          1. 拾取系统: FBO + shader + pick key 映射
+          2. 实体资源: VAO/VBO/EBO/Shader/Texture (级联降引用)
+          3. Overlay 资源: VAO/VBO/EBO/Program/Texture
+          4. 基类: 命令队列 + overlay 回调 + 相机缓存
+        """
+        cls._destroy_pick()
+        cls._unregister_all_entities()
+        cls._unregister_all_overlays()
+        cls._pre_overlay_callbacks.clear()
+        cls._outline_selected_ids.clear()
+        cls._scene_fbo_override = 0
+        super().Shutdown()
+
+    @classmethod
     def OnEvent(cls, event: Event) -> None:
-        """事件处理 — enqueue 命令到队列，由 StartFrame 消费。"""
-        if isinstance(event, WindowResizeEvent):
-            width, height = event.unpack()
-            cls.enqueue(ResizeCommand(width, height))
-        if any([
-            isinstance(event, NewComponentEvent),
-            isinstance(event, ComponentModifiedEvent)
-        ]):
-            entity_id, comp = event.unpack()
-            if isinstance(comp, MeshRenderer):
-                cls.enqueue(
-                    EntityRegistrationCommand(entity_id, comp.visible)
-                )
+        """事件处理 — enqueue 命令到队列，由 StartFrame 消费。
+
+        注意:
+          - 窗口 resize 已改为直接 Command (glfwWindow 回调中提交)。
+          - 实体注册/解注册使用 renderer.enqueue(EntityRegistrationCommand(...))。
+        """
         if isinstance(event, SceneCameraUpdateEvent):
             cls.enqueue(CameraUpdateCommand())
         if isinstance(event, MouseMoveEvent):

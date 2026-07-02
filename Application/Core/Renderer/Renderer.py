@@ -55,7 +55,12 @@ class Renderer(ABC):
     def enqueue(cls, cmd: RenderCommand) -> None:
         """主线程安全: 提交一条渲染命令。
 
-        替代旧的 renderer.OnEvent(event) 模式中的直接操作。
+        使用方式:
+          renderer.enqueue(EntityRegistrationCommand(entity_id, True))
+          renderer.enqueue(ResizeCommand(width, height))
+
+        Command 的 execute(renderer) 在渲染线程被调用，
+        调用方无需知道 renderer 的具体实现。
         """
         if cls._command_queue is not None:
             cls._command_queue.enqueue(cmd)
@@ -102,6 +107,20 @@ class Renderer(ABC):
     def EndFrame(cls):
         """帧结束 — 后处理、GPU query、present 等。"""
         ...
+
+    @classmethod
+    def Shutdown(cls) -> None:
+        """释放所有 GPU 资源 — 渲染线程、GL 上下文有效时调用。
+
+        子类应覆写以释放各自后端的 GPU 对象 (VAO/VBO/Shader/FBO 等)。
+        基类负责清理跨后端共享的状态 (命令队列、overlay 回调、相机缓存)。
+        """
+        cls._command_queue = None
+        cls._overlay_callbacks.clear()
+        cls._cached_view = None
+        cls._cached_proj = None
+        cls._pending_resize = None
+        cls._active_camera = None
 
     # ════════════════════════════════════════════════════════════
     # 相机注入 (Editor / Runtime 各自注入自己的相机)

@@ -138,7 +138,7 @@ class EditorCamera(OrbitCamera):
             return
         elif button == MouseButtonCode.Middle:
             if shift_held:
-                self.pan(-offset_x * self.pan_speed, offset_y * self.pan_speed)
+                self.pan(offset_x * self.pan_speed, offset_y * self.pan_speed)
 
     def on_scroll(self, y_offset: float) -> None:
         """滚轮映射 — 2D 调 ortho_size, 3D 调 orbit_distance。

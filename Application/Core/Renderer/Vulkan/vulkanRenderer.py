@@ -24,15 +24,11 @@ if TYPE_CHECKING:
     from Application.Core.Engine import Engine
 
 from Application.Core.Events.Event import Event
-from Application.Core.Events.WindowEvent import *
-from Application.Core.Events.SceneEvent import *
+from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
 from Application.Core.Scene.SceneManager import SceneManager
-from Application.Core.Scene.BasicComponents import *
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
 from Application.Core.Renderer.RenderCommand import (
-    ResizeCommand,
     CameraUpdateCommand,
-    EntityRegistrationCommand,
 )
 from Application.Core.Renderer.CommandQueue import CommandQueue
 from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
@@ -118,16 +114,11 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
 
     @classmethod
     def OnEvent(cls, event: Event) -> None:
-        if isinstance(event, WindowResizeEvent):
-            width, height = event.unpack()
-            cls.enqueue(ResizeCommand(width, height))
+        """事件处理 — enqueue 命令到队列，由 StartFrame 消费。
 
-        if any([isinstance(event, NewComponentEvent), isinstance(event, ComponentModifiedEvent)]):
-            entity_id, comp = event.unpack()
-            if isinstance(comp, MeshRenderer):
-                cls.enqueue(
-                    EntityRegistrationCommand(entity_id, comp.visible)
-                )
-
+        注意:
+          - 窗口 resize 已改为直接 Command (glfwWindow 回调中提交)。
+          - 实体注册/解注册使用 renderer.enqueue(EntityRegistrationCommand(...))。
+        """
         if isinstance(event, SceneCameraUpdateEvent):
             cls.enqueue(CameraUpdateCommand())

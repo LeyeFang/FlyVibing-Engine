@@ -174,6 +174,28 @@ void main() {
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
         cls._pick_fbo_w, cls._pick_fbo_h = w, h
 
+    @classmethod
+    def _destroy_pick(cls) -> None:
+        """销毁拾取系统的 GPU 资源 — 渲染线程、GL 上下文有效时调用。"""
+        if cls._pick_fbo:
+            gl.glDeleteFramebuffers(1, [cls._pick_fbo])
+            cls._pick_fbo = 0
+        if cls._pick_color:
+            gl.glDeleteTextures(1, [cls._pick_color])
+            cls._pick_color = 0
+        if cls._pick_depth:
+            gl.glDeleteRenderbuffers(1, [cls._pick_depth])
+            cls._pick_depth = 0
+        if cls._pick_prog:
+            gl.glDeleteProgram(cls._pick_prog)
+            cls._pick_prog = 0
+        if cls._overlay_pick_prog:
+            gl.glDeleteProgram(cls._overlay_pick_prog)
+            cls._overlay_pick_prog = 0
+        cls._overlay_pick_key_map.clear()
+        cls._pick_cache = -1
+        cls._pick_overlay_key = None
+
     # ════════════════════════════════════════════════════════════
     # Entity Pick Pass
     # ════════════════════════════════════════════════════════════

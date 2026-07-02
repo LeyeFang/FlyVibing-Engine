@@ -280,3 +280,77 @@ class ZenGLResourceManager:
         cls._overlay_gpu_resources.pop(key, None)
         rm = [k for k,v in cls._overlay_pick_key_map.items() if v==key]
         for k in rm: cls._overlay_pick_key_map.pop(k, None)
+
+    # ════════════════════════════════════════════════════════════
+    # 资源卸载 (引用计数管理)
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def unregister_entity(cls, entity_id: int) -> None:
+        """从 GPU 卸载实体 (ZenGL pipeline 由 GC 自动回收)。"""
+        if entity_id not in cls.registered_entities:
+            return
+        entity = cls.registered_entities[entity_id]
+        cls._decref_mesh(entity.mesh_id)
+        cls._decref_shader(entity.shader_id)
+        cls._decref_texture(entity.texture_id)
+        del cls.registered_entities[entity_id]
+
+    @classmethod
+    def unregister_mesh(cls, mesh_id: int) -> None:
+        cls._decref_mesh(mesh_id)
+
+    @classmethod
+    def unregister_shader(cls, shader_id: int) -> None:
+        cls._decref_shader(shader_id)
+
+    @classmethod
+    def unregister_texture(cls, texture_id: int) -> None:
+        cls._decref_texture(texture_id)
+
+    # ════════════════════════════════════════════════════════════
+    # 引用计数辅助
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _decref_mesh(cls, mesh_id: int) -> None:
+        if mesh_id not in cls.registered_meshes:
+            return
+        data = cls.registered_meshes[mesh_id]
+        data.ref_count -= 1
+        if data.ref_count <= 0:
+            del cls.registered_meshes[mesh_id]
+
+    @classmethod
+    def _decref_shader(cls, shader_id: int) -> None:
+        if shader_id not in cls.registered_shaders:
+            return
+        data = cls.registered_shaders[shader_id]
+        data.ref_count -= 1
+        if data.ref_count <= 0:
+            del cls.registered_shaders[shader_id]
+
+    @classmethod
+    def _decref_texture(cls, texture_id: int) -> None:
+        if texture_id not in cls.registered_textures:
+            return
+        data = cls.registered_textures[texture_id]
+        data.ref_count -= 1
+        if data.ref_count <= 0:
+            del cls.registered_textures[texture_id]
+
+    # ════════════════════════════════════════════════════════════
+    # 批量资源清理 (Shutdown 时调用)
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _unregister_all_entities(cls) -> None:
+        """卸载所有已注册实体的 GPU 资源，级联降引用 mesh/shader/texture。"""
+        for entity_id in list(cls.registered_entities.keys()):
+            cls.unregister_entity(entity_id)
+
+    @classmethod
+    def _unregister_all_overlays(cls) -> None:
+        """卸载所有 overlay 的 GPU 资源。"""
+        for key in list(cls._overlay_gpu_resources.keys()):
+            cls.unregister_overlay_drawable(key)

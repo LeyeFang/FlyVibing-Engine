@@ -1,134 +1,112 @@
 import time
 import math
 from collections import deque
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from Application.Core.Events.StatsEvent import PerformanceStatsEvent
 from Application.Core.Timer.Timer import ResetStartTime
 
+if TYPE_CHECKING:
+    from Application.Core.Engine import Engine
+
 
 class FrameProfiler:
-    # 类变量（全局状态）
-    _interval: float = 1.0                 # 上报间隔（秒）
-    _window_size: int = 1000               # 滑动窗口大小（保留最近 N 帧）
-    _frame_times_ms: Optional[deque] = None   # 存储帧耗时（毫秒）
-    _last_tick_time: Optional[float] = None   # 上一帧的时间点
-    _last_report_time: float = 0.0            # 上次上报的时间点
-    _frame_count_since_report: int = 0        # 本区间内累计帧数
-    _is_started: bool = False                 # 是否已调用 Start
-    _start_time: float = 0.0
-    _next_report_time: float = 3.0
+    """每 Engine 独立的帧性能分析器。
 
-    @classmethod
-    def Init(
-        cls
-    ) -> None:
-        pass
+    由 Engine._get_profiler() 创建并持有。
+    每个 Engine 的渲染线程各自调用 tick()，互不干扰。
+    """
 
-    @classmethod
-    def Start(
-        cls,
+    def __init__(self, engine: 'Engine' = None) -> None:
+        self._engine = engine          # 所属 Engine（用于 PerformanceStatsEvent 路由）
+        self._interval: float = 1.0
+        self._window_size: int = 1000
+        self._frame_times_ms: Optional[deque] = None
+        self._last_tick_time: Optional[float] = None
+        self._last_report_time: float = 0.0
+        self._frame_count_since_report: int = 0
+        self._is_started: bool = False
+        self._start_time: float = 0.0
+        self._next_report_time: float = 3.0
+
+    def start(
+        self,
         interval: float = 1.0,
         window_size: int = 1000
     ) -> None:
-        """
-        初始化性能分析器（在进入主循环前调用一次）
-        :param interval:     统计上报间隔（秒），默认 1 秒
-        :param window_size:  保存最近多少帧用于百分位计算，默认 1000
-        """
-        cls._interval = interval
-        cls._window_size = window_size
-        cls._frame_times_ms = deque(maxlen=window_size)
-        cls._last_tick_time = None
-        cls._last_report_time = time.perf_counter()
-        cls._next_report_time = 3
-        cls._frame_count_since_report = 0
-        cls._start_time = time.perf_counter()
-        cls._is_started = True
-        ResetStartTime()  # 同步 Timer 模块的全局计时起点
+        """初始化性能分析器（在进入渲染循环前调用一次）。"""
+        self._interval = interval
+        self._window_size = window_size
+        self._frame_times_ms = deque(maxlen=window_size)
+        self._last_tick_time = None
+        self._last_report_time = time.perf_counter()
+        self._next_report_time = 3
+        self._frame_count_since_report = 0
+        self._start_time = time.perf_counter()
+        self._is_started = True
+        ResetStartTime()
 
-    @classmethod
-    def Tick(
-        cls
+    def tick(
+        self
     ) -> None:
-        """
-        每帧调用一次（在游戏循环的每帧末尾调用）。
-        记录帧耗时，并每隔 interval 秒计算并上报 1% low FPS / 1% low 帧标准差 数据。
-        """
-        if not cls._is_started:
-            return  # 未初始化，忽略
+        """每帧调用一次，记录帧耗时并周期性上报。"""
+        if not self._is_started:
+            return
         now = time.perf_counter()
-        # 计算本帧耗时（毫秒）
-        if cls._last_tick_time is not None:
-            dt_ms = (now - cls._last_tick_time) * 1000.0
+        if self._last_tick_time is not None:
+            dt_ms = (now - self._last_tick_time) * 1000.0
             if dt_ms > 0:
-                cls._frame_times_ms.append(dt_ms)
-        cls._last_tick_time = now
-        cls._frame_count_since_report += 1
-        # 判断是否需要上报
-        if now - cls._start_time >= cls._next_report_time:
-            elapsed = now - cls._last_report_time
-            cls._report_and_reset(now, elapsed)
-            cls._next_report_time += 1
-            cls._last_report_time = now
+                self._frame_times_ms.append(dt_ms)
+        self._last_tick_time = now
+        self._frame_count_since_report += 1
+        if now - self._start_time >= self._next_report_time:
+            elapsed = now - self._last_report_time
+            self._report_and_reset(now, elapsed)
+            self._next_report_time += 1
+            self._last_report_time = now
 
-    @classmethod
     def _report_and_reset(
-        cls,
+        self,
         now: float,
         elapsed: float
     ) -> None:
-        """计算百分位数据和帧时间标准差，通过事件发送，然后重置区间计数器（不清除窗口）"""
-        # 1. 平均 FPS（本区间内）
-        avg_fps = cls._frame_count_since_report / elapsed
-        # 2. 1% low 帧时间（毫秒）
-        p1_ms = cls._compute_percentile_1p()
-        # 转换为 FPS
+        """计算百分位数据并通过事件上报。"""
+        avg_fps = self._frame_count_since_report / elapsed
+        p1_ms = self._compute_percentile_1p()
         p1_fps = 1000.0 / p1_ms if p1_ms > 0 else 0.0
-        # 3. 1% low 帧的标准差（毫秒）
-        std_ms = cls._compute_1p_low_std()
-        # 4. 发送事件
+        std_ms = self._compute_1p_low_std()
+        # 上报时指定所属 Engine，使事件正确路由
         PerformanceStatsEvent.Pack(
             fps=avg_fps,
             frame_time_std_ms=std_ms,
             p1_low_fps=p1_fps,
+            engine=self._engine,
         )
-        # 重置区间计数器（窗口数据保留）
-        cls._frame_count_since_report = 0
+        self._frame_count_since_report = 0
 
-    @classmethod
     def _compute_percentile_1p(
-        cls
+        self
     ) -> float:
-        """
-        对当前窗口内的帧时间升序排序，返回 1% low 帧时间（毫秒）
-        若窗口不足 2 帧，返回 0.0
-        """
-        if cls._frame_times_ms is None or len(cls._frame_times_ms) < 2:
+        """返回 1% low 帧时间（毫秒）。"""
+        if self._frame_times_ms is None or len(self._frame_times_ms) < 2:
             return 0.0
-        frames = list(cls._frame_times_ms)
-        frames.sort()  # 升序
+        frames = list(self._frame_times_ms)
+        frames.sort()
         n = len(frames)
-        # 1% low → 第 99% 分位点（最差的那 1% 帧的上限）
         idx_p1 = min(int(0.99 * n), n - 1)
         return frames[idx_p1]
 
-    @classmethod
     def _compute_1p_low_std(
-        cls
+        self
     ) -> float:
-        """
-        计算窗口内最差 1% 帧时间（即 ≥ 99% 分位点的那 1% 帧）的标准差（毫秒）
-        若窗口不足 2 帧，返回 0.0
-        """
-        if cls._frame_times_ms is None or len(cls._frame_times_ms) < 2:
+        """返回最差 1% 帧时间的标准差（毫秒）。"""
+        if self._frame_times_ms is None or len(self._frame_times_ms) < 2:
             return 0.0
-        frames = list(cls._frame_times_ms)
-        frames.sort()  # 升序
+        frames = list(self._frame_times_ms)
+        frames.sort()
         n = len(frames)
-        # 取最差的 1% 帧：索引从 99% 分位点 到 末尾
         idx_p1 = min(int(0.99 * n), n - 1)
-        worst_frames = frames[idx_p1:]  # 最差 1% 帧
+        worst_frames = frames[idx_p1:]
         k = len(worst_frames)
         if k < 2:
             return 0.0
@@ -136,14 +114,12 @@ class FrameProfiler:
         variance = sum((x - mean) ** 2 for x in worst_frames) / k
         return math.sqrt(variance)
 
-    # ---------- 可选：调试用 ----------
-    @classmethod
-    def GetCurrentStats(cls) -> dict:
-        """立即返回当前统计（用于调试，不触发上报）"""
-        p1_ms = cls._compute_percentile_1p()
-        std_ms = cls._compute_1p_low_std()
+    def get_current_stats(self) -> dict:
+        """立即返回当前统计（调试用，不触发上报）。"""
+        p1_ms = self._compute_percentile_1p()
+        std_ms = self._compute_1p_low_std()
         return {
-            "window_frames": len(cls._frame_times_ms) if cls._frame_times_ms else 0,
+            "window_frames": len(self._frame_times_ms) if self._frame_times_ms else 0,
             "p1_low_ms": p1_ms,
             "frame_time_std_ms": std_ms,
             "p1_low_fps": 1000.0 / p1_ms if p1_ms > 0 else 0.0,

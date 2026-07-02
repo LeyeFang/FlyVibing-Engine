@@ -48,7 +48,6 @@ class EditorHost(Engine):
     # ════════════════════════════════════════════════════════════
     # 工厂方法（Engine 要求子类覆写）
     # ════════════════════════════════════════════════════════════
-
     @classmethod
     def _create_window(cls) -> 'EditorWindow':
         """创建编辑器窗口 (GLFW + OpenGL 上下文)。
@@ -116,6 +115,11 @@ class EditorHost(Engine):
         if cls._editor_plugin is not None:
             cls._editor_plugin.on_unload()
             cls._editor_plugin = None
+
+    @classmethod
+    def _unload_plugin(cls) -> None:
+        """Engine.shutdown() 回调 — 卸载编辑器插件。"""
+        cls.unload_plugin()
 
     # ════════════════════════════════════════════════════════════
     # 编辑器全局 API

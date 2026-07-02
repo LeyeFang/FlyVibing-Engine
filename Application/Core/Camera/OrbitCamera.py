@@ -104,7 +104,6 @@ class OrbitCamera(CameraBase):
         old_pitch = self.pitch
         near_pole = abs(old_pitch) >= self._POLE_THRESHOLD
         f = self._forward
-
         # 垂直旋转
         right = np.cross(f, world_up)
         right_norm = float(np.linalg.norm(right))
@@ -115,7 +114,6 @@ class OrbitCamera(CameraBase):
         else:
             right /= right_norm
         f = self._rotate_vector(f, right, delta_pitch)
-
         # 水平旋转 + yaw/pitch 提取
         if near_pole:
             self.yaw = old_yaw + delta_yaw
@@ -135,12 +133,10 @@ class OrbitCamera(CameraBase):
             cross_xz = ox * nz - oz * nx
             dot_xz = ox * nx + oz * nz
             self.yaw = old_yaw + math.atan2(cross_xz, dot_xz)
-
         self._update_position()
 
     def pan(self, delta_right: float, delta_up: float) -> None:
         """平移注视点 — 沿摄像机局部坐标系的 right/up 轴 (世界单位)。
-
         Args:
             delta_right: 沿摄像机 right 轴位移 (世界单位, 正=右移)
             delta_up:    沿摄像机 up 轴位移 (世界单位, 正=上移)
@@ -201,7 +197,6 @@ class OrbitCamera(CameraBase):
     # ════════════════════════════════════════════════════════════
     # CameraBase 接口: 矩阵
     # ════════════════════════════════════════════════════════════
-
     def get_view_matrix(self) -> np.ndarray:
         """Generate view matrix — look_at(camera_pos, orbit_target, world_up).
 
@@ -239,7 +234,6 @@ class OrbitCamera(CameraBase):
     # ════════════════════════════════════════════════════════════
     # 内部: 方向向量 + 向量旋转
     # ════════════════════════════════════════════════════════════
-
     @property
     def _forward(self) -> np.ndarray:
         """当前向前方向 (GL 空间, orbit_target → camera, 单位向量)。"""

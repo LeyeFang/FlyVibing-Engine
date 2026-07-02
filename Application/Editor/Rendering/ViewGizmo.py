@@ -32,6 +32,15 @@ import numpy as np
 if TYPE_CHECKING:
     from Application.Core.Renderer.Renderer import Renderer
 
+from Application.Core.Renderer.RenderCommand import (
+    OverlayRegistrationCommand,
+    OverlayUnregistrationCommand,
+)
+from Application.Editor.EditorEvent import (
+    OverlayRegisteredEvent,
+    OverlayUnregisteredEvent,
+)
+
 
 # ════════════════════════════════════════════════════════════════
 # 内联着色器
@@ -163,7 +172,6 @@ class ViewGizmo:
         for face_name in cls.FACE_NAMES:
             verts, indices = face_geometries[face_name]
             pick_id = cls.FACE_PICK_IDS.get(face_name, 0)
-            print(face_name, pick_id)
             overlay = RRM.overlay_drawable_struct(
                 key=f"{cls.OVERLAY_KEY_PREFIX}_{face_name}",
                 vertices=verts,
@@ -189,8 +197,9 @@ class ViewGizmo:
                 pick_id=pick_id,   # 1~6
                 render_layer=1,    # screen-space overlay
             )
-            renderer.register_overlay_drawable(overlay)
-        print("[ViewGizmo] registered 6 face overlays")
+            renderer.enqueue(OverlayRegistrationCommand(overlay))
+        from Application.Editor.EditorHost import EditorHost
+        OverlayRegisteredEvent.Pack('ViewGizmo', engine=EditorHost)
 
     @classmethod
     def unregister_from(
@@ -199,10 +208,11 @@ class ViewGizmo:
     ) -> None:
         """注销 6 个面 overlay。"""
         for face_name in cls.FACE_NAMES:
-            renderer.unregister_overlay_drawable(
+            renderer.enqueue(OverlayUnregistrationCommand(
                 f"{cls.OVERLAY_KEY_PREFIX}_{face_name}"
-            )
-        print("[ViewGizmo] unregistered")
+            ))
+        from Application.Editor.EditorHost import EditorHost
+        OverlayUnregisteredEvent.Pack('ViewGizmo', engine=EditorHost)
 
     # ════════════════════════════════════════════════════════════
     # 拾取数据导出 (供 Renderer 使用)

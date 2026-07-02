@@ -55,7 +55,7 @@ import numpy as np
 # ════════════════════════════════════════════════════════════════
 
 OUTLINE_COLOR: tuple = (0.878, 0.416, 0.153)      # Blender 橙色
-OUTLINE_WIDTH: int = 3                               # 边缘检测半径 (像素)
+OUTLINE_WIDTH: int = 3                                  # 边缘检测半径 (像素)
 OUTLINE_XRAY: bool = True                             # 默认穿透模式
 ENTITY_ID_OFFSET: int = 1                             # entity_id → outID (0=空)
 
@@ -143,7 +143,6 @@ class OutlinerID:
             cls._zg_create_fbo(
                 renderer.viewport_width, renderer.viewport_height)
             cls._zg_compile_entity_shaders()
-
         else:
             cls._gl_compile_shaders()
             cls._gl_create_quad()
@@ -152,7 +151,7 @@ class OutlinerID:
 
         # 注册后渲染回调 (在实体渲染 + overlay 回调之后)
         renderer.register_overlay_callback(cls._on_post_render)
-        print(f"[OutlinerID] registered (backend={'ZenGL' if cls._backend==BACKEND_ZENGL else 'OpenGL'})")
+        pass  # registration logged via event system
 
     @classmethod
     def unregister_from(cls, renderer) -> None:
@@ -163,7 +162,6 @@ class OutlinerID:
         else:
             cls._gl_release()
         cls._renderer = None
-        print("[OutlinerID] unregistered")
 
     # ════════════════════════════════════════════════════════
     # 主线程 API (零 GL 调用)
@@ -355,12 +353,23 @@ void main() {{
         # FBO
         cls._gl_fbo = gl.glGenFramebuffers(1)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, cls._gl_fbo)
-        gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0,
-                                  gl.GL_TEXTURE_2D, cls._gl_color_tex, 0)
-        gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT1,
-                                  gl.GL_TEXTURE_2D, cls._gl_id_tex, 0)
-        gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT,
-                                     gl.GL_RENDERBUFFER, cls._gl_ds_rbo)
+        gl.glFramebufferTexture2D(
+            gl.GL_FRAMEBUFFER,
+            gl.GL_COLOR_ATTACHMENT0,
+            gl.GL_TEXTURE_2D,
+            cls._gl_color_tex,
+            0)
+        gl.glFramebufferTexture2D(
+            gl.GL_FRAMEBUFFER,
+            gl.GL_COLOR_ATTACHMENT1,
+            gl.GL_TEXTURE_2D,
+            cls._gl_id_tex,
+            0)
+        gl.glFramebufferRenderbuffer(
+            gl.GL_FRAMEBUFFER,
+            gl.GL_DEPTH_ATTACHMENT,
+            gl.GL_RENDERBUFFER,
+            cls._gl_ds_rbo)
         gl.glDrawBuffers(2, [gl.GL_COLOR_ATTACHMENT0, gl.GL_COLOR_ATTACHMENT1])
         if gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER) != gl.GL_FRAMEBUFFER_COMPLETE:
             raise RuntimeError("OutlinerID: MRT FBO incomplete")

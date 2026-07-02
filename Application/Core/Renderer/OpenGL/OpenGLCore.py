@@ -31,17 +31,6 @@ class OpenGLCore:
         Args:
             window_size: (width, height) 初始窗口尺寸
         """
-        # ── 打印 GPU 信息 ──
-        vendor = gl.glGetString(gl.GL_VENDOR)
-        renderer = gl.glGetString(gl.GL_RENDERER)
-        version = gl.glGetString(gl.GL_VERSION)
-        if vendor:
-            print(f"[OpenGL] GPU Vendor : {vendor.decode() if isinstance(vendor, bytes) else vendor}")
-        if renderer:
-            print(f"[OpenGL] GPU Renderer: {renderer.decode() if isinstance(renderer, bytes) else renderer}")
-        if version:
-            print(f"[OpenGL] GL Version  : {version.decode() if isinstance(version, bytes) else version}")
-
         # ── 视口 ──
         gl.glViewport(0, 0, window_size[0], window_size[1])
 

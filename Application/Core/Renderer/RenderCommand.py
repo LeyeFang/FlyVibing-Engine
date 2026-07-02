@@ -6,11 +6,13 @@ RenderCommand — 渲染命令基类 + 具体命令。
   - 命令是无状态 dataclass — 所有数据由字段携带
   - execute(renderer) 接收渲染器实例，调用其已有的方法
 
-当前命令 (覆盖 openGLRenderer.OnEvent 的全部事件类型):
-  ResizeCommand            — 窗口尺寸变更
-  CameraUpdateCommand      — 相机矩阵更新
-  EntityRegistrationCommand— 实体 MeshRenderer 注册/注销
-  PickMouseMoveCommand     — 拾取系统鼠标位置
+当前命令:
+  ResizeCommand               — 窗口尺寸变更
+  CameraUpdateCommand         — 相机矩阵更新
+  EntityRegistrationCommand   — 实体 MeshRenderer 注册/注销
+  OverlayRegistrationCommand  — Overlay 可绘制对象 GPU 资源注册
+  OverlayUnregistrationCommand— Overlay 可绘制对象 GPU 资源解注册
+  PickMouseMoveCommand        — 拾取系统鼠标位置
 """
 
 from __future__ import annotations
@@ -57,6 +59,28 @@ class EntityRegistrationCommand(RenderCommand):
             renderer.register_entity(self.entity_id)
         else:
             renderer.unregister_entity(self.entity_id)
+
+
+@dataclass
+class OverlayRegistrationCommand(RenderCommand):
+    """Overlay 可绘制对象 GPU 资源注册。
+
+    调用方 (Grid / ViewGizmo / TransformGizmo 等) 创建 overlay_drawable_struct
+    纯数据后，通过此命令提交到渲染线程执行 GPU 资源创建。
+    """
+    overlay: Any  # RenderResourceManger.overlay_drawable_struct
+
+    def execute(self, renderer: Any) -> None:
+        renderer.register_overlay_drawable(self.overlay)
+
+
+@dataclass
+class OverlayUnregistrationCommand(RenderCommand):
+    """Overlay 可绘制对象 GPU 资源解注册。"""
+    key: str
+
+    def execute(self, renderer: Any) -> None:
+        renderer.unregister_overlay_drawable(self.key)
 
 
 @dataclass

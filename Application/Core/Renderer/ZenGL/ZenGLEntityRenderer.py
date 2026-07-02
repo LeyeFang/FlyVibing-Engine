@@ -2,6 +2,7 @@
 from __future__ import annotations
 import numpy as np
 from Application.Core.Scene.SceneManager import SceneManager
+from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Math.Transform import calculate_entity_model
 
 
@@ -17,4 +18,17 @@ class ZenGLEntityRenderer:
                 e.pipeline.uniforms['view'][:] = view.astype('f4').tobytes()
                 e.pipeline.uniforms['projection'][:] = proj.astype('f4').tobytes()
             except: pass
+            # ── 材质 uniform — 每帧从 Material 读取最新值上传 ──
+            try:
+                material = ResourceManager.GetMaterial(e.material_id)
+                for u_name, u_value in material.uniforms_data.items():
+                    if u_name in ('model', 'view', 'projection'):
+                        continue
+                    arr = np.array([u_value], dtype='f4') if not hasattr(u_value, '__len__') else np.array(u_value, dtype='f4')
+                    try:
+                        e.pipeline.uniforms[u_name][:] = arr.tobytes()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             e.pipeline.render()

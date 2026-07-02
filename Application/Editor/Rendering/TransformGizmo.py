@@ -39,6 +39,15 @@ import numpy as np
 if TYPE_CHECKING:
     from Application.Core.Renderer.Renderer import Renderer
 
+from Application.Core.Renderer.RenderCommand import (
+    OverlayRegistrationCommand,
+    OverlayUnregistrationCommand,
+)
+from Application.Editor.EditorEvent import (
+    OverlayRegisteredEvent,
+    OverlayUnregisteredEvent,
+)
+
 
 # ════════════════════════════════════════════════════════════════
 # 内联着色器
@@ -393,7 +402,7 @@ class TransformGizmo:
                 pick_id=ad['pick_id'],  # 1/2/3
                 render_layer=1,         # screen-space overlay
             )
-            renderer.register_overlay_drawable(overlay)
+            renderer.enqueue(OverlayRegistrationCommand(overlay))
 
         # ── 3 平面手柄 ──
         for plane_name, pd in cls.PLANE_DEFS.items():
@@ -420,23 +429,25 @@ class TransformGizmo:
                 pick_id=pd['pick_id'],  # 4/5/6
                 render_layer=1,         # screen-space overlay
             )
-            renderer.register_overlay_drawable(overlay)
+            renderer.enqueue(OverlayRegistrationCommand(overlay))
 
-        print("[TransformGizmo] registered 3 axes + 3 planes")
+        from Application.Editor.EditorHost import EditorHost
+        OverlayRegisteredEvent.Pack('TransformGizmo', engine=EditorHost)
 
     @classmethod
     def unregister_from(cls, renderer: 'Renderer') -> None:
         """注销所有 6 个 overlay。"""
         for axis_name in cls.AXIS_DEFS:
-            renderer.unregister_overlay_drawable(
+            renderer.enqueue(OverlayUnregistrationCommand(
                 f"{cls.OVERLAY_KEY_PREFIX}_axis_{axis_name}"
-            )
+            ))
         for plane_name in cls.PLANE_DEFS:
-            renderer.unregister_overlay_drawable(
+            renderer.enqueue(OverlayUnregistrationCommand(
                 f"{cls.OVERLAY_KEY_PREFIX}_plane_{plane_name}"
-            )
+            ))
         cls._renderer = None
-        print("[TransformGizmo] unregistered")
+        from Application.Editor.EditorHost import EditorHost
+        OverlayUnregisteredEvent.Pack('TransformGizmo', engine=EditorHost)
 
     _renderer: any = None  # 记录当前绑定的渲染器，供 show/hide 使用
 

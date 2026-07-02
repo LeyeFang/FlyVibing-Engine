@@ -19,10 +19,6 @@ class ZenGLCore:
     @classmethod
     def init_core(cls, window_size: tuple[int, int]) -> None:
         cls.ctx = zengl.context()
-        info = cls.ctx.info
-        print(f"[ZenGL] GPU Vendor : {info.get('GL_VENDOR','N/A')}")
-        print(f"[ZenGL] GPU Renderer: {info.get('GL_RENDERER','N/A')}")
-        print(f"[ZenGL] GL Version  : {info.get('GL_VERSION','N/A')}")
         cls._create_images(window_size)
 
     @classmethod
@@ -76,3 +72,12 @@ class ZenGLCore:
         """清理深度图像 (为 screen-space overlay 准备)."""
         if cls._depth_image:
             cls._depth_image.clear()
+
+    @classmethod
+    def destroy_core(cls) -> None:
+        """销毁 ZenGL 核心 GPU 资源 — 渲染线程、GL 上下文有效时调用。"""
+        cls._color_image = None
+        cls._depth_image = None
+        cls._overlay_image = None
+        cls._overlay_depth = None
+        cls.ctx = None

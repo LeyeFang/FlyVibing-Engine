@@ -436,6 +436,22 @@ class OpenGLResourceManager:
             del cls.registered_textures[texture_id]
 
     # ════════════════════════════════════════════════════════════
+    # 批量资源清理 (Shutdown 时调用)
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _unregister_all_entities(cls) -> None:
+        """卸载所有已注册实体的 GPU 资源 (VAO)，级联降引用 mesh/shader/texture。"""
+        for entity_id in list(cls.registered_entities.keys()):
+            cls.unregister_entity(entity_id)
+
+    @classmethod
+    def _unregister_all_overlays(cls) -> None:
+        """卸载所有 overlay 的 GPU 资源 (VAO/VBO/EBO/program/texture)。"""
+        for key in list(cls._overlay_gpu_resources.keys()):
+            cls.unregister_overlay_drawable(key)
+
+    # ════════════════════════════════════════════════════════════
     # Editor Overlay 资源管理 (GPU 端实现)
     # ════════════════════════════════════════════════════════════
     #

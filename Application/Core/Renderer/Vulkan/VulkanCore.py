@@ -145,8 +145,7 @@ class VulkanCore:
         # ⑪ 创建全局描述符池
         cls._create_descriptor_pool()
 
-        print(f"[Vulkan] GPU : {cls._get_device_name()}")
-        print(f"[Vulkan] SwapChain : {cls.swapchain_width}x{cls.swapchain_height}")
+        # GPU info logged via event system
 
     @classmethod
     def destroy_core(cls) -> None:

@@ -43,11 +43,11 @@ class EditorPlugin(Plugin):
 
     def on_load(self, engine: 'Engine') -> None:
         """编辑器插件加载（主线程）。"""
-        print(f"[EditorPlugin] on_load — v{self.version}")
+        pass  # lifecycle logged via event system
 
     def on_unload(self) -> None:
         """编辑器插件卸载（主线程）。"""
-        print("[EditorPlugin] on_unload")
+        pass  # lifecycle logged via event system
 
     # ════════════════════════════════════════════════════════════
     # Layer 暴露

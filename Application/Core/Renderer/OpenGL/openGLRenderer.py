@@ -14,6 +14,7 @@ openGLRenderer — PyOpenGL 渲染器 (MRO 编排层)。
     - OpenGLPickSystem        : Pick FBO + Pass + Cache + API
     - OpenGLEntityRenderer    : 实体渲染 (_RenderEntities)
     - OpenGLOverlayRenderer   : overlay drawable 渲染 (_render_overlay_drawables)
+    - OpenGLPostProcess       : 后处理管线 (MRT + 边缘检测 + 合成)
     - Renderer                : 生命周期接口 + overlay 回调
     - RenderResourceManger    : 资源管理抽象接口
 
@@ -24,6 +25,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
     from Application.Core.Engine import Engine
+
+import numpy as np
 
 from Application.Core.Events.Event import Event
 from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
@@ -39,6 +42,7 @@ from Application.Core.Renderer.OpenGL.OpenGLResourceManager import OpenGLResourc
 from Application.Core.Renderer.OpenGL.OpenGLPickSystem import OpenGLPickSystem
 from Application.Core.Renderer.OpenGL.OpenGLOverlayRenderer import OpenGLOverlayRenderer
 from Application.Core.Renderer.OpenGL.OpenGLEntityRenderer import OpenGLEntityRenderer
+from Application.Core.Renderer.OpenGL.OpenGLPostProcess import OpenGLPostProcess
 
 
 class openGLRenderer(
@@ -47,6 +51,7 @@ class openGLRenderer(
     OpenGLPickSystem,
     OpenGLEntityRenderer,
     OpenGLOverlayRenderer,
+    OpenGLPostProcess,
     Renderer,
     RenderResourceManger
 ):
@@ -111,8 +116,17 @@ class openGLRenderer(
     def Create(
         cls
     ) -> "openGLRenderer":
-        from Application.Editor.EditorHost import EditorHost
-        window_size = EditorHost.editor_window.GetSize()
+        # ── 从当前 GLFW 上下文获取窗口尺寸 (不再硬编码 EditorHost) ──
+        # 调用方 (Engine._create_renderer) 在调用 Create 前已调用
+        # cls.window.MakeContextCurrent()，当前 GL 上下文的窗口即目标窗口。
+        import glfw as _glfw
+        _glfw_win = _glfw.get_current_context()
+        if _glfw_win is not None:
+            window_size = _glfw.get_framebuffer_size(_glfw_win)
+        else:
+            # 回退: 无当前上下文时使用 EditorHost (兼容旧测试路径)
+            from Application.Editor.EditorHost import EditorHost
+            window_size = EditorHost.editor_window.GetSize()
         OpenGLCore.init_core(window_size)
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]
@@ -140,6 +154,11 @@ class openGLRenderer(
             cls._pending_resize = None
         view = cls._cached_view
         proj = cls._cached_proj
+        # ── 兜底: 无相机时使用单位矩阵 (PIE 首帧 / 未注入相机) ──
+        if view is None:
+            view = np.identity(4, dtype=np.float32)
+        if proj is None:
+            proj = np.identity(4, dtype=np.float32)
         vp_w, vp_h = cls.viewport_width, cls.viewport_height
         # ── 1. 清屏 ──
         OpenGLCore.clear_frame()
@@ -152,7 +171,9 @@ class openGLRenderer(
             cb(view, proj, vp_w, vp_h)
         # ── 4. 实体渲染 (可能重定向到 Scene FBO) ──
         cls._RenderEntities(view, proj)
-        # ── 5. 统一 overlay 入口: 先回调, 后 drawable ──
+        # ── 5. 后处理管线 (MRT → 边缘检测 → 合成) ──
+        cls._render_post_process(view, proj)
+        # ── 6. 统一 overlay 入口: 先回调, 后 drawable ──
         cls._render_all_overlays(view, proj)
 
     @classmethod
@@ -167,11 +188,13 @@ class openGLRenderer(
           1. 拾取系统: FBO + shader + pick key 映射
           2. 实体资源: VAO/VBO/EBO/Shader/Texture (级联降引用)
           3. Overlay 资源: VAO/VBO/EBO/Program/Texture
-          4. 基类: 命令队列 + overlay 回调 + 相机缓存
+          4. 后处理资源: FBO + shader + quad VAO
+          5. 基类: 命令队列 + overlay 回调 + 相机缓存
         """
         cls._destroy_pick()
         cls._unregister_all_entities()
         cls._unregister_all_overlays()
+        cls.unregister_highlight_effect()
         cls._pre_overlay_callbacks.clear()
         cls._outline_selected_ids.clear()
         cls._scene_fbo_override = 0

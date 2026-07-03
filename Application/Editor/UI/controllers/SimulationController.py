@@ -1,6 +1,9 @@
 """模拟状态机 — 统一管理 Run / Pause / Stop 状态"""
 from enum import Enum, auto
 
+from Application.Core.Events.EngineEvent import EngineLifecycleEvent
+from Application.Editor.EditorHost import EditorHost
+
 
 class SimulationState(Enum):
     STOPPED = auto()
@@ -12,6 +15,8 @@ class SimulationController:
     """单例风格的模拟状态控制器 — 持有 GameRuntime 实例。"""
 
     _state: SimulationState = SimulationState.STOPPED
+    _pending_start: bool = False
+    _pending_stop: bool = False
 
     # ── 状态查询 ────────────────────────────────────────────
 
@@ -44,39 +49,73 @@ class SimulationController:
 
     @classmethod
     def play(cls) -> None:
-        """▶ 启动模拟 — 创建并启动 GameRuntime。"""
-        from Application.Runtime.GameRuntime import GameRuntime
-        from Application.Runtime.RuntimeLayer import RuntimeLayer
+        """▶ 请求启动模拟（由渲染线程 ImGui 回调触发）。
 
+        不直接创建 Runtime 窗口，改为设置 _pending_start 标记。
+        主线程在 EditorLayer.OnUpdate() 中消费此标记，
+        确保 RuntimeWindow 由主线程创建（GLFW 线程亲和性要求）。
+        """
         if cls._state != SimulationState.STOPPED:
             return
+        cls._pending_start = True
+        EngineLifecycleEvent.Pack(
+            stage="simulation", message="Play requested (pending)", engine=EditorHost
+        )
 
-        # 推入 RuntimeLayer 后启动
+    @classmethod
+    def _try_consume_start(cls) -> None:
+        """主线程调用: 消费 _pending_start 标记，执行实际的 PIE 启动。"""
+        if not cls._pending_start:
+            return
+        cls._pending_start = False
+
+        from Application.Runtime.GameRuntime import GameRuntime
+        from Application.Runtime.RuntimeLayer import RuntimeLayer
+        from Application.Runtime.RuntimeDebugLayer import RuntimeDebugLayer
+
         GameRuntime.push_layer(RuntimeLayer)
+        GameRuntime.push_layer(RuntimeDebugLayer)
         GameRuntime.start()
         cls._state = SimulationState.RUNNING
-        print("[Simulation] Runtime started")
+        EngineLifecycleEvent.Pack(
+            stage="simulation", message="Runtime started", engine=EditorHost
+        )
 
     @classmethod
     def pause(cls) -> None:
-        """⏸ 暂停模拟（暂未实现）。"""
         if cls._state == SimulationState.RUNNING:
             cls._state = SimulationState.PAUSED
 
     @classmethod
     def resume(cls) -> None:
-        """▶ 恢复运行（暂未实现）。"""
         if cls._state == SimulationState.PAUSED:
             cls._state = SimulationState.RUNNING
 
     @classmethod
     def stop(cls) -> None:
-        """■ 停止模拟 — 停止 GameRuntime。"""
-        from Application.Runtime.GameRuntime import GameRuntime
+        """■ 请求停止模拟（由渲染线程 ImGui 回调触发）。
 
+        不直接销毁 Runtime 窗口，改为设置 _pending_stop 标记。
+        主线程在 EditorLayer.OnUpdate() 中消费此标记，
+        确保 glfw.destroy_window() 在创建线程执行（GLFW 线程亲和性）。
+        """
         if cls._state == SimulationState.STOPPED:
             return
+        cls._pending_stop = True
+        EngineLifecycleEvent.Pack(
+            stage="simulation", message="Stop requested (pending)", engine=EditorHost
+        )
 
+    @classmethod
+    def _try_consume_stop(cls) -> None:
+        """主线程调用: 消费 _pending_stop 标记，执行实际的窗口销毁。"""
+        if not cls._pending_stop:
+            return
+        cls._pending_stop = False
+
+        from Application.Runtime.GameRuntime import GameRuntime
         GameRuntime.stop()
         cls._state = SimulationState.STOPPED
-        print("[Simulation] Runtime stopped")
+        EngineLifecycleEvent.Pack(
+            stage="simulation", message="Runtime stopped", engine=EditorHost
+        )

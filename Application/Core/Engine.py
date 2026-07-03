@@ -32,6 +32,7 @@ from threading import Thread
 
 from Application.Core.Layers.Layer import Layer
 from Application.Core.Events.Event import Event, BindPackCallback, _register_engine, _is_first_bind
+from Application.Core.Events.EngineEvent import EngineLifecycleEvent, LayerLifecycleEvent
 from Application.Core.Events.WindowEvent import WindowCloseEvent
 from Application.Core.Input.InputState import InputState, _set_default_input_state
 from Application.Core.Window.Window import Window
@@ -235,7 +236,13 @@ class Engine:
             cls._logic_thread = Thread(target=cls._logic_loop, daemon=True)
             cls._logic_thread.start()
         # 6. 等待渲染线程准备好
-        cls._state()['renderer_ready'].wait()
+        #    PIE 模式 (_logic_thread_enabled=True): 不阻塞调用线程。
+        #      渲染器就绪由 render_loop 内部的 renderer_ready + run_ready 自行同步。
+        #      若在此阻塞，调用线程（编辑器主线程）将被卡死在 poll_events 回调链内，
+        #      导致 _glfw_poll_lock 无法释放 → 逻辑线程死锁。
+        #    非 PIE 模式: 调用线程需要确认渲染器就绪后再继续（如 EditorHost 启动、导出模式）。
+        if not cls._state()['_logic_thread_enabled']:
+            cls._state()['renderer_ready'].wait()
         cls._instance = cls
         cls._state()['_initialized'] = True
         # 7. 注册强制终止处理器 (atexit + SIGINT)
@@ -253,7 +260,7 @@ class Engine:
     @classmethod
     def _signal_handler(cls, signum, frame) -> None:
         """SIGINT (Ctrl+C) 处理器 — 触发正常关闭流程。"""
-        print(f"\n[Engine] Received signal {signum}, shutting down...")
+        print(f"\n[Engine:{cls.__name__}] Received signal {signum}, setting run_state=False...", flush=True)
         cls.run_state = False
 
     @classmethod
@@ -302,14 +309,19 @@ class Engine:
 
     @classmethod
     def _logic_loop(cls) -> None:
-        """逻辑循环 — 独立线程运行 (PIE 模式)。"""
+        """逻辑循环 — 独立线程运行 (PIE 模式)。
+
+        不调用任何 GLFW 函数。窗口事件和生命周期全部由主线程管理。
+        本线程仅执行游戏逻辑更新。
+        """
+        import time as _time
         cls._state()['run_ready'].set()
         while cls.run_state:
-            cls.window.Update()
             for layer in cls._state()['layer_stack']:
                 layer.OnUpdate()
                 if not cls.run_state:
                     break
+            _time.sleep(0.005)
 
     @classmethod
     def shutdown(cls) -> None:
@@ -367,6 +379,7 @@ class Engine:
         Layer.OnAttach() 在渲染线程的 run_ready 之后统一调用，
         不在 push 时立即调用（保持与现有行为一致）。
         """
+        layer._engine = cls
         cls._state()['layer_stack'].append(layer)
 
     @classmethod
@@ -410,6 +423,11 @@ class Engine:
         # 3. 全局终止事件
         if isinstance(event, WindowCloseEvent):
             cls.run_state = False
+        # 4. 兜底: 生命周期事件若未被任何 Layer 消费，由 Engine 直接打印
+        #    处理 DebugLayer 自身 attach/detach 时暂无其他 Layer 能打印的情况
+        if isinstance(event, (EngineLifecycleEvent, LayerLifecycleEvent)):
+            if not event.consumed:
+                print(event)
 
     # ════════════════════════════════════════════════════════════
     # 渲染线程
@@ -417,37 +435,26 @@ class Engine:
 
     @classmethod
     def _render_loop(cls) -> None:
-        """渲染线程入口 — 创建渲染器 → 等待 run_ready → 进入渲染循环。
-        流程:
-          1. 创建渲染器（子类决定具体类型）
-          2. 设置 renderer_ready 事件
-          3. 等待 run_ready（主线程调用 run() 时设置）
-          4. 调用所有 Layer.OnAttach()
-          5. 进入渲染循环: StartFrame → Layer.OnRender → EndFrame → SwapBuffer
-          6. 退出时清理所有 GPU 资源 (GL 上下文仍有效)
-        """
+        """渲染线程入口 — 创建渲染器 → 等待 run_ready → 进入渲染循环。"""
         try:
-            # 1. 创建渲染器（包含 GPU 上下文初始化和资源加载）
             cls.renderer = cls._create_renderer()
-            # 2. 通知主线程：渲染器已就绪
             cls._state()['renderer_ready'].set()
-            # 3. 等待主线程发令开始
             cls._state()['run_ready'].wait()
-            # 4. 层初始化（在渲染线程，GL 上下文可用）
             for layer in cls._state()['layer_stack']:
                 layer.OnAttach()
-            # 5. 启动帧性能分析器
             cls._get_profiler().start(1)
-            # 6. 渲染主循环
             while cls.run_state:
                 cls._render_one_frame()
         except Exception as e:
-            # 渲染线程异常 — 设置 run_state=False 让主线程退出
+            EngineLifecycleEvent.Pack(
+                stage="exception",
+                message=f"_render_loop EXCEPTION: {e}",
+                engine=cls
+            )
             cls.run_state = False
             traceback.print_exc()
         finally:
             # ── GPU 资源清理 (GL 上下文仍绑定在当前线程) ──
-            # 逆序 detach 层 (ImGui backend shutdown 需 GL 上下文)
             for layer in reversed(cls._state()['layer_stack']):
                 try:
                     layer.OnDetach()

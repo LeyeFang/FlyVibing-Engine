@@ -275,34 +275,31 @@ class Renderer(ABC):
 
     @classmethod
     def _render_overlay_drawables(cls, view: np.ndarray, proj: np.ndarray) -> None:
-        """遍历数据驱动 overlay 并绘制 — 子类 (OpenGL/Vulkan) 实现。
+        """遍历数据驱动 overlay 并绘制 — 子类 (OpenGL/ZenGL) 实现。
 
-        与 _render_overlays 的区别:
-          - _render_overlays:    回调式, Editor 自行管理 GL 状态 (如轮廓 blit)
-          - _render_overlay_drawables: 声明式, 渲染器管理 GL 状态 (如 Grid/Gizmo)
+        声明式 overlay: Editor 提供纯数据 (overlay_drawable_struct),
+        渲染器负责 GPU 上传和绘制 (如 Grid/Gizmo)。
 
-        基类默认空实现, GL 后端覆盖。
+        基类默认空实现, 后端覆盖。
         """
         pass
 
     @classmethod
     def _render_all_overlays(cls, view: np.ndarray, proj: np.ndarray) -> None:
-        """统一 overlay 渲染入口 — 三层渲染。
+        """统一 overlay 渲染入口 — 两层渲染。
 
         渲染顺序 (bottom→top):
-          Callbacks (Outliner/OutlinerID) — 实体+轮廓 blit 到屏幕
           Layer 0: scene-space overlay (Grid) — 深度测试 vs 实体, 不额外清深度
           Clear depth — 为 screen-space overlay 准备
           Layer 1: screen-space overlay (ViewGizmo, TransformGizmo)
 
         注意:
-          - Callbacks 在 Layer 0 之前，因为 Outliner 的 stencil blit
-            全屏覆盖默认帧缓冲，Grid 需在 blit 之后绘制才能显示。
+          - PostProcess (轮廓高亮等) 在 _render_post_process 中执行,
+            位于 _RenderEntities 之后、本方法之前。
           - Layer 0 不清深度：Grid 应通过深度测试被实体遮挡，
             Grid 线跟实体同深度时实体在前。
           - Layer 1 清深度：屏幕空间覆盖物（Gizmo）始终最前。
         """
-        cls._render_overlays(view, proj)
         cls._render_overlay_drawables(view, proj, layer=0)
         cls._clear_depth_for_overlays()
         cls._render_overlay_drawables(view, proj, layer=1)
@@ -535,9 +532,8 @@ class RenderResourceManger(ABC):
         pick_id: int = 0
         render_layer: int = 0
         """渲染层级: 0=场景空间 (vs entity depth), 1=屏幕空间 (depth cleared)
-        渲染顺序 (bottom→top): Outliner callback → 0 → 深度清理 → 1
-        - Outliner:  callback (实体+轮廓 blit, 最先渲染)
-        - Grid:      layer=0 (默认, 在轮廓之上绘制)
+        渲染顺序 (bottom→top): Entities → PostProcess → Layer 0 → 深度清理 → Layer 1
+        - Grid:      layer=0 (默认, 在实体和后处理之上绘制)
         - ViewGizmo: layer=1 (screen-space, 始终最前)
         - TransformGizmo: layer=1
         """

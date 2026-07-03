@@ -1,6 +1,7 @@
 # ── 标准库 ──
 import ctypes
 import os
+import time
 
 # ── 第三方库 ──
 from imgui_bundle import imgui
@@ -21,11 +22,6 @@ from Application.Core.Layers.Layer import Layer
 
 # ── 应用层: 编辑器 ──
 from Application.Editor.EditorCamera import EditorCamera
-from Application.Editor.EditorEvent import (
-    ClearSelectionEvent,
-    SelecteEntityEvent,
-    ViewGizmoFaceClickEvent,
-)
 from Application.Editor.Rendering.Grid import Grid
 from Application.Editor.Rendering.OutlinerID import OutlinerID
 from Application.Editor.Rendering.ViewGizmo import ViewGizmo
@@ -86,6 +82,9 @@ class EditorLayer(Layer):
 
     @classmethod
     def OnEvent(cls, event: Event) -> None:
+        # ── 防御: 渲染线程已退出时 ImGui 上下文已被销毁 ──
+        if imgui.get_current_context() is None:
+            return
         # ── 窗口 resize 始终处理，不受面板鼠标拦截影响 ──
         if isinstance(event, WindowResizeEvent):
             w, h = event.unpack()
@@ -109,10 +108,12 @@ class EditorLayer(Layer):
                 return
             if event.action != MouseActionCode.Release:
                 return
+            t0 = time.perf_counter()
             pick_type, pick_value = cls.renderer.pick_at(
                 event.pos_x, event.pos_y)
+            dt = (time.perf_counter() - t0) * 1000
             if pick_type == 'entity':
-                SelecteEntityEvent.Pack(entity_id=pick_value, engine=EditorHost)
+                # print(f"[EditorLayer] Click → Entity#{pick_value}  ({dt:.3f}ms)")
                 OutlinerID.set_selected_entities({pick_value})
             elif pick_type == 'overlay' and pick_value:
                 prefix = ViewGizmo.OVERLAY_KEY_PREFIX
@@ -122,14 +123,28 @@ class EditorLayer(Layer):
                     if direction is not None:
                         cam.look_from_direction(direction)
                         SceneCameraUpdateEvent.Pack()
-                        ViewGizmoFaceClickEvent.Pack(face_name=face_name, engine=EditorHost)
+                        print(f"[EditorLayer] ViewGizmo → {face_name}  ({dt:.3f}ms)")
+                else:
+                    print(f"[EditorLayer] Click → Overlay '{pick_value}'  ({dt:.3f}ms)")
             else:
-                ClearSelectionEvent.Pack(engine=EditorHost)
+                print(f"[EditorLayer] Click → nothing  ({dt:.3f}ms)")
                 OutlinerID.clear()
 
     @classmethod
     def OnUpdate(cls):
-        pass
+        # ── 消费延迟的 PIE 启动/停止请求 (主线程执行 GLFW 窗口操作) ──
+        from Application.Editor.UI.controllers.SimulationController import SimulationController
+        SimulationController._try_consume_start()
+        SimulationController._try_consume_stop()
+
+        # ── 检测 RuntimeWindow 关闭 (用户点 X) ──
+        if SimulationController.is_running():
+            from Application.Runtime.GameRuntime import GameRuntime
+            import glfw as _glfw
+            if (GameRuntime.window is not None
+                    and GameRuntime.window.glfw_window is not None
+                    and _glfw.window_should_close(GameRuntime.window.glfw_window)):
+                SimulationController.stop()
 
     @classmethod
     def OnRender(cls):
@@ -151,11 +166,21 @@ class EditorLayer(Layer):
     def _load_fonts(cls) -> None:
         """加载 UI 字体 — 优先 Inter (Blender 同款)，否则用系统字体。"""
         io = imgui.get_io()
+        font_loaded = False
 
         for font_path in cls.FONT_CANDIDATES:
             if os.path.isfile(font_path):
                 io.fonts.add_font_from_file_ttf(font_path, cls.FONT_SIZE)
+                print(f"[Font] Loaded: {font_path} ({cls.FONT_SIZE}px)")
+                font_loaded = True
                 break
+
+        if not font_loaded:
+            print(
+                "[Font] No custom font found. Using ImGui default.\n"
+                "       To get Blender-style font, download Inter:\n"
+                "       https://rsms.me/inter/ → Resource/Fonts/Inter-Regular.ttf"
+            )
 
     @classmethod
     def _init_ui_panels(cls):

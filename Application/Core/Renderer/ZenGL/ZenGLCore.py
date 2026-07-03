@@ -19,6 +19,10 @@ class ZenGLCore:
     @classmethod
     def init_core(cls, window_size: tuple[int, int]) -> None:
         cls.ctx = zengl.context()
+        info = cls.ctx.info
+        print(f"[ZenGL] GPU Vendor : {info.get('GL_VENDOR','N/A')}")
+        print(f"[ZenGL] GPU Renderer: {info.get('GL_RENDERER','N/A')}")
+        print(f"[ZenGL] GL Version  : {info.get('GL_VERSION','N/A')}")
         cls._create_images(window_size)
 
     @classmethod

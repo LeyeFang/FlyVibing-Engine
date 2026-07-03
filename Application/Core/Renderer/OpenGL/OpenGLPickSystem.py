@@ -209,7 +209,8 @@ void main() {
         """每帧将实体 ID 渲染到拾取 FBO — 通过 MRO 访问 cls.registered_entities。"""
         entities = SceneManager.GetRenderableEntities()
         if not entities:
-            print("[PICK-DBG] NO renderable entities, skipping pick pass")
+            # Only print when verbose debugging is needed
+            # print("[PICK-DBG] NO renderable entities, skipping pick pass")
             cls._finalize_pick_read()
             return
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, cls._pick_fbo)

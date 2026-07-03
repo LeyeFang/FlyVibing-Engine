@@ -45,10 +45,15 @@ class glfwWindow(Window):
     def Therminate(
         cls
     ):
+        """销毁自身 GLFW 窗口。
+
+        不调用 glfw.terminate() — 该操作由子类 (如 EditorWindow) 根据自身角色决定。
+        RuntimeWindow / PreviewRuntimeWindow 不应终止整个 GLFW，
+        因为编辑器窗口仍需要 GLFW 处于初始化状态。
+        """
         if cls.glfw_window is not None:
             glfw.destroy_window(cls.glfw_window)
             cls.glfw_window = None
-        glfw.terminate()
 
     @classmethod
     def OnEvent(

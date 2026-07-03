@@ -6,11 +6,6 @@ GameRuntime — 游戏运行时（Engine 子类）。
              逻辑跑在独立线程，编辑器控制生命周期。
   run()   — 阻塞 (导出/独立运行)
              逻辑跑在主线程。
-
-生命周期控制 (PIE):
-  Editor → GameRuntime.start()
-         → GameRuntime.stop()   (设置 run_state = False)
-         → GameRuntime.is_running()
 """
 
 from __future__ import annotations
@@ -18,28 +13,37 @@ from __future__ import annotations
 from typing import Union
 
 from Application.Core.Engine import Engine, RendererType, WindowType
+from Application.Core.Events.EngineEvent import EngineLifecycleEvent
+from Application.Core.Window.Window import Window
+from Application.Core.Renderer.Renderer import Renderer
 
 
 class GameRuntime(Engine):
     """游戏运行时 — 可被编辑器管理（PIE）或独立运行（导出）。"""
 
     # ════════════════════════════════════════════════════════════
-    # 工厂方法（暂为空实现）
+    # 工厂方法
     # ════════════════════════════════════════════════════════════
 
     @classmethod
-    def _create_window(cls):
-        """创建运行时窗口 — 当前使用 StubWindow 占位。"""
-        from Application.Runtime.StubWindow import StubWindow
-        StubWindow.Create()
-        return StubWindow
+    def _create_window(cls) -> Window:
+        """创建运行时窗口 — 独立的 GLFW 子窗口 (OpenGL 上下文)。"""
+        from Application.Runtime.RuntimeWindow import RuntimeWindow
+        RuntimeWindow.Create()
+        return RuntimeWindow
 
     @classmethod
-    def _create_renderer(cls):
-        """创建运行时渲染器 — 当前使用 StubRenderer 占位。"""
-        from Application.Runtime.StubRenderer import StubRenderer
-        StubRenderer.Create()
-        return StubRenderer
+    def _create_renderer(cls) -> Renderer:
+        """创建运行时渲染器 — 根据 cls.renderer_type 选择后端。"""
+        cls.window.MakeContextCurrent()
+        renderer_cls = cls._get_renderer_class(cls.renderer_type)
+        renderer = renderer_cls.Create()
+        # ── 修正视口: 使用 RuntimeWindow 而非 EditorWindow ──
+        w, h = cls.window.GetSize()
+        renderer.viewport_width = w
+        renderer.viewport_height = h
+        renderer.aspect_ratio = w / h if h else 1.0
+        return renderer
 
     # ════════════════════════════════════════════════════════════
     # 生命周期
@@ -51,14 +55,10 @@ class GameRuntime(Engine):
         window_type: Union[WindowType, str] = WindowType.GLFW,
         renderer_type: Union[RendererType, str] = RendererType.OpenGL,
     ) -> 'GameRuntime':
-        """非阻塞启动 (PIE 模式)。
-
-        逻辑循环跑在独立后台线程，立即返回。
-        编辑器通过 stop() 或设置 run_state=False 停止 Runtime。
-        """
+        """非阻塞启动 (PIE 模式)。"""
         cls._state()['_logic_thread_enabled'] = True
         cls.init(window_type=window_type, renderer_type=renderer_type)
-        print(f"[GameRuntime] Started in PIE mode (logic thread)")
+        EngineLifecycleEvent.Pack(stage="start", message="Started in PIE mode", engine=cls)
         return cls
 
     @classmethod
@@ -67,12 +67,9 @@ class GameRuntime(Engine):
         window_type: Union[WindowType, str] = WindowType.GLFW,
         renderer_type: Union[RendererType, str] = RendererType.OpenGL,
     ) -> None:
-        """阻塞启动 (导出模式)。
-
-        逻辑循环跑在调用线程，直到窗口关闭或 stop() 被调用。
-        """
+        """阻塞启动 (导出模式)。"""
         cls.init(window_type=window_type, renderer_type=renderer_type)
-        print(f"[GameRuntime] Started in export mode (inline)")
+        EngineLifecycleEvent.Pack(stage="start", message="Started in export mode", engine=cls)
         super().run()
 
     # ════════════════════════════════════════════════════════════
@@ -82,26 +79,23 @@ class GameRuntime(Engine):
     @classmethod
     def stop(cls) -> None:
         """请求停止 Runtime 并清理状态，允许再次 start()。"""
+        # 必须在 run_state=False 之前派发事件 —
+        # 否则渲染线程的 finally 块会先清空 layer_stack，DebugLayer 收不到事件。
+        EngineLifecycleEvent.Pack(stage="stop", message="Stopped and cleaned up", engine=cls)
         cls.run_state = False
-        # 等待线程退出
         cls._join_threads()
-        # 清理窗口
         if cls.window is not None:
             try:
                 cls.window.Therminate()
             except Exception:
                 pass
-        # 重置初始化标记，允许再次 start()
         cls._state()['_initialized'] = False
         cls._state()['_logic_thread_enabled'] = False
-        # 清理层栈
         cls._state()['layer_stack'].clear()
-        # 清除类变量引用
         cls.window = None
         cls.renderer = None
         cls.renderer_thread = None
         cls._logic_thread = None
-        print(f"[GameRuntime] Stopped and cleaned up")
 
     @classmethod
     def is_running(cls) -> bool:

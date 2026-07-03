@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from Application.Core.Engine import Engine
 from Application.Core.Events.Event import Event
+from Application.Core.Events.EngineEvent import EngineLifecycleEvent
 from Application.Core.Window.Window import Window
 from Application.Core.Renderer.Renderer import Renderer
 from Application.Core.Plugin import Plugin
@@ -107,7 +108,11 @@ class EditorHost(Engine):
         for layer_cls in plugin.get_layers():
             cls.push_layer(layer_cls)
         cls._editor_plugin = plugin
-        print(f"[EditorHost] Plugin loaded: {plugin.name} v{plugin.version}")
+        EngineLifecycleEvent.Pack(
+            stage="plugin",
+            message=f"Plugin loaded: {plugin.name} v{plugin.version}",
+            engine=cls
+        )
 
     @classmethod
     def unload_plugin(cls) -> None:
@@ -120,6 +125,34 @@ class EditorHost(Engine):
     def _unload_plugin(cls) -> None:
         """Engine.shutdown() 回调 — 卸载编辑器插件。"""
         cls.unload_plugin()
+
+    # ════════════════════════════════════════════════════════════
+    # 关闭流程（覆写 Engine.shutdown）
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def shutdown(cls) -> None:
+        """编辑器关闭 — 先停止 PIE，再走标准清理流程。
+
+        必须先行停止 GameRuntime，因为：
+        1. EditorWindow.Therminate() 会调用 glfw.terminate()，杀死所有 GLFW 窗口
+        2. 若 Runtime 渲染线程还在跑，下一帧 SwapBuffer 会在已销毁的窗口上崩溃
+        3. GameRuntime 的 GPU 资源 (Render Thread finally 块) 需要在 GLFW 存活时释放
+        """
+        # 1. 先行停止 PIE (如果正在运行)
+        from Application.Runtime.GameRuntime import GameRuntime
+        if GameRuntime._state().get('_initialized', False):
+            EngineLifecycleEvent.Pack(
+                stage="shutdown",
+                message="Stopping PIE before editor shutdown",
+                engine=cls
+            )
+            GameRuntime.stop()
+            from Application.Editor.UI.controllers.SimulationController import SimulationController
+            from Application.Editor.UI.controllers.SimulationController import SimulationState
+            SimulationController._state = SimulationState.STOPPED
+        # 2. 标准 Engine 关闭流程
+        super().shutdown()
 
     # ════════════════════════════════════════════════════════════
     # 编辑器全局 API

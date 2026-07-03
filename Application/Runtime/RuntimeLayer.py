@@ -7,6 +7,7 @@ RuntimeLayer — 游戏运行时专用 Layer（空转桩）。
 
 from Application.Core.Layers.Layer import Layer
 from Application.Core.Events.Event import Event
+from Application.Core.Events.EngineEvent import LayerLifecycleEvent
 
 
 class RuntimeLayer(Layer):
@@ -14,11 +15,15 @@ class RuntimeLayer(Layer):
 
     @classmethod
     def OnAttach(cls):
-        print("[RuntimeLayer] OnAttach")
+        LayerLifecycleEvent.Pack(
+            layer_name=cls.__name__, stage="attach", engine=cls._engine
+        )
 
     @classmethod
     def OnDetach(cls):
-        print("[RuntimeLayer] OnDetach")
+        LayerLifecycleEvent.Pack(
+            layer_name=cls.__name__, stage="detach", engine=cls._engine
+        )
 
     @classmethod
     def OnUpdate(cls):

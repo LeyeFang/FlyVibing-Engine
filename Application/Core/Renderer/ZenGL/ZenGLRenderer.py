@@ -16,11 +16,13 @@ from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
 from Application.Core.Renderer.ZenGL.ZenGLResourceManager import ZenGLResourceManager
 from Application.Core.Renderer.ZenGL.ZenGLEntityRenderer import ZenGLEntityRenderer
 from Application.Core.Renderer.ZenGL.ZenGLOverlayRenderer import ZenGLOverlayRenderer
+from Application.Core.Renderer.ZenGL.ZenGLPostProcess import ZenGLPostProcess
 
 
 class ZenGLRenderer(
     ZenGLCore, ZenGLResourceManager,
     ZenGLEntityRenderer, ZenGLOverlayRenderer,
+    ZenGLPostProcess,
     Renderer, RenderResourceManger,
 ):
     _scene_fbo_override: int = 0
@@ -41,9 +43,15 @@ class ZenGLRenderer(
 
     @classmethod
     def Create(cls):
-        from Application.Editor.EditorHost import EditorHost
         from Application.Core.Renderer.CommandQueue import CommandQueue
-        sz = EditorHost.editor_window.GetSize()
+        # ── 从当前 GLFW 上下文获取窗口尺寸 (不再硬编码 EditorHost) ──
+        import glfw as _glfw
+        _glfw_win = _glfw.get_current_context()
+        if _glfw_win is not None:
+            sz = _glfw.get_framebuffer_size(_glfw_win)
+        else:
+            from Application.Editor.EditorHost import EditorHost
+            sz = EditorHost.editor_window.GetSize()
         ZenGLCore.init_core(sz)
         cls.viewport_width, cls.viewport_height = sz
         cls.aspect_ratio = sz[0]/sz[1]
@@ -64,19 +72,18 @@ class ZenGLRenderer(
         view = cls._cached_view if cls._cached_view is not None else np.identity(4, 'f4')
         proj = cls._cached_proj if cls._cached_proj is not None else np.identity(4, 'f4')
         ZenGLCore.clear_frame()
-
         for cb in cls._pre_overlay_callbacks:
             try: cb(view, proj, cls.viewport_width, cls.viewport_height)
             except: pass
-
         cls._RenderEntities(view, proj)
-        # ★ 走 _render_all_overlays (分层: layer 0 → callbacks → clear depth → layer 1)
+        # ★ 后处理管线 (MRT → 边缘检测 → 合成)
+        cls._render_post_process(view, proj)
+        # ★ 走 _render_all_overlays (分层: layer 0 → clear depth → layer 1)
         cls._render_all_overlays(view, proj)
         # Overlay pick pass
         # ★ Overlay pick pass — 对齐 OpenGLPickSystem._render_overlays_pick_pass
         cls._ensure_pick_images(cls.viewport_width, cls.viewport_height)
         cls._render_overlay_pick_pass(view, proj)
-        # _render_overlays 已由 _render_all_overlays 内部调用
         ctx.end_frame()
         # 每帧结束后读取 pick buffer
         cls._read_pick_buffer()
@@ -95,8 +102,9 @@ class ZenGLRenderer(
           1. 拾取图像
           2. 实体资源: pipeline/VBO/EBO/Image (级联降引用)
           3. Overlay 资源: pipeline/VBO/EBO/Image
-          4. 核心: context + 主图像
-          5. 基类: 命令队列 + overlay 回调 + 相机缓存
+          4. 后处理资源: MRT Images + entity pipelines
+          5. 核心: context + 主图像
+          6. 基类: 命令队列 + overlay 回调 + 相机缓存
         """
         cls._zg_pick_data = b''
         cls._zg_overlay_pick_img = None
@@ -104,6 +112,7 @@ class ZenGLRenderer(
         cls._zg_overlay_pick_size = (0, 0)
         cls._unregister_all_entities()
         cls._unregister_all_overlays()
+        cls.unregister_highlight_effect()
         cls._overlay_pick_key_map.clear()
         cls._pre_overlay_callbacks.clear()
         cls._outline_selected_ids.clear()
@@ -261,12 +270,11 @@ void main() {
     @classmethod
     def _read_pick_buffer(cls) -> None:
         """每帧结束后读取 entity + overlay pick 图像。"""
-        # Entity pick (OutlinerID)
-        from Application.Editor.Rendering.OutlinerID import OutlinerID
-        if OutlinerID._zg_pick_img is not None:
+        # Entity pick (PostProcess MRT)
+        if cls._pp_pick_img is not None:
             try:
-                cls._zg_pick_data = OutlinerID._zg_pick_img.read()
-                cls._zg_pick_size = OutlinerID._zg_pick_img.size
+                cls._zg_pick_data = cls._pp_pick_img.read()
+                cls._zg_pick_size = cls._pp_pick_img.size
             except Exception:
                 pass
         # Overlay pick

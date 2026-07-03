@@ -3,6 +3,7 @@ import esper
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Scene.BasicComponents import *
 from Application.Core.Events.SceneEvent import *
+from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand
 
 
 class SceneManager:
@@ -53,7 +54,12 @@ class SceneManager:
         component_instance: Component
     ) -> None:
         esper.add_component(entity_id, component_instance)
-        NewComponentEvent.Pack(entity_id, component_instance)
+        NewComponentEvent.Pack(entity_id, component_instance, engine=cls.app)
+        # ── 自动向渲染器注册/注销实体 GPU 资源 ──
+        if isinstance(component_instance, MeshRenderer):
+            _renderer = getattr(cls.app, 'renderer', None)
+            if _renderer is not None:
+                _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
 
     # ============================================================
     # 查询接口 / Query Interface
@@ -146,7 +152,7 @@ class SceneManager:
         if scale_xyz is not None:
             transform = esper.component_for_entity(entity_id, Transform)
             transform.scale_x, transform.scale_y, transform.scale_z = scale_xyz
-        ComponentModifiedEvent.Pack(entity_id, transform)
+        ComponentModifiedEvent.Pack(entity_id, transform, engine=cls.app)
 
     @classmethod
     def SetMainCameraTransform(
@@ -191,7 +197,12 @@ class SceneManager:
             mesh_rend.mesh_id = mesh_id
         if material_id is not None:
             mesh_rend.material_id = material_id
-        ComponentModifiedEvent.Pack(entity_id, mesh_rend)
+        # ── 可见性切换 → 自动向渲染器注册/注销 ──
+        if visible is not None:
+            _renderer = getattr(cls.app, 'renderer', None)
+            if _renderer is not None:
+                _renderer.enqueue(EntityRegistrationCommand(entity_id, register=visible))
+        ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=cls.app)
 
     # --- 材质 / Material & Shader ---
     @classmethod
@@ -216,7 +227,7 @@ class SceneManager:
 
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
         mesh_rend.material_id = new_material_id
-        ComponentModifiedEvent.Pack(entity_id, mesh_rend)
+        ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=cls.app)
         return new_material_id
 
     @classmethod
@@ -231,7 +242,7 @@ class SceneManager:
         """
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
         mesh_rend.material_id = material_id
-        ComponentModifiedEvent.Pack(entity_id, mesh_rend)
+        ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=cls.app)
 
     @classmethod
     def SetEntityTexture(
@@ -254,7 +265,7 @@ class SceneManager:
         while len(material.texture_id_list) <= slot:
             material.texture_id_list.append(0)
         material.texture_id_list[slot] = texture_id
-        ComponentModifiedEvent.Pack(entity_id, mesh_rend)
+        ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=cls.app)
 
     @classmethod
     def SetEntityShader(
@@ -266,7 +277,7 @@ class SceneManager:
         entity_material = ResourceManager.GetMaterial(mesh_rend.material_id)
         uniforms_name_type = ResourceManager.GetShader(shader_id).uniforms_name_type
         entity_material.set_new_shader(shader_id, uniforms_name_type)
-        ComponentModifiedEvent.Pack(entity_id, mesh_rend)
+        ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=cls.app)
 
     @classmethod
     def SetMaterialParams(
@@ -376,4 +387,4 @@ class SceneManager:
             modified = True
 
         if modified:
-            ComponentModifiedEvent.Pack(entity_id, transform)
+            ComponentModifiedEvent.Pack(entity_id, transform, engine=cls.app)

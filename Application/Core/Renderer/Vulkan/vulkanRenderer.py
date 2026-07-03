@@ -45,9 +45,16 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
     @classmethod
     def Create(cls) -> "vulkanRenderer":
         """初始化 Vulkan 渲染器。"""
-        from Application.Editor.EditorHost import EditorHost
-        window_size = EditorHost.editor_window.GetSize()
-        VulkanCore.init_core(EditorHost.editor_window.glfw_window, window_size)
+        # ── 从当前 GLFW 上下文获取窗口 (不再硬编码 EditorHost) ──
+        import glfw as _glfw
+        _glfw_win = _glfw.get_current_context()
+        if _glfw_win is not None:
+            window_size = _glfw.get_framebuffer_size(_glfw_win)
+            VulkanCore.init_core(_glfw_win, window_size)
+        else:
+            from Application.Editor.EditorHost import EditorHost
+            window_size = EditorHost.editor_window.GetSize()
+            VulkanCore.init_core(EditorHost.editor_window.glfw_window, window_size)
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]
         cls.aspect_ratio = window_size[0] / window_size[1]

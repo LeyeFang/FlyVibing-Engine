@@ -9,7 +9,8 @@ if TYPE_CHECKING:
 
 class Layer(ABC):
 
-    app: 'Engine'
+    app: 'Engine' = None
+    _engine: 'Engine' = None  # 由 Engine.push_layer 赋值，指向所属 Engine 子类
 
     @classmethod
     @abstractmethod

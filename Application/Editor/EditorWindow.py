@@ -88,6 +88,18 @@ class EditorWindow(glfwWindow):
     # ════════════════════════════════════════════════════════════
 
     @classmethod
+    def Therminate(cls):
+        """销毁编辑器窗口 — 同时终止 GLFW。
+
+        编辑器是 GLFW 的唯一拥有者，关闭编辑器窗口意味着整个 GLFW 会话结束。
+        PIE RuntimeWindow 已在 EditorHost.shutdown() 中先行销毁。
+        """
+        if cls.glfw_window is not None:
+            glfw.destroy_window(cls.glfw_window)
+            cls.glfw_window = None
+        glfw.terminate()
+
+    @classmethod
     def OnEvent(
         cls,
         event: Event

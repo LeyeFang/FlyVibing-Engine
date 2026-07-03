@@ -14,7 +14,6 @@ from Application.Core.Scene.BasicComponents import MeshRenderer
 from Application.Core.Timer.Timer import GetRunTime
 from Application.Core.Events.InputEvent import *
 from Application.Core.Events.SceneEvent import *
-from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand
 
 mask_events = [
     MouseMoveEvent,
@@ -30,7 +29,6 @@ class DebugLayer(Layer):
     @classmethod
     def OnAttach(cls):
         from Application.Editor.EditorHost import EditorHost
-        renderer = EditorHost.get_editor_renderer()
 
         square_mesh_id = ResourceManager.GetDefaultMesh("Square")
         cube_mesh_id = ResourceManager.GetDefaultMesh("Cube")
@@ -48,8 +46,6 @@ class DebugLayer(Layer):
         SceneManager.SetEntityTexture(
             cls.entity_id_1,
             tex_id)
-        # 直接提交 GPU 资源注册命令 (替代旧的 NewComponentEvent → Renderer.OnEvent 路径)
-        renderer.enqueue(EntityRegistrationCommand(cls.entity_id_1, register=True))
 
         # Entity 2 SSVEP
         cls.entity_id_2 = SceneManager.AddEntity()
@@ -66,8 +62,6 @@ class DebugLayer(Layer):
         SceneManager.SetMaterialParams(
             cls.entity_id_2,
             {"freq": 15})
-        # 直接提交 GPU 资源注册命令
-        renderer.enqueue(EntityRegistrationCommand(cls.entity_id_2, register=True))
 
         # 通知渲染器刷新相机矩阵
         SceneCameraUpdateEvent.Pack(engine=EditorHost)

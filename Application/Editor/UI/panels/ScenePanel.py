@@ -13,6 +13,7 @@ from Application.Editor.Services.ControllerRegistry import (
     NAME_SCENE_BROWSER,
     NAME_RESOURCE_BROWSER,
     NAME_VIEWPORT,
+    NAME_SELECTION,
 )
 
 
@@ -34,6 +35,7 @@ class ScenePanel(BasePanel):
         self._browser_ctrl = get_ctrl(NAME_SCENE_BROWSER)
         self._resource_ctrl = get_ctrl(NAME_RESOURCE_BROWSER)
         self._viewport_ctrl = get_ctrl(NAME_VIEWPORT)
+        self._selection_ctrl = get_ctrl(NAME_SELECTION)
 
     # ============================================================
     # 主绘制入口
@@ -187,16 +189,16 @@ class ScenePanel(BasePanel):
             return
 
         # 遍历当前帧的可渲染实体
-        selected = self._browser_ctrl.get_selected()
+        selected = self._selection_ctrl.get_selected()
         for eid in entity_ids:
             clicked, _ = imgui.selectable(
                 f"Entity #{eid}", selected == eid
             )
             if clicked:
-                self._browser_ctrl.select(eid)
+                self._selection_ctrl.select(eid)
 
         # 底部显示选中实体的组件摘要
-        selected = self._browser_ctrl.get_selected()
+        selected = self._selection_ctrl.get_selected()
         if selected is not None:
             imgui.separator()
             self._draw_entity_summary(selected)
@@ -205,7 +207,7 @@ class ScenePanel(BasePanel):
         self,
         entity_id: int
     ) -> None:
-        """显示选中实体的 Transform / Mesh / Material 信息"""
+        """显示选中实体的 Transform / Mesh / Material 信息（可编辑）"""
         summary = self._browser_ctrl.get_summary(entity_id)
         if summary is None:
             imgui.text_disabled("(failed to load entity info)")
@@ -215,18 +217,38 @@ class ScenePanel(BasePanel):
             imgui.ImVec4(*BLENDER_ORANGE, 1.00),
             f"Entity #{summary.entity_id}",
         )
-        imgui.text(
-            f"Position: ({summary.position[0]:.1f}, "
-            f"{summary.position[1]:.1f}, {summary.position[2]:.1f})"
-        )
-        if summary.mesh_id is not None:
-            imgui.text(f"Mesh ID: {summary.mesh_id}")
-        else:
-            imgui.text("(no Mesh)")
-        if summary.material_id is not None:
-            imgui.text(f"Material ID: {summary.material_id}")
-        else:
-            imgui.text("(no Material)")
+        imgui.separator()
+
+        # ── Transform（可编辑，类型检查由 imgui 内置保证） ──
+        if imgui.collapsing_header("Transform", imgui.TreeNodeFlags_.default_open):
+            # Position（编辑器坐标系）
+            pos = list(summary.position)
+            changed, new_pos = imgui.drag_float3("Position", pos, 0.1, format="%.2f")
+            if changed:
+                self._browser_ctrl.set_position(entity_id, tuple(new_pos))
+
+            # Rotation（欧拉角，度）
+            rot = list(summary.rotation)
+            changed, new_rot = imgui.drag_float3("Rotation", rot, 1.0, format="%.1f")
+            if changed:
+                self._browser_ctrl.set_rotation(entity_id, tuple(new_rot))
+
+            # Scale
+            scl = list(summary.scale)
+            changed, new_scl = imgui.drag_float3("Scale", scl, 0.05, format="%.2f")
+            if changed:
+                self._browser_ctrl.set_scale(entity_id, tuple(new_scl))
+
+        # ── Mesh / Material（当前只读，后续可扩展） ──
+        if imgui.collapsing_header("Renderer", imgui.TreeNodeFlags_.default_open):
+            if summary.mesh_id is not None:
+                imgui.text(f"Mesh ID: {summary.mesh_id}")
+            else:
+                imgui.text("(no Mesh)")
+            if summary.material_id is not None:
+                imgui.text(f"Material ID: {summary.material_id}")
+            else:
+                imgui.text("(no Material)")
 
     # ============================================================
     # Resources 标签页

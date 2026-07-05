@@ -72,6 +72,15 @@ class SimulationController:
         from Application.Runtime.GameRuntime import GameRuntime
         from Application.Runtime.RuntimeLayer import RuntimeLayer
         from Application.Runtime.RuntimeDebugLayer import RuntimeDebugLayer
+        from Application.Runtime.RuntimeNodeLayer import RuntimeNodeLayer
+
+        # ── 注入节点图 (若有) ──
+        from Application.Editor.UI.UIManager import UIManager
+        ne_panel = UIManager.find("Node Editor")
+        if ne_panel is not None and ne_panel._canvas is not None:
+            RuntimeNodeLayer.set_canvas(ne_panel._canvas)
+            GameRuntime.push_layer(RuntimeNodeLayer)
+            print("[Simulation] Node graph injected for PIE")
 
         GameRuntime.push_layer(RuntimeLayer)
         GameRuntime.push_layer(RuntimeDebugLayer)

@@ -1,5 +1,7 @@
 import esper
 
+import numpy as np
+
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Scene.BasicComponents import *
 from Application.Core.Events.SceneEvent import *
@@ -97,6 +99,28 @@ class SceneManager:
     ) -> Transform:
         transform = esper.component_for_entity(entity_id, Transform)
         return transform
+
+    @classmethod
+    def GetEntityModelMatrix(
+        cls,
+        entity_id: int,
+    ) -> 'np.ndarray':
+        """Get the TRS model matrix for an entity (convenience wrapper).
+
+        Extracts position/rotation/scale from the entity's Transform component
+        and delegates to Core.Math.Transform.calculate_entity_model().
+
+        Returns:
+            numpy ndarray: 4×4 float32 model matrix (pyrr-style, row-vector).
+            Upload with glUniformMatrix4fv(..., GL_FALSE, ...).
+        """
+        from Application.Core.Math.Transform import calculate_entity_model
+        t = cls.GetEntityTransform(entity_id)
+        return calculate_entity_model(
+            position=(t.position_x, t.position_y, t.position_z),
+            rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
+            scale=(t.scale_x, t.scale_y, t.scale_z),
+        )
 
     @classmethod
     def GetEntityMesh(

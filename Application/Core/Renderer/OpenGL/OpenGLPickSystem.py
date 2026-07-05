@@ -25,7 +25,6 @@ from OpenGL import GL as gl
 
 from Application.Core.Renderer.OpenGL.OpenGLUtils import OpenGLUtils
 from Application.Core.Scene.SceneManager import SceneManager
-from Application.Core.Math.Transform import calculate_entity_model
 
 
 class OpenGLPickSystem:
@@ -232,7 +231,7 @@ void main() {
             gpu = cls.registered_entities.get(entity_id)
             if gpu is None:
                 continue
-            model = calculate_entity_model(SceneManager.GetEntityTransform(entity_id))
+            model = SceneManager.GetEntityModelMatrix(entity_id)
             model_f32 = np.ascontiguousarray(model.astype('float32'))
             if loc_model >= 0:
                 gl.glUniformMatrix4fv(loc_model, 1, gl.GL_FALSE, model_f32)

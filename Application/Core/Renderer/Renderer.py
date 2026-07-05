@@ -76,8 +76,17 @@ class Renderer(ABC):
 
     @classmethod
     @abstractmethod
-    def Create(cls):
-        """初始化渲染器 — 在渲染线程调用，GL 上下文已绑定。"""
+    def Create(cls, window: 'Window' = None):
+        """初始化渲染器 — 在渲染线程调用。
+
+        Args:
+            window: 所属的 Window 实例（Engine 传入）。
+                    渲染器通过 window.GetSize() 获取初始尺寸，
+                    通过 window.GetNativeHandle() 获取平台句柄（Vulkan Surface 等）。
+                    不再需要通过 GLFW 上下文或 EditorHost 回退获取窗口信息。
+
+        调用方 (Engine._create_renderer) 在调用前已确保 GL 上下文绑定到当前线程。
+        """
         ...
 
     # ════════════════════════════════════════════════════════════
@@ -150,6 +159,8 @@ class Renderer(ABC):
     @classmethod
     def _on_window_resize(cls, width: int, height: int) -> None:
         """子类在 WindowResizeEvent 处理中调用 — 更新缓存、宽高比与视口尺寸。"""
+        if width <= 0 or height <= 0:
+            return  # 忽略无效尺寸 (窗口最小化或初始化时可能收到 (0,0))
         cls._pending_resize = (width, height)
         cls.viewport_width = width
         cls.viewport_height = height

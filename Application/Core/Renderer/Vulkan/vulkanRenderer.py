@@ -33,7 +33,6 @@ from Application.Core.Renderer.RenderCommand import (
 from Application.Core.Renderer.CommandQueue import CommandQueue
 from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
 from Application.Core.Renderer.Vulkan.VulkanResourceManager import VulkanResourceManager
-from Application.Core.Math.Transform import calculate_entity_model
 
 import numpy as np
 import vulkan as vk
@@ -43,18 +42,28 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
     """Vulkan 渲染器 — 低级图形 API 后端。"""
 
     @classmethod
-    def Create(cls) -> "vulkanRenderer":
-        """初始化 Vulkan 渲染器。"""
-        # ── 从当前 GLFW 上下文获取窗口 (不再硬编码 EditorHost) ──
-        import glfw as _glfw
-        _glfw_win = _glfw.get_current_context()
-        if _glfw_win is not None:
-            window_size = _glfw.get_framebuffer_size(_glfw_win)
-            VulkanCore.init_core(_glfw_win, window_size)
+    def Create(cls, window=None) -> "vulkanRenderer":
+        """初始化 Vulkan 渲染器。
+
+        Args:
+            window: Engine 传入的 Window 实例。
+                    通过 window.GetSize() 获取尺寸，
+                    通过 window.GetNativeHandle() 获取 GLFW 窗口句柄用于 Surface 创建。
+        """
+        if window is not None:
+            window_size = window.GetSize()
+            native_handle = window.GetNativeHandle()
+            VulkanCore.init_core(native_handle, window_size)
         else:
-            from Application.Editor.EditorHost import EditorHost
-            window_size = EditorHost.editor_window.GetSize()
-            VulkanCore.init_core(EditorHost.editor_window.glfw_window, window_size)
+            # 回退: 从当前 GLFW 上下文获取 (兼容旧测试路径)
+            import glfw as _glfw
+            _glfw_win = _glfw.get_current_context()
+            if _glfw_win is not None:
+                window_size = _glfw.get_framebuffer_size(_glfw_win)
+                VulkanCore.init_core(_glfw_win, window_size)
+            else:
+                window_size = (800, 600)
+                VulkanCore.init_core(None, window_size)
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]
         cls.aspect_ratio = window_size[0] / window_size[1]
@@ -101,7 +110,7 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
                     shader_data.pipeline_layout, 0, 1, [entity.descriptor_set], 0, None,
                 )
 
-            model = calculate_entity_model(SceneManager.GetEntityTransform(entity_id))
+            model = SceneManager.GetEntityModelMatrix(entity_id)
             mvp = (vp @ model).astype('float32')
             # push constant 必须传 CFFI float 数组，不能传 bytes
             vk.vkCmdPushConstants(

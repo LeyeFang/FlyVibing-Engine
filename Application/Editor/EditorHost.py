@@ -67,7 +67,7 @@ class EditorHost(Engine):
         """
         cls.window.MakeContextCurrent()
         renderer_cls = cls._get_renderer_class(cls.renderer_type)
-        EditorHost.editor_renderer = renderer_cls.Create()
+        EditorHost.editor_renderer = renderer_cls.Create(window=cls.window)
         return EditorHost.editor_renderer
 
     # ════════════════════════════════════════════════════════════

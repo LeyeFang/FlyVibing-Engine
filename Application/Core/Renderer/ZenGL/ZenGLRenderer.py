@@ -42,16 +42,23 @@ class ZenGLRenderer(
     def unregister_outliner(cls): cls._outliner = None
 
     @classmethod
-    def Create(cls):
+    def Create(cls, window=None):
+        """初始化 ZenGL 渲染器。
+
+        Args:
+            window: Engine 传入的 Window 实例。通过 window.GetSize() 获取初始尺寸。
+        """
         from Application.Core.Renderer.CommandQueue import CommandQueue
-        # ── 从当前 GLFW 上下文获取窗口尺寸 (不再硬编码 EditorHost) ──
-        import glfw as _glfw
-        _glfw_win = _glfw.get_current_context()
-        if _glfw_win is not None:
-            sz = _glfw.get_framebuffer_size(_glfw_win)
+        if window is not None:
+            sz = window.GetSize()
         else:
-            from Application.Editor.EditorHost import EditorHost
-            sz = EditorHost.editor_window.GetSize()
+            # 回退: 从当前 GLFW 上下文获取 (兼容旧测试路径)
+            import glfw as _glfw
+            _glfw_win = _glfw.get_current_context()
+            if _glfw_win is not None:
+                sz = _glfw.get_framebuffer_size(_glfw_win)
+            else:
+                sz = (800, 600)
         ZenGLCore.init_core(sz)
         cls.viewport_width, cls.viewport_height = sz
         cls.aspect_ratio = sz[0]/sz[1]
@@ -69,6 +76,9 @@ class ZenGLRenderer(
         ctx.new_frame()
         if cls._pending_resize:
             w,h = cls._pending_resize; ZenGLCore.rebuild_images(w,h); cls._pending_resize = None
+            # ★ 重建实体/overlay 管线 — 新 framebuffer images 已创建，旧管线仍引用旧 images
+            cls._rebuild_entity_pipelines()
+            cls._rebuild_overlay_pipelines()
         view = cls._cached_view if cls._cached_view is not None else np.identity(4, 'f4')
         proj = cls._cached_proj if cls._cached_proj is not None else np.identity(4, 'f4')
         ZenGLCore.clear_frame()

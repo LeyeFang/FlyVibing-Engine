@@ -37,12 +37,7 @@ class GameRuntime(Engine):
         """创建运行时渲染器 — 根据 cls.renderer_type 选择后端。"""
         cls.window.MakeContextCurrent()
         renderer_cls = cls._get_renderer_class(cls.renderer_type)
-        renderer = renderer_cls.Create()
-        # ── 修正视口: 使用 RuntimeWindow 而非 EditorWindow ──
-        w, h = cls.window.GetSize()
-        renderer.viewport_width = w
-        renderer.viewport_height = h
-        renderer.aspect_ratio = w / h if h else 1.0
+        renderer = renderer_cls.Create(window=cls.window)
         return renderer
 
     # ════════════════════════════════════════════════════════════

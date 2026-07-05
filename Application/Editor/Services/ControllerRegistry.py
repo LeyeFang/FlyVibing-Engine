@@ -42,6 +42,7 @@ NAME_SCENE_BROWSER  = "SceneBrowser"
 NAME_RESOURCE_BROWSER = "ResourceBrowser"
 NAME_VIEWPORT       = "Viewport"
 NAME_NODE_EDITOR    = "NodeEditor"
+NAME_SELECTION      = "Selection"
 
 
 # ═══════════════════════════════════════════════════════════════

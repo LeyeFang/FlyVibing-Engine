@@ -10,6 +10,8 @@ from Application.Core.Scene.SceneManager import SceneManager
 class EntitySummary:
     entity_id: int
     position: tuple[float, float, float]
+    rotation: tuple[float, float, float]
+    scale: tuple[float, float, float]
     mesh_id: Optional[int] = None
     material_id: Optional[int] = None
 
@@ -48,6 +50,8 @@ class SceneBrowserController:
             summary = EntitySummary(
                 entity_id=entity_id,
                 position=t['position'],
+                rotation=t['rotation'],
+                scale=t['scale'],
             )
             try:
                 summary.mesh_id = SceneManager.GetEntityMesh(entity_id)
@@ -60,6 +64,23 @@ class SceneBrowserController:
             return summary
         except Exception:
             return None
+
+    # ── 实体属性编辑 ────────────────────────────────────────
+
+    @classmethod
+    def set_position(cls, entity_id: int, position: tuple[float, float, float]) -> None:
+        """设置实体位置（编辑器坐标系）。"""
+        SceneManager.SetEntityTransformEditor(entity_id, position_xyz=position)
+
+    @classmethod
+    def set_rotation(cls, entity_id: int, rotation: tuple[float, float, float]) -> None:
+        """设置实体旋转（欧拉角）。"""
+        SceneManager.SetEntityTransformEditor(entity_id, rotation_xyz=rotation)
+
+    @classmethod
+    def set_scale(cls, entity_id: int, scale: tuple[float, float, float]) -> None:
+        """设置实体缩放。"""
+        SceneManager.SetEntityTransformEditor(entity_id, scale_xyz=scale)
 
 
 # ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──

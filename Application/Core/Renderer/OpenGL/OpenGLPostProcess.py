@@ -120,7 +120,6 @@ class OpenGLPostProcess(PostProcess):
             gl.glUniform1i(loc_tex, 0)
 
         from Application.Core.Scene.SceneManager import SceneManager
-        from Application.Core.Math.Transform import calculate_entity_model
 
         active_ids = cls._highlight_config.selected_ids if cls._highlight_config else set()
 
@@ -129,8 +128,7 @@ class OpenGLPostProcess(PostProcess):
             if entity is None:
                 continue
 
-            model = calculate_entity_model(
-                SceneManager.GetEntityTransform(eid))
+            model = SceneManager.GetEntityModelMatrix(eid)
             model_f32 = np.ascontiguousarray(model.astype('float32'))
             if loc_model >= 0:
                 gl.glUniformMatrix4fv(loc_model, 1, gl.GL_FALSE, model_f32)

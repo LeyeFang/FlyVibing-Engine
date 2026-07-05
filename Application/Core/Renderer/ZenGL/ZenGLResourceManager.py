@@ -54,6 +54,10 @@ class ZenGLResourceManager:
         _pick_ebo: any = None; _pick_muni: list = field(default_factory=list)
         _pick_vbo: any = None; _pick_fmt: str = ""; _pick_locs: list = field(default_factory=list)
         _pick_vcount: int = 0; _pick_stride: int = 0
+        # ★ resize 重建用: 保存原始 overlay 定义
+        _orig_vs: str = ""; _orig_fs: str = ""
+        _orig_vertices: any = None; _orig_indices: any = None
+        _orig_stride: int = 0; _orig_attrs: tuple = ()
 
     registered_entities: dict = {}
     registered_meshes: dict = {}
@@ -124,6 +128,134 @@ class ZenGLResourceManager:
         cls.registered_entities[entity_id] = cls.entity_data_struct(
             shader_id=shader_id, texture_id=tex_id, mesh_id=mesh_id,
             material_id=material_id, pipeline=pipeline, vao=0)
+
+    @classmethod
+    def _rebuild_entity_pipelines(cls) -> None:
+        """resize 后重建所有实体管线 — 新 framebuffer images 已创建，
+        但已有 pipeline 仍引用旧 images。此方法用当前 framebuffer 重建管线。
+        """
+        from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
+        for entity_id, entity in list(cls.registered_entities.items()):
+            try:
+                mesh_data = cls.registered_meshes.get(entity.mesh_id)
+                shader_data = cls.registered_shaders.get(entity.shader_id)
+                if mesh_data is None or shader_data is None:
+                    continue
+
+                # ── 重建 uniforms / layout / resources (与 register_entity 一致) ──
+                uniforms = {}
+                layout = []; resources = []
+                for n, t in shader_data.uniforms_type.items():
+                    if t in ('sampler2D', 'sampler'): continue
+                    if t == 'mat4': uniforms[n] = np.identity(4, 'f4').flatten().tolist()
+                    elif t in ('float', 'double'): uniforms[n] = 0.0
+                    elif t in ('int',): uniforms[n] = 0
+
+                has_sampler = any(
+                    t in ('sampler2D', 'sampler') for t in shader_data.uniforms_type.values())
+                if entity.texture_id and has_sampler and entity.texture_id in cls.registered_textures:
+                    td = cls.registered_textures[entity.texture_id]
+                    layout.append({'name': 'uTexture', 'binding': 0})
+                    resources.append({
+                        'type': 'sampler', 'binding': 0, 'image': td.image,
+                        'min_filter': 'linear', 'mag_filter': 'linear'})
+
+                mesh_layout = getattr(mesh_data, 'layout', None) or STD_LAYOUT.ENTITY_POS_UV_NORMAL
+                VertexLayout.check_shader_consistency(
+                    mesh_layout, shader_data.vs_src, f"entity shader '{entity.shader_id}'")
+
+                # ★ 关键: 用当前 framebuffer 重建管线
+                new_pipeline = ZenGLCore.ctx.pipeline(
+                    vertex_shader=shader_data.vs_src,
+                    fragment_shader=shader_data.fs_src,
+                    uniforms=uniforms, layout=layout, resources=resources,
+                    framebuffer=ZenGLCore.get_framebuffer(),
+                    topology='triangles', cull_face='none',
+                    depth={'func': 'less', 'write': True},
+                    vertex_buffers=zengl.bind(
+                        mesh_data.vbo,
+                        mesh_layout.to_zengl_format(),
+                        *mesh_layout.get_active_locations(shader_data.vs_src)),
+                    index_buffer=mesh_data.ebo,
+                    vertex_count=mesh_data.elements_count,
+                )
+                entity.pipeline = new_pipeline
+            except Exception:
+                pass
+
+    @classmethod
+    def _rebuild_overlay_pipelines(cls) -> None:
+        """resize 后重建所有 overlay 管线 — 用当前 framebuffer 重建。"""
+        from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
+        ctx = ZenGLCore.ctx
+        for key, gpu in list(cls._overlay_gpu_resources.items()):
+            try:
+                if not gpu._orig_vs or gpu._orig_vertices is None:
+                    continue
+                verts = gpu._orig_vertices
+                vbo = ctx.buffer(verts.tobytes() if isinstance(verts, np.ndarray) else verts)
+                ebo = None
+                if gpu._orig_indices is not None:
+                    idx = gpu._orig_indices.astype('i4') if isinstance(gpu._orig_indices, np.ndarray) else np.array(gpu._orig_indices, 'i4')
+                    ebo = ctx.buffer(idx.tobytes(), index=True)
+
+                ol_layout = gpu.layout
+                if ol_layout is None:
+                    attrs = gpu._orig_attrs or ((0, 3, 0),)
+                    ol_layout = VertexLayout(attributes=tuple(attrs), stride=gpu._orig_stride or 12)
+                fmt_str = ol_layout.to_zengl_format()
+                locs = ol_layout.to_zengl_locations()
+                vb = zengl.bind(vbo, fmt_str, *locs)
+                vc = vbo.size // (gpu._orig_stride or 12) if ebo is None else ebo.size // 4
+
+                topo_map = {'triangles':'triangles','lines':'lines','line_strip':'line_strip','points':'points'}
+                topo = topo_map.get(gpu.draw_mode, 'triangles')
+
+                import re as _re
+                fs_p = _re.sub(r'uniform\s+sampler(\S+)\s+(\w+)\s*;', r'layout(binding=0) uniform sampler\1 \2;', gpu._orig_fs)
+                vs_p = _re.sub(r'uniform\s+sampler(\S+)\s+(\w+)\s*;', r'layout(binding=0) uniform sampler\1 \2;', gpu._orig_vs)
+
+                kw = {'vertex_shader': vs_p, 'fragment_shader': fs_p,
+                      'framebuffer': ZenGLCore.get_overlay_framebuffer(),
+                      'topology': topo, 'vertex_buffers': vb, 'vertex_count': vc}
+                if ebo: kw['index_buffer'] = ebo
+                kw['depth'] = {'func':'less','write':True} if gpu.depth_test else {'func':'always','write':False}
+                if gpu.blend: kw['blend'] = {'enable':True,'src_color':'src_alpha','dst_color':'one_minus_src_alpha'}
+                if gpu.cull_face: kw['cull_face'] = 'back'
+
+                # 重建 uniforms
+                ou = {}
+                _UNIFORM_RE = _re.compile(r'uniform\s+(\w+)\s+(\w+)\s*;')
+                _SAMPLER_TYPES = {'sampler2D', 'sampler3D', 'samplerCube', 'sampler2DShadow',
+                                  'sampler', 'usampler2D', 'isampler2D', 'image2D'}
+                for src in (gpu._orig_vs, gpu._orig_fs):
+                    for m in _UNIFORM_RE.finditer(src):
+                        utype, uname = m.group(1), m.group(2)
+                        if uname in ou or utype in _SAMPLER_TYPES:
+                            continue
+                        if utype in ('mat4',): ou[uname] = np.identity(4, 'f4').flatten().tolist()
+                        elif utype in ('mat3',): ou[uname] = np.identity(3, 'f4').flatten().tolist()
+                        elif utype in ('vec4',): ou[uname] = [1.0, 1.0, 1.0, 1.0]
+                        elif utype in ('vec3',): ou[uname] = [0.0, 0.0, 0.0]
+                        elif utype in ('vec2',): ou[uname] = [0.0, 0.0]
+                        elif utype in ('float', 'double',): ou[uname] = [1.0]
+                        elif utype in ('int', 'uint', 'bool',): ou[uname] = [0]
+                if gpu.uniforms:
+                    for uname, uval in gpu.uniforms.items():
+                        if isinstance(uval, np.ndarray): ou[uname] = uval.flatten().tolist()
+                        elif isinstance(uval, (list, tuple)): ou[uname] = list(uval)
+                kw['uniforms'] = ou
+
+                if gpu.texture is not None:
+                    kw['layout'] = [{'name': gpu.texture_uniform or 'uLetterTex', 'binding': 0}]
+                    kw['resources'] = [{'type': 'sampler', 'binding': 0, 'image': gpu.texture,
+                                        'min_filter': 'linear', 'mag_filter': 'linear'}]
+
+                new_pipeline = ctx.pipeline(**kw)
+                gpu.pipeline = new_pipeline
+                gpu.pick_pipeline = None  # 惰性重建
+            except Exception:
+                pass
 
     @classmethod
     def register_mesh(cls, mesh: Mesh, mesh_id: int) -> None:
@@ -302,6 +434,10 @@ class ZenGLResourceManager:
             _pick_muni=[mn for mn in ('uModel', 'uView', 'uProj') if mn in ou],
             _pick_vbo=pick_vbo, _pick_fmt=fmt_str, _pick_locs=locs, _pick_vcount=vc,
             _pick_stride=vs_stride,
+            # ★ resize 重建用: 保存原始 overlay 定义
+            _orig_vs=overlay.vs_src, _orig_fs=overlay.fs_src,
+            _orig_vertices=verts, _orig_indices=overlay.indices,
+            _orig_stride=vs_stride, _orig_attrs=(getattr(overlay, 'vertex_attrs', None) or ol_layout.attributes),
         )
         if overlay.pick_type > 0:
             cls._overlay_pick_key_map[(overlay.pick_type, overlay.pick_id)] = overlay.key

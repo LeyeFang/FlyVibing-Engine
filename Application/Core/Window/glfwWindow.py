@@ -46,6 +46,11 @@ class glfwWindow(Window):
         return glfw.get_framebuffer_size(cls.glfw_window)
 
     @classmethod
+    def GetNativeHandle(cls):
+        """返回 GLFW 原生窗口句柄 (GLFWwindow 指针)。"""
+        return cls.glfw_window
+
+    @classmethod
     def Therminate(
         cls
     ):

@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
     from Application.Core.Engine import Engine
+    from Application.Core.Window.Window import Window
 
 import numpy as np
 
@@ -114,19 +115,25 @@ class openGLRenderer(
 
     @classmethod
     def Create(
-        cls
+        cls,
+        window: 'Window' = None,
     ) -> "openGLRenderer":
-        # ── 从当前 GLFW 上下文获取窗口尺寸 (不再硬编码 EditorHost) ──
-        # 调用方 (Engine._create_renderer) 在调用 Create 前已调用
-        # cls.window.MakeContextCurrent()，当前 GL 上下文的窗口即目标窗口。
-        import glfw as _glfw
-        _glfw_win = _glfw.get_current_context()
-        if _glfw_win is not None:
-            window_size = _glfw.get_framebuffer_size(_glfw_win)
+        """初始化 OpenGL 渲染器。
+
+        Args:
+            window: Engine 传入的 Window 实例。通过 window.GetSize() 获取初始尺寸。
+                    调用方已在 Create 前调用 window.MakeContextCurrent()。
+        """
+        if window is not None:
+            window_size = window.GetSize()
         else:
-            # 回退: 无当前上下文时使用 EditorHost (兼容旧测试路径)
-            from Application.Editor.EditorHost import EditorHost
-            window_size = EditorHost.editor_window.GetSize()
+            # 回退: 从当前 GLFW 上下文获取 (兼容旧测试路径)
+            import glfw as _glfw
+            _glfw_win = _glfw.get_current_context()
+            if _glfw_win is not None:
+                window_size = _glfw.get_framebuffer_size(_glfw_win)
+            else:
+                window_size = (800, 600)
         OpenGLCore.init_core(window_size)
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]

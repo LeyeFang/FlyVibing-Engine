@@ -32,13 +32,14 @@ from Application.Editor.UI.controllers.SimulationController import SimulationCon
 from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController  # noqa: F401
 from Application.Editor.UI.controllers.ResourceBrowserController import ResourceBrowserController  # noqa: F401
 from Application.Editor.UI.controllers.ViewportController import ViewportController  # noqa: F401
+from Application.Editor.UI.controllers.SelectionController import SelectionController  # noqa: F401
 from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel
 
 
 class EditorLayer(Layer):
 
     # ── 字体配置 ────────────────────────────────────────────────
-    FONT_SIZE: float = 19.5
+    FONT_SIZE: float = 17
     FONT_CANDIDATES: list[str] = [
         "Resource/Fonts/Inter-Regular.ttf",
         "C:/Windows/Fonts/segoeui.ttf",
@@ -120,7 +121,7 @@ class EditorLayer(Layer):
             dt = (time.perf_counter() - t0) * 1000
             if pick_type == 'entity':
                 # print(f"[EditorLayer] Click → Entity#{pick_value}  ({dt:.3f}ms)")
-                OutlinerID.set_selected_entities({pick_value})
+                SelectionController.select(pick_value)
             elif pick_type == 'overlay' and pick_value:
                 prefix = ViewGizmo.OVERLAY_KEY_PREFIX
                 if pick_value.startswith(prefix):
@@ -134,7 +135,7 @@ class EditorLayer(Layer):
                     print(f"[EditorLayer] Click → Overlay '{pick_value}'  ({dt:.3f}ms)")
             else:
                 print(f"[EditorLayer] Click → nothing  ({dt:.3f}ms)")
-                OutlinerID.clear()
+                SelectionController.clear()
 
     @classmethod
     def OnUpdate(cls):

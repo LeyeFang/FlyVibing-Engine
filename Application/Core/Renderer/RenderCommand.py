@@ -38,6 +38,8 @@ class ResizeCommand(RenderCommand):
     height: int
 
     def execute(self, renderer: Any) -> None:
+        if self.width <= 0 or self.height <= 0:
+            return  # 忽略无效尺寸 (窗口初始化时可能收到 (0,0))
         renderer._on_window_resize(self.width, self.height)
 
 

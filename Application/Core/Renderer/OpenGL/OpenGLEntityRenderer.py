@@ -19,7 +19,6 @@ from OpenGL import GL as gl
 from Application.Core.Renderer.OpenGL.OpenGLUtils import OpenGLUtils
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Scene.SceneManager import SceneManager
-from Application.Core.Math.Transform import calculate_entity_model
 
 
 class OpenGLEntityRenderer:
@@ -57,9 +56,7 @@ class OpenGLEntityRenderer:
             # ── 激活 shader ──
             gl.glUseProgram(program)
             # ── MVP 矩阵 ──
-            model = calculate_entity_model(
-                SceneManager.GetEntityTransform(entity_id)
-            )
+            model = SceneManager.GetEntityModelMatrix(entity_id)
             OpenGLUtils.set_uniform_mat4(
                 cls.registered_shaders, entity.shader_id, 'model', model)
             OpenGLUtils.set_uniform_mat4(

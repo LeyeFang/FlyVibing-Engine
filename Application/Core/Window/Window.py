@@ -88,6 +88,20 @@ class Window(ABC):
 
     @classmethod
     @abstractmethod
+    def GetNativeHandle(cls):
+        """返回平台原生窗口句柄。
+
+        GLFW 后端: 返回 GLFWwindow 指针 (int/c_void_p)
+        SDL2 后端: 返回 SDL_Window 指针
+        Vulkan 等需要原生句柄的后端通过此接口获取，不直接依赖具体窗口类型。
+
+        Returns:
+            平台相关的窗口句柄，或 None（后端未初始化）。
+        """
+        ...
+
+    @classmethod
+    @abstractmethod
     def OnEvent(cls, event: Event):
         ...
 

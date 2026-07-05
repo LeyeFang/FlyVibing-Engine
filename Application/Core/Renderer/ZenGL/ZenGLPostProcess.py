@@ -89,7 +89,6 @@ class ZenGLPostProcess(PostProcess):
             pass
 
         from Application.Core.Scene.SceneManager import SceneManager
-        from Application.Core.Math.Transform import calculate_entity_model
 
         active_ids = cls._highlight_config.selected_ids if cls._highlight_config else set()
 
@@ -105,8 +104,7 @@ class ZenGLPostProcess(PostProcess):
                 continue
 
             try:
-                model = calculate_entity_model(
-                    SceneManager.GetEntityTransform(eid))
+                model = SceneManager.GetEntityModelMatrix(eid)
                 p.uniforms['model'][:] = model.astype('float32').tobytes()
                 p.uniforms['view'][:] = view.astype('float32').tobytes()
                 p.uniforms['projection'][:] = proj.astype(
@@ -259,6 +257,8 @@ void main() {
             return
         cls._release_fbo()
         cls._create_fbo(w, h)
+        # ★ 重建后清除实体 pipeline 缓存 — 旧 pipeline 引用已释放的旧 images
+        cls._pp_entity_pipelines.clear()
 
     @classmethod
     def _release_fbo(cls) -> None:

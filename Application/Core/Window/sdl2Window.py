@@ -52,6 +52,11 @@ class sdl2Window(Window):
         return (w.value, h.value)
 
     @classmethod
+    def GetNativeHandle(cls):
+        """返回 SDL2 原生窗口句柄 (SDL_Window 指针)。"""
+        return cls.sdl2_window
+
+    @classmethod
     def OnEvent(
         cls,
         event: Event

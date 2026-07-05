@@ -4,23 +4,23 @@ Camera — View & Projection Matrix Utilities
 
 All camera-related matrix calculations in one place.
 
-CONVENTION:
-  All functions return numpy ndarray (4×4, float32) in column-vector convention.
-  For OpenGL upload: these are Type B matrices → use GL_TRUE.
+Design:
+  Math 层不依赖任何 Scene/ECS 类型。所有函数接受纯数值参数
+  (float, tuple, np.ndarray)。调用方从 ECS 组件中提取数值后传入。
 
-  Exception: calculate_view_matrix() and calculate_projection_matrix()
-  internally use pyrr and return pyrr-style matrices for backward compatibility.
-  For these, use GL_FALSE when uploading to OpenGL.
+CONVENTION:
+  Most functions use pyrr internally and return pyrr-style matrices
+  (row-vector convention). Upload with GL_FALSE.
 
 FUNCTIONS:
-  For Scene Camera (free camera, uses Transform component):
-    calculate_view_matrix(camera, transform, target=None) → np.ndarray
-    calculate_projection_matrix(camera, aspect_ratio) → np.ndarray
-    get_world_forward(camera, transform) → np.ndarray
+  For Scene Camera (free camera):
+    calculate_view_matrix(position, rotation, local_forward, up, target=None) → np.ndarray
+    calculate_projection_matrix(fov, aspect, near, far, is_ortho, ortho_size) → np.ndarray
+    get_world_forward(rotation, local_forward) → np.ndarray
 
-  For Editor Camera (orbit camera, uses yaw/pitch/distance):
+  For Editor Camera (orbit camera):
     compute_orbit_position(yaw, pitch, distance, target) → np.ndarray
-    compute_orbit_view_matrix(yaw, pitch, distance, target) → np.ndarray
+    compute_orbit_view_matrix(yaw, pitch, distance, target, up) → np.ndarray
     compute_orbit_projection_matrix(fov, aspect, near, far) → np.ndarray
 
   Low-level (no ECS dependency):
@@ -34,19 +34,19 @@ import math
 import numpy as np
 from pyrr import matrix44, Matrix44, vector4, vector3, Vector3
 
-from Application.Core.Scene.BasicComponents import Camera, Transform, ProjectionType
-
 
 # ═══════════════════════════════════════════════════════════════
-# Scene Camera (free camera, uses ECS Transform)
+# Scene Camera (free camera — pure numeric parameters)
 # ═══════════════════════════════════════════════════════════════
 
 def calculate_view_matrix(
-    camera: Camera,
-    transform: Transform,
-    target: np.ndarray = None
+    position: tuple[float, float, float],
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    local_forward: tuple[float, float, float] = (0.0, 0.0, -1.0),
+    up_vector: tuple[float, float, float] = (0.0, 1.0, 0.0),
+    target: np.ndarray = None,
 ) -> np.ndarray:
-    """Calculate view matrix from Camera + Transform components.
+    """Calculate view matrix from raw camera parameters.
 
     Two modes:
       - Orbit mode (target is not None):
@@ -56,89 +56,89 @@ def calculate_view_matrix(
         Uses rotation matrix + local_forward to compute look-at target.
 
     Args:
-        camera: Camera component (up_vector, local_forward, etc.)
-        transform: Transform component (position, rotation)
-        target: Optional orbit target point (world space, shape (3,))
+        position:      World-space camera position (px, py, pz).
+        rotation:      Euler angles in radians (rx=pitch, ry=yaw, rz=roll).
+        local_forward: Forward direction in camera local space (default: -Z).
+        up_vector:     World up vector (default: +Y).
+        target:        Optional orbit target point (world space, shape (3,)).
 
     Returns:
         numpy ndarray: 4×4 float32 view matrix (pyrr-style, row-vector).
         Upload with glUniformMatrix4fv(..., GL_FALSE, ...).
     """
-    pos = Vector3([transform.position_x, transform.position_y, transform.position_z])
-    up = Vector3(camera.up_vector)
+    pos = Vector3(list(position))
+    up = Vector3(list(up_vector))
 
     if target is not None:
-        return matrix44.create_look_at(pos, Vector3(target), up)
+        return matrix44.create_look_at(pos, Vector3(target), up).astype(np.float32)
 
     # Free camera: rotate local forward direction to world space
-    rot_mat = matrix44.create_from_eulers([
-        transform.rotation_x,   # pitch
-        transform.rotation_y,   # yaw
-        transform.rotation_z    # roll
-    ])
-    local_forward = Vector3(camera.local_forward)
-    local_forward_h = vector4.create_from_vector3(local_forward)  # w=0 (direction)
-    world_forward_vec4 = matrix44.apply_to_vector(rot_mat, local_forward_h)
-    world_forward = vector3.create_from_vector4(world_forward_vec4)
-    target_from_rot = pos + world_forward[0]
-    return matrix44.create_look_at(pos, target_from_rot, up)
+    rot_mat = matrix44.create_from_eulers(list(rotation))
+    local_fwd = Vector3(list(local_forward))
+    local_fwd_h = vector4.create_from_vector3(local_fwd)  # w=0 (direction)
+    world_fwd_vec4 = matrix44.apply_to_vector(rot_mat, local_fwd_h)
+    world_fwd = vector3.create_from_vector4(world_fwd_vec4)
+    target_from_rot = pos + world_fwd[0]
+    return matrix44.create_look_at(pos, target_from_rot, up).astype(np.float32)
 
 
 def calculate_projection_matrix(
-    camera: Camera,
-    aspect_ratio: float
+    fov: float = 45.0,
+    aspect_ratio: float = 16.0 / 9.0,
+    near: float = 0.1,
+    far: float = 1000.0,
+    is_ortho: bool = False,
+    ortho_size: float = 5.0,
 ) -> np.ndarray:
-    """Calculate projection matrix from Camera component.
+    """Calculate projection matrix from raw parameters.
 
     Args:
-        camera: Camera component (fov, near_plane, far_plane, projection_type)
-        aspect_ratio: Viewport aspect ratio (width / height)
+        fov:          Vertical field of view in degrees (perspective only).
+        aspect_ratio: Viewport aspect ratio (width / height).
+        near:         Near clipping plane.
+        far:          Far clipping plane.
+        is_ortho:     If True, use orthographic projection.
+        ortho_size:   Ortho half-height in world units (ortho only).
 
     Returns:
         numpy ndarray: 4×4 float32 projection matrix (pyrr-style, row-vector).
         Upload with glUniformMatrix4fv(..., GL_FALSE, ...).
     """
-    near = camera.near_plane
-    far = camera.far_plane
-    fov = camera.fov
-
-    if camera.projection_type == ProjectionType.PERSPECTIVE:
-        return matrix44.create_perspective_projection(fov, aspect_ratio, near, far)
-    else:
-        half_h = camera.ortho_size
+    if is_ortho:
+        half_h = ortho_size
         half_w = half_h * aspect_ratio
         return matrix44.create_orthogonal_projection(
             -half_w, half_w, -half_h, half_h, near, far
-        )
+        ).astype(np.float32)
+    else:
+        return matrix44.create_perspective_projection(
+            fov, aspect_ratio, near, far
+        ).astype(np.float32)
 
 
 def get_world_forward(
-    camera: Camera,
-    transform: Transform
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0),
+    local_forward: tuple[float, float, float] = (0.0, 0.0, -1.0),
 ) -> np.ndarray:
     """Get the camera's forward direction in world space (unit vector).
 
     Args:
-        camera: Camera component (local_forward)
-        transform: Transform component (rotation)
+        rotation:      Euler angles in radians (rx, ry, rz).
+        local_forward: Forward direction in camera local space (default: -Z).
 
     Returns:
         numpy ndarray: 3-element float32 unit vector in world space.
     """
-    rot_mat = matrix44.create_from_eulers([
-        transform.rotation_x,
-        transform.rotation_y,
-        transform.rotation_z
-    ])
-    local_forward = Vector3(camera.local_forward)
-    local_forward_h = vector4.create_from_vector3(local_forward)
-    world_forward_vec4 = matrix44.apply_to_vector(rot_mat, local_forward_h)
-    world_forward = vector3.create_from_vector4(world_forward_vec4)[0]
+    rot_mat = matrix44.create_from_eulers(list(rotation))
+    local_fwd = Vector3(list(local_forward))
+    local_fwd_h = vector4.create_from_vector3(local_fwd)
+    world_fwd_vec4 = matrix44.apply_to_vector(rot_mat, local_fwd_h)
+    world_fwd = vector3.create_from_vector4(world_fwd_vec4)[0]
     # Normalize to unit vector
-    fwd_len = np.linalg.norm(world_forward)
+    fwd_len = np.linalg.norm(world_fwd)
     if fwd_len > 0:
-        world_forward = world_forward / fwd_len
-    return world_forward
+        world_fwd = world_fwd / fwd_len
+    return world_fwd
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -60,3 +60,8 @@ class SceneBrowserController:
             return summary
         except Exception:
             return None
+
+
+# ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──
+from Application.Editor.Services.ControllerRegistry import register, NAME_SCENE_BROWSER
+register(NAME_SCENE_BROWSER, SceneBrowserController)

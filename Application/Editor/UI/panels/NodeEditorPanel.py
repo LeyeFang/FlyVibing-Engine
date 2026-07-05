@@ -38,6 +38,33 @@ def _apply_ne_style(accent: tuple):
     s.set_color_(node_ed.StyleColor.flow_marker,       _col(accent, 1.00))
 
 
+_HDR_COLOR = imgui.ImVec4(0.600, 0.600, 0.600, 0.70)
+
+
+def _draw_add_menu_section(
+    title: str,
+    items: list[tuple[str, str]],   # (label, type_name)
+    canvas: NodeCanvas,
+    avail: imgui.ImVec2,
+) -> None:
+    """在 Add 子菜单中绘制一个分类区块：
+      - title       → 灰色文字标题（不可点击）
+      - separator   → 分隔线
+      - items       → 可点击的菜单项，点击后在画布中央创建节点
+    """
+    imgui.spacing()
+    imgui.text_colored(_HDR_COLOR, title)
+    imgui.separator()
+    for label, type_name in items:
+        changed, _selected = imgui.menu_item(label, "", False, True)
+        if changed:
+            max_y = max((inst.pos[1] for inst in canvas.nodes.values()), default=40)
+            cx = 80.0
+            cy = max_y + 200.0
+            canvas.add_node(type_name, (cx, cy))
+            imgui.close_current_popup()
+
+
 class NodeEditorPanel(BasePanel):
     """节点编辑器画布 — Runtime 生命周期节点编辑"""
 
@@ -61,6 +88,7 @@ class NodeEditorPanel(BasePanel):
         self._editor_context: node_ed.EditorContext | None = None
         self._editor_initialized: bool = False
         self._canvas_initialized: bool = False
+        self._add_popup_active: bool = False  # popup 当前可见（flag 门控 begin_popup）
 
     # ============================================================
     # 生命周期
@@ -124,6 +152,10 @@ class NodeEditorPanel(BasePanel):
         ne = node_ed
         ne.set_current_editor(self._editor_context)
 
+        # ── Add 按钮 ──
+        if imgui.small_button("+ Add Node"):
+            self._add_popup_active = True
+
         # ── 画布背景色 & 网格 ──
         s = ne.get_style()
         s.set_color_(ne.StyleColor.bg,   _col((0.090, 0.090, 0.090), 1.00))
@@ -160,12 +192,54 @@ class NodeEditorPanel(BasePanel):
                 imgui.pop_style_color(1)
                 imgui.dummy(imgui.ImVec2(0, 2))
 
-            # ── 引脚 ──
-            imgui.separator()
+            # ── PrintString: 可编辑文本框 ──
+            if inst.node_type == "PrintString":
+                imgui.dummy(imgui.ImVec2(0, 2))
+                msg = inst.props.get("message", "")
+                changed, new_msg = imgui.input_text(
+                    f"##print_msg_{nid}", msg,
+                )
+                if changed:
+                    inst.props["message"] = new_msg
+                imgui.dummy(imgui.ImVec2(0, 2))
+
+            # ── 引脚（输出列对齐到最长输入文字右侧） ──
+            _max_in_w = max(
+                (imgui.calc_text_size(f"> {p.name}").x
+                 for p in nd.pins if p.direction == "input"),
+                default=0,
+            )
+            # 无输入 pin 时给输出一个最小左 padding，让 > 顶到右侧
+            _min_pad = imgui.calc_text_size("> ").x * 4
+            _out_pad = max(_max_in_w, _min_pad)
+
+            # 手动画分隔线（imgui.separator 在 node editor 内会拉满画布宽度）
+            _cursor = imgui.get_cursor_screen_pos()
+            _node_w = max(
+                imgui.calc_text_size(f"  {nd.label}  ").x,
+                max((imgui.calc_text_size(f"> {p.name}").x for p in nd.pins), default=0),
+                max((_out_pad + imgui.calc_text_size(f"{p.name} >").x
+                     for p in nd.pins if p.direction == "output"), default=0),
+                80.0,
+            )
+            _dl = imgui.get_window_draw_list()
+            _dl.add_line(
+                imgui.ImVec2(_cursor.x, _cursor.y + 3),
+                imgui.ImVec2(_cursor.x + _node_w, _cursor.y + 3),
+                imgui.get_color_u32(imgui.Col_.border),
+                1.0,
+            )
+            imgui.dummy(imgui.ImVec2(0, 6))  # 分隔线占位
             for pin in nd.pins:
+                pin_id = inst.pin_ids[pin.name]
                 kind = ne.PinKind.input if pin.direction == "input" else ne.PinKind.output
-                ne.begin_pin(ne.PinId(pin.id), kind)
-                imgui.text(f" {pin.name}")
+                ne.begin_pin(ne.PinId(pin_id), kind)
+                if pin.direction == "output":
+                    imgui.dummy(imgui.ImVec2(_out_pad, 1))
+                    imgui.same_line()
+                    imgui.text(f"{pin.name} >")
+                else:
+                    imgui.text(f"> {pin.name}")
                 ne.end_pin()
 
             ne.end_node()
@@ -246,14 +320,9 @@ class NodeEditorPanel(BasePanel):
                     canvas.links[lid.id()] = LinkInstance(lid.id(), ep.id(), sp.id())
 
         # ══════════════════════════════════════════════════════
-        # 右键菜单（在 suspend 块中绘制普通 imgui）
-        # suspend/resume 必须放在 begin/end 内部
+        # 空画布提示
         # ══════════════════════════════════════════════════════
         ne.suspend()
-        if ne.show_background_context_menu():
-            imgui.open_popup("Create Node")
-
-        # ── 空画布提示 ──
         if not canvas.nodes:
             canvas_pos = imgui.get_cursor_screen_pos()
             imgui.set_cursor_screen_pos((
@@ -262,35 +331,58 @@ class NodeEditorPanel(BasePanel):
             ))
             imgui.text_colored(
                 imgui.ImVec4(0.400, 0.400, 0.400, 1.00),
-                "Right-click canvas to add nodes",
+                'Click "Add" button to create nodes',
             )
-
-        # ── 右键菜单内容 ──
-        if imgui.begin_popup("Create Node"):
-            imgui.text_disabled("Add Node...")
-            imgui.separator()
-            # 按 category 分组显示
-            categories = {}
-            for td in _TYPES.values():
-                categories.setdefault(td.category, []).append(td)
-            for cat, type_list in categories.items():
-                if imgui.begin_menu(cat, True):
-                    for td in type_list:
-                        changed, _ = imgui.menu_item(td.label, "", False, True)
-                        if changed:
-                            # 在画布中心附近创建节点
-                            cx = avail.x / 2 - 60 + len(canvas.nodes) * 20
-                            cy = avail.y / 2 - 40 + len(canvas.nodes) * 20
-                            canvas.add_node(td.type_name, (cx, cy))
-                    imgui.end_menu()
-            imgui.end_popup()
         ne.resume()
-
         ne.end()
 
+        # ── Add 弹出菜单（同帧 open_popup + begin_popup，flag 门控） ──
+        if self._add_popup_active:
+            imgui.open_popup("Create Node")
+            _bpop = imgui.begin_popup("Create Node")
+            if _bpop:
+                _draw_add_menu_section("Math", [
+                    ("+ Add", "MathAdd"),
+                    ("Subtract", "MathSubtract"),
+                    ("Multiply", "MathMultiply"),
+                    ("Divide", "MathDivide"),
+                    ("Random Uniform", "MathRandomUniform"),
+                    ("Random Gaussian", "MathRandomGaussian"),
+                ], canvas, avail)
+                _draw_add_menu_section("Time", [
+                    ("Get Time", "TimeGetElapsed"),
+                    ("Get Delta Time", "TimeGetDelta"),
+                    ("Delay", "TimeDelay"),
+                ], canvas, avail)
+                _draw_add_menu_section("Entity", [
+                    ("Create Entity", "EntityCreate"),
+                    ("Destroy Entity", "EntityDestroy"),
+                    ("Set Transform", "EntitySetTransform"),
+                    ("Get Transform", "EntityGetTransform"),
+                    ("Add Mesh Component", "EntityAddMesh"),
+                    ("Add Camera Component", "EntityAddCamera"),
+                    ("Find Entity By Name", "EntityFindByName"),
+                    ("Set Visibility", "EntitySetVisibility"),
+                ], canvas, avail)
+                _draw_add_menu_section("Variable", [
+                    ("Set Variable", "VarSet"),
+                    ("Get Variable", "VarGet"),
+                ], canvas, avail)
+                _draw_add_menu_section("Debug", [
+                    ("Print", "Print"),
+                    ("Print String", "PrintString"),
+                ], canvas, avail)
+                imgui.end_popup()
+            if not imgui.is_popup_open("Create Node"):
+                self._add_popup_active = False
+
         # ══════════════════════════════════════════════════════
-        # 同步拖拽后的节点位置
+        # 同步拖拽后的节点位置（新节点第一帧 get_node_position 返回未初始化极值，跳过）
         # ══════════════════════════════════════════════════════
         for nid in list(canvas.nodes.keys()):
             np = ne.get_node_position(ne.NodeId(nid))
-            canvas.nodes[nid].pos = (np.x, np.y)
+            inst = canvas.nodes[nid]
+            # 只接受合理范围内的位置（-1e6 ~ 1e6），排除 INT_MIN/FLT_MAX 等垃圾值
+            if -1e6 < np.x < 1e6 and -1e6 < np.y < 1e6:
+                if (np.x, np.y) != inst.pos:
+                    inst.pos = (np.x, np.y)

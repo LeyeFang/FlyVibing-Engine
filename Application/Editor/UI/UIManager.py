@@ -90,13 +90,14 @@ class UIManager:
             | imgui.WindowFlags_.no_docking
         )
 
-        # 取消圆角和边框，背景透明（让 3D 场景透出来）
+        # 取消圆角、边框、内边距，背景透明（让 3D 场景透出来，面板贴边）
         imgui.push_style_var(imgui.StyleVar_.window_rounding, 0.0)
         imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
+        imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
         imgui.push_style_color(imgui.Col_.window_bg, imgui.ImVec4(0, 0, 0, 0))
 
         imgui.begin("MainDockSpace", None, window_flags)
-        imgui.pop_style_var(2)
+        imgui.pop_style_var(3)
         imgui.pop_style_color()
 
         # ── 绘制主菜单栏（必须在 MainDockSpace 内部） ──
@@ -259,6 +260,7 @@ class UIManager:
         imgui.push_style_var(imgui.StyleVar_.window_rounding, 0.0)
         imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
         imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(10, 3))
+        imgui.push_style_color(imgui.Col_.window_bg, imgui.ImVec4(0.176, 0.176, 0.176, 1.00))
 
         window_flags = (
             imgui.WindowFlags_.no_title_bar
@@ -282,6 +284,7 @@ class UIManager:
         # (预留)
 
         imgui.end()
+        imgui.pop_style_color()
         imgui.pop_style_var(3)
 
     @staticmethod

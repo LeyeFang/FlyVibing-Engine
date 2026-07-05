@@ -29,6 +29,7 @@ from typing import Callable
 from OpenGL import GL as gl
 
 from Application.Core.Renderer.OpenGL.OpenGLUtils import OpenGLUtils
+from Application.Core.Renderer.VertexLayout import VertexLayout, STD_LAYOUT
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Resource.Mesh import Mesh
 from Application.Resource.Material import Material, Shader, Texture
@@ -67,11 +68,13 @@ class OpenGLResourceManager:
             vbo            : GLuint — 顶点缓冲 (交错: pos+uv+normal)
             ebo            : GLuint — 索引缓冲
             elements_count : 索引数量 (三角形数 × 3)
+            layout         : VertexLayout — 顶点格式描述符
             ref_count      : 引用计数
         """
         vbo: int = 0
         ebo: int = 0
         elements_count: int = 0
+        layout: 'VertexLayout' = None
         ref_count: int = 0
 
     @dataclass
@@ -118,17 +121,6 @@ class OpenGLResourceManager:
     registered_textures: dict[str, texture_data_struct] = {}
 
     # ════════════════════════════════════════════════════════════
-    # 交错顶点布局常量
-    # ════════════════════════════════════════════════════════════
-    # 每顶点 8 个 float: [px, py, pz,  u, v,  nx, ny, nz]
-    #                    |-- pos --|  |uv|  |--- normal ---|
-
-    _VERTEX_STRIDE: int = 8 * 4          # 8 floats × 4 bytes = 32 bytes
-    _POS_OFFSET: int = 0                  # 3 floats offset
-    _UV_OFFSET: int = 3 * 4               # 2 floats, after pos = 12 bytes
-    _NORMAL_OFFSET: int = 5 * 4           # 3 floats, after pos+uv = 20 bytes
-
-    # ════════════════════════════════════════════════════════════
     # 资源注册
     # ════════════════════════════════════════════════════════════
 
@@ -168,18 +160,15 @@ class OpenGLResourceManager:
 
         # 绑定 VBO 并设置顶点属性
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, mesh_data.vbo)
-        # location 0: aPos — 3 × float32
-        gl.glVertexAttribPointer(0, 3, gl.GL_FLOAT, gl.GL_FALSE, cls._VERTEX_STRIDE,
-                                 ctypes.c_void_p(cls._POS_OFFSET))
-        gl.glEnableVertexAttribArray(0)
-        # location 1: aTexCoord — 2 × float32
-        gl.glVertexAttribPointer(1, 2, gl.GL_FLOAT, gl.GL_FALSE, cls._VERTEX_STRIDE,
-                                 ctypes.c_void_p(cls._UV_OFFSET))
-        gl.glEnableVertexAttribArray(1)
-        # location 2: aNormal — 3 × float32
-        gl.glVertexAttribPointer(2, 3, gl.GL_FLOAT, gl.GL_FALSE, cls._VERTEX_STRIDE,
-                                 ctypes.c_void_p(cls._NORMAL_OFFSET))
-        gl.glEnableVertexAttribArray(2)
+
+        # ★ 顶点格式: 优先使用 mesh.layout, 回退到旧硬编码常量
+        layout = getattr(mesh_data, 'layout', None) or STD_LAYOUT.ENTITY_POS_UV_NORMAL
+        VertexLayout.check_shader_consistency(
+            layout, shader.vs_src, f"entity shader '{shader_id}'")
+        for loc, size, stride, offset in layout.to_gl_attribs():
+            gl.glVertexAttribPointer(loc, size, gl.GL_FLOAT, gl.GL_FALSE, stride,
+                                     ctypes.c_void_p(offset))
+            gl.glEnableVertexAttribArray(loc)
 
         # 绑定 EBO
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, mesh_data.ebo)
@@ -234,6 +223,7 @@ class OpenGLResourceManager:
             vbo=vbo,
             ebo=ebo,
             elements_count=int(indices.size),
+            layout=mesh.layout or STD_LAYOUT.ENTITY_POS_UV_NORMAL,
             ref_count=1,
         )
 
@@ -476,6 +466,7 @@ class OpenGLResourceManager:
         line_width: float = 1.0
         uniforms_setup: Callable[[int], None] = field(default=lambda p: None)
         uniforms: dict = None  # 声明式 uniform (后端无关)
+        layout: 'VertexLayout' = None  # ★ 顶点格式描述符
         render_layer: int = 0
         ignore_scene_matrices: bool = False
         model_matrix_cb: Callable[[int, int], 'np.ndarray'] = None
@@ -514,15 +505,22 @@ class OpenGLResourceManager:
             verts.nbytes,
             verts.tobytes(),
             gl.GL_STATIC_DRAW)
-        for loc, size, offset in overlay.vertex_attrs:
-            gl.glVertexAttribPointer(
-                loc,
-                size,
-                gl.GL_FLOAT,
-                gl.GL_FALSE,
-                overlay.vertex_stride,
-                ctypes.c_void_p(offset))
-            gl.glEnableVertexAttribArray(loc)
+
+        # ★ 顶点格式: 优先使用 overlay.layout, 回退到 overlay.vertex_attrs
+        ol_layout = overlay.layout
+        if ol_layout is not None:
+            VertexLayout.check_shader_consistency(
+                ol_layout, overlay.vs_src, f"overlay '{overlay.key}'")
+            for loc, size, stride, offset in ol_layout.to_gl_attribs():
+                gl.glVertexAttribPointer(loc, size, gl.GL_FLOAT, gl.GL_FALSE, stride,
+                                         ctypes.c_void_p(offset))
+                gl.glEnableVertexAttribArray(loc)
+        else:
+            for loc, size, offset in overlay.vertex_attrs:
+                gl.glVertexAttribPointer(
+                    loc, size, gl.GL_FLOAT, gl.GL_FALSE,
+                    overlay.vertex_stride, ctypes.c_void_p(offset))
+                gl.glEnableVertexAttribArray(loc)
         # ── EBO ──
         ebo = gl.glGenBuffers(1)
         indices = np.ascontiguousarray(overlay.indices.astype('uint32'))
@@ -555,6 +553,13 @@ class OpenGLResourceManager:
                 pixels)
             gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
         draw_mode_gl = cls._DRAW_MODE_MAP.get(overlay.draw_mode, gl.GL_LINES)
+        # ★ 顶点格式: 优先 overlay.layout, 回退从 vertex_attrs 构造
+        ol_layout = overlay.layout
+        if ol_layout is None and overlay.vertex_attrs is not None:
+            ol_layout = VertexLayout(
+                attributes=tuple(overlay.vertex_attrs),
+                stride=overlay.vertex_stride,
+            )
         cls._overlay_gpu_resources[overlay.key] = cls.overlay_gpu_data(
             vao=vao, vbo=vbo, ebo=ebo, program=program,
             texture=texture,
@@ -566,6 +571,7 @@ class OpenGLResourceManager:
             cull_face=overlay.cull_face,
             uniforms_setup=overlay.uniforms_setup,
             uniforms=getattr(overlay, 'uniforms', None),
+            layout=ol_layout,
             render_layer=getattr(overlay, 'render_layer', 0),
             ignore_scene_matrices=overlay.ignore_scene_matrices,
             model_matrix_cb=overlay.model_matrix_cb,

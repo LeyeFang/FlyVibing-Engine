@@ -84,3 +84,8 @@ class ViewportController:
         """从 EditorCamera 同步实际投影模式（用于外部切换后保持一致）。"""
         cam = EditorCamera.get_instance()
         cls._mode_2d = cam.is_orthographic
+
+
+# ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──
+from Application.Editor.Services.ControllerRegistry import register, NAME_VIEWPORT
+register(NAME_VIEWPORT, ViewportController)

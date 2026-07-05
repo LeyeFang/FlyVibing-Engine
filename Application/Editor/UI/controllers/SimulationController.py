@@ -119,3 +119,8 @@ class SimulationController:
         EngineLifecycleEvent.Pack(
             stage="simulation", message="Runtime stopped", engine=EditorHost
         )
+
+
+# ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──
+from Application.Editor.Services.ControllerRegistry import register, NAME_SIMULATION
+register(NAME_SIMULATION, SimulationController)

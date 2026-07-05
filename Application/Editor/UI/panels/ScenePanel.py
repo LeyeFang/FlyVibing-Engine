@@ -7,17 +7,12 @@ from Application.Editor.UI.PanelStyle import (
     WARNING_AMBER,
     ERROR_RED,
 )
-from Application.Editor.UI.controllers.SimulationController import (
-    SimulationController,
-)
-from Application.Editor.UI.controllers.SceneBrowserController import (
-    SceneBrowserController,
-)
-from Application.Editor.UI.controllers.ResourceBrowserController import (
-    ResourceBrowserController,
-)
-from Application.Editor.UI.controllers.ViewportController import (
-    ViewportController,
+from Application.Editor.Services.ControllerRegistry import (
+    get_ctrl,
+    NAME_SIMULATION,
+    NAME_SCENE_BROWSER,
+    NAME_RESOURCE_BROWSER,
+    NAME_VIEWPORT,
 )
 
 
@@ -34,6 +29,11 @@ class ScenePanel(BasePanel):
         self.visible = True
         # 0=Entities, 1=Resources — 纯 UI 状态，留在面板
         self._active_tab: int = 0
+        # ── 从 ControllerRegistry 获取控制器（支持测试时 Mock 注入） ──
+        self._sim_ctrl = get_ctrl(NAME_SIMULATION)
+        self._browser_ctrl = get_ctrl(NAME_SCENE_BROWSER)
+        self._resource_ctrl = get_ctrl(NAME_RESOURCE_BROWSER)
+        self._viewport_ctrl = get_ctrl(NAME_VIEWPORT)
 
     # ============================================================
     # 主绘制入口
@@ -77,7 +77,7 @@ class ScenePanel(BasePanel):
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*SUCCESS_GREEN, 1.00))
         if imgui.button("▶ Run", (btn_w, 0)):
-            SimulationController.play()
+            self._sim_ctrl.play()
         imgui.pop_style_color(1)
 
         imgui.same_line()
@@ -85,9 +85,9 @@ class ScenePanel(BasePanel):
         # ⏸ Pause（仅在运行时可用）
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*WARNING_AMBER, 1.00))
-        imgui.begin_disabled(not SimulationController.is_running())
+        imgui.begin_disabled(not self._sim_ctrl.is_running())
         if imgui.button("⏸ Pause", (btn_w, 0)):
-            SimulationController.pause()
+            self._sim_ctrl.pause()
         imgui.end_disabled()
         imgui.pop_style_color(1)
 
@@ -96,14 +96,14 @@ class ScenePanel(BasePanel):
         # ■ Stop（仅在未停止时可用）
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*ERROR_RED, 1.00))
-        imgui.begin_disabled(SimulationController.is_stopped())
+        imgui.begin_disabled(self._sim_ctrl.is_stopped())
         if imgui.button("■ Stop", (btn_w, 0)):
-            SimulationController.stop()
+            self._sim_ctrl.stop()
         imgui.end_disabled()
         imgui.pop_style_color(1)
 
         # 状态提示
-        imgui.text_disabled(SimulationController.get_state_label())
+        imgui.text_disabled(self._sim_ctrl.get_state_label())
 
         imgui.separator()
 
@@ -144,14 +144,14 @@ class ScenePanel(BasePanel):
         av = imgui.get_content_region_avail().x
         btn_w = (av - imgui.get_style().item_spacing.x) / 2.0
 
-        is_2d = ViewportController.is_2d()
+        is_2d = self._viewport_ctrl.is_2d()
 
         # 3D 按钮
         if not is_2d:
             imgui.push_style_color(
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
         if imgui.button("3D (Persp)", (btn_w, 0)):
-            ViewportController.switch_to_3d()
+            self._viewport_ctrl.switch_to_3d()
         if not is_2d:
             imgui.pop_style_color(1)
 
@@ -162,7 +162,7 @@ class ScenePanel(BasePanel):
             imgui.push_style_color(
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
         if imgui.button("2D (Ortho)", (btn_w, 0)):
-            ViewportController.switch_to_2d()
+            self._viewport_ctrl.switch_to_2d()
         if is_2d:
             imgui.pop_style_color(1)
 
@@ -178,7 +178,7 @@ class ScenePanel(BasePanel):
         self._draw_viewport_mode()
         imgui.separator()
 
-        entity_ids = SceneBrowserController.get_renderable_entities()
+        entity_ids = self._browser_ctrl.get_renderable_entities()
 
         if not entity_ids:
             imgui.text_colored(
@@ -187,16 +187,16 @@ class ScenePanel(BasePanel):
             return
 
         # 遍历当前帧的可渲染实体
-        selected = SceneBrowserController.get_selected()
+        selected = self._browser_ctrl.get_selected()
         for eid in entity_ids:
             clicked, _ = imgui.selectable(
                 f"Entity #{eid}", selected == eid
             )
             if clicked:
-                SceneBrowserController.select(eid)
+                self._browser_ctrl.select(eid)
 
         # 底部显示选中实体的组件摘要
-        selected = SceneBrowserController.get_selected()
+        selected = self._browser_ctrl.get_selected()
         if selected is not None:
             imgui.separator()
             self._draw_entity_summary(selected)
@@ -206,7 +206,7 @@ class ScenePanel(BasePanel):
         entity_id: int
     ) -> None:
         """显示选中实体的 Transform / Mesh / Material 信息"""
-        summary = SceneBrowserController.get_summary(entity_id)
+        summary = self._browser_ctrl.get_summary(entity_id)
         if summary is None:
             imgui.text_disabled("(failed to load entity info)")
             return
@@ -240,32 +240,32 @@ class ScenePanel(BasePanel):
         if imgui.collapsing_header(
             "Meshes", imgui.TreeNodeFlags_.default_open
         ):
-            for id_str, mesh in ResourceBrowserController.get_meshes().items():
+            for id_str, mesh in self._resource_ctrl.get_meshes().items():
                 imgui.bullet_text(
-                    f"[{id_str}] {ResourceBrowserController.get_resource_name(mesh)}"
+                    f"[{id_str}] {self._resource_ctrl.get_resource_name(mesh)}"
                 )
 
         # Shader 列表
         if imgui.collapsing_header(
             "Shaders", imgui.TreeNodeFlags_.default_open
         ):
-            for id_str, shader in ResourceBrowserController.get_shaders().items():
+            for id_str, shader in self._resource_ctrl.get_shaders().items():
                 imgui.bullet_text(
-                    f"[{id_str}] {ResourceBrowserController.get_resource_name(shader)}"
+                    f"[{id_str}] {self._resource_ctrl.get_resource_name(shader)}"
                 )
 
         # Texture 列表
         if imgui.collapsing_header(
             "Textures", imgui.TreeNodeFlags_.default_open
         ):
-            for id_str, tex in ResourceBrowserController.get_textures().items():
+            for id_str, tex in self._resource_ctrl.get_textures().items():
                 imgui.bullet_text(
-                    f"[{id_str}] {ResourceBrowserController.get_resource_name(tex)}"
+                    f"[{id_str}] {self._resource_ctrl.get_resource_name(tex)}"
                 )
 
         # Material 列表
         if imgui.collapsing_header(
             "Materials", imgui.TreeNodeFlags_.default_open
         ):
-            for id_str, mat in ResourceBrowserController.get_materials().items():
+            for id_str, mat in self._resource_ctrl.get_materials().items():
                 imgui.bullet_text(f"[{id_str}] {mat}")

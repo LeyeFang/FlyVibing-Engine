@@ -232,6 +232,11 @@ void main() {
                     }
                     if gpu._pick_ebo is not None:
                         pick_kw['index_buffer'] = gpu._pick_ebo
+                    # ★ 面剔除: 对齐 visual pass (ViewGizmo cull_face=True → 'back')
+                    #    无此设置时 back faces 也会被渲染到 pick buffer,
+                    #    导致重叠像素的归属由渲染顺序决定, 产生随机错误的拾取结果
+                    if gpu.cull_face:
+                        pick_kw['cull_face'] = 'back'
                     pu = {}
                     for mn in gpu._pick_muni:
                         pu[mn] = [0.0]*16

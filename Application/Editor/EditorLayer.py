@@ -26,13 +26,19 @@ from Application.Editor.Rendering.Grid import Grid
 from Application.Editor.Rendering.OutlinerID import OutlinerID
 from Application.Editor.Rendering.ViewGizmo import ViewGizmo
 from Application.Editor.UI.UIManager import UIManager
+
+# ★ 先导入 Controller（触发 auto-register 到 ControllerRegistry），再导入 Panel
+from Application.Editor.UI.controllers.SimulationController import SimulationController  # noqa: F401
+from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController  # noqa: F401
+from Application.Editor.UI.controllers.ResourceBrowserController import ResourceBrowserController  # noqa: F401
+from Application.Editor.UI.controllers.ViewportController import ViewportController  # noqa: F401
 from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel
 
 
 class EditorLayer(Layer):
 
     # ── 字体配置 ────────────────────────────────────────────────
-    FONT_SIZE: float = 15.0
+    FONT_SIZE: float = 19.5
     FONT_CANDIDATES: list[str] = [
         "Resource/Fonts/Inter-Regular.ttf",
         "C:/Windows/Fonts/segoeui.ttf",

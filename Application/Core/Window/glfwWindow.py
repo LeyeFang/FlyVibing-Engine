@@ -7,6 +7,7 @@ from Application.Core.Events.WindowEvent import *
 from Application.Core.Events.InputEvent import *
 from Application.Core.Window.Window import Window
 from Application.Core.Renderer.RenderCommand import ResizeCommand
+from Application.Core.Input.InputPipeline import InputPipeline
 
 import glfw
 
@@ -21,10 +22,13 @@ class glfwWindow(Window):
     ):
         cls.glfw_window = cls._create_window()
         glfw.set_window_size_callback(cls.glfw_window, cls._window_resize_event_callback)
-        glfw.set_scroll_callback(cls.glfw_window, cls._scroll_callback)
-        glfw.set_mouse_button_callback(cls.glfw_window, cls._mouse_callback)
-        glfw.set_key_callback(cls.glfw_window, cls._key_callback)
-        glfw.set_cursor_pos_callback(cls.glfw_window, cls._mouse_move_callbakc)
+        # ── 输入管线: GLFW 回调 + InputState + 拖拽/移动分流 ──
+        cls._input_pipeline = InputPipeline(cls.glfw_window)
+        cls._input_pipeline.on_key = cls._make_key_hook()
+        cls._input_pipeline.on_mouse_button = cls._make_mouse_button_hook()
+        cls._input_pipeline.on_drag = cls._make_drag_hook()
+        cls._input_pipeline.on_move = cls._make_move_hook()
+        cls._input_pipeline.on_scroll = cls._make_scroll_hook()
         return cls
 
     @classmethod
@@ -117,9 +121,60 @@ class glfwWindow(Window):
         """
         pass
 
-    #
-    #
-    # Above is callback functions --------------------------------------------
+    # ════════════════════════════════════════════════════════════
+    # 输入钩子工厂 — 为 InputPipeline 提供与原有行为一致的钩子
+    # 通过闭包捕获 cls (类引用), 使 cls._engine 在回调时动态解析
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _make_key_hook(cls):
+        """键盘钩子 — 与原有 _key_callback 行为一致。"""
+        _kls = cls
+        def hook(key, scancode, action, mods):
+            if key == glfw.KEY_ESCAPE and action == glfw.RELEASE:
+                WindowCloseEvent.Pack(engine=_kls._engine)
+            KeyboardButtonEvent.Pack(key, scancode, action, mods, engine=_kls._engine)
+        return hook
+
+    @classmethod
+    def _make_mouse_button_hook(cls):
+        """鼠标按键钩子 — 与原有 _mouse_callback 行为一致。"""
+        _kls = cls
+        def hook(button, action, mods, x, y):
+            MouseButtonEvent.Pack(
+                button=button, action=action, mods=mods,
+                pos_x=int(x), pos_y=int(y), engine=_kls._engine,
+            )
+        return hook
+
+    @classmethod
+    def _make_drag_hook(cls):
+        """鼠标拖拽钩子 — 与原有 _mouse_move_callbakc 拖拽分支一致。"""
+        _kls = cls
+        def hook(button, dx, dy, x, y):
+            MouseGragEvent.Pack(int(x), int(y), engine=_kls._engine)
+        return hook
+
+    @classmethod
+    def _make_move_hook(cls):
+        """鼠标移动钩子 — 与原有 _mouse_move_callbakc 纯移动分支一致。"""
+        _kls = cls
+        def hook(x, y):
+            MouseMoveEvent.Pack(int(x), int(y), engine=_kls._engine)
+        return hook
+
+    @classmethod
+    def _make_scroll_hook(cls):
+        """滚轮钩子 — 与原有 _scroll_callback 行为一致。"""
+        _kls = cls
+        def hook(xoff, yoff):
+            ScrollerEvent.Pack(x_offset=int(xoff), y_offset=int(yoff), engine=_kls._engine)
+        return hook
+
+    # ════════════════════════════════════════════════════════════
+    # 窗口 resize (非输入事件, 保持直接 GLFW 回调注册)
+    # ════════════════════════════════════════════════════════════
+
     @classmethod
     def _window_resize_event_callback(
         cls,
@@ -133,56 +188,3 @@ class glfwWindow(Window):
             engine.renderer.enqueue(ResizeCommand(width, height))
         # 通知其他层 (ImGui display_size 等)
         WindowResizeEvent.Pack(width, height, engine=cls._engine)
-
-    @classmethod
-    def _key_callback(
-        cls,
-        window,
-        key,
-        scancode,
-        action,
-        mods
-    ) -> None:
-        if key == glfw.KEY_ESCAPE and action == glfw.RELEASE:
-            WindowCloseEvent.Pack(engine=cls._engine)
-        KeyboardButtonEvent.Pack(key, scancode, action, mods, engine=cls._engine)
-
-    @classmethod
-    def _mouse_callback(
-        cls,
-        window,
-        button,
-        action,
-        mods
-    ) -> None:
-        pos_x, pos_y = glfw.get_cursor_pos(cls.glfw_window)
-        MouseButtonEvent.Pack(
-            button=button,
-            action=action,
-            mods=mods,
-            pos_x=pos_x,
-            pos_y=pos_y,
-            engine=cls._engine)
-
-    @classmethod
-    def _mouse_move_callbakc(
-        cls,
-        window,
-        pos_x,
-        pos_y
-    ) -> None:
-        # 分流: 按下按钮 → 拖拽事件, 未按下 → 纯移动事件 (用于拾取预读)
-        inp = cls._engine._get_input_state() if cls._engine is not None else None
-        if inp is not None and inp.current_mouse_button_code is not None:
-            MouseGragEvent.Pack(pos_x, pos_y, engine=cls._engine)
-        else:
-            MouseMoveEvent.Pack(pos_x, pos_y, engine=cls._engine)
-
-    @classmethod
-    def _scroll_callback(
-        cls,
-        window,
-        x_offset,
-        y_offset
-    ) -> None:
-        ScrollerEvent.Pack(x_offset=x_offset, y_offset=y_offset, engine=cls._engine)

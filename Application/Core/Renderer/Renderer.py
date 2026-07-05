@@ -31,6 +31,7 @@ from Application.Core.Renderer.RenderCommand import RenderCommand
 
 if TYPE_CHECKING:
     from Application.Core.Camera.CameraBase import CameraBase
+    from Application.Core.Renderer.VertexLayout import VertexLayout
 
 
 class Renderer(ABC):
@@ -233,12 +234,37 @@ class Renderer(ABC):
             else cls._active_camera.target if hasattr(cls._active_camera, 'target')
             else np.zeros(3, 'f4')
         ),
-        'camera.fade_radius': lambda cls: np.array([
-            cls._active_camera.orbit_distance if hasattr(cls._active_camera, 'orbit_distance')
-            else cls._active_camera.distance if hasattr(cls._active_camera, 'distance')
-            else 10.0
-        ], 'f4'),
+        'camera.fade_radius': lambda cls: cls._resolve_fade_radius(),
     }
+
+    @classmethod
+    def _resolve_fade_radius(cls) -> 'np.ndarray':
+        """解析 Grid 淡出半径 — 3D 透视用 orbit_distance, 2D 正交用 ortho_size。
+        
+        在 2D 正交模式下，缩放由 ortho_size 控制而非 orbit_distance，
+        因此 fade_radius 需要跟随 ortho_size 动态缩放，
+        否则 Grid 在 2D 下拉远时不会像 3D 那样显示更多网格线。
+        """
+        cam = cls._active_camera
+        if cam is None:
+            return np.array([10.0], 'f4')
+
+        # ── 2D 正交模式: fade_radius 基于可见区域 ──
+        if hasattr(cam, 'is_orthographic') and cam.is_orthographic:
+            ortho_size = cam.ortho_size if hasattr(cam, 'ortho_size') else 10.0
+            # 可见区域半高 = ortho_size, 半宽 = ortho_size * aspect
+            # 中心到远角的距离 = ortho_size * sqrt(1 + aspect²)
+            # 乘以 1.5 提供边缘 padding，与 3D 透视下的体验一致
+            aspect = cls.aspect_ratio if hasattr(cls, 'aspect_ratio') else 1.0
+            radius = ortho_size * max(aspect, 1.0) * 1.5
+            return np.array([radius], 'f4')
+
+        # ── 3D 透视模式: fade_radius = orbit_distance ──
+        if hasattr(cam, 'orbit_distance'):
+            return np.array([cam.orbit_distance], 'f4')
+        if hasattr(cam, 'distance'):
+            return np.array([cam.distance], 'f4')
+        return np.array([10.0], 'f4')
 
     @classmethod
     def _resolve_overlay_uniforms(cls, uniforms: dict | None) -> dict[str, 'np.ndarray']:
@@ -352,12 +378,14 @@ class RenderResourceManger(ABC):
             vao            : 顶点数组对象句柄
             ebo            : 索引缓冲对象句柄
             elements_count : 索引数量 (用于 glDrawElements)
+            layout         : VertexLayout — 顶点格式描述符 (跨后端)
             ref_count      : 引用计数
         """
         vbo: int
         vao: int
         ebo: int
         elements_count: int
+        layout: 'VertexLayout' = None
         ref_count: int = 0
 
     @dataclass
@@ -506,8 +534,9 @@ class RenderResourceManger(ABC):
             model_matrix_cb: fn(w, h) → 4×4 model 矩阵 (仅 ignore_scene_matrices 时)
             texture_pixels: RGBA uint8 纹理像素 (H, W, 4)
             texture_uniform: 片段着色器中 sampler 名称
-            vertex_stride : 每顶点字节数
-            vertex_attrs  : [(location, size_floats, offset_bytes), ...]
+            vertex_stride : 每顶点字节数 (旧, 建议改用 layout)
+            vertex_attrs  : [(location, size_floats, offset_bytes), ...] (旧, 建议改用 layout)
+            layout        : VertexLayout — 顶点格式描述符 (新, 优先于 vertex_stride/vertex_attrs)
             pick_type     : 拾取类型 (0=不可拾取, 1=gizmo面, 2=entity, ...)
             pick_id       : 拾取 ID (该类型内唯一, 0~65535)
         """
@@ -528,6 +557,7 @@ class RenderResourceManger(ABC):
         texture_uniform: str = ''
         vertex_stride: int = 12
         vertex_attrs: list = None
+        layout: 'VertexLayout' = None  # ★ 新: 跨后端顶点格式描述符 (优先于 vertex_stride/vertex_attrs)
         pick_type: int = 0
         pick_id: int = 0
         render_layer: int = 0

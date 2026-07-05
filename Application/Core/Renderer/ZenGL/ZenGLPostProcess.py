@@ -218,7 +218,6 @@ void main() {
         cls._pp_mrt_vs = '''#version 440 core
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec2 aTexCoord;
-layout(location=2) in vec3 aNormal;
 uniform mat4 model, view, projection;
 out vec2 TexCoord;
 void main() {
@@ -302,6 +301,10 @@ void main() {
                 'min_filter': 'linear', 'mag_filter': 'linear',
             })
 
+        from Application.Core.Renderer.VertexLayout import VertexLayout
+        VertexLayout.check_shader_consistency(
+            mesh_data.layout, cls._pp_mrt_vs, "PostProcess MRT")
+
         pipeline = ctx.pipeline(
             vertex_shader=cls._pp_mrt_vs,
             fragment_shader=cls._pp_mrt_fs,
@@ -324,7 +327,9 @@ void main() {
             cull_face='none',
             depth={'func': 'less', 'write': True},
             vertex_buffers=__import__('zengl').bind(
-                mesh_data.vbo, '3f 2f 3f', 0, 1, -1
+                mesh_data.vbo,
+                mesh_data.layout.to_zengl_format(),
+                *mesh_data.layout.get_active_locations(cls._pp_mrt_vs),
             ),
             index_buffer=mesh_data.ebo,
             vertex_count=mesh_data.elements_count,

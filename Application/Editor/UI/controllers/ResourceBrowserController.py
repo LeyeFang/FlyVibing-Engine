@@ -30,3 +30,8 @@ class ResourceBrowserController:
     @classmethod
     def get_resource_name(cls, resource: dict[str, Any]) -> str:
         return resource.get("name", "unnamed")
+
+
+# ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──
+from Application.Editor.Services.ControllerRegistry import register, NAME_RESOURCE_BROWSER
+register(NAME_RESOURCE_BROWSER, ResourceBrowserController)

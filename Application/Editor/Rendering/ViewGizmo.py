@@ -166,6 +166,7 @@ class ViewGizmo:
     ) -> None:
         """注册 6 个面 overlay (纯数据, GPU 资源由 Renderer 管理)。"""
         from Application.Core.Renderer.Renderer import RenderResourceManger as RRM
+        from Application.Core.Renderer.VertexLayout import STD_LAYOUT
         face_geometries = cls._build_face_geometries()
         tex_pixels = cls._build_letter_atlas()
         shared_cb = cls._compute_cube_model_cb
@@ -186,13 +187,7 @@ class ViewGizmo:
                 model_matrix_cb=shared_cb,
                 texture_pixels=tex_pixels,
                 texture_uniform='uLetterTex',
-                vertex_stride=11 * 4,
-                vertex_attrs=[
-                    (0, 3, 0),    # aPos
-                    (1, 3, 12),   # aColor
-                    (2, 3, 24),   # aNormal
-                    (3, 2, 36),   # aTexCoord
-                ],
+                layout=STD_LAYOUT.VIEW_GIZMO,
                 pick_type=1,       # 1 = ViewGizmo face
                 pick_id=pick_id,   # 1~6
                 render_layer=1,    # screen-space overlay

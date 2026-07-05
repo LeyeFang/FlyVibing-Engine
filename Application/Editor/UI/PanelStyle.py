@@ -13,7 +13,7 @@ from imgui_bundle import imgui
 # 强调橙:    #E06A27  (0.878, 0.416, 0.153)  Blender 标志色
 # 文字:      #C0C0C0  (0.753, 0.753, 0.753)  暖灰白
 # 文字禁用:  #666666  (0.400, 0.400, 0.400)
-# 边框:      #3D3D3D  (0.239, 0.239, 0.239)
+# 面板边框:  #595959  (0.350, 0.350, 0.350)  浅灰，区分面板与渲染背景
 # ============================================================
 
 
@@ -54,6 +54,10 @@ COLOR_EVENT     = (0.420, 0.650, 0.920)   # 淡蓝 — 事件节点
 COLOR_FLOW      = (0.600, 0.600, 0.600)   # 灰色 — 流程节点
 COLOR_EXEC_PIN  = (0.950, 0.950, 0.950)   # 白色 — 执行引脚
 COLOR_DATA_PIN  = (0.600, 0.800, 1.000)   # 淡蓝 — 数据引脚
+COLOR_MATH      = (0.420, 0.550, 0.920)   # 柔蓝 — 数学/纯函数节点
+COLOR_TIME      = (0.878, 0.753, 0.314)   # 暖金 — 时间节点
+COLOR_ENTITY    = (0.314, 0.784, 0.471)   # 青绿 — Entity 生命周期节点
+COLOR_VARIABLE  = (0.650, 0.420, 0.920)   # 淡紫 — 变量节点
 
 # ============================================================
 # 主入口
@@ -72,13 +76,13 @@ def apply_custom_style(
     _set_col(style, imgui.Col_.frame_bg_hovered, 0.227, 0.227, 0.227, 1.00)   # #3A3A3A
     _set_col(style, imgui.Col_.frame_bg_active,  0.290, 0.290, 0.290, 1.00)   # #4A4A4A
 
-    # 标题栏 — Blender 用深色标题，激活时橙色下划线式高亮
-    _set_col(style, imgui.Col_.title_bg,              0.094, 0.094, 0.094, 1.00)   # #181818
-    _set_col(style, imgui.Col_.title_bg_active,       0.137, 0.137, 0.137, 1.00)   # #232323
-    _set_col(style, imgui.Col_.title_bg_collapsed,    0.094, 0.094, 0.094, 1.00)
+    # 标题栏 — 与按钮同色，激活时略亮
+    _set_col(style, imgui.Col_.title_bg,              0.176, 0.176, 0.176, 1.00)   # #2D2D2D
+    _set_col(style, imgui.Col_.title_bg_active,       0.227, 0.227, 0.227, 1.00)   # #3A3A3A
+    _set_col(style, imgui.Col_.title_bg_collapsed,    0.176, 0.176, 0.176, 1.00)
 
-    # 菜单栏 — 略亮于窗口背景
-    _set_col(style, imgui.Col_.menu_bar_bg, 0.137, 0.137, 0.137, 1.00)
+    # 菜单栏 — 与按钮同色
+    _set_col(style, imgui.Col_.menu_bar_bg, 0.176, 0.176, 0.176, 1.00)
 
     # 选中 / 高亮 — Blender 橙
     _set_col(style, imgui.Col_.header,          0.878, 0.416, 0.153, 0.55)
@@ -90,8 +94,8 @@ def apply_custom_style(
     _set_col(style, imgui.Col_.button_hovered,  0.227, 0.227, 0.227, 1.00)
     _set_col(style, imgui.Col_.button_active,   0.290, 0.290, 0.290, 1.00)
 
-    # 边框 / 分割线 — 细且低调
-    _set_col(style, imgui.Col_.border,              0.239, 0.239, 0.239, 1.00)
+    # 边框 / 分割线 — 面板边缘用浅灰区分渲染背景
+    _set_col(style, imgui.Col_.border,              0.350, 0.350, 0.350, 1.00)   # #595959
     _set_col(style, imgui.Col_.border_shadow,       0.000, 0.000, 0.000, 0.00)
     _set_col(style, imgui.Col_.separator,           0.239, 0.239, 0.239, 1.00)
     _set_col(style, imgui.Col_.separator_hovered,   0.878, 0.416, 0.153, 0.55)
@@ -156,9 +160,9 @@ def apply_custom_style(
     style.item_inner_spacing = (4.0, 4.0)
     style.indent_spacing     = 16.0
 
-    # ── 边框粗细 — Blender 几乎无可见边框 ────────────────────────
-    style.window_border_size = 0.0
-    style.child_border_size  = 0.0
+    # ── 边框粗细 — 面板边缘 2px，区分渲染背景 ──────────────────
+    style.window_border_size = 2.0
+    style.child_border_size  = 2.0
     style.popup_border_size  = 1.0
     style.frame_border_size  = 0.0
     style.tab_border_size    = 0.0

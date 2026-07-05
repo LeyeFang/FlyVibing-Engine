@@ -26,6 +26,7 @@ from Application.Resource.Mesh import Mesh
 from Application.Resource.Material import Material, Shader, Texture
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
+from Application.Core.Renderer.VertexLayout import VertexLayout, STD_LAYOUT
 
 
 class VulkanResourceManager:
@@ -69,6 +70,7 @@ class VulkanResourceManager:
         index_buffer: object = None
         index_memory: object = None
         elements_count: int = 0
+        layout: 'VertexLayout' = None  # ★ 顶点格式描述符
         ref_count: int = 0
 
     @dataclass
@@ -206,6 +208,7 @@ class VulkanResourceManager:
             index_buffer=ibo,
             index_memory=ibo_mem,
             elements_count=int(indices.size),
+            layout=mesh.layout or STD_LAYOUT.ENTITY_POS_UV_NORMAL,
             ref_count=1,
         )
 

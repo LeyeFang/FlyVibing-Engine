@@ -377,6 +377,7 @@ class TransformGizmo:
     def register_to(cls, renderer: 'Renderer') -> None:
         """注册 6 个 overlay (3 轴 + 3 面)。"""
         from Application.Core.Renderer.Renderer import RenderResourceManger as RRM
+        from Application.Core.Renderer.VertexLayout import STD_LAYOUT
 
         # ── 3 轴箭头 ──
         for axis_name, ad in cls.AXIS_DEFS.items():
@@ -393,11 +394,7 @@ class TransformGizmo:
                 cull_face=False,
                 ignore_scene_matrices=True,
                 model_matrix_cb=cls._compute_mvp_cb,
-                vertex_stride=6 * 4,  # ★ pos(3) + color(3) = 6 floats
-                vertex_attrs=[
-                    (0, 3, 0),    # aPos
-                    (1, 3, 12),   # aColor
-                ],
+                layout=STD_LAYOUT.TRANSFORM_GIZMO,
                 pick_type=2,            # 2 = TransformGizmo
                 pick_id=ad['pick_id'],  # 1/2/3
                 render_layer=1,         # screen-space overlay
@@ -420,11 +417,7 @@ class TransformGizmo:
                 cull_face=False,
                 ignore_scene_matrices=True,
                 model_matrix_cb=cls._compute_mvp_cb,
-                vertex_stride=6 * 4,  # ★ pos(3) + color(3) = 6 floats
-                vertex_attrs=[
-                    (0, 3, 0),    # aPos
-                    (1, 3, 12),   # aColor
-                ],
+                layout=STD_LAYOUT.TRANSFORM_GIZMO,
                 pick_type=2,            # 2 = TransformGizmo
                 pick_id=pd['pick_id'],  # 4/5/6
                 render_layer=1,         # screen-space overlay

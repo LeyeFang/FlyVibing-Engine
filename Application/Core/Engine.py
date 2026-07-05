@@ -163,10 +163,20 @@ class Engine:
 
     @classmethod
     def _get_input_state(cls) -> InputState:
-        """返回当前 Engine 的 InputState 实例（延迟创建）。"""
+        """返回当前 Engine 的 InputState 实例（延迟创建）。
+
+        优先使用窗口管线已有的 InputState (glfwWindow.InputPipeline),
+        确保 Engine 和输入管线共享同一份状态。
+        """
         st = cls._state()
         if st['_input_state'] is None:
-            st['_input_state'] = InputState()
+            # 尝试从窗口的输入管线获取已有 InputState
+            if (cls.window is not None
+                    and hasattr(cls.window, '_input_pipeline')
+                    and cls.window._input_pipeline is not None):
+                st['_input_state'] = cls.window._input_pipeline.input_state
+            else:
+                st['_input_state'] = InputState()
         return st['_input_state']
 
     @classmethod

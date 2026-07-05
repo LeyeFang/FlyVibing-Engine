@@ -219,7 +219,6 @@ class OpenGLPostProcess(PostProcess):
         _MRT_VS = '''#version 440 core
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec2 aTexCoord;
-layout(location=2) in vec3 aNormal;
 uniform mat4 model, view, projection;
 out vec2 TexCoord;
 void main() {
@@ -302,6 +301,7 @@ void main() {
     @classmethod
     def _create_quad(cls) -> None:
         """创建全屏四边形 VAO (triangle strip)。"""
+        from Application.Core.Renderer.VertexLayout import STD_LAYOUT
         verts = np.array([-1, -1, 1, -1, -1, 1, 1, 1], dtype='f4')
         cls._pp_quad_vao = gl.glGenVertexArrays(1)
         vbo = gl.glGenBuffers(1)
@@ -310,7 +310,11 @@ void main() {
         gl.glBufferData(gl.GL_ARRAY_BUFFER, verts.nbytes, verts,
                         gl.GL_STATIC_DRAW)
         gl.glEnableVertexAttribArray(0)
-        gl.glVertexAttribPointer(0, 2, gl.GL_FLOAT, gl.GL_FALSE, 0, None)
+        # ★ 使用标准布局
+        ql = STD_LAYOUT.SCREEN_QUAD
+        loc, size, stride, offset = ql.to_gl_attribs()[0]
+        gl.glVertexAttribPointer(loc, size, gl.GL_FLOAT, gl.GL_FALSE, stride,
+                                 ctypes.c_void_p(offset))
         gl.glBindVertexArray(0)
 
     # ════════════════════════════════════════════════════════

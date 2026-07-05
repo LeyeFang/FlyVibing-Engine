@@ -13,6 +13,7 @@ from Application.Resource.Mesh import Mesh
 from Application.Resource.Material import Material, Shader as CPU_Shader, Texture as CPU_Texture
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Renderer.Renderer import RenderResourceManger as RRM
+from Application.Core.Renderer.VertexLayout import VertexLayout, STD_LAYOUT
 from Application.Core.Renderer.ZenGL.ZenGLOverlayRenderer import _DEBUG_ZENGL_OVERLAY
 
 
@@ -26,6 +27,7 @@ class ZenGLResourceManager:
     class mesh_data_struct:
         vbo: any = None; ebo: any = None
         elements_count: int = 0; vertex_stride: int = 32; ref_count: int = 0
+        layout: 'VertexLayout' = None  # ★ 顶点格式描述符
 
     @dataclass
     class shader_data_struct:
@@ -46,6 +48,7 @@ class ZenGLResourceManager:
         uniforms_setup: any = None; uniforms: dict = None; texture: any = None
         texture_uniform: str = 'uLetterTex'
         model_matrix_cb: any = None; pick_type: int = 0; pick_id: int = 0; render_layer: int = 0
+        layout: 'VertexLayout' = None  # ★ 顶点格式描述符
         # 惰性 pick pipeline 构造参数 (ZenGL Pipeline 不暴露内部属性)
         _pick_vs: str = ""; _pick_topo: str = "triangles"
         _pick_ebo: any = None; _pick_muni: list = field(default_factory=list)
@@ -58,8 +61,6 @@ class ZenGLResourceManager:
     registered_textures: dict = {}
     _overlay_gpu_resources: dict = {}
     _overlay_pick_key_map: dict = {}
-
-    _VERTEX_STRIDE = 32; _POS_OFFSET = 0; _UV_OFFSET = 12; _NORMAL_OFFSET = 20
 
     @classmethod
     def register_entity(cls, entity_id: int) -> None:
@@ -100,6 +101,11 @@ class ZenGLResourceManager:
             resources.append({'type': 'sampler', 'binding': 0, 'image': td.image,
                               'min_filter': 'linear', 'mag_filter': 'linear'})
 
+        # ★ 顶点格式: 优先使用 mesh.layout, 回退到旧硬编码
+        mesh_layout = getattr(mesh_data, 'layout', None) or STD_LAYOUT.ENTITY_POS_UV_NORMAL
+        VertexLayout.check_shader_consistency(
+            mesh_layout, shader_data.vs_src, f"entity shader '{shader_id}'")
+
         pipeline = ZenGLCore.ctx.pipeline(
             vertex_shader=shader_data.vs_src,
             fragment_shader=shader_data.fs_src,
@@ -107,7 +113,10 @@ class ZenGLResourceManager:
             framebuffer=ZenGLCore.get_framebuffer(),
             topology='triangles', cull_face='none',
             depth={'func': 'less', 'write': True},
-            vertex_buffers=zengl.bind(mesh_data.vbo, '3f 2f 3f', 0, 1, -1),
+            vertex_buffers=zengl.bind(
+                mesh_data.vbo,
+                mesh_layout.to_zengl_format(),
+                *mesh_layout.get_active_locations(shader_data.vs_src)),
             index_buffer=mesh_data.ebo,
             vertex_count=mesh_data.elements_count,
         )
@@ -127,7 +136,9 @@ class ZenGLResourceManager:
         ebo = ZenGLCore.ctx.buffer(idx.tobytes(), index=True)
         cls.registered_meshes[mesh_id] = cls.mesh_data_struct(
             vbo=vbo, ebo=ebo,
-            elements_count=int(idx.size), ref_count=1)
+            elements_count=int(idx.size), ref_count=1,
+            layout=mesh.layout or STD_LAYOUT.ENTITY_POS_UV_NORMAL,
+        )
 
     @classmethod
     def register_shader(cls, shader: CPU_Shader, shader_id: int) -> None:
@@ -163,13 +174,33 @@ class ZenGLResourceManager:
             idx = overlay.indices.astype('i4') if isinstance(overlay.indices, np.ndarray) else np.array(overlay.indices, 'i4')
             ebo = ctx.buffer(idx.tobytes(), index=True)
 
-        vs_stride = getattr(overlay, 'vertex_stride', 0)
-        vs_attrs = getattr(overlay, 'vertex_attrs', [(0,3,0)])
-        fmt_parts = [f'{c}f' for _,c,_ in sorted(vs_attrs, key=lambda x:x[2])]
-        locs = [loc for loc,_,_ in sorted(vs_attrs, key=lambda x:x[2])]
-        fmt_str = ' '.join(fmt_parts)
+        # ★ 顶点格式: 优先 overlay.layout, 回退从 vertex_attrs 构造
+        ol_layout = overlay.layout
+        if ol_layout is None:
+            vs_stride = getattr(overlay, 'vertex_stride', 0)
+            vs_attrs = getattr(overlay, 'vertex_attrs', [(0, 3, 0)])
+            ol_layout = VertexLayout(
+                attributes=tuple(vs_attrs),
+                stride=vs_stride or 12,
+            )
+        VertexLayout.check_shader_consistency(
+            ol_layout, overlay.vs_src, f"overlay '{overlay.key}'")
+        fmt_str = ol_layout.to_zengl_format()
+        locs = ol_layout.to_zengl_locations()
         vb = zengl.bind(vbo, fmt_str, *locs)
+        vs_stride = ol_layout.stride
         vc = vbo.size // vs_stride if ebo is None else ebo.size // 4
+
+        # ★ 创建 position-only VBO 供 pick pipeline 使用
+        #    从 VertexLayout 读取 location=0 的属性参数
+        ploc, pcount, poffset = ol_layout.get_position_attr()
+        pos_offset_floats = poffset // 4   # byte offset → float index
+        if isinstance(verts, np.ndarray):
+            pos_data = np.ascontiguousarray(
+                verts[:, pos_offset_floats:pos_offset_floats + pcount].astype('f4'))
+            pick_vbo = ctx.buffer(pos_data.tobytes())
+        else:
+            pick_vbo = vbo  # 非 numpy 回退 (不应发生)
 
         topo_map = {'triangles':'triangles','lines':'lines','line_strip':'line_strip','points':'points'}
         topo = topo_map.get(overlay.draw_mode, 'triangles')
@@ -263,12 +294,13 @@ class ZenGLResourceManager:
             uniforms=getattr(overlay, 'uniforms', None), texture=ot,
             texture_uniform=getattr(overlay,'texture_uniform','uLetterTex'),
             model_matrix_cb=overlay.model_matrix_cb,
+            layout=ol_layout,
             pick_type=overlay.pick_type, pick_id=overlay.pick_id,
             render_layer=getattr(overlay, 'render_layer', 0),
             # 缓存 pick pipeline 构造参数 (ZenGL Pipeline 不暴露 vertex_shader 等属性)
             _pick_vs=vs_p, _pick_topo=topo, _pick_ebo=ebo,
             _pick_muni=[mn for mn in ('uModel', 'uView', 'uProj') if mn in ou],
-            _pick_vbo=vbo, _pick_fmt=fmt_str, _pick_locs=locs, _pick_vcount=vc,
+            _pick_vbo=pick_vbo, _pick_fmt=fmt_str, _pick_locs=locs, _pick_vcount=vc,
             _pick_stride=vs_stride,
         )
         if overlay.pick_type > 0:

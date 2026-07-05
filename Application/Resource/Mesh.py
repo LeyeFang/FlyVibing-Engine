@@ -1,6 +1,10 @@
 import numpy as np
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from Application.Core.Renderer.VertexLayout import VertexLayout
 
 
 @dataclass
@@ -10,7 +14,7 @@ class Mesh:
     indices: np.ndarray = None
     uvs: np.ndarray = None
     normals: np.ndarray = None
-    vao_config: dict = field(default_factory=dict)
+    layout: 'VertexLayout' = None  # ★ 顶点格式描述符 (跨渲染后端), 取代旧 vao_config
 
     def __init__(
         self,

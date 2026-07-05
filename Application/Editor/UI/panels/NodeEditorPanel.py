@@ -13,6 +13,7 @@ from Application.Editor.UI.controllers.NodeEditorController import (
     NodeCanvas,
     LinkInstance,
     _TYPES,
+    _gen_id,
 )
 
 
@@ -263,61 +264,60 @@ class NodeEditorPanel(BasePanel):
             sp = ne.PinId(0)
             ep = ne.PinId(0)
             if ne.query_new_link(sp, ep):
-                sd = canvas.find_pin_dir(sp.id())
-                ed = canvas.find_pin_dir(ep.id())
-                sn = canvas.find_pin_node(sp.id())
-                en = canvas.find_pin_node(ep.id())
-                valid = (
-                    sd is not None and ed is not None and sd != ed
-                    and sn is not None and en is not None and sn != en
-                )
-                if valid:
-                    out_pin = sp.id() if sd == "output" else ep.id()
-                    in_pin = ep.id() if sd == "output" else sp.id()
-                    if canvas.find_pin_dir(out_pin) == "output" and \
-                       canvas.find_pin_dir(in_pin) == "input":
-                        ne.accept_new_item(_col((0.8, 0.8, 0.8, 0.5)), 2.0)
-                    else:
-                        ne.reject_new_item()
-                else:
-                    ne.reject_new_item()
+                # 仅当两端 pin 都有效时处理
+                if sp.id() != 0 and ep.id() != 0:
+                    sd = canvas.find_pin_dir(sp.id())
+                    ed = canvas.find_pin_dir(ep.id())
+                    sn = canvas.find_pin_node(sp.id())
+                    en = canvas.find_pin_node(ep.id())
+                    # 仅当拖到合法的异向/异节点 pin 时，才尝试接受
+                    if (sd and ed and sd != ed and sn and en and sn != en):
+                        out_pin = sp.id() if sd == "output" else ep.id()
+                        in_pin = ep.id() if sd == "output" else sp.id()
+                        if (canvas.find_pin_dir(out_pin) == "output"
+                                and canvas.find_pin_dir(in_pin) == "input"):
+                            if ne.accept_new_item():
+                                # 用户松手确认连线
+                                lid = canvas.add_link(out_pin, in_pin)
+                                if lid != -1:
+                                    print(
+                                        f"[Link] Created: "
+                                        f"{canvas.find_pin_name(out_pin)} → "
+                                        f"{canvas.find_pin_name(in_pin)}"
+                                    )
+                                else:
+                                    print("[Link] Duplicate — skipped")
+                            # NOTE: 不要 else: reject_new_item()！
+                            # accept_new_item()==False 仅表示用户还没松手，
+                            # 下一帧 begin_create() 仍然为 True，继续等待。
             ne.end_create()
 
         # ══════════════════════════════════════════════════════
-        # 交互: Delete 删除选中节点/连线
+        # 交互: Delete 键删除选中节点/连线
         # ══════════════════════════════════════════════════════
-        if ne.begin_delete():
-            del_link = ne.LinkId(0)
-            while ne.query_deleted_link(del_link):
-                if del_link.id() in canvas.links:
-                    canvas.remove_link(del_link.id())
-                    ne.accept_new_item()
-                else:
-                    ne.reject_new_item()
+        _del_pressed = imgui.is_key_pressed(imgui.Key.delete, False)
+        if _del_pressed:
+            _sel_nodes = ne.get_selected_nodes()
+            _sel_links = ne.get_selected_links()
+            _del_node_count = 0
+            _del_link_count = 0
+            for sn in _sel_nodes:
+                nid = sn.id()
+                if nid in canvas.nodes:
+                    print(f"[Delete] Node: {canvas.nodes[nid].node_type} (id={nid})")
+                    canvas.remove_node(nid)
+                    _del_node_count += 1
+            for sl in _sel_links:
+                lid = sl.id()
+                if lid in canvas.links:
+                    print(f"[Delete] Link: {lid}")
+                    canvas.remove_link(lid)
+                    _del_link_count += 1
+            if _del_node_count == 0 and _del_link_count == 0:
+                print("[Delete] No selection — click a node first, then press Delete")
+            ne.clear_selection()
 
-            del_node = ne.NodeId(0)
-            while ne.query_deleted_node(del_node):
-                if del_node.id() in canvas.nodes:
-                    canvas.remove_node(del_node.id())
-                    ne.accept_new_item()
-                else:
-                    ne.reject_new_item()
-            ne.end_delete()
-
         # ══════════════════════════════════════════════════════
-        # 收集创建的新 link
-        # ══════════════════════════════════════════════════════
-        for lid in ne.get_action_context_links():
-            if lid.id() in canvas.links:
-                continue
-            sp = ne.PinId(0)
-            ep = ne.PinId(0)
-            if ne.get_link_pins(lid, sp, ep):
-                sd = canvas.find_pin_dir(sp.id())
-                if sd == "output":
-                    canvas.links[lid.id()] = LinkInstance(lid.id(), sp.id(), ep.id())
-                else:
-                    canvas.links[lid.id()] = LinkInstance(lid.id(), ep.id(), sp.id())
 
         # ══════════════════════════════════════════════════════
         # 空画布提示

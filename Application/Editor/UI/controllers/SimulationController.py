@@ -70,6 +70,11 @@ class SimulationController:
         cls._pending_start = False
 
         from Application.Runtime.GameRuntime import GameRuntime
+
+        # 防止重复启动
+        if cls._state != SimulationState.STOPPED:
+            return
+
         from Application.Runtime.RuntimeLayer import RuntimeLayer
         from Application.Runtime.RuntimeDebugLayer import RuntimeDebugLayer
         from Application.Runtime.RuntimeNodeLayer import RuntimeNodeLayer

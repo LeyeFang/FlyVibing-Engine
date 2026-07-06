@@ -5,7 +5,7 @@ vulkanRenderer — Vulkan 渲染器后端 (继承 VulkanCore + VulkanResourceMan
   - 显式 GPU 内存管理 (VkBuffer / VkImage / VkDeviceMemory)
   - 引用计数 GPU 资源管理
   - Push constant 传递 MVP 矩阵 (快速更新)
-  - View/Proj 矩阵缓存 (仅在 SceneCameraUpdateEvent 时重算)
+  - View/Proj 矩阵通过 SetViewProjectionCommand 由逻辑线程推送
   - 延迟 resize 处理 (后续扩展)
 
 架构:
@@ -23,13 +23,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from Application.Core.Engine import Engine
 
-from Application.Core.Events.Event import Event
-from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
-from Application.Core.Renderer.RenderCommand import (
-    CameraUpdateCommand,
-)
 from Application.Core.Renderer.CommandQueue import CommandQueue
 from Application.Core.Renderer.Vulkan.VulkanCore import VulkanCore
 from Application.Core.Renderer.Vulkan.VulkanResourceManager import VulkanResourceManager
@@ -67,10 +62,7 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]
         cls.aspect_ratio = window_size[0] / window_size[1]
-        # ── 缓存初始相机矩阵 (由 set_active_camera 在 OnAttach 中设置) ──
-        if cls._active_camera is not None:
-            cls._cached_view = cls._active_camera.get_view_matrix()
-            cls._cached_proj = cls._active_camera.get_projection_matrix(cls.aspect_ratio)
+        # 相机矩阵由逻辑线程通过 SetViewProjectionCommand 推送
         cls._command_queue = CommandQueue()
         return cls
 
@@ -127,14 +119,3 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
     @classmethod
     def EndFrame(cls) -> None:
         pass
-
-    @classmethod
-    def OnEvent(cls, event: Event) -> None:
-        """事件处理 — enqueue 命令到队列，由 StartFrame 消费。
-
-        注意:
-          - 窗口 resize 已改为直接 Command (glfwWindow 回调中提交)。
-          - 实体注册/解注册使用 renderer.enqueue(EntityRegistrationCommand(...))。
-        """
-        if isinstance(event, SceneCameraUpdateEvent):
-            cls.enqueue(CameraUpdateCommand())

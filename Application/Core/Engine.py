@@ -28,6 +28,7 @@ import threading
 import atexit
 import signal
 import traceback
+import time as _time
 from threading import Thread
 
 from Application.Core.Layers.Layer import Layer
@@ -99,6 +100,11 @@ class Engine:
                 '_input_state': None,
                 # 帧性能分析器 (FrameProfiler 实例, 由 _get_profiler 延迟创建)
                 '_profiler': None,
+                # ── 时间系统 ──
+                '_engine_start_time': 0.0,   # init() 时设置
+                '_last_frame_time': 0.0,     # 上一帧 perf_counter
+                '_delta_time': 0.0,          # 帧间隔 (秒)
+                '_elapsed_time': 0.0,        # 引擎已运行时间 (秒)
             }
         return cls._registry[name]
 
@@ -255,6 +261,11 @@ class Engine:
             cls._state()['renderer_ready'].wait()
         cls._instance = cls
         cls._state()['_initialized'] = True
+        # 6b. 初始化引擎自身时钟
+        cls._state()['_engine_start_time'] = _time.perf_counter()
+        cls._state()['_last_frame_time'] = _time.perf_counter()
+        cls._state()['_delta_time'] = 0.0
+        cls._state()['_elapsed_time'] = 0.0
         # 7. 注册强制终止处理器 (atexit + SIGINT)
         atexit.register(cls._emergency_shutdown)
         try:
@@ -309,6 +320,7 @@ class Engine:
             cls._state()['run_ready'].set()
             try:
                 while cls.run_state:
+                    cls._tick_timing()
                     cls.window.Update()
                     for layer in cls._state()['layer_stack']:
                         layer.OnUpdate()
@@ -324,14 +336,39 @@ class Engine:
         不调用任何 GLFW 函数。窗口事件和生命周期全部由主线程管理。
         本线程仅执行游戏逻辑更新。
         """
-        import time as _time
         cls._state()['run_ready'].set()
         while cls.run_state:
+            cls._tick_timing()
             for layer in cls._state()['layer_stack']:
                 layer.OnUpdate()
                 if not cls.run_state:
                     break
             _time.sleep(0.005)
+
+    # ════════════════════════════════════════════════════════════
+    # 时间系统
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _tick_timing(cls) -> None:
+        """每帧调用一次 — 更新 delta / elapsed 时间缓存。"""
+        now = _time.perf_counter()
+        st = cls._state()
+        if st['_last_frame_time'] == 0.0:
+            st['_last_frame_time'] = now
+        st['_delta_time'] = now - st['_last_frame_time']
+        st['_last_frame_time'] = now
+        st['_elapsed_time'] = now - st['_engine_start_time']
+
+    @classmethod
+    def get_elapsed_time(cls) -> float:
+        """引擎已运行时间 (秒)。由 _tick_timing() 每帧更新。"""
+        return cls._state().get('_elapsed_time', 0.0)
+
+    @classmethod
+    def get_delta_time(cls) -> float:
+        """上一帧耗时 (秒)。由 _tick_timing() 每帧更新。"""
+        return cls._state().get('_delta_time', 0.0)
 
     @classmethod
     def shutdown(cls) -> None:

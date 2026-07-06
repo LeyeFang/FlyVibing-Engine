@@ -58,3 +58,52 @@ def _eval_delay(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
         g.set_state(node_id, "started", False)
 
 register_evaluator("TimeDelay", _eval_delay)
+
+
+# ── TimeTrigger ──────────────────────────────────────────────
+
+def _eval_time_trigger(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
+    """Time Trigger — 当引擎时间越过阈值时触发 exec_out。
+
+    反复触发: 阈值被更新（增大）后，可再次 fire。"""
+    inst = g._canvas.nodes[node_id]
+    nd = g._types[inst.node_type]
+    mode = inst.props.get("mode", "manual")
+
+    # ── 读取阈值 ──
+    if mode == "manual":
+        threshold = float(inst.props.get("time", 0.0))
+    else:
+        time_pin = next((p for p in nd.pins if p.name == "Time"), None)
+        threshold = 0.0
+        if time_pin is not None:
+            inst_pin_id = inst.pin_ids.get(time_pin.name)
+            if inst_pin_id is not None:
+                val = g._read_input(inst_pin_id, ctx)
+                if val is not None:
+                    threshold = float(val)
+
+    current = ctx.elapsed_time
+    last_fired_at = g.get_state(node_id, "_last_fired_threshold", -1.0)
+
+    # ── 触发条件: 越过阈值 OR 阈值更新到更大值且当前已到达 ──
+    threshold_changed = (threshold > last_fired_at + 0.0001)
+    fired = (current >= threshold > 0) and threshold_changed
+
+    if fired:
+        print(f"[TimeTrigger] t={current:.4f} thr={threshold:.4f}")
+
+    if fired:
+        g.set_state(node_id, "_last_fired_threshold", threshold)
+        g.set_state(node_id, "_blocked", False)
+    else:
+        g.set_state(node_id, "_blocked", True)
+
+    # ── 写入 Elapsed output pin ──
+    for p in nd.pins:
+        if p.name == "Elapsed" and p.direction == "output":
+            inst_pin_id = inst.pin_ids.get(p.name)
+            if inst_pin_id is not None:
+                ctx.set_pin(inst_pin_id, current)
+
+register_evaluator("TimeTrigger", _eval_time_trigger)

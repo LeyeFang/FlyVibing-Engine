@@ -75,16 +75,11 @@ class EditorHost(Engine):
     # ════════════════════════════════════════════════════════════
     @classmethod
     def _on_event(cls, event: Event) -> None:
-        """编辑器事件分发 — 额外桥接 Renderer.OnEvent。
+        """编辑器事件分发 — 全部经由 Layer 栈处理。
 
-        TODO: RHI 化后删除 renderer.OnEvent 调用。
-              渲染器将通过 Command Queue 接收 resize/camera 更新。
+        Renderer 已完全解耦 Event 系统，仅通过 Command Queue 接收指令。
         """
-        # Engine 标准分发: Layer → Window
         super()._on_event(event)
-        # 过渡期: 桥接 Renderer（处理 WindowResizeEvent 等）
-        if cls.renderer is not None and not event.consumed:
-            cls.renderer.OnEvent(event)
 
     # ════════════════════════════════════════════════════════════
     # 插件管理

@@ -61,6 +61,7 @@ class GraphEvaluator:
         self._canvas = canvas          # NodeCanvas 实例
         self._types = _TYPES           # 节点类型注册表
         self._node_state: dict[int, dict] = {}  # node_id → state dict
+        self._eval_guard: set[int] = set()      # 数据节点懒求值环检测
 
     # ── 入口 ───────────────────────────────────────────────
 
@@ -69,6 +70,8 @@ class GraphEvaluator:
 
         event_type: "OnGameStart" | "OnFrameUpdate" | "OnGameStop"
         """
+        self._eval_guard.clear()  # 每帧重置环检测
+        ctx._pin_values.clear()   # 每帧清除 data pin 缓存，强制重新求值
         for nid, inst in self._canvas.nodes.items():
             nd = self._types.get(inst.node_type)
             if nd and nd.category == "Event" and inst.node_type == event_type:
@@ -119,11 +122,55 @@ class GraphEvaluator:
         return result
 
     def _read_input(self, input_pin_id: int, ctx: ExecutionContext) -> Any:
-        """读取某个 input pin 的值 — 沿 data 连线向上游查找 output pin 的值。"""
+        """读取某个 input pin 的值 — 沿 data 连线向上游查找 output pin 的值。
+
+        若上游 output pin 的值尚未被设置（纯数据节点未被求值），
+        则自动触发该数据节点的懒求值（递归）。"""
         for link in self._canvas.links.values():
             if link.to_pin == input_pin_id:
+                self._ensure_pin_evaluated(link.from_pin, ctx)
                 return ctx.get_pin(link.from_pin)
         return None
+
+    # ── 数据节点懒求值 ─────────────────────────────────────
+
+    def _ensure_pin_evaluated(self, output_pin_id: int, ctx: ExecutionContext) -> None:
+        """确保某个 output pin 的值已被求值。
+
+        若该 pin 属于纯数据节点（无 exec 引脚）且值尚未计算，
+        则递归求值该数据节点。带简单的环检测避免死循环。
+        """
+        if ctx.get_pin(output_pin_id) is not None:
+            return  # 已有值，跳过
+
+        owner_nid = self._canvas.find_pin_node(output_pin_id)
+        if owner_nid is None:
+            return
+
+        inst = self._canvas.nodes.get(owner_nid)
+        if inst is None:
+            return
+
+        nd = self._types.get(inst.node_type)
+        if nd is None:
+            return
+
+        # 环检测：同一帧内同一节点不重复求值
+        if owner_nid in self._eval_guard:
+            return
+        self._eval_guard.add(owner_nid)
+
+        fn = _EVALUATORS.get(inst.node_type)
+        if fn:
+            try:
+                fn(owner_nid, ctx, self)
+            except Exception as e:
+                print(
+                    f"[GraphEvaluator] ERROR in data node "
+                    f"#{owner_nid} ({inst.node_type}): {e}"
+                )
+
+        self._eval_guard.discard(owner_nid)
 
     # ── 节点状态（有状态节点如 Delay） ─────────────────────
 

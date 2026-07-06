@@ -3,15 +3,7 @@ from __future__ import annotations
 from typing import Callable
 import numpy as np
 
-from Application.Core.Events.Event import Event
-from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
-from Application.Core.Events.InputEvent import MouseMoveEvent
-
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
-from Application.Core.Renderer.RenderCommand import (
-    CameraUpdateCommand,
-    PickMouseMoveCommand,
-)
 from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
 from Application.Core.Renderer.ZenGL.ZenGLResourceManager import ZenGLResourceManager
 from Application.Core.Renderer.ZenGL.ZenGLEntityRenderer import ZenGLEntityRenderer
@@ -62,10 +54,7 @@ class ZenGLRenderer(
         ZenGLCore.init_core(sz)
         cls.viewport_width, cls.viewport_height = sz
         cls.aspect_ratio = sz[0]/sz[1]
-        # 缓存初始相机矩阵
-        if cls._active_camera is not None:
-            cls._cached_view = cls._active_camera.get_view_matrix()
-            cls._cached_proj = cls._active_camera.get_projection_matrix(cls.aspect_ratio)
+        # 相机矩阵由逻辑线程通过 SetViewProjectionCommand 推送
         # 初始化命令队列
         cls._command_queue = CommandQueue()
         return cls
@@ -132,19 +121,7 @@ class ZenGLRenderer(
         ZenGLCore.destroy_core()
         super().Shutdown()
 
-    @classmethod
-    def OnEvent(cls, event: Event) -> None:
-        """事件处理 — enqueue 命令到队列，由 StartFrame 消费。
 
-        注意:
-          - 窗口 resize 已改为直接 Command (glfwWindow 回调中提交)。
-          - 实体注册/解注册使用 renderer.enqueue(EntityRegistrationCommand(...))。
-        """
-        if isinstance(event, SceneCameraUpdateEvent):
-            cls.enqueue(CameraUpdateCommand())
-        if isinstance(event, MouseMoveEvent):
-            cls.enqueue(
-                PickMouseMoveCommand(event.pos_x, event.pos_y))
 
     # ════════════════════════════════════════════════════════════
     # 拾取系统 (entity + overlay)

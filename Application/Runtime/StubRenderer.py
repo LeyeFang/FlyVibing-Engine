@@ -6,7 +6,6 @@ StubRenderer — Runtime 用的占位渲染器（无真实 GPU 资源）。
 """
 
 from Application.Core.Renderer.Renderer import Renderer
-from Application.Core.Camera.CameraBase import CameraBase
 
 
 class StubRenderer(Renderer):
@@ -32,14 +31,6 @@ class StubRenderer(Renderer):
 
     @classmethod
     def EndFrame(cls):
-        pass
-
-    @classmethod
-    def OnEvent(cls, event):
-        pass
-
-    @classmethod
-    def set_active_camera(cls, camera):
         pass
 
     @classmethod

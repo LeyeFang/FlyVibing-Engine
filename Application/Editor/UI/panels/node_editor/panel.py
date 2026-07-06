@@ -202,22 +202,287 @@ class NodeEditorPanel(BasePanel):
             # PrintString 文本框
             if inst.node_type == "PrintString":
                 imgui.dummy(imgui.ImVec2(0, 2))
+                imgui.push_item_width(110)
                 msg = inst.props.get("message", "")
                 changed, new_msg = imgui.input_text(
                     f"##print_msg_{nid}", msg,
                 )
                 if changed:
                     inst.props["message"] = new_msg
+                imgui.pop_item_width()
                 imgui.dummy(imgui.ImVec2(0, 2))
+
+            # Random 节点 UI 控件
+            if inst.node_type == "Random":
+                self._draw_random_widgets(nid, inst)
+
+            # TimeTrigger 节点 UI 控件
+            if inst.node_type == "TimeTrigger":
+                self._draw_time_trigger_widgets(nid, inst)
+
+            # VarSet 节点 UI 控件
+            if inst.node_type == "VarSet":
+                self._draw_var_set_widgets(nid, inst)
+
+            # VarGet 节点 UI 控件
+            if inst.node_type == "VarGet":
+                self._draw_var_get_widgets(nid, inst)
+
+            # Constant 节点 UI 控件
+            if inst.node_type == "Constant":
+                self._draw_constant_widgets(nid, inst)
 
             self._draw_pins(canvas, ne, nid, inst, nd)
             ne.end_node()
 
+    # ── Random 节点专用控件 ────────────────────────────────
+
+    def _draw_random_widgets(self, nid: int, inst) -> None:
+        """在 Random 节点体内绘制分布选择、模式切换、种子和参数输入框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(105)
+
+        # ── 分布下拉 ──
+        dist = inst.props.get("distribution", "uniform")
+        dist_labels = ["Uniform", "Gaussian"]
+        dist_idx = 0 if dist == "uniform" else 1
+        changed, new_idx = imgui.combo(
+            f"##rand_dist_{nid}", dist_idx, dist_labels,
+        )
+        if changed:
+            inst.props["distribution"] = "uniform" if new_idx == 0 else "gaussian"
+
+        # ── 模式切换 ──
+        mode = inst.props.get("mode", "manual")
+        if imgui.radio_button(f"Manual##rand_mode_man_{nid}", mode == "manual"):
+            inst.props["mode"] = "manual"
+        imgui.same_line()
+        if imgui.radio_button(f"Pin##rand_mode_pin_{nid}", mode == "pin"):
+            inst.props["mode"] = "pin"
+
+        # ── 种子 ──
+        seed = inst.props.get("seed", 0)
+        changed, new_seed = imgui.input_int(f"Seed##rand_seed_{nid}", seed)
+        if changed:
+            inst.props["seed"] = new_seed
+
+        # ── Manual 模式参数输入 ──
+        if mode == "manual":
+            if dist == "uniform":
+                v = inst.props.get("min", 0.0)
+                changed, nv = imgui.input_float(f"Min##rand_min_{nid}", v)
+                if changed:
+                    inst.props["min"] = nv
+                v = inst.props.get("max", 1.0)
+                changed, nv = imgui.input_float(f"Max##rand_max_{nid}", v)
+                if changed:
+                    inst.props["max"] = nv
+            else:
+                v = inst.props.get("mean", 0.0)
+                changed, nv = imgui.input_float(f"Mean##rand_mean_{nid}", v)
+                if changed:
+                    inst.props["mean"] = nv
+                v = inst.props.get("stddev", 1.0)
+                changed, nv = imgui.input_float(f"StdDev##rand_std_{nid}", v)
+                if changed:
+                    inst.props["stddev"] = nv
+
+        imgui.pop_item_width()
+
+    # ── TimeTrigger 节点专用控件 ───────────────────────────
+
+    def _draw_time_trigger_widgets(self, nid: int, inst) -> None:
+        """在 TimeTrigger 节点体内绘制模式切换和时间输入框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(90)
+
+        mode = inst.props.get("mode", "manual")
+        if imgui.radio_button(f"Manual##tt_mode_man_{nid}", mode == "manual"):
+            inst.props["mode"] = "manual"
+        imgui.same_line()
+        if imgui.radio_button(f"Pin##tt_mode_pin_{nid}", mode == "pin"):
+            inst.props["mode"] = "pin"
+
+        if mode == "manual":
+            v = inst.props.get("time", 0.0)
+            changed, nv = imgui.input_float(f"Time (s)##tt_time_{nid}", v, format="%.2f")
+            if changed:
+                inst.props["time"] = nv
+
+        imgui.pop_item_width()
+
+    # ── 变量名辅助 ────────────────────────────────────────
+
+    def _collect_var_names(self, exclude_nid: int | None = None) -> list[str]:
+        """收集画布上所有 VarSet/VarGet 已使用的变量名，去重排序。"""
+        names: set[str] = set()
+        for nid, inst in self._canvas.nodes.items():
+            if nid == exclude_nid:
+                continue
+            if inst.node_type in ("VarSet", "VarGet"):
+                n = inst.props.get("var_name", "")
+                if n:
+                    names.add(n)
+        return sorted(names)
+
+    def _draw_var_name_combo(self, label: str, nid: int, inst) -> None:
+        """绘制变量名选择下拉框：已有名称列表 + 可自定义输入。"""
+        existing = self._collect_var_names(nid)
+        current = inst.props.get("var_name", "")
+
+        # 构建选项列表: 已有名称在前，"Custom..." 在最后
+        items = existing + ["+ New..."]
+        try:
+            idx = existing.index(current)
+        except ValueError:
+            idx = len(existing)  # "Custom..." 位置
+
+        changed, new_idx = imgui.combo(f"##var_{label}_{nid}", idx, items)
+        if changed:
+            if new_idx < len(existing):
+                inst.props["var_name"] = existing[new_idx]
+            else:
+                # 选 "+ New..." → 保持当前文本，下面用 input_text 编辑
+                pass
+
+        # 自定义输入（当选中 "Custom..." 或名称不在列表中时）
+        if idx >= len(existing) or not existing:
+            imgui.push_item_width(90)
+            changed, txt = imgui.input_text(
+                f"##var_{label}_txt_{nid}", current,
+            )
+            if changed:
+                inst.props["var_name"] = txt
+            imgui.pop_item_width()
+
+    # ── VarSet 节点专用控件 ────────────────────────────────
+
+    def _draw_var_set_widgets(self, nid: int, inst) -> None:
+        """在 VarSet 节点体内绘制变量名、模式切换和值输入框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(90)
+
+        # 变量名（下拉+自定义）
+        self._draw_var_name_combo("vs", nid, inst)
+
+        mode = inst.props.get("mode", "manual")
+        if imgui.radio_button(f"Manual##vs_mode_man_{nid}", mode == "manual"):
+            inst.props["mode"] = "manual"
+        imgui.same_line()
+        if imgui.radio_button(f"Pin##vs_mode_pin_{nid}", mode == "pin"):
+            inst.props["mode"] = "pin"
+
+        if mode == "manual":
+            v = inst.props.get("value", 0.0)
+            changed, nv = imgui.input_float(f"Value##vs_val_{nid}", v, format="%.4f")
+            if changed:
+                inst.props["value"] = nv
+
+        imgui.pop_item_width()
+
+    # ── VarGet 节点专用控件 ────────────────────────────────
+
+    def _draw_var_get_widgets(self, nid: int, inst) -> None:
+        """在 VarGet 节点体内绘制变量名输入框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(90)
+
+        # 变量名（下拉+自定义）
+        self._draw_var_name_combo("vg", nid, inst)
+
+        imgui.pop_item_width()
+
+    # ── Constant 节点专用控件 ──────────────────────────────
+
+    def _draw_constant_widgets(self, nid: int, inst) -> None:
+        """在 Constant 节点体内绘制值输入框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(90)
+        v = inst.props.get("value", 0.0)
+        changed, nv = imgui.input_float(f"Value##const_val_{nid}", v, format="%.4f")
+        if changed:
+            inst.props["value"] = nv
+        imgui.pop_item_width()
+
+    # ── 可见引脚过滤 ───────────────────────────────────────
+
+    @staticmethod
+    def _visible_pins(inst, nd, canvas=None) -> list:
+        """返回当前模式下应显示的引脚列表。"""
+        # ── VarSet: Manual 模式隐藏 Value/Name pin ──
+        if inst.node_type == "VarSet":
+            mode = inst.props.get("mode", "manual")
+            return [p for p in nd.pins
+                    if p.name not in ("Name",)  # Name 用文本框
+                    and not (p.name == "Value" and mode == "manual")]
+        # ── VarGet: 隐藏 Name pin ──
+        if inst.node_type == "VarGet":
+            return [p for p in nd.pins if p.name != "Name"]
+        # ── Random: 按模式/分布过滤 ──
+        if inst.node_type == "Random":
+            mode = inst.props.get("mode", "manual")
+            dist = inst.props.get("distribution", "uniform")
+            visible = []
+            for p in nd.pins:
+                if p.name == "Result":
+                    visible.append(p)
+                elif mode == "pin":
+                    if dist == "uniform" and p.name in ("Min", "Max"):
+                        visible.append(p)
+                    elif dist == "gaussian" and p.name in ("Mean", "StdDev"):
+                        visible.append(p)
+            return visible
+
+        # ── TimeTrigger: 动态 exec_out 引脚 ──
+        if inst.node_type == "TimeTrigger":
+            mode = inst.props.get("mode", "manual")
+            visible = []
+
+            # 静态引脚
+            for p in nd.pins:
+                if p.name == "exec_in":
+                    visible.append(p)
+                elif p.name == "Elapsed":
+                    visible.append(p)
+                elif p.name == "Time" and mode == "pin":
+                    visible.append(p)
+
+            # 动态 exec_out: 有连线的全显示 + 一个空余
+            if canvas is not None:
+                max_connected = -1
+                for i in range(8):
+                    pin_name = f"out_{i}"
+                    pin_id = inst.pin_ids.get(pin_name)
+                    if pin_id is not None:
+                        has_link = any(
+                            lk.from_pin == pin_id
+                            for lk in canvas.links.values()
+                        )
+                        if has_link:
+                            max_connected = i
+                show_up_to = max(max_connected + 2, 1)  # 至少显示 1 个
+                for p in nd.pins:
+                    if p.name.startswith("out_"):
+                        idx = int(p.name.split("_")[1])
+                        if idx < show_up_to:
+                            visible.append(p)
+            else:
+                # 无 canvas 引用时显示 1 个
+                for p in nd.pins:
+                    if p.name == "out_0":
+                        visible.append(p)
+                        break
+            return visible
+
+        return list(nd.pins)
+
     def _draw_pins(self, canvas: NodeCanvas, ne, nid: int, inst, nd) -> None:
         """绘制节点的所有引脚 + 分隔线。"""
+        pins = self._visible_pins(inst, nd, canvas)
+
         _max_in_w = max(
             (imgui.calc_text_size(f"> {p.name}").x
-             for p in nd.pins if p.direction == "input"),
+             for p in pins if p.direction == "input"),
             default=0,
         )
         _min_pad = imgui.calc_text_size("> ").x * 4
@@ -227,9 +492,9 @@ class NodeEditorPanel(BasePanel):
         _cursor = imgui.get_cursor_screen_pos()
         _node_w = max(
             imgui.calc_text_size(f"  {nd.label}  ").x,
-            max((imgui.calc_text_size(f"> {p.name}").x for p in nd.pins), default=0),
+            max((imgui.calc_text_size(f"> {p.name}").x for p in pins), default=0),
             max((_out_pad + imgui.calc_text_size(f"{p.name} >").x
-                 for p in nd.pins if p.direction == "output"), default=0),
+                 for p in pins if p.direction == "output"), default=0),
             80.0,
         )
         _dl = imgui.get_window_draw_list()
@@ -241,7 +506,7 @@ class NodeEditorPanel(BasePanel):
         )
         imgui.dummy(imgui.ImVec2(0, 6))
 
-        for pin in nd.pins:
+        for pin in pins:
             pin_id = inst.pin_ids[pin.name]
             kind = ne.PinKind.input if pin.direction == "input" else ne.PinKind.output
             ne.begin_pin(ne.PinId(pin_id), kind)

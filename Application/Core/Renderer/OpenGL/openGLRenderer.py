@@ -29,14 +29,7 @@ if TYPE_CHECKING:
 
 import numpy as np
 
-from Application.Core.Events.Event import Event
-from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
-from Application.Core.Events.InputEvent import MouseMoveEvent
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
-from Application.Core.Renderer.RenderCommand import (
-    CameraUpdateCommand,
-    PickMouseMoveCommand,
-)
 from Application.Core.Renderer.CommandQueue import CommandQueue
 from Application.Core.Renderer.OpenGL.OpenGLCore import OpenGLCore
 from Application.Core.Renderer.OpenGL.OpenGLResourceManager import OpenGLResourceManager
@@ -138,10 +131,7 @@ class openGLRenderer(
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]
         cls.aspect_ratio = window_size[0] / window_size[1]
-        # ── 缓存初始相机矩阵 (由 set_active_camera 在 OnAttach 中设置) ──
-        if cls._active_camera is not None:
-            cls._cached_view = cls._active_camera.get_view_matrix()
-            cls._cached_proj = cls._active_camera.get_projection_matrix(cls.aspect_ratio)
+        # ── 相机矩阵由逻辑线程通过 SetViewProjectionCommand 推送 ──
         # ── 初始化拾取系统 ──
         cls.init_pick(window_size[0], window_size[1])
         # ── 初始化命令队列 ──
@@ -207,19 +197,7 @@ class openGLRenderer(
         cls._scene_fbo_override = 0
         super().Shutdown()
 
-    @classmethod
-    def OnEvent(cls, event: Event) -> None:
-        """事件处理 — enqueue 命令到队列，由 StartFrame 消费。
 
-        注意:
-          - 窗口 resize 已改为直接 Command (glfwWindow 回调中提交)。
-          - 实体注册/解注册使用 renderer.enqueue(EntityRegistrationCommand(...))。
-        """
-        if isinstance(event, SceneCameraUpdateEvent):
-            cls.enqueue(CameraUpdateCommand())
-        if isinstance(event, MouseMoveEvent):
-            cls.enqueue(
-                PickMouseMoveCommand(event.pos_x, event.pos_y))
 
     # ════════════════════════════════════════════════════════════
     # Overlay drawable 注册扩展 — 维护 pick_key 查找表

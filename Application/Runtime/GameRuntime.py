@@ -87,6 +87,9 @@ class GameRuntime(Engine):
         cls._state()['_initialized'] = False
         cls._state()['_logic_thread_enabled'] = False
         cls._state()['layer_stack'].clear()
+        # 重置时间，避免下次 start() 前 push_layer 的 OnAttach 拿到旧时间
+        cls._state()['_elapsed_time'] = 0.0
+        cls._state()['_delta_time'] = 0.0
         cls.window = None
         cls.renderer = None
         cls.renderer_thread = None

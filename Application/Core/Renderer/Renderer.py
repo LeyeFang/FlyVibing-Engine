@@ -13,25 +13,23 @@ RHI 命令模型:
 子类实现:
   - openGLRenderer   : OpenGL/  — PyOpenGL 后端
   - vulkanRenderer   : Vulkan/  — Vulkan 后端
+  - ZenGLRenderer    : ZenGL/   — ZenGL 后端
 
-相机注入:
-  Renderer 不持有具体相机引用，通过 set_active_camera() 注入 CameraBase 实例。
-  Editor 注入 EditorCamera, Runtime 注入 SceneCamera/OrbitCamera。
+相机矩阵:
+  Renderer 不持有相机引用。view/proj 矩阵由逻辑线程的相机模块计算后，
+  通过 SetViewProjectionCommand 推送给渲染器。
+  Editor / GameRuntime 各自持有并管理自己的相机实例。
 """
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, TYPE_CHECKING
+from typing import Callable
 
 import numpy as np
 
 from Application.Core.Renderer.CommandQueue import CommandQueue
 from Application.Core.Renderer.RenderCommand import RenderCommand
-
-if TYPE_CHECKING:
-    from Application.Core.Camera.CameraBase import CameraBase
-    from Application.Core.Renderer.VertexLayout import VertexLayout
 
 
 class Renderer(ABC):
@@ -66,13 +64,16 @@ class Renderer(ABC):
         if cls._command_queue is not None:
             cls._command_queue.enqueue(cmd)
 
-    # ── 相机矩阵缓存 (所有后端共享) ──
+    # ── 相机矩阵缓存 (所有后端共享, 由 SetViewProjectionCommand 写入) ──
     _cached_view: 'np.ndarray' = None       # 4x4 视图矩阵 (float32)
     _cached_proj: 'np.ndarray' = None       # 4x4 投影矩阵 (float32)
     _pending_resize: tuple = None           # (width, height) or None
 
-    # ── 活动相机 (由外部注入, 不依赖 Editor/Scene 具体类) ──
-    _active_camera: 'CameraBase' = None
+    # ── 相机元数据缓存 (由 SetViewProjectionCommand 写入, 供动态 uniform 解析) ──
+    _cam_orbit_target: 'np.ndarray' = None  # 轨道注视点
+    _cam_orbit_distance: float = 10.0       # 摄像机距离
+    _cam_is_orthographic: bool = False      # 是否正交投影
+    _cam_ortho_size: float = 10.0           # 正交半高
 
     @classmethod
     @abstractmethod
@@ -130,50 +131,29 @@ class Renderer(ABC):
         cls._cached_view = None
         cls._cached_proj = None
         cls._pending_resize = None
-        cls._active_camera = None
+        cls._cam_orbit_target = None
+        cls._cam_orbit_distance = 10.0
+        cls._cam_is_orthographic = False
+        cls._cam_ortho_size = 10.0
 
     # ════════════════════════════════════════════════════════════
-    # 相机注入 (Editor / Runtime 各自注入自己的相机)
-    # ════════════════════════════════════════════════════════════
-
-    @classmethod
-    def set_active_camera(cls, camera: 'CameraBase') -> None:
-        """注入当前活动相机 — 编辑器注入 EditorCamera, Runtime 注入 SceneCamera。
-
-        调用时机: Layer.OnAttach() 中, 在首次 StartFrame() 之前。
-        Renderer 不 import 任何 Editor 或 Scene 具体相机类。
-
-        Args:
-            camera: 实现 CameraBase 接口的相机实例
-        """
-        cls._active_camera = camera
-        # 立即刷新缓存, 确保首帧矩阵有效
-        if camera is not None:
-            cls._cached_view = camera.get_view_matrix()
-            cls._cached_proj = camera.get_projection_matrix(cls.aspect_ratio)
-
-    # ════════════════════════════════════════════════════════════
-    # 相机矩阵缓存辅助 (子类 OnEvent 中调用)
+    # 窗口尺寸变更 (子类通过 ResizeCommand 调用)
     # ════════════════════════════════════════════════════════════
 
     @classmethod
     def _on_window_resize(cls, width: int, height: int) -> None:
-        """子类在 WindowResizeEvent 处理中调用 — 更新缓存、宽高比与视口尺寸。"""
+        """子类在 resize 处理中调用 — 更新缓存、宽高比与视口尺寸。
+
+        注意: 投影矩阵的重算不再由渲染器负责。
+        逻辑线程侧的相机模块应在收到 resize 通知后，
+        重新计算 proj 并通过 SetViewProjectionCommand 推送。
+        """
         if width <= 0 or height <= 0:
             return  # 忽略无效尺寸 (窗口最小化或初始化时可能收到 (0,0))
         cls._pending_resize = (width, height)
         cls.viewport_width = width
         cls.viewport_height = height
         cls.aspect_ratio = width / height
-        if cls._active_camera is not None:
-            cls._cached_proj = cls._active_camera.get_projection_matrix(cls.aspect_ratio)
-
-    @classmethod
-    def _on_camera_update(cls) -> None:
-        """子类在 SceneCameraUpdateEvent 处理中调用 — 刷新 view/proj 缓存。"""
-        if cls._active_camera is not None:
-            cls._cached_view = cls._active_camera.get_view_matrix()
-            cls._cached_proj = cls._active_camera.get_projection_matrix(cls.aspect_ratio)
 
     # ════════════════════════════════════════════════════════════
     # 拾取接口 (main thread 安全, 零 GL 调用)
@@ -241,8 +221,7 @@ class Renderer(ABC):
     # 已知动态 uniform 源 → 解析函数 (返回 np.ndarray)
     _DYNAMIC_UNIFORM_SOURCES: dict = {
         'camera.fade_center':  lambda cls: (
-            cls._active_camera.orbit_target if hasattr(cls._active_camera, 'orbit_target')
-            else cls._active_camera.target if hasattr(cls._active_camera, 'target')
+            cls._cam_orbit_target if cls._cam_orbit_target is not None
             else np.zeros(3, 'f4')
         ),
         'camera.fade_radius': lambda cls: cls._resolve_fade_radius(),
@@ -256,26 +235,15 @@ class Renderer(ABC):
         因此 fade_radius 需要跟随 ortho_size 动态缩放，
         否则 Grid 在 2D 下拉远时不会像 3D 那样显示更多网格线。
         """
-        cam = cls._active_camera
-        if cam is None:
-            return np.array([10.0], 'f4')
-
         # ── 2D 正交模式: fade_radius 基于可见区域 ──
-        if hasattr(cam, 'is_orthographic') and cam.is_orthographic:
-            ortho_size = cam.ortho_size if hasattr(cam, 'ortho_size') else 10.0
-            # 可见区域半高 = ortho_size, 半宽 = ortho_size * aspect
-            # 中心到远角的距离 = ortho_size * sqrt(1 + aspect²)
-            # 乘以 1.5 提供边缘 padding，与 3D 透视下的体验一致
+        if cls._cam_is_orthographic:
+            ortho_size = cls._cam_ortho_size
             aspect = cls.aspect_ratio if hasattr(cls, 'aspect_ratio') else 1.0
             radius = ortho_size * max(aspect, 1.0) * 1.5
             return np.array([radius], 'f4')
 
         # ── 3D 透视模式: fade_radius = orbit_distance ──
-        if hasattr(cam, 'orbit_distance'):
-            return np.array([cam.orbit_distance], 'f4')
-        if hasattr(cam, 'distance'):
-            return np.array([cam.distance], 'f4')
-        return np.array([10.0], 'f4')
+        return np.array([cls._cam_orbit_distance], 'f4')
 
     @classmethod
     def _resolve_overlay_uniforms(cls, uniforms: dict | None) -> dict[str, 'np.ndarray']:

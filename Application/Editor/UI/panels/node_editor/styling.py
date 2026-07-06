@@ -47,13 +47,13 @@ MENU_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         ("Subtract", "MathSubtract"),
         ("Multiply", "MathMultiply"),
         ("Divide", "MathDivide"),
-        ("Random Uniform", "MathRandomUniform"),
-        ("Random Gaussian", "MathRandomGaussian"),
+        ("Random", "Random"),
     ]),
     ("Time", [
         ("Get Time", "TimeGetElapsed"),
         ("Get Delta Time", "TimeGetDelta"),
         ("Delay", "TimeDelay"),
+        ("Time Trigger", "TimeTrigger"),
     ]),
     ("Entity", [
         ("Create Entity", "EntityCreate"),
@@ -68,6 +68,7 @@ MENU_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
     ("Variable", [
         ("Set Variable", "VarSet"),
         ("Get Variable", "VarGet"),
+        ("Constant", "Constant"),
     ]),
     ("Debug", [
         ("Print", "Print"),

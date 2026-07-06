@@ -150,6 +150,20 @@ _reg(NodeTypeDef(
     "A ÷ B\nDiv by 0 → 0",
 ))
 
+# ── 统一 Random 节点 ──
+_reg(NodeTypeDef(
+    "Random", "Random", "Math", MATH_COLOR,
+    [
+        PinDef(_gen_id(), "Min", "data", "input", "float"),
+        PinDef(_gen_id(), "Max", "data", "input", "float"),
+        PinDef(_gen_id(), "Mean", "data", "input", "float"),
+        PinDef(_gen_id(), "StdDev", "data", "input", "float"),
+        PinDef(_gen_id(), "Result", "data", "output", "float"),
+    ],
+    "Uniform / Gaussian",
+))
+
+# ── 旧版 Random 节点 (保留兼容，不再出现在菜单) ──
 _reg(NodeTypeDef(
     "MathRandomUniform", "Random Uniform", "Math", MATH_COLOR,
     [
@@ -203,6 +217,18 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
     "Wait N seconds",
+))
+
+_reg(NodeTypeDef(
+    "TimeTrigger", "Time Trigger", "Time", TIME_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Time", "data", "input", "float"),
+        PinDef(_gen_id(), "Elapsed", "data", "output", "float"),
+    ] + [
+        PinDef(_gen_id(), f"out_{i}", "exec", "output") for i in range(8)
+    ],
+    "Fire at engine time T",
 ))
 
 
@@ -326,6 +352,14 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "Value", "data", "output", "variant"),
     ],
     "Read value by name",
+))
+
+_reg(NodeTypeDef(
+    "Constant", "Constant", "Variable", VAR_COLOR,
+    [
+        PinDef(_gen_id(), "Result", "data", "output", "float"),
+    ],
+    "Fixed float value",
 ))
 
 

@@ -46,6 +46,7 @@ class RuntimeDebugLayer(Layer):
     def OnEvent(cls, event: Event) -> None:
         if not isinstance(event, _SILENT_EVENTS):
             print(event)
+            event.consume()  # 防止 Engine._on_event 兜底重复打印
 
     @classmethod
     def OnRender(cls):

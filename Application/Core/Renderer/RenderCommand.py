@@ -8,11 +8,10 @@ RenderCommand — 渲染命令基类 + 具体命令。
 
 当前命令:
   ResizeCommand               — 窗口尺寸变更
-  CameraUpdateCommand         — 相机矩阵更新
+  SetViewProjectionCommand    — 设置 view/proj 矩阵 (由逻辑线程计算后推送给渲染器)
   EntityRegistrationCommand   — 实体 MeshRenderer 注册/注销
   OverlayRegistrationCommand  — Overlay 可绘制对象 GPU 资源注册
   OverlayUnregistrationCommand— Overlay 可绘制对象 GPU 资源解注册
-  PickMouseMoveCommand        — 拾取系统鼠标位置
 """
 
 from __future__ import annotations
@@ -20,6 +19,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
+
+import numpy as np
 
 
 class RenderCommand(ABC):
@@ -44,10 +45,45 @@ class ResizeCommand(RenderCommand):
 
 
 @dataclass
-class CameraUpdateCommand(RenderCommand):
-    """相机矩阵更新 — 等效于 renderer._on_camera_update()。"""
+class SetViewProjectionCommand(RenderCommand):
+    """设置 view/proj 矩阵 — 由逻辑线程计算后推送给渲染器。
+
+    渲染器不再持有相机引用，仅接收已计算好的矩阵数据。
+    view/proj 可为 None 表示不更新对应矩阵。
+
+    同时携带渲染器需要的相机元数据 (用于 overlay 动态 uniform 解析等)。
+
+    使用方式:
+      cam = EditorCamera.get_instance()
+      renderer.enqueue(SetViewProjectionCommand(
+          view=cam.get_view_matrix(),
+          proj=cam.get_projection_matrix(aspect_ratio),
+          orbit_target=cam.orbit_target,
+          orbit_distance=cam.orbit_distance,
+          is_orthographic=cam.is_orthographic,
+          ortho_size=cam.ortho_size,
+      ))
+    """
+    view: 'np.ndarray | None' = None       # 4x4 float32 view matrix
+    proj: 'np.ndarray | None' = None       # 4x4 float32 projection matrix
+    # ── 相机元数据 (供渲染器动态 uniform 解析等使用) ──
+    orbit_target: 'np.ndarray | None' = None   # 轨道注视点 (世界坐标)
+    orbit_distance: float | None = None        # 摄像机到注视点的距离
+    is_orthographic: bool = False              # 是否正交投影模式
+    ortho_size: float = 10.0                   # 正交半高
+
     def execute(self, renderer: Any) -> None:
-        renderer._on_camera_update()
+        if self.view is not None:
+            renderer._cached_view = self.view
+        if self.proj is not None:
+            renderer._cached_proj = self.proj
+        # 更新相机元数据缓存 (供动态 uniform 解析)
+        if self.orbit_target is not None:
+            renderer._cam_orbit_target = self.orbit_target
+        if self.orbit_distance is not None:
+            renderer._cam_orbit_distance = self.orbit_distance
+        renderer._cam_is_orthographic = self.is_orthographic
+        renderer._cam_ortho_size = self.ortho_size
 
 
 @dataclass
@@ -85,11 +121,4 @@ class OverlayUnregistrationCommand(RenderCommand):
         renderer.unregister_overlay_drawable(self.key)
 
 
-@dataclass
-class PickMouseMoveCommand(RenderCommand):
-    """拾取鼠标位置更新。"""
-    x: int
-    y: int
 
-    def execute(self, renderer: Any) -> None:
-        renderer.update_pick_mouse(self.x, self.y)

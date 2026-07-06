@@ -12,6 +12,7 @@ from Application.Core.Events.Event import Event
 from Application.Core.Events.InputEvent import *
 from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
 from Application.Core.Events.WindowEvent import WindowResizeEvent
+from Application.Core.Renderer.RenderCommand import SetViewProjectionCommand
 from Application.Core.Events.Enum.InputEnum import (
     MouseButtonCode, 
     MouseActionCode,
@@ -68,10 +69,11 @@ class EditorLayer(Layer):
         w, h = editor_window.GetSize()
         io.display_size = (float(w), float(h))
         cls._init_ui_panels()
-        # ── 渲染器: 注入活动相机 + 注册 Grid/ViewGizmo/Outliner overlay ──
+        # ── 渲染器: 注册 Grid/ViewGizmo/Outliner overlay + 推送初始相机矩阵 ──
         cls.renderer = EditorHost.get_editor_renderer()
         cam = EditorCamera.get_instance()
-        cls.renderer.set_active_camera(cam)
+        # 相机矩阵由逻辑线程计算后通过 SetViewProjectionCommand 推送
+        cls._sync_camera_to_renderer()
         Grid.register_to(cls.renderer)
         ViewGizmo.register_to(cls.renderer)
         OutlinerID.register_to(cls.renderer)
@@ -92,24 +94,35 @@ class EditorLayer(Layer):
         # ── 防御: 渲染线程已退出时 ImGui 上下文已被销毁 ──
         if imgui.get_current_context() is None:
             return
+        # ── MouseMoveEvent: 始终更新拾取鼠标位置 (主线程安全, 零 GL 调用) ──
+        if isinstance(event, MouseMoveEvent):
+            cls.renderer.update_pick_mouse(event.pos_x, event.pos_y)
+            return
+        # ── SceneCameraUpdateEvent: 始终处理 (ViewportController / DebugLayer 触发) ──
+        if isinstance(event, SceneCameraUpdateEvent):
+            cls._sync_camera_to_renderer()
+            return
         # ── 窗口 resize 始终处理，不受面板鼠标拦截影响 ──
         if isinstance(event, WindowResizeEvent):
             w, h = event.unpack()
             io = imgui.get_io()
             io.display_size = (float(w), float(h))
+            # 投影矩阵依赖 aspect_ratio，resize 后需重新推送
+            cls._sync_camera_to_renderer()
+            return
         if cls._mouse_in_any_panel():
             return
         cam = EditorCamera.get_instance()
         if isinstance(event, ScrollerEvent):
             _, y_offset = event.unpack()
             cam.on_scroll(y_offset)
-            SceneCameraUpdateEvent.Pack()
+            cls._sync_camera_to_renderer()
         elif isinstance(event, MouseGragEvent):
             bt, offset_x, offset_y = event.unpack()
             if bt == MouseButtonCode.Left:
                 return  # 左键拖动不操作视图，仅用于点选
             cam.on_mouse_drag(bt, offset_x, offset_y, IsShiftPressed())
-            SceneCameraUpdateEvent.Pack()
+            cls._sync_camera_to_renderer()
         elif isinstance(event, MouseButtonEvent):
             if event.button != MouseButtonCode.Left:
                 return
@@ -129,7 +142,7 @@ class EditorLayer(Layer):
                     direction = ViewGizmo.FACE_LOOK_DIRECTIONS.get(face_name)
                     if direction is not None:
                         cam.look_from_direction(direction)
-                        SceneCameraUpdateEvent.Pack()
+                        cls._sync_camera_to_renderer()
                         print(f"[EditorLayer] ViewGizmo → {face_name}  ({dt:.3f}ms)")
                 else:
                     print(f"[EditorLayer] Click → Overlay '{pick_value}'  ({dt:.3f}ms)")
@@ -210,3 +223,31 @@ class EditorLayer(Layer):
             if x <= mx <= x + w and y <= my <= y + h:
                 return True
         return False
+
+    @classmethod
+    def _sync_camera_to_renderer(cls) -> None:
+        """计算当前 EditorCamera 的 view/proj 矩阵并推送到渲染器。
+
+        渲染器不再持有相机引用，矩阵由逻辑线程计算后通过
+        SetViewProjectionCommand 单向推送。
+
+        同时推送相机元数据 (orbit_target, distance 等),
+        供渲染器动态 uniform 解析使用 (如 Grid fade_center/fade_radius)。
+
+        调用时机:
+          - OnAttach: 初始矩阵
+          - 摄像机操作 (orbit/pan/dolly/scroll): 每次变更后
+          - WindowResizeEvent: 投影矩阵依赖 aspect_ratio
+          - SceneCameraUpdateEvent: ViewportController / DebugLayer 触发
+        """
+        if cls.renderer is None:
+            return
+        cam = EditorCamera.get_instance()
+        cls.renderer.enqueue(SetViewProjectionCommand(
+            view=cam.get_view_matrix(),
+            proj=cam.get_projection_matrix(cls.renderer.aspect_ratio),
+            orbit_target=cam.orbit_target,
+            orbit_distance=cam.orbit_distance,
+            is_orthographic=cam.is_orthographic,
+            ortho_size=cam.ortho_size,
+        ))

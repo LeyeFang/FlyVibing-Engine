@@ -18,7 +18,6 @@ RuntimeNodeLayer — 由节点图驱动的 GameRuntime Layer。
 
 from __future__ import annotations
 
-import time
 from Application.Core.Layers.Layer import Layer
 from Application.Core.Events.Event import Event
 from Application.Core.Events.EngineEvent import LayerLifecycleEvent
@@ -36,7 +35,6 @@ class RuntimeNodeLayer(Layer):
     _canvas = None          # NodeCanvas 实例
     _evaluator: GraphEvaluator | None = None
     _context: ExecutionContext | None = None
-    _start_time: float = 0.0
 
     @classmethod
     def set_canvas(cls, canvas) -> None:
@@ -56,11 +54,15 @@ class RuntimeNodeLayer(Layer):
             print("[RuntimeNodeLayer] WARNING: No canvas set — graph will not execute")
             return
 
+        # 防止重复初始化
+        if cls._evaluator is not None:
+            return
+
         cls._evaluator = GraphEvaluator(cls._canvas, _TYPES)
         cls._context = ExecutionContext()
-        cls._start_time = time.perf_counter()
+        cls._frame = 0
 
-        # 触发 OnGameStart
+        # 触发 OnGameStart（引擎时间从 0 开始）
         cls._context.elapsed_time = 0.0
         cls._context.delta_time = 0.0
         cls._evaluator.trigger("OnGameStart", cls._context)
@@ -82,11 +84,13 @@ class RuntimeNodeLayer(Layer):
         if cls._evaluator is None or cls._context is None:
             return
 
-        now = time.perf_counter()
-        cls._context.delta_time = now - cls._start_time - cls._context.elapsed_time
-        cls._context.elapsed_time = now - cls._start_time
-
-        cls._evaluator.trigger("OnFrameUpdate", cls._context)
+        cls._frame += 1
+        # 仅当 frame 为奇数时执行（跳过重复实例的第二次调用）
+        if cls._frame % 2 == 1:
+            if cls._engine is not None:
+                cls._context.delta_time = cls._engine.get_delta_time()
+                cls._context.elapsed_time = cls._engine.get_elapsed_time()
+            cls._evaluator.trigger("OnFrameUpdate", cls._context)
 
     @classmethod
     def OnEvent(cls, event: Event) -> None:

@@ -99,9 +99,16 @@ class Event(metaclass=MetaEvent):
     def __str__(self) -> str:
         info = self.log_info
         prefix = self._engine_prefix()
+        # 优先使用所属 Engine 自身时间（从 init() 开始计时），回退全局计时器
+        t = GetRunTime()
+        if self._source_engine is not None:
+            try:
+                t = self._source_engine.get_elapsed_time()
+            except Exception:
+                pass
         if info:
-            return f"{prefix}Time: {GetRunTime():.4f}, Event: {type(self).__name__}, {info}"
-        return f"{prefix}Time: {GetRunTime():.4f}, Event: {type(self).__name__}"
+            return f"{prefix}Time: {t:.4f}, Event: {type(self).__name__}, {info}"
+        return f"{prefix}Time: {t:.4f}, Event: {type(self).__name__}"
 
     def __repr__(self) -> str:
         return self.__str__()

@@ -473,6 +473,7 @@ class OpenGLResourceManager:
         texture_uniform: str = ''
         pick_type: int = 0
         pick_id: int = 0
+        model_is_ndc: bool = False  # True=model_matrix_cb 返回完整 MVP (如 TransformGizmo)
     # GPU 端 overlay 注册表: key → overlay_gpu_data
     _overlay_gpu_resources: dict[str, 'overlay_gpu_data'] = {}
     _DRAW_MODE_MAP: dict[str, int] = {
@@ -578,6 +579,7 @@ class OpenGLResourceManager:
             texture_uniform=overlay.texture_uniform,
             pick_type=overlay.pick_type,
             pick_id=overlay.pick_id,
+            model_is_ndc=getattr(overlay, 'model_is_ndc', False),
         )
 
     @classmethod

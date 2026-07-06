@@ -16,6 +16,7 @@ class SceneManager:
     scene_camera: Camera = None
     scene_camera_id: int = None
     main_camera_id: int = None
+    _entity_names: dict[int, str] = {}  # entity_id → human-readable name
 
     # ============================================================
     # 生命周期 / Lifecycle
@@ -43,11 +44,45 @@ class SceneManager:
     # ============================================================
     @classmethod
     def AddEntity(
-        cls
+        cls,
+        name: str = ""
     ) -> int:
         entity_id = esper.create_entity(Transform())
         cls.entities[f'{entity_id}'] = 1
+        if name:
+            cls._entity_names[entity_id] = name
         return entity_id
+
+    @classmethod
+    def SetEntityName(cls, entity_id: int, name: str) -> None:
+        """设置实体的人类可读名称（编辑器 Outliner 显示）。"""
+        if name.strip():
+            cls._entity_names[entity_id] = name.strip()
+        else:
+            cls._entity_names.pop(entity_id, None)
+
+    @classmethod
+    def GetEntityName(cls, entity_id: int) -> str:
+        """获取实体名称，无名称时返回空字符串。"""
+        return cls._entity_names.get(entity_id, "")
+
+    @classmethod
+    def GetAllEntityInfos(cls) -> list[dict]:
+        """返回所有实体的摘要信息，供编辑器 UI 列表使用。
+
+        Returns:
+            [{ 'entity_id': int, 'name': str, 'has_mesh': bool, 'has_camera': bool }, ...]
+        """
+        result = []
+        for entity_id in cls.GetRenderableEntities():
+            info = {
+                'entity_id': entity_id,
+                'name': cls.GetEntityName(entity_id),
+                'has_mesh': esper.has_component(entity_id, MeshRenderer),
+                'has_camera': esper.has_component(entity_id, Camera),
+            }
+            result.append(info)
+        return result
 
     @classmethod
     def AddComponentToEntity(

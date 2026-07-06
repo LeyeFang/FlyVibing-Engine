@@ -46,17 +46,21 @@ class MouseGragEvent(Event):
     _last_x: int = 0   # 持久追踪状态 (非事件数据)
     _last_y: int = 0   # 持久追踪状态 (非事件数据)
 
-    def __init__(self, offset_x: int, offset_y: int, press_button: int) -> None:
+    def __init__(self, offset_x: int, offset_y: int, press_button: int,
+                 pos_x: int = 0, pos_y: int = 0) -> None:
         super().__init__()
         self.offset_x: int = offset_x
         self.offset_y: int = offset_y
         self.press_button: int = press_button
+        self.pos_x: int = pos_x      # 当前鼠标绝对坐标 (供 gizmo 拖拽等使用)
+        self.pos_y: int = pos_y
 
     @property
     def log_info(self) -> str:
         return (
             f"Mouse Grag Button={MouseButtonCode[self.press_button]}, "
-            f"Offset=({self.offset_x}, {self.offset_y})"
+            f"Offset=({self.offset_x}, {self.offset_y}), "
+            f"Pos=({self.pos_x}, {self.pos_y})"
         )
 
     @classmethod
@@ -70,6 +74,8 @@ class MouseGragEvent(Event):
                 offset_x=pos_x - cls._last_x,
                 offset_y=pos_y - cls._last_y,
                 press_button=btn,
+                pos_x=pos_x,
+                pos_y=pos_y,
             )
             cls._last_x = pos_x
             cls._last_y = pos_y

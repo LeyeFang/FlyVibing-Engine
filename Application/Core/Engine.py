@@ -93,6 +93,7 @@ class Engine:
                 'layer_stack': [],
                 'renderer_ready': threading.Event(),
                 'run_ready': threading.Event(),
+                'layers_attached': threading.Event(),
                 # True = 逻辑线程模式 (PIE: start() 非阻塞)
                 # False = 内联模式 (导出/编辑器: run() 阻塞)
                 '_logic_thread_enabled': False,
@@ -318,6 +319,9 @@ class Engine:
         else:
             # 传统行为：在调用线程上跑逻辑循环
             cls._state()['run_ready'].set()
+            # 等待渲染线程完成所有 Layer.OnAttach() 后再开始处理窗口事件，
+            # 避免 EditorLayer.OnEvent() 在 OnAttach() 之前被调用导致 AttributeError
+            cls._state()['layers_attached'].wait()
             try:
                 while cls.run_state:
                     cls._tick_timing()
@@ -489,6 +493,7 @@ class Engine:
             cls._state()['run_ready'].wait()
             for layer in cls._state()['layer_stack']:
                 layer.OnAttach()
+            cls._state()['layers_attached'].set()
             cls._get_profiler().start(1)
             while cls.run_state:
                 cls._render_one_frame()
@@ -500,6 +505,8 @@ class Engine:
             )
             cls.run_state = False
             traceback.print_exc()
+            # 确保 run() 不会因等待 layers_attached 而永远阻塞
+            cls._state()['layers_attached'].set()
         finally:
             # ── GPU 资源清理 (GL 上下文仍绑定在当前线程) ──
             for layer in reversed(cls._state()['layer_stack']):

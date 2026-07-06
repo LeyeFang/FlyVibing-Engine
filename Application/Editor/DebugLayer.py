@@ -19,6 +19,7 @@ mask_events = [
     MouseMoveEvent,
     MouseGragEvent,
     MouseButtonEvent,
+    ScrollerEvent,
     SceneCameraUpdateEvent,
 ]
 

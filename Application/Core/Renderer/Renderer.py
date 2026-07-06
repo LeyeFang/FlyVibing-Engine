@@ -546,6 +546,14 @@ class RenderResourceManger(ABC):
         - ViewGizmo: layer=1 (screen-space, 始终最前)
         - TransformGizmo: layer=1
         """
+        model_is_ndc: bool = False
+        """model_matrix_cb 返回值是否已是 NDC 坐标 (完整 MVP)。
+        
+        False (默认): model_matrix_cb 返回 model 矩阵, pick pass 会额外乘投影矩阵。
+          ViewGizmo 属于此类 — compute_cube_model 返回正交模型矩阵。
+        True: model_matrix_cb 返回完整 MVP (clip-space), pick pass 应直接使用。
+          TransformGizmo 属于此类 — _compute_mvp_cb 返回 P@V@M。
+        """
         uniforms: dict = None
         """声明式 uniform 初始值 (后端无关): {name: value}
         value 类型:

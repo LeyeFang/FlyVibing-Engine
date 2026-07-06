@@ -7,11 +7,15 @@ RenderCommand — 渲染命令基类 + 具体命令。
   - execute(renderer) 接收渲染器实例，调用其已有的方法
 
 当前命令:
-  ResizeCommand               — 窗口尺寸变更
-  SetViewProjectionCommand    — 设置 view/proj 矩阵 (由逻辑线程计算后推送给渲染器)
-  EntityRegistrationCommand   — 实体 MeshRenderer 注册/注销
-  OverlayRegistrationCommand  — Overlay 可绘制对象 GPU 资源注册
-  OverlayUnregistrationCommand— Overlay 可绘制对象 GPU 资源解注册
+  ResizeCommand                 — 窗口尺寸变更
+  SetViewProjectionCommand      — 设置 view/proj 矩阵 (由逻辑线程计算后推送给渲染器)
+  EntityRegistrationCommand     — 实体 MeshRenderer 注册/注销
+  OverlayRegistrationCommand    — Overlay 可绘制对象 GPU 资源注册
+  OverlayUnregistrationCommand  — Overlay 可绘制对象 GPU 资源解注册
+  RegisterHighlightEffectCommand   — 轮廓高亮后处理注册
+  UnregisterHighlightEffectCommand — 轮廓高亮后处理注销
+  UpdateHighlightSelectionCommand  — 更新选中实体集合
+  UpdateHighlightConfigCommand     — 更新轮廓渲染参数
 """
 
 from __future__ import annotations
@@ -119,6 +123,60 @@ class OverlayUnregistrationCommand(RenderCommand):
 
     def execute(self, renderer: Any) -> None:
         renderer.unregister_overlay_drawable(self.key)
+
+
+@dataclass
+class RegisterHighlightEffectCommand(RenderCommand):
+    """注册轮廓高亮后处理效果 — 编译 shader、创建 FBO/VAO。
+
+    调用方: OutlinerID.register_to()
+    """
+    config: Any  # HighlightEffectConfig
+
+    def execute(self, renderer: Any) -> None:
+        renderer.register_highlight_effect(self.config)
+
+
+@dataclass
+class UnregisterHighlightEffectCommand(RenderCommand):
+    """注销轮廓高亮效果，释放全部 GPU 资源。
+
+    调用方: OutlinerID.unregister_from()
+    """
+
+    def execute(self, renderer: Any) -> None:
+        renderer.unregister_highlight_effect()
+
+
+@dataclass
+class UpdateHighlightSelectionCommand(RenderCommand):
+    """更新选中实体 ID 集合 — 下一帧 PostProcess._sync_selection() 生效。
+
+    调用方: OutlinerID.set_selected_entities() / OutlinerID.clear()
+    线程安全: 主线程 enqueue，渲染线程 execute，无需加锁。
+    """
+    entity_ids: set[int]
+
+    def execute(self, renderer: Any) -> None:
+        renderer.update_highlight_selection(self.entity_ids)
+
+
+@dataclass
+class UpdateHighlightConfigCommand(RenderCommand):
+    """更新轮廓渲染参数 — 不重建 GPU 资源。
+
+    调用方: OutlinerID.configure()
+    """
+    color: 'tuple[float, float, float] | None' = None
+    width: 'int | None' = None
+    xray: 'bool | None' = None
+
+    def execute(self, renderer: Any) -> None:
+        renderer.update_highlight_config(
+            color=self.color,
+            width=self.width,
+            xray=self.xray,
+        )
 
 
 

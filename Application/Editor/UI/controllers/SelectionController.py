@@ -2,13 +2,14 @@
 SelectionController — 编辑器实体选中状态的唯一入口（Single Source of Truth）。
 
 职责:
-  - 统一管理"哪个实体被选中"，同时同步两套下游系统:
+  - 统一管理"哪个实体被选中"，同时同步三套下游系统:
     · SceneBrowserController.selected_entity_id  — 数据层（ScenePanel/Inspector 读取）
     · OutlinerID                                  — 渲染层（3D 视口轮廓高亮）
+    · TransformGizmo                              — 渲染层（gizmo 跟随实体位置）
   - 任何入口（Viewport 点选 / ScenePanel 列表点击 / 未来快捷键）都通过本 Controller
 
 架构约束:
-  ✅ 可引用: SceneBrowserController, OutlinerID
+  ✅ 可引用: SceneBrowserController, OutlinerID, TransformGizmo
   ❌ 不可引用: imgui, imgui_bundle, Panel, EditorLayer
 """
 
@@ -18,6 +19,8 @@ from typing import Optional
 
 from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
 from Application.Editor.Rendering.OutlinerID import OutlinerID
+from Application.Editor.Rendering.TransformGizmo import TransformGizmo
+from Application.Core.Scene.SceneManager import SceneManager
 
 
 class SelectionController:
@@ -38,12 +41,21 @@ class SelectionController:
         """
         SceneBrowserController.select(entity_id)
         OutlinerID.set_selected_entities({entity_id})
+        # ── Gizmo 跟随实体位置 ──
+        TransformGizmo._visible = True
+        try:
+            t = SceneManager.GetEntityTransform(entity_id)
+            TransformGizmo.set_target_position(
+                (t.position_x, t.position_y, t.position_z))
+        except Exception:
+            pass
 
     @classmethod
     def clear(cls) -> None:
         """清除所有选中 — 同时更新数据层 & 渲染层。"""
         SceneBrowserController.clear_selection()
         OutlinerID.clear()
+        TransformGizmo._visible = False
 
     # ── 查询 ────────────────────────────────────────────────
 

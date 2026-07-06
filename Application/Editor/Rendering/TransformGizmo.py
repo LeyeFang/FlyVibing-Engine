@@ -66,9 +66,10 @@ void main() {
 
 _GIZMO_FS: str = """#version 440 core
 in vec3 vColor;
+uniform float uBrightness;
 out vec4 fragColor;
 void main() {
-    fragColor = vec4(vColor, 1.0);
+    fragColor = vec4(vColor * uBrightness, 1.0);
 }
 """
 
@@ -138,7 +139,7 @@ class TransformGizmo:
     }
 
     # ── 尺寸常量 ──────────────────────────────────────────
-    GIZMO_SCREEN_FRACTION: float = 0.15  # gizmo 占视口高度的 15%
+    GIZMO_SCREEN_FRACTION: float = 0.30  # gizmo 占视口高度的 30%
     ARROW_SHAFT_LENGTH: float = 0.70
     ARROW_SHAFT_RADIUS: float = 0.025
     ARROW_TIP_LENGTH: float = 0.30
@@ -148,6 +149,20 @@ class TransformGizmo:
 
     # ── 内部状态 ──────────────────────────────────────────
     _target_pos: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+    _active_drag_key: str | None = None  # 当前被拖拽的 overlay key
+    _visible: bool = False               # 无选中实体时隐藏
+
+    # ════════════════════════════════════════════════════════════
+    # 手柄亮度 (供 renderer via callable uniform 每帧读取)
+    # ════════════════════════════════════════════════════════════
+
+    BRIGHTNESS_DIM: float = 0.35
+    BRIGHTNESS_ACTIVE: float = 1.0
+
+    @classmethod
+    def get_handle_brightness(cls, key: str) -> float:
+        """返回指定 overlay 手柄的当前亮度 (供 renderer 每帧读取)。"""
+        return cls.BRIGHTNESS_ACTIVE if key == cls._active_drag_key else cls.BRIGHTNESS_DIM
 
     # ════════════════════════════════════════════════════════════
     # 目标位置管理
@@ -180,6 +195,8 @@ class TransformGizmo:
         视觉 pass 与拾取 pass 共用此回调, 保证拾取位置正确。
         gizmo 在屏幕上始终占据固定比例 (GIZMO_SCREEN_FRACTION), 不随镜头拉远拉近变化。
         """
+        if not cls._visible:
+            return np.zeros((4, 4), dtype=np.float32)  # 不渲染: 零矩阵
         from Application.Editor.EditorCamera import EditorCamera
 
         cam = EditorCamera.get_instance()
@@ -382,8 +399,9 @@ class TransformGizmo:
         # ── 3 轴箭头 ──
         for axis_name, ad in cls.AXIS_DEFS.items():
             verts, indices = cls._build_arrow_geometry(ad['gl_dir'], ad['color'])
+            overlay_key = f"{cls.OVERLAY_KEY_PREFIX}_axis_{axis_name}"
             overlay = RRM.overlay_drawable_struct(
-                key=f"{cls.OVERLAY_KEY_PREFIX}_axis_{axis_name}",
+                key=overlay_key,
                 vertices=verts,
                 indices=indices,
                 vs_src=_GIZMO_VS,
@@ -398,6 +416,11 @@ class TransformGizmo:
                 pick_type=2,            # 2 = TransformGizmo
                 pick_id=ad['pick_id'],  # 1/2/3
                 render_layer=1,         # screen-space overlay
+                model_is_ndc=True,      # _compute_mvp_cb 返回完整 MVP
+                uniforms={
+                    'uBrightness': (lambda k=overlay_key: np.array(
+                        [cls.get_handle_brightness(k)], 'f4')),
+                },
             )
             renderer.enqueue(OverlayRegistrationCommand(overlay))
 
@@ -405,8 +428,9 @@ class TransformGizmo:
         for plane_name, pd in cls.PLANE_DEFS.items():
             d1, d2 = pd['gl_dirs']
             verts, indices = cls._build_plane_geometry(d1, d2, pd['color'])
+            overlay_key = f"{cls.OVERLAY_KEY_PREFIX}_plane_{plane_name}"
             overlay = RRM.overlay_drawable_struct(
-                key=f"{cls.OVERLAY_KEY_PREFIX}_plane_{plane_name}",
+                key=overlay_key,
                 vertices=verts,
                 indices=indices,
                 vs_src=_GIZMO_VS,
@@ -421,6 +445,11 @@ class TransformGizmo:
                 pick_type=2,            # 2 = TransformGizmo
                 pick_id=pd['pick_id'],  # 4/5/6
                 render_layer=1,         # screen-space overlay
+                model_is_ndc=True,      # _compute_mvp_cb 返回完整 MVP
+                uniforms={
+                    'uBrightness': (lambda k=overlay_key: np.array(
+                        [cls.get_handle_brightness(k)], 'f4')),
+                },
             )
             renderer.enqueue(OverlayRegistrationCommand(overlay))
 
@@ -527,3 +556,208 @@ class TransformGizmo:
                     'color': pd['color'],
                 }
         return None
+
+    # ════════════════════════════════════════════════════════════
+    # 拖拽数学工具 (从测试文件搬运, 已验证)
+    # ════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def screen_to_world_ray(
+        mx: float, my: float,
+        vp_w: int, vp_h: int,
+        view_mat: np.ndarray,
+        proj_mat: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """屏幕坐标 → 世界空间射线 (origin, direction)。"""
+        ndc_x = (2.0 * mx / vp_w) - 1.0
+        ndc_y = 1.0 - (2.0 * my / vp_h)
+
+        near_clip = np.array([ndc_x, ndc_y, -1.0, 1.0], dtype=np.float32)
+        far_clip = np.array([ndc_x, ndc_y, 1.0, 1.0], dtype=np.float32)
+
+        V = np.array(view_mat, dtype=np.float32).T
+        P = np.array(proj_mat, dtype=np.float32).T
+        VP = P @ V
+        inv_VP = np.linalg.inv(VP)
+
+        near_world = inv_VP @ near_clip
+        far_world = inv_VP @ far_clip
+        near_world /= near_world[3]
+        far_world /= far_world[3]
+
+        origin = near_world[:3].copy()
+        direction = far_world[:3] - near_world[:3]
+        direction = direction / np.linalg.norm(direction)
+        return origin, direction
+
+    @staticmethod
+    def ray_plane_intersection(
+        ray_origin: np.ndarray, ray_dir: np.ndarray,
+        plane_point: np.ndarray, plane_normal: np.ndarray,
+    ) -> np.ndarray | None:
+        """射线与平面求交。"""
+        denom = np.dot(ray_dir, plane_normal)
+        if abs(denom) < 1e-8:
+            print(f"  [DBG-GIZMO] ray_plane_intersection FAIL: denom={denom:.6f} (ray_dir∥plane_normal)")
+            return None
+        t = np.dot(plane_point - ray_origin, plane_normal) / denom
+        if t < 0:
+            print(f"  [DBG-GIZMO] ray_plane_intersection FAIL: t={t:.3f}<0 (behind ray)")
+            return None
+        hit = ray_origin + ray_dir * t
+        print(f"  [DBG-GIZMO] ray_plane_intersection OK: denom={denom:.4f} t={t:.3f} hit=({hit[0]:.2f},{hit[1]:.2f},{hit[2]:.2f})")
+        return hit
+
+    @staticmethod
+    def closest_point_on_axis(
+        point: np.ndarray, axis_origin: np.ndarray, axis_dir: np.ndarray,
+    ) -> np.ndarray:
+        """点到轴线的最近点。"""
+        v = point - axis_origin
+        t = np.dot(v, axis_dir)
+        return axis_origin + axis_dir * t
+
+    # ════════════════════════════════════════════════════════════
+    # 拖拽状态机 (纯数据, 零 GL)
+    # ════════════════════════════════════════════════════════════
+
+    _drag_state: dict | None = None
+
+    @classmethod
+    def begin_axis_drag(
+        cls,
+        entity_pos: np.ndarray,
+        axis_dir: np.ndarray,
+        cam_pos: np.ndarray,
+        ray_o: np.ndarray,
+        ray_d: np.ndarray,
+    ) -> None:
+        """开始沿轴拖拽 — 计算起始状态。"""
+        axis_dir = axis_dir / max(np.linalg.norm(axis_dir), 1e-8)
+        entity_pos = np.asarray(entity_pos, dtype=np.float32)
+        cam_arr = np.asarray(cam_pos, dtype=np.float32)
+
+        print(f"  [DBG-GIZMO] begin_axis_drag: entity=({entity_pos[0]:.2f},{entity_pos[1]:.2f},{entity_pos[2]:.2f})")
+        print(f"    axis_dir=({axis_dir[0]:.3f},{axis_dir[1]:.3f},{axis_dir[2]:.3f})")
+        print(f"    cam_pos=({cam_arr[0]:.2f},{cam_arr[1]:.2f},{cam_arr[2]:.2f})")
+        print(f"    ray_o=({ray_o[0]:.2f},{ray_o[1]:.2f},{ray_o[2]:.2f}) ray_d=({ray_d[0]:.3f},{ray_d[1]:.3f},{ray_d[2]:.3f})")
+
+        # 构建拖拽平面: 法线 = axis × camera_right (面朝摄像机, 射线不会退化)
+        view_dir = entity_pos - cam_arr
+        view_dir = view_dir / max(np.linalg.norm(view_dir), 1e-8)
+        world_up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+        camera_right = np.cross(view_dir, world_up)
+        if np.linalg.norm(camera_right) < 1e-6:
+            camera_right = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+        camera_right = camera_right / max(np.linalg.norm(camera_right), 1e-8)
+
+        plane_normal = np.cross(axis_dir, camera_right)
+        if np.linalg.norm(plane_normal) < 1e-6:
+            # 轴平行于 camera_right → 回退用 world_up
+            plane_normal = np.cross(axis_dir, world_up)
+        plane_normal = plane_normal / max(np.linalg.norm(plane_normal), 1e-8)
+
+        print(f"    view_dir=({view_dir[0]:.3f},{view_dir[1]:.3f},{view_dir[2]:.3f})")
+        print(f"    plane_normal=({plane_normal[0]:.3f},{plane_normal[1]:.3f},{plane_normal[2]:.3f})")
+
+        hit = cls.ray_plane_intersection(ray_o, ray_d, entity_pos, plane_normal)
+        mouse_start = (
+            cls.closest_point_on_axis(hit, entity_pos, axis_dir)
+            if hit is not None else entity_pos.copy())
+
+        cls._drag_state = {
+            'mode': 'axis',
+            'axis_dir': axis_dir,
+            'plane_normal': plane_normal,
+            'plane_point': entity_pos.copy(),
+            'start_pos': entity_pos.copy(),
+            'mouse_start': mouse_start,
+        }
+
+        # ── 查找 overlay key 用于亮度高亮 ──
+        for name, ad in cls.AXIS_DEFS.items():
+            if np.allclose(ad['gl_dir'], axis_dir, atol=1e-3):
+                cls._active_drag_key = f"{cls.OVERLAY_KEY_PREFIX}_axis_{name}"
+                break
+
+    @classmethod
+    def begin_plane_drag(
+        cls,
+        entity_pos: np.ndarray,
+        d1: np.ndarray,
+        d2: np.ndarray,
+        ray_o: np.ndarray,
+        ray_d: np.ndarray,
+    ) -> None:
+        """开始平面内拖拽。
+
+        Args:
+            entity_pos: 实体世界位置 (3,)
+            d1, d2:     平面张成的两个 GL 方向 — 来自 PLANE_DEFS['gl_dirs']
+            ray_o:      当前鼠标射线起点
+            ray_d:      当前鼠标射线方向
+        """
+        d1 = np.asarray(d1, dtype=np.float32)
+        d2 = np.asarray(d2, dtype=np.float32)
+        d1 = d1 / max(np.linalg.norm(d1), 1e-8)
+        d2 = d2 / max(np.linalg.norm(d2), 1e-8)
+        entity_pos = np.asarray(entity_pos, dtype=np.float32)
+
+        plane_normal = np.cross(d1, d2)
+        plane_normal = plane_normal / max(np.linalg.norm(plane_normal), 1e-8)
+
+        hit = cls.ray_plane_intersection(ray_o, ray_d, entity_pos, plane_normal)
+        mouse_start = hit if hit is not None else entity_pos.copy()
+
+        cls._drag_state = {
+            'mode': 'plane',
+            'plane_normal': plane_normal,
+            'plane_point': entity_pos.copy(),
+            'start_pos': entity_pos.copy(),
+            'mouse_start': mouse_start,
+        }
+
+        # ── 查找 overlay key 用于亮度高亮 ──
+        for name, pd in cls.PLANE_DEFS.items():
+            if (np.allclose(pd['gl_dirs'][0], d1, atol=1e-3)
+                    and np.allclose(pd['gl_dirs'][1], d2, atol=1e-3)):
+                cls._active_drag_key = f"{cls.OVERLAY_KEY_PREFIX}_plane_{name}"
+                break
+
+    @classmethod
+    def is_dragging(cls) -> bool:
+        """是否正在拖拽中。"""
+        return cls._drag_state is not None
+
+    @classmethod
+    def update_drag(
+        cls,
+        ray_o: np.ndarray,
+        ray_d: np.ndarray,
+    ) -> np.ndarray | None:
+        """更新拖拽 — 返回新的实体世界位置。"""
+        if cls._drag_state is None:
+            return None
+
+        ds = cls._drag_state
+        hit = cls.ray_plane_intersection(
+            ray_o, ray_d, ds['plane_point'], ds['plane_normal'])
+        if hit is None:
+            print(f"  [DBG-GIZMO] update_drag: no hit (mode={ds['mode']})")
+            return None
+
+        if ds['mode'] == 'axis':
+            current = cls.closest_point_on_axis(hit, ds['start_pos'], ds['axis_dir'])
+            delta = current - ds['mouse_start']
+        else:  # plane
+            delta = hit - ds['mouse_start']
+
+        new_pos = ds['start_pos'] + delta
+        print(f"  [DBG-GIZMO] update_drag: mode={ds['mode']} delta=({delta[0]:.3f},{delta[1]:.3f},{delta[2]:.3f}) new=({new_pos[0]:.2f},{new_pos[1]:.2f},{new_pos[2]:.2f})")
+        return new_pos
+
+    @classmethod
+    def end_drag(cls) -> None:
+        """结束拖拽 — 清理内部状态。"""
+        cls._drag_state = None
+        cls._active_drag_key = None

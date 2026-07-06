@@ -21,6 +21,13 @@ Editor Outliner (ID Buffer) — Blender 风格的实体 ID + 屏幕空间边缘�
 
 from __future__ import annotations
 
+from Application.Core.Renderer.RenderCommand import (
+    RegisterHighlightEffectCommand,
+    UnregisterHighlightEffectCommand,
+    UpdateHighlightSelectionCommand,
+    UpdateHighlightConfigCommand,
+)
+
 
 # ============================================================================
 # 参数常量
@@ -75,13 +82,21 @@ class OutlinerID:
             width=cls._width,
             xray=cls._xray,
         )
-        renderer.register_highlight_effect(config)
+        renderer.enqueue(RegisterHighlightEffectCommand(config))
+
+        from Application.Editor.EditorHost import EditorHost
+        from Application.Editor.EditorEvent import OverlayRegisteredEvent
+        OverlayRegisteredEvent.Pack('OutlinerID', engine=EditorHost)
 
     @classmethod
     def unregister_from(cls, renderer) -> None:
         """注销 outliner — 释放 PostProcess GPU 资源。"""
-        renderer.unregister_highlight_effect()
+        renderer.enqueue(UnregisterHighlightEffectCommand())
         cls._renderer = None
+
+        from Application.Editor.EditorHost import EditorHost
+        from Application.Editor.EditorEvent import OverlayUnregisteredEvent
+        OverlayUnregisteredEvent.Pack('OutlinerID', engine=EditorHost)
 
     # ========================================================================
     # 主线程 API (零 GL 调用)
@@ -97,13 +112,13 @@ class OutlinerID:
             entity_ids: 被选中的实体 ID 集合
         """
         if cls._renderer is not None:
-            cls._renderer.update_highlight_selection(entity_ids)
+            cls._renderer.enqueue(UpdateHighlightSelectionCommand(entity_ids))
 
     @classmethod
     def clear(cls) -> None:
         """清除所有选中 (主线程安全)。"""
         if cls._renderer is not None:
-            cls._renderer.update_highlight_selection(set())
+            cls._renderer.enqueue(UpdateHighlightSelectionCommand(set()))
 
     @classmethod
     def configure(
@@ -128,11 +143,11 @@ class OutlinerID:
         if xray is not None:
             cls._xray = bool(xray)
         if cls._renderer is not None:
-            cls._renderer.update_highlight_config(
+            cls._renderer.enqueue(UpdateHighlightConfigCommand(
                 color=color,
                 width=outline_width,
                 xray=xray,
-            )
+            ))
 
     # ========================================================================
     # 兼容性 — 保留 _sync() 空实现 (EditorLayer 可能引用)

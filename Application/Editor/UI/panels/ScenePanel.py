@@ -175,29 +175,39 @@ class ScenePanel(BasePanel):
     def _draw_entities_tab(
         self
     ) -> None:
-        """列出场景中所有可渲染实体"""
-        # ── 2D / 3D 视口模式切换 (在 entity 列表上方) ──
+        """列出场景中所有实体 → 名称可点选，选中后在下方编辑"""
+        # ── 2D / 3D 视口模式切换 ──
         self._draw_viewport_mode()
         imgui.separator()
 
-        entity_ids = self._browser_ctrl.get_renderable_entities()
+        entity_infos = self._browser_ctrl.get_all_entity_infos()
 
-        if not entity_ids:
+        if not entity_infos:
             imgui.text_colored(
                 imgui.ImVec4(0.400, 0.400, 0.400, 1.00), "(empty scene)"
             )
             return
 
-        # 遍历当前帧的可渲染实体
         selected = self._selection_ctrl.get_selected()
-        for eid in entity_ids:
+        for info in entity_infos:
+            eid = info['entity_id']
+            name = info.get('name', '')
+            label = name if name else f"Entity #{eid}"
+
+            # 组件标记（小图标）
+            flags_str = ""
+            if info.get('has_camera'):
+                flags_str += " 📷"
+            if info.get('has_mesh'):
+                flags_str += " ◼"
+
             clicked, _ = imgui.selectable(
-                f"Entity #{eid}", selected == eid
+                f"{label}{flags_str}##{eid}", selected == eid
             )
             if clicked:
                 self._selection_ctrl.select(eid)
 
-        # 底部显示选中实体的组件摘要
+        # 底部：选中实体的检视面板
         selected = self._selection_ctrl.get_selected()
         if selected is not None:
             imgui.separator()
@@ -207,48 +217,73 @@ class ScenePanel(BasePanel):
         self,
         entity_id: int
     ) -> None:
-        """显示选中实体的 Transform / Mesh / Material 信息（可编辑）"""
+        """显示选中实体的所有组件（可展开、可编辑）。"""
         summary = self._browser_ctrl.get_summary(entity_id)
         if summary is None:
             imgui.text_disabled("(failed to load entity info)")
             return
 
+        # ── 实体名称（可编辑） ──
         imgui.text_colored(
             imgui.ImVec4(*BLENDER_ORANGE, 1.00),
             f"Entity #{summary.entity_id}",
         )
+        imgui.same_line()
+        imgui.text_disabled("—")
+        imgui.same_line()
+        name_buf = summary.name or ""
+        changed, new_name = imgui.input_text(
+            "##entity_name", name_buf, 256,
+        )
+        if changed:
+            self._browser_ctrl.set_name(entity_id, new_name)
+        if not summary.name:
+            imgui.same_line()
+            imgui.text_disabled("(click to name)")
+
         imgui.separator()
 
-        # ── Transform（可编辑，类型检查由 imgui 内置保证） ──
+        # ── Transform（可展开、可编辑） ──
         if imgui.collapsing_header("Transform", imgui.TreeNodeFlags_.default_open):
-            # Position（编辑器坐标系）
             pos = list(summary.position)
             changed, new_pos = imgui.drag_float3("Position", pos, 0.1, format="%.2f")
             if changed:
                 self._browser_ctrl.set_position(entity_id, tuple(new_pos))
 
-            # Rotation（欧拉角，度）
             rot = list(summary.rotation)
             changed, new_rot = imgui.drag_float3("Rotation", rot, 1.0, format="%.1f")
             if changed:
                 self._browser_ctrl.set_rotation(entity_id, tuple(new_rot))
 
-            # Scale
             scl = list(summary.scale)
             changed, new_scl = imgui.drag_float3("Scale", scl, 0.05, format="%.2f")
             if changed:
                 self._browser_ctrl.set_scale(entity_id, tuple(new_scl))
 
-        # ── Mesh / Material（当前只读，后续可扩展） ──
-        if imgui.collapsing_header("Renderer", imgui.TreeNodeFlags_.default_open):
-            if summary.mesh_id is not None:
+        # ── MeshRenderer（有 mesh 才显示） ──
+        if summary.mesh_id is not None:
+            if imgui.collapsing_header("MeshRenderer", imgui.TreeNodeFlags_.default_open):
                 imgui.text(f"Mesh ID: {summary.mesh_id}")
-            else:
-                imgui.text("(no Mesh)")
-            if summary.material_id is not None:
-                imgui.text(f"Material ID: {summary.material_id}")
-            else:
-                imgui.text("(no Material)")
+                if summary.material_id is not None:
+                    imgui.text(f"Material ID: {summary.material_id}")
+                else:
+                    imgui.text_disabled("(no Material)")
+
+        # ── Camera（有 camera 才显示） ──
+        if summary.has_camera:
+            if imgui.collapsing_header("Camera", imgui.TreeNodeFlags_.default_open):
+                try:
+                    cam = self._browser_ctrl.get_camera_info(entity_id)
+                except Exception:
+                    cam = None
+                if cam:
+                    imgui.text(f"Projection: {cam.get('projection', 'perspective')}")
+                    imgui.text(f"FOV: {cam.get('fov', 45.0):.1f}")
+                    imgui.text(f"Near: {cam.get('near', 0.1):.2f}  Far: {cam.get('far', 1000.0):.1f}")
+                    if cam.get('is_primary'):
+                        imgui.text_colored(imgui.ImVec4(*WARNING_AMBER, 1.00), "(Primary Camera)")
+                else:
+                    imgui.text_disabled("(camera info unavailable)")
 
     # ============================================================
     # Resources 标签页

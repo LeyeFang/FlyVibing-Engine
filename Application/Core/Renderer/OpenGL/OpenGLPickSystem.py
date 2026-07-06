@@ -290,13 +290,17 @@ void main() {
                 if loc_model >= 0:
                     gl.glUniformMatrix4fv(loc_model, 1, gl.GL_TRUE,
                         np.ascontiguousarray(model.astype('float32')))
-                # 设置 uProj (新版本 model 不含 aspect)
-                from Application.Core.Math.ViewGizmo import compute_ortho_proj
-                op = compute_ortho_proj(vp_w, vp_h)
+                # uProj: 若 model 已是完整 MVP (NDC), 则用 identity, 否则用正交投影
                 loc_proj = gl.glGetUniformLocation(cls._overlay_pick_prog, 'uProj')
                 if loc_proj >= 0:
-                    gl.glUniformMatrix4fv(loc_proj, 1, gl.GL_TRUE,
-                        np.ascontiguousarray(op.astype('float32')))
+                    if getattr(gpu, 'model_is_ndc', False):
+                        gl.glUniformMatrix4fv(loc_proj, 1, gl.GL_TRUE,
+                            np.identity(4, dtype='float32'))
+                    else:
+                        from Application.Core.Math.ViewGizmo import compute_ortho_proj
+                        op = compute_ortho_proj(vp_w, vp_h)
+                        gl.glUniformMatrix4fv(loc_proj, 1, gl.GL_TRUE,
+                            np.ascontiguousarray(op.astype('float32')))
             else:
                 if loc_ndc >= 0:
                     gl.glUniform1i(loc_ndc, 0)

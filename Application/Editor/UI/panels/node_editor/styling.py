@@ -43,7 +43,7 @@ _HDR_COLOR = imgui.ImVec4(0.600, 0.600, 0.600, 0.70)
 # 每个分类: (标题, [(显示标签, 类型名), ...])
 MENU_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
     ("Math", [
-        ("+ Add", "MathAdd"),
+        ("Sum", "MathAdd"),
         ("Subtract", "MathSubtract"),
         ("Multiply", "MathMultiply"),
         ("Divide", "MathDivide"),

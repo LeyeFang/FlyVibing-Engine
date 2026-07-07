@@ -11,13 +11,16 @@
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as node_ed
 
 from Application.Editor.UI.BasePanel import BasePanel
 from Application.Editor.UI.PanelStyle import ERROR_RED
+from Application.Editor.UI.FileDialog import FileDialog
 
 from Application.Editor.UI.controllers.node_editor import (
     NodeCanvas,
@@ -37,23 +40,44 @@ from .styling import (
 # Add 菜单辅助
 # ═══════════════════════════════════════════════════════════════
 
+_SUB_HDR_COLOR = imgui.ImVec4(0.500, 0.500, 0.500, 0.60)
+
+
 def _draw_add_menu_section(
     title: str,
-    items: list[tuple[str, str]],
+    items: list,
     canvas: NodeCanvas,
     avail: imgui.ImVec2,
 ) -> None:
-    """在 Add 弹出菜单中绘制一个分类区块。"""
+    """在 Add 弹出菜单中绘制一个分类区块（子菜单展平为视觉分组）。"""
     imgui.spacing()
     imgui.text_colored(_HDR_COLOR, title)
     imgui.separator()
-    for label, type_name in items:
-        changed, _selected = imgui.menu_item(label, "", False, True)
+    for item in items:
+        _draw_menu_item(item[0], item[1], canvas, _depth=0)
+
+
+def _draw_menu_item(
+    label: str,
+    target,
+    canvas: NodeCanvas,
+    _depth: int = 0,
+) -> None:
+    """绘制菜单项 —— 列表 = 子分组头（纯展示），字符串 = 可点击菜单项。"""
+    if isinstance(target, list):
+        # 子分组 → 绘制只读小标题 + 展平子项
+        imgui.spacing()
+        imgui.text_colored(_SUB_HDR_COLOR, f"  {label}")
+        for sub_label, sub_value in target:
+            _draw_menu_item(sub_label, sub_value, canvas, _depth=1)
+    else:
+        prefix = "    " if _depth > 0 else ""
+        changed, _selected = imgui.menu_item(f"{prefix}{label}", "", False, True)
         if changed:
             max_y = max((inst.pos[1] for inst in canvas.nodes.values()), default=40)
             cx = 80.0
             cy = max_y + 200.0
-            canvas.add_node(type_name, (cx, cy))
+            canvas.add_node(target, (cx, cy))
             imgui.close_current_popup()
 
 
@@ -80,7 +104,13 @@ class NodeEditorPanel(BasePanel):
         self._editor_context: node_ed.EditorContext | None = None
         self._editor_initialized: bool = False
         self._canvas_initialized: bool = False
-        self._add_popup_active: bool = False
+        self._add_popup_pos: imgui.ImVec2 = imgui.ImVec2(0, 0)
+        # ── Import / Export 状态 ──
+        self._import_path: str = ""
+        self._export_path: str = ""
+        self._import_error: str = ""
+        self._export_error: str = ""
+        self._last_io_dir: str = str(Path.home())  # 上次 I/O 目录
 
     # ============================================================
     # 生命周期
@@ -134,9 +164,26 @@ class NodeEditorPanel(BasePanel):
         ne = node_ed
         ne.set_current_editor(self._editor_context)
 
-        # ── Add 按钮 ──
-        if imgui.small_button("+ Add Node"):
-            self._add_popup_active = True
+        # ── 工具栏: Add / Import / Export ──
+        if imgui.small_button("Add Node"):
+            self._add_popup_pos = imgui.get_item_rect_min()
+            imgui.open_popup("Create Node")
+
+        imgui.same_line()
+        if imgui.small_button("Import"):
+            self._import_error = ""
+            imgui.open_popup("Import Graph")
+
+        imgui.same_line()
+        if imgui.small_button("Export"):
+            self._export_error = ""
+            imgui.open_popup("Export Graph")
+
+        # ── Import 弹出窗口 ──
+        self._draw_import_popup(canvas)
+
+        # ── Export 弹出窗口 ──
+        self._draw_export_popup(canvas)
 
         # ── 画布背景色 & 网格 ──
         s = ne.get_style()
@@ -216,6 +263,10 @@ class NodeEditorPanel(BasePanel):
             if inst.node_type == "Random":
                 self._draw_random_widgets(nid, inst)
 
+            # ScalarMath 节点 UI 控件
+            if inst.node_type == "ScalarMath":
+                self._draw_scalar_math_widgets(nid, inst)
+
             # TimeTrigger 节点 UI 控件
             if inst.node_type == "TimeTrigger":
                 self._draw_time_trigger_widgets(nid, inst)
@@ -231,6 +282,14 @@ class NodeEditorPanel(BasePanel):
             # Constant 节点 UI 控件
             if inst.node_type == "Constant":
                 self._draw_constant_widgets(nid, inst)
+
+            # EntitySpawn 节点 UI 控件
+            if inst.node_type == "EntitySpawn":
+                self._draw_entity_spawn_widgets(nid, inst)
+
+            # VecMath 节点 UI 控件
+            if inst.node_type == "VecMath":
+                self._draw_vec_math_widgets(nid, inst)
 
             self._draw_pins(canvas, ne, nid, inst, nd)
             ne.end_node()
@@ -287,6 +346,29 @@ class NodeEditorPanel(BasePanel):
                 if changed:
                     inst.props["stddev"] = nv
 
+        imgui.pop_item_width()
+
+    # ── ScalarMath 节点专用控件 ────────────────────────────
+
+    def _draw_scalar_math_widgets(self, nid: int, inst) -> None:
+        """在 ScalarMath 节点体内绘制操作下拉框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(100)
+
+        op = inst.props.get("operation", "sum")
+        ops = ["Sum", "Subtract", "Multiply", "Divide"]
+        try:
+            idx = next(i for i, o in enumerate(ops) if o.lower() == op)
+        except StopIteration:
+            idx = 0
+        changed, new_idx = imgui.combo(
+            f"##scalar_op_{nid}", idx, ops,
+        )
+        if changed:
+            inst.props["operation"] = ops[new_idx].lower()
+
+        imgui.same_line()
+        imgui.text_disabled("Op")
         imgui.pop_item_width()
 
     # ── TimeTrigger 节点专用控件 ───────────────────────────
@@ -404,6 +486,54 @@ class NodeEditorPanel(BasePanel):
             inst.props["value"] = nv
         imgui.pop_item_width()
 
+    # ── EntitySpawn 节点专用控件 ───────────────────────────
+
+    def _draw_entity_spawn_widgets(self, nid: int, inst) -> None:
+        """在 EntitySpawn 节点体内绘制 Template 下拉框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(105)
+
+        template = inst.props.get("template", "Empty")
+        labels = ["Empty", "Cube", "Camera"]
+        try:
+            idx = labels.index(template)
+        except ValueError:
+            idx = 0
+        changed, new_idx = imgui.combo(
+            f"##spawn_tpl_{nid}", idx, labels,
+        )
+        if changed:
+            inst.props["template"] = labels[new_idx]
+
+        imgui.same_line()
+        imgui.text_disabled("Template")
+        imgui.pop_item_width()
+
+    # ── VecMath 节点专用控件 ───────────────────────────────
+
+    def _draw_vec_math_widgets(self, nid: int, inst) -> None:
+        """在 VecMath 节点体内绘制操作下拉框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(105)
+
+        op = inst.props.get("operation", "add")
+        ops = ["Add", "Subtract", "Multiply", "Divide",
+               "Dot", "Cross", "Normalize", "Length"]
+        try:
+            idx = ops.index(op.capitalize()) if op.capitalize() in ops else ops.index(
+                next(o for o in ops if o.lower() == op))
+        except (ValueError, StopIteration):
+            idx = 0
+        changed, new_idx = imgui.combo(
+            f"##vec_op_{nid}", idx, ops,
+        )
+        if changed:
+            inst.props["operation"] = ops[new_idx].lower()
+
+        imgui.same_line()
+        imgui.text_disabled("Op")
+        imgui.pop_item_width()
+
     # ── 可见引脚过滤 ───────────────────────────────────────
 
     @staticmethod
@@ -418,6 +548,31 @@ class NodeEditorPanel(BasePanel):
         # ── VarGet: 隐藏 Name pin ──
         if inst.node_type == "VarGet":
             return [p for p in nd.pins if p.name != "Name"]
+        # ── VecMath: 一元操作隐藏 B pin ──
+        if inst.node_type == "VecMath":
+            op = inst.props.get("operation", "add")
+            if op in ("normalize", "length"):
+                return [p for p in nd.pins if p.name != "B"]
+        # ── ScalarMath: 自增输入 pin（有连线才显示） ──
+        if inst.node_type == "ScalarMath":
+            if canvas is not None:
+                max_connected = -1
+                for i in range(8):
+                    pin_name = f"In_{i}"
+                    pid = inst.pin_ids.get(pin_name)
+                    if pid is not None:
+                        if any(lk.to_pin == pid for lk in canvas.links.values()):
+                            max_connected = i
+                show_up_to = max(max_connected + 2, 2)  # 至少 2 个
+                visible = []
+                for p in nd.pins:
+                    if p.name.startswith("In_"):
+                        idx = int(p.name.split("_")[1])
+                        if idx < show_up_to:
+                            visible.append(p)
+                    else:
+                        visible.append(p)
+                return visible
         # ── Random: 按模式/分布过滤 ──
         if inst.node_type == "Random":
             mode = inst.props.get("mode", "manual")
@@ -480,23 +635,26 @@ class NodeEditorPanel(BasePanel):
         """绘制节点的所有引脚 + 分隔线。"""
         pins = self._visible_pins(inst, nd, canvas)
 
-        _max_in_w = max(
-            (imgui.calc_text_size(f"> {p.name}").x
-             for p in pins if p.direction == "input"),
+        # ── 第 1 步: 计算节点宽度（基于标题 + 所有 pin 原始文字） ──
+        _title_w = imgui.calc_text_size(f"  {nd.label}  ").x
+        _max_pin_text_w = max(
+            (imgui.calc_text_size(f"> {p.name}").x for p in pins),
+            default=0,
+        )
+        _node_w = max(_title_w, _max_pin_text_w, 80.0)
+
+        # ── 第 2 步: 输出 pin 右对齐 → padding = 节点宽 - 输出文字宽 - 边距 ──
+        _max_out_w = max(
+            (imgui.calc_text_size(f"{p.name} >").x
+             for p in pins if p.direction == "output"),
             default=0,
         )
         _min_pad = imgui.calc_text_size("> ").x * 4
-        _out_pad = max(_max_in_w, _min_pad)
+        _margin = imgui.calc_text_size("  ").x
+        _out_pad = max(_node_w - _max_out_w - _margin, _min_pad)
 
         # 手动画分隔线
         _cursor = imgui.get_cursor_screen_pos()
-        _node_w = max(
-            imgui.calc_text_size(f"  {nd.label}  ").x,
-            max((imgui.calc_text_size(f"> {p.name}").x for p in pins), default=0),
-            max((_out_pad + imgui.calc_text_size(f"{p.name} >").x
-                 for p in pins if p.direction == "output"), default=0),
-            80.0,
-        )
         _dl = imgui.get_window_draw_list()
         _dl.add_line(
             imgui.ImVec2(_cursor.x, _cursor.y + 3),
@@ -591,19 +749,185 @@ class NodeEditorPanel(BasePanel):
             ne.clear_selection()
 
     # ============================================================
-    # 子步骤: Add 弹出菜单
+    # 子步骤: Import / Export 弹出窗口
+    # ============================================================
+
+    def _draw_import_popup(self, canvas: NodeCanvas) -> None:
+        """绘制 Import Graph 弹出窗口。"""
+        if not imgui.begin_popup_modal("Import Graph", None, imgui.WindowFlags_.always_auto_resize)[0]:
+            return
+
+        imgui.text("Import node graph from JSON file:")
+        imgui.spacing()
+
+        # ── 文件路径输入 ──
+        imgui.push_item_width(400)
+        changed, self._import_path = imgui.input_text(
+            "##import_path", self._import_path,
+        )
+        imgui.pop_item_width()
+        imgui.same_line()
+        if imgui.small_button("Browse##import"):
+            FileDialog.open_json(
+                callback=lambda p: setattr(self, '_import_path', p),
+                start_dir=self._last_io_dir,
+            )
+
+        imgui.spacing()
+
+        # ── 错误提示 ──
+        if self._import_error:
+            imgui.text_colored(
+                imgui.ImVec4(*ERROR_RED, 1.00),
+                self._import_error,
+            )
+
+        imgui.spacing()
+
+        # ── Import / Cancel ──
+        if imgui.button("Import", imgui.ImVec2(100, 0)):
+            self._do_import(canvas)
+
+        imgui.same_line()
+        if imgui.button("Cancel", imgui.ImVec2(100, 0)):
+            self._import_path = ""
+            self._import_error = ""
+            imgui.close_current_popup()
+
+        imgui.end_popup()
+
+    def _draw_export_popup(self, canvas: NodeCanvas) -> None:
+        """绘制 Export Graph 弹出窗口。"""
+        if not imgui.begin_popup_modal("Export Graph", None, imgui.WindowFlags_.always_auto_resize)[0]:
+            return
+
+        imgui.text("Export node graph to JSON file:")
+        imgui.spacing()
+
+        # ── 文件路径输入 ──
+        imgui.push_item_width(400)
+        changed, self._export_path = imgui.input_text(
+            "##export_path", self._export_path,
+        )
+        imgui.pop_item_width()
+        imgui.same_line()
+        if imgui.small_button("Browse##export"):
+            FileDialog.save_json(
+                callback=lambda p: setattr(self, '_export_path', p),
+                start_dir=self._last_io_dir,
+            )
+
+        imgui.spacing()
+
+        # ── 节点/连线统计 ──
+        n_count = len(canvas.nodes)
+        l_count = len(canvas.links)
+        imgui.text_disabled(f"  {n_count} nodes, {l_count} links")
+
+        imgui.spacing()
+
+        # ── 错误提示 ──
+        if self._export_error:
+            imgui.text_colored(
+                imgui.ImVec4(*ERROR_RED, 1.00),
+                self._export_error,
+            )
+
+        imgui.spacing()
+
+        # ── Export / Cancel ──
+        if imgui.button("Export", imgui.ImVec2(100, 0)):
+            self._do_export(canvas)
+
+        imgui.same_line()
+        if imgui.button("Cancel", imgui.ImVec2(100, 0)):
+            self._export_path = ""
+            self._export_error = ""
+            imgui.close_current_popup()
+
+        imgui.end_popup()
+
+    def _do_import(self, canvas: NodeCanvas) -> None:
+        """执行导入：从 JSON 文件加载节点图。"""
+        fp = self._import_path.strip()
+        if not fp:
+            self._import_error = "Please select a file."
+            return
+
+        if not os.path.isfile(fp):
+            self._import_error = f"File not found:\n{fp}"
+            return
+
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            self._import_error = f"Invalid JSON:\n{e}"
+            return
+        except Exception as e:
+            self._import_error = f"Failed to read file:\n{e}"
+            return
+
+        if "nodes" not in data:
+            self._import_error = "Not a valid node graph file (missing 'nodes')."
+            return
+
+        try:
+            new_canvas = NodeCanvas.from_dict(data)
+        except Exception as e:
+            self._import_error = f"Failed to parse graph:\n{e}"
+            return
+
+        # ── 替换画布内容 ──
+        canvas.clear()
+        for nid, inst in new_canvas.nodes.items():
+            canvas._nodes[nid] = inst
+        for lid, lk in new_canvas.links.items():
+            canvas._links[lid] = lk
+
+        self._last_io_dir = os.path.dirname(fp)
+        print(f"[Import] Loaded {len(canvas.nodes)} nodes, {len(canvas.links)} links from {fp}")
+        self._import_path = ""
+        self._import_error = ""
+        imgui.close_current_popup()
+
+    def _do_export(self, canvas: NodeCanvas) -> None:
+        """执行导出：将节点图保存为 JSON 文件。"""
+        fp = self._export_path.strip()
+        if not fp:
+            self._export_error = "Please specify a file path."
+            return
+
+        # 自动补 .json
+        if not fp.lower().endswith(".json"):
+            fp += ".json"
+
+        try:
+            os.makedirs(os.path.dirname(fp) or ".", exist_ok=True)
+            data = canvas.to_dict()
+            with open(fp, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            self._export_error = f"Failed to write file:\n{e}"
+            return
+
+        self._last_io_dir = os.path.dirname(fp)
+        print(f"[Export] Saved {len(canvas.nodes)} nodes, {len(canvas.links)} links to {fp}")
+        self._export_path = ""
+        self._export_error = ""
+        imgui.close_current_popup()
+
+    # ============================================================
+    # 子步骤: Import / Export 弹出窗口（END）
     # ============================================================
 
     def _draw_add_popup(self, canvas: NodeCanvas, avail) -> None:
-        if self._add_popup_active:
-            imgui.open_popup("Create Node")
-            _bpop = imgui.begin_popup("Create Node")
-            if _bpop:
-                for title, items in MENU_SECTIONS:
-                    _draw_add_menu_section(title, items, canvas, avail)
-                imgui.end_popup()
-            if not imgui.is_popup_open("Create Node"):
-                self._add_popup_active = False
+        imgui.set_next_window_pos(self._add_popup_pos)
+        _bpop = imgui.begin_popup("Create Node")
+        if _bpop:
+            for title, items in MENU_SECTIONS:
+                _draw_add_menu_section(title, items, canvas, avail)
+            imgui.end_popup()
 
     # ============================================================
     # 子步骤: 位置同步

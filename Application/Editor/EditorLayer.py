@@ -23,10 +23,11 @@ from Application.Core.Layers.Layer import Layer
 
 # ── 应用层: 编辑器 ──
 from Application.Editor.EditorCamera import EditorCamera
-from Application.Editor.Rendering.Grid import Grid
-from Application.Editor.Rendering.OutlinerID import OutlinerID
-from Application.Editor.Rendering.TransformGizmo import TransformGizmo
-from Application.Editor.Rendering.ViewGizmo import ViewGizmo
+from Application.Editor.Gizmos.Grid import Grid
+from Application.Editor.Gizmos.OutlinerID import OutlinerID
+from Application.Editor.Gizmos.TransformGizmo import TransformGizmo
+from Application.Editor.Gizmos.ViewGizmo import ViewGizmo
+from Application.Editor.Gizmos.CameraFrustum import CameraFrustum
 from Application.Editor.UI.UIManager import UIManager
 
 # ★ 先导入 Controller（触发 auto-register 到 ControllerRegistry），再导入 Panel
@@ -85,10 +86,13 @@ class EditorLayer(Layer):
         ViewGizmo.register_to(cls.renderer)
         OutlinerID.register_to(cls.renderer)
         TransformGizmo.register_to(cls.renderer)
+        # ── 摄像机 entity gizmo (frustum / 2D boundary) ──
+        cls._refresh_camera_gizmos()
 
     @classmethod
     def OnDetach(cls):
         if cls.renderer is not None:
+            cls._unregister_all_camera_gizmos()
             TransformGizmo.unregister_from(cls.renderer)
             OutlinerID.unregister_from(cls.renderer)
             ViewGizmo.unregister_from(cls.renderer)
@@ -146,6 +150,62 @@ class EditorLayer(Layer):
                 cls._handle_left_press(event.pos_x, event.pos_y, cam)
             else:  # Release
                 cls._handle_left_release(event.pos_x, event.pos_y, cam)
+
+    # ════════════════════════════════════════════════════════════
+    # Camera Gizmo — ECS Camera entity 可视化
+    # ════════════════════════════════════════════════════════════
+
+    _camera_gizmo_keys: set[str] = set()
+    """当前已注册的 camera gizmo overlay key 集合。"""
+    _camera_gizmo_entity_ids: frozenset[int] = frozenset()
+    """上次刷新时的 Camera entity ID 集合，用于检测是否需要重建。"""
+
+    @classmethod
+    def _refresh_camera_gizmos(cls) -> None:
+        """遍历 ECS 中所有 Camera entity，注册/更新对应的 gizmo overlay。
+
+        仅在 Camera entity 集合发生变化时才重建 GPU 资源。
+        """
+        if cls.renderer is None:
+            return
+
+        # ── 查询当前 Camera entity ID 集合 ──
+        from Application.Core.Scene.GizmoQuery import GizmoQuery
+        from Application.Editor.UI.controllers.SelectionController import SelectionController
+        from Application.Core.Renderer.RenderCommand import OverlayRegistrationCommand
+
+        try:
+            selected_id = SelectionController.get_selected()
+            selected_ids = {selected_id} if selected_id is not None else set()
+        except Exception:
+            selected_ids = set()
+
+        try:
+            cam_list = GizmoQuery.get_camera_gizmos(selected_ids=selected_ids)
+        except Exception:
+            return
+
+        # ── 快速比较: 如果 entity ID 集合未变，跳过重建 ──
+        current_ids = frozenset(cd.entity_id for cd in cam_list)
+        if current_ids == cls._camera_gizmo_entity_ids:
+            return
+        cls._camera_gizmo_entity_ids = current_ids
+
+        # ── 有变化 → 注销旧 + 注册新 ──
+        cls._unregister_all_camera_gizmos()
+        for cam_data in cam_list:
+            if cam_data.is_perspective:
+                overlay = CameraFrustum.build_overlay(cam_data)
+                cls.renderer.enqueue(OverlayRegistrationCommand(overlay))
+                cls._camera_gizmo_keys.add(overlay.key)
+
+    @classmethod
+    def _unregister_all_camera_gizmos(cls) -> None:
+        """注销所有已注册的 camera gizmo overlay。"""
+        from Application.Core.Renderer.RenderCommand import OverlayUnregistrationCommand
+        for key in list(cls._camera_gizmo_keys):
+            cls.renderer.enqueue(OverlayUnregistrationCommand(key))
+        cls._camera_gizmo_keys.clear()
 
     # ════════════════════════════════════════════════════════════
     # Gizmo 拖拽 + 拾取辅助
@@ -265,6 +325,9 @@ class EditorLayer(Layer):
                     and _glfw.window_should_close(GameRuntime.window.glfw_window)):
                 SimulationController.stop()
 
+        # ── 刷新 camera gizmo (Camera entity 增删 / Transform 变化 / 选中变化) ──
+        cls._refresh_camera_gizmos()
+
     @classmethod
     def OnRender(cls):
         # ── 处理待处理的轮廓请求 (render thread, GL 调用) ──
@@ -283,30 +346,53 @@ class EditorLayer(Layer):
 
     @classmethod
     def _load_fonts(cls) -> None:
-        """加载 UI 字体 — 优先 Inter (Blender 同款)，否则用系统字体。"""
+        """加载 UI 字体并合并 Font Awesome 6 图标字体。
+
+        hello_imgui.load_font_ttf_with_font_awesome_icons 需要字体文件位于
+        assets 目录内，因此我们统一使用 Resource/Fonts/ 下的字体副本。
+        """
+        from imgui_bundle import hello_imgui as _hi
+
+        # hello_imgui 的资源目录指向 Resource/，字体相对路径为 Fonts/xxx.ttf
+        _resource_dir = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "Resource"))
+        _hi.set_assets_folder(_resource_dir)
+
         io = imgui.get_io()
         font_loaded = False
 
-        for font_path in cls.FONT_CANDIDATES:
-            if os.path.isfile(font_path):
-                io.fonts.add_font_from_file_ttf(font_path, cls.FONT_SIZE)
-                print(f"[Font] Loaded: {font_path} ({cls.FONT_SIZE}px)")
+        # 候选字体（相对于 Resource/ 的路径）
+        _font_candidates = [
+            "Fonts/Inter-Regular.ttf",
+            "Fonts/segoeui.ttf",
+            "Fonts/arial.ttf",
+        ]
+        for rel_path in _font_candidates:
+            if _hi.asset_exists(rel_path):
+                _hi.load_font_ttf_with_font_awesome_icons(
+                    rel_path, cls.FONT_SIZE)
+                print(f"[Font] Loaded + FA6: {rel_path} ({cls.FONT_SIZE}px)")
                 font_loaded = True
                 break
 
         if not font_loaded:
+            io.fonts.add_font_default()
             print(
-                "[Font] No custom font found. Using ImGui default.\n"
-                "       To get Blender-style font, download Inter:\n"
-                "       https://rsms.me/inter/ → Resource/Fonts/Inter-Regular.ttf"
+                "[Font] No bundled font found. Using ImGui default.\n"
+                "       Place a .ttf in Resource/Fonts/, e.g. Inter-Regular.ttf"
             )
 
     @classmethod
     def _init_ui_panels(cls):
-        """注册编辑器 UI 面板 (幂等, 仅首次调用生效)。"""
+        """注册编辑器 UI 面板 (幂等, 仅首次调用生效)。
+
+        默认隐藏 Scene 面板和 Node Editor 面板 — 用户通过 View 菜单手动打开。
+        """
         if not hasattr(cls, '_panels_registered'):
-            UIManager.register(ScenePanel())
-            UIManager.register(NodeEditorPanel())
+            scene_panel = UIManager.register(ScenePanel())
+            node_panel = UIManager.register(NodeEditorPanel())
+            scene_panel.visible = False
+            node_panel.visible = False
             cls._panels_registered = True
 
     # ════════════════════════════════════════════════════════════

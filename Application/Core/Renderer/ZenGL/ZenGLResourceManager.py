@@ -14,7 +14,7 @@ from Application.Resource.Material import Material, Shader as CPU_Shader, Textur
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Renderer.Renderer import RenderResourceManger as RRM
 from Application.Core.Renderer.VertexLayout import VertexLayout, STD_LAYOUT
-from Application.Core.Renderer.ZenGL.ZenGLOverlayRenderer import _DEBUG_ZENGL_OVERLAY
+from Application.Core.Renderer.ZenGL.ZenGLOverlays import _DEBUG_ZENGL_OVERLAY
 
 
 class ZenGLResourceManager:

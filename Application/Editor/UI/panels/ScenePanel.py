@@ -16,6 +16,9 @@ from Application.Editor.Services.ControllerRegistry import (
     NAME_SELECTION,
 )
 
+# ── Font Awesome 6 图标 (imgui_bundle 内置矢量图标方案) ─────
+from imgui_bundle import icons_fontawesome_6 as fa
+
 
 class ScenePanel(BasePanel):
     """场景管理器面板 — 只负责绘制，业务逻辑委托给 Controller"""
@@ -71,35 +74,36 @@ class ScenePanel(BasePanel):
     def _draw_controls(
         self
     ) -> None:
-        """绘制播放控制按钮组"""
+        """绘制播放控制按钮组（使用 Font Awesome 6 矢量图标）。"""
         av = imgui.get_content_region_avail().x
-        btn_w = (av - imgui.get_style().item_spacing.x * 2) / 3.0
+        spacing = imgui.get_style().item_spacing.x
+        btn_w = (av - spacing * 2) / 3.0
 
-        # ▶ Run
+        # ▶ Run — 绿色
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*SUCCESS_GREEN, 1.00))
-        if imgui.button("▶ Run", (btn_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_PLAY}  Run", (btn_w, 0)):
             self._sim_ctrl.play()
         imgui.pop_style_color(1)
 
         imgui.same_line()
 
-        # ⏸ Pause（仅在运行时可用）
+        # ⏸ Pause — 琥珀色（仅在运行时可用）
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*WARNING_AMBER, 1.00))
         imgui.begin_disabled(not self._sim_ctrl.is_running())
-        if imgui.button("⏸ Pause", (btn_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_PAUSE}  Pause", (btn_w, 0)):
             self._sim_ctrl.pause()
         imgui.end_disabled()
         imgui.pop_style_color(1)
 
         imgui.same_line()
 
-        # ■ Stop（仅在未停止时可用）
+        # ■ Stop — 红色（仅在未停止时可用）
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*ERROR_RED, 1.00))
         imgui.begin_disabled(self._sim_ctrl.is_stopped())
-        if imgui.button("■ Stop", (btn_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_STOP}  Stop", (btn_w, 0)):
             self._sim_ctrl.stop()
         imgui.end_disabled()
         imgui.pop_style_color(1)
@@ -136,15 +140,15 @@ class ScenePanel(BasePanel):
             self._draw_resources_tab()
 
     # ============================================================
-    # 视口模式: 2D / 3D 切换 (在 entity 列表上方)
+    # 视口模式: 2D / 3D / Overlay 切换 (在 entity 列表上方)
     # ============================================================
 
     def _draw_viewport_mode(
         self
     ) -> None:
-        """绘制 2D | 3D 视口模式切换按钮，委托 ViewportController"""
+        """绘制 2D | 3D | Overlay 视口模式切换按钮，委托 ViewportController"""
         av = imgui.get_content_region_avail().x
-        btn_w = (av - imgui.get_style().item_spacing.x) / 2.0
+        btn_w = (av - imgui.get_style().item_spacing.x * 2) / 3.0
 
         is_2d = self._viewport_ctrl.is_2d()
 
@@ -152,7 +156,7 @@ class ScenePanel(BasePanel):
         if not is_2d:
             imgui.push_style_color(
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
-        if imgui.button("3D (Persp)", (btn_w, 0)):
+        if imgui.button("3D", (btn_w, 0)):
             self._viewport_ctrl.switch_to_3d()
         if not is_2d:
             imgui.pop_style_color(1)
@@ -163,10 +167,17 @@ class ScenePanel(BasePanel):
         if is_2d:
             imgui.push_style_color(
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
-        if imgui.button("2D (Ortho)", (btn_w, 0)):
+        if imgui.button("2D", (btn_w, 0)):
             self._viewport_ctrl.switch_to_2d()
         if is_2d:
             imgui.pop_style_color(1)
+
+        imgui.same_line()
+
+        # Overlay 按钮 (未来实现)
+        imgui.begin_disabled(True)
+        imgui.button("Overlay", (btn_w, 0))
+        imgui.end_disabled()
 
     # ============================================================
     # Entities 标签页

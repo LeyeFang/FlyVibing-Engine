@@ -40,14 +40,23 @@ _HDR_COLOR = imgui.ImVec4(0.600, 0.600, 0.600, 0.70)
 # Add 菜单分类数据
 # ═══════════════════════════════════════════════════════════════
 
-# 每个分类: (标题, [(显示标签, 类型名), ...])
-MENU_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
+# 每个分类: (标题, [子项 ...])
+#   子项 = ("标签", "类型名")           ← 叶子 → 直接创建节点
+#   子项 = ("标签", [子项 ...])         ← 子菜单 → 展开更深层级
+MENU_SECTIONS: list[tuple[str, list]] = [
     ("Math", [
-        ("Sum", "MathAdd"),
-        ("Subtract", "MathSubtract"),
-        ("Multiply", "MathMultiply"),
-        ("Divide", "MathDivide"),
-        ("Random", "Random"),
+        ("Variable", [
+            ("Constant", "Constant"),
+            ("Set Variable", "VarSet"),
+            ("Get Variable", "VarGet"),
+            ("Make Vec3", "MakeVec3"),
+            ("Break Vec3", "BreakVec3"),
+        ]),
+        ("Calculate", [
+            ("Scalar Math", "ScalarMath"),
+            ("Random", "Random"),
+            ("Vec Math", "VecMath"),
+        ]),
     ]),
     ("Time", [
         ("Get Time", "TimeGetElapsed"),
@@ -57,18 +66,11 @@ MENU_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
     ]),
     ("Entity", [
         ("Create Entity", "EntityCreate"),
+        ("Spawn Entity", "EntitySpawn"),
         ("Destroy Entity", "EntityDestroy"),
-        ("Set Transform", "EntitySetTransform"),
-        ("Get Transform", "EntityGetTransform"),
         ("Add Mesh Component", "EntityAddMesh"),
         ("Add Camera Component", "EntityAddCamera"),
-        ("Find Entity By Name", "EntityFindByName"),
         ("Set Visibility", "EntitySetVisibility"),
-    ]),
-    ("Variable", [
-        ("Set Variable", "VarSet"),
-        ("Get Variable", "VarGet"),
-        ("Constant", "Constant"),
     ]),
     ("Debug", [
         ("Print", "Print"),

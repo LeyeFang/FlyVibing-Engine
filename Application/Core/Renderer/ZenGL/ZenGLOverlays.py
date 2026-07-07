@@ -1,4 +1,4 @@
-"""ZenGLOverlayRenderer — ZenGL 叠加层渲染器"""
+"""ZenGLOverlays — ZenGL 叠加层渲染器"""
 from __future__ import annotations
 import numpy as np
 
@@ -7,7 +7,7 @@ _DEBUG_ZENGL_OVERLAY: bool = False
 _seen_overlay_keys: set = set()  # 避免重复打印同一 overlay 的 uniform 缺失
 
 
-class ZenGLOverlayRenderer:
+class ZenGLOverlays:
 
     @classmethod
     def _render_overlay_drawables(cls, view: np.ndarray, proj: np.ndarray, layer: int = -1) -> None:

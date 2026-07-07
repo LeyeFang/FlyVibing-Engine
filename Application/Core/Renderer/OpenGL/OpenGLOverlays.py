@@ -1,5 +1,5 @@
 """
-OpenGLOverlayRenderer — PyOpenGL 叠加层渲染器 (Mixin, 通过 MRO 访问资源)。
+OpenGLOverlays — PyOpenGL 叠加层渲染器 (Mixin, 通过 MRO 访问资源)。
 
 职责:
   - 遍历已注册的 overlay drawable 并提交 GL 绘制命令
@@ -16,7 +16,7 @@ import numpy as np
 from OpenGL import GL as gl
 
 
-class OpenGLOverlayRenderer:
+class OpenGLOverlays:
     """PyOpenGL 叠加层渲染器 — 编辑器的 Grid/Gizmo 等 overlay 绘制。"""
 
     @classmethod

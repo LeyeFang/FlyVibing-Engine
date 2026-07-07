@@ -65,3 +65,28 @@ class LinkInstance:
     id: int
     from_pin: int
     to_pin: int
+
+
+# ═══════════════════════════════════════════════════════════════
+# 类型安全引用
+# ═══════════════════════════════════════════════════════════════
+
+@dataclass
+class EntityRef:
+    """类型安全的实体引用 — 替代裸 int EntityID 在节点间传递。
+
+    节点输出 EntityRef，下游节点读取时检查 is_valid，
+    避免对已销毁实体的无效操作。
+    """
+    eid: int = -1
+
+    @property
+    def is_valid(self) -> bool:
+        """实体是否仍然存在。"""
+        if self.eid < 0:
+            return False
+        try:
+            import esper
+            return esper.entity_exists(self.eid)
+        except Exception:
+            return False

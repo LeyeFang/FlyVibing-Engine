@@ -36,6 +36,7 @@ MATH_COLOR      = (0.420, 0.550, 0.920)
 TIME_COLOR      = (0.878, 0.753, 0.314)
 ENTITY_COLOR    = (0.314, 0.784, 0.471)
 VAR_COLOR       = (0.650, 0.420, 0.920)
+VECTOR_COLOR    = (0.314, 0.710, 0.710)  # 保留兼容，新节点用 MATH_COLOR
 DEBUG_COLOR     = (0.600, 0.600, 0.600)
 
 
@@ -47,14 +48,14 @@ _reg(NodeTypeDef(
     "OnGameStart", "On Game Start", "Event",
     _SUCCESS_GREEN,
     [PinDef(_gen_id(), "exec", "exec", "output")],
-    "Started by Engine",
+    "When the game begins",
 ))
 
 _reg(NodeTypeDef(
     "OnGameStop", "On Game Stop", "Event",
     _ERROR_RED,
     [PinDef(_gen_id(), "exec", "exec", "output")],
-    "Triggered on Stop",
+    "When the game ends",
 ))
 
 _reg(NodeTypeDef(
@@ -64,7 +65,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec", "exec", "output"),
         PinDef(_gen_id(), "delta", "data", "output", "float"),
     ],
-    "Fires every frame",
+    "Every frame",
 ))
 
 
@@ -79,7 +80,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_in", "exec", "input"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Title: Game\nSize:  1280x720\nMode: Windowed",
+    "Open a game window",
 ))
 
 _reg(NodeTypeDef(
@@ -102,13 +103,30 @@ _reg(NodeTypeDef(
     _COLOR_FLOW,
     [PinDef(_gen_id(), "exec_in", "exec", "input")]
     + [PinDef(_gen_id(), f"out_{i}", "exec", "output") for i in range(3)],
-    "Execute in order",
+    "Chain in order",
 ))
 
 
 # ═══════════════════════════════════════════════════════════════
-# 数学节点 (Math) — 纯函数，无 exec 引脚
+# 数学节点 (Math) — 纯数据，无 exec 引脚
 # ═══════════════════════════════════════════════════════════════
+
+# ── ScalarMath: 统一下拉 + 自增输入 ──────────────────────────
+
+_reg(NodeTypeDef(
+    "ScalarMath", "Scalar Math", "Math", MATH_COLOR,
+    [
+        PinDef(_gen_id(), "In_0", "data", "input", "float"),
+        PinDef(_gen_id(), "In_1", "data", "input", "float"),
+    ] + [
+        PinDef(_gen_id(), f"In_{i}", "data", "input", "float") for i in range(2, 8)
+    ] + [
+        PinDef(_gen_id(), "Result", "data", "output", "float"),
+    ],
+    "Sum / Sub / Mul / Div",
+))
+
+# ── 旧版四则运算 (保留兼容，菜单中不再出现) ──
 
 _reg(NodeTypeDef(
     "MathAdd", "Add", "Math", MATH_COLOR,
@@ -147,7 +165,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "B", "data", "input", "float"),
         PinDef(_gen_id(), "Result", "data", "output", "float"),
     ],
-    "A ÷ B\nDiv by 0 → 0",
+    "A / B",
 ))
 
 # ── 统一 Random 节点 ──
@@ -160,7 +178,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "StdDev", "data", "input", "float"),
         PinDef(_gen_id(), "Result", "data", "output", "float"),
     ],
-    "Uniform / Gaussian",
+    "Uniform or Gaussian",
 ))
 
 # ── 旧版 Random 节点 (保留兼容，不再出现在菜单) ──
@@ -196,7 +214,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_out", "exec", "output"),
         PinDef(_gen_id(), "Elapsed", "data", "output", "float"),
     ],
-    "Engine elapsed (s)",
+    "Time since start",
 ))
 
 _reg(NodeTypeDef(
@@ -206,7 +224,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_out", "exec", "output"),
         PinDef(_gen_id(), "Delta", "data", "output", "float"),
     ],
-    "Frame delta (s)",
+    "Frame time",
 ))
 
 _reg(NodeTypeDef(
@@ -228,7 +246,7 @@ _reg(NodeTypeDef(
     ] + [
         PinDef(_gen_id(), f"out_{i}", "exec", "output") for i in range(8)
     ],
-    "Fire at engine time T",
+    "When time reaches T",
 ))
 
 
@@ -244,7 +262,20 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_out", "exec", "output"),
         PinDef(_gen_id(), "EntityID", "data", "output", "int"),
     ],
-    "Spawn new entity",
+    "Create empty entity",
+))
+
+# ── v2: 类型安全 EntityRef ───────────────────────────────────
+
+_reg(NodeTypeDef(
+    "EntitySpawn", "Spawn Entity", "Entity", ENTITY_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Name", "data", "input", "string"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+        PinDef(_gen_id(), "Entity", "data", "output", "entity_ref"),
+    ],
+    "Cube / Camera / Empty",
 ))
 
 _reg(NodeTypeDef(
@@ -258,32 +289,6 @@ _reg(NodeTypeDef(
 ))
 
 _reg(NodeTypeDef(
-    "EntitySetTransform", "Set Transform", "Entity", ENTITY_COLOR,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "EntityID", "data", "input", "int"),
-        PinDef(_gen_id(), "Position", "data", "input", "vec3"),
-        PinDef(_gen_id(), "Rotation", "data", "input", "vec3"),
-        PinDef(_gen_id(), "Scale", "data", "input", "vec3"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-    ],
-    "pos / rot / scale",
-))
-
-_reg(NodeTypeDef(
-    "EntityGetTransform", "Get Transform", "Entity", ENTITY_COLOR,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "EntityID", "data", "input", "int"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-        PinDef(_gen_id(), "Position", "data", "output", "vec3"),
-        PinDef(_gen_id(), "Rotation", "data", "output", "vec3"),
-        PinDef(_gen_id(), "Scale", "data", "output", "vec3"),
-    ],
-    "Read pos / rot / scale",
-))
-
-_reg(NodeTypeDef(
     "EntityAddMesh", "Add Mesh Component", "Entity", ENTITY_COLOR,
     [
         PinDef(_gen_id(), "exec_in", "exec", "input"),
@@ -292,7 +297,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "MaterialID", "data", "input", "int"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Attach MeshRenderer",
+    "Add visible mesh",
 ))
 
 _reg(NodeTypeDef(
@@ -302,18 +307,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "EntityID", "data", "input", "int"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Attach Camera",
-))
-
-_reg(NodeTypeDef(
-    "EntityFindByName", "Find Entity By Name", "Entity", ENTITY_COLOR,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "Name", "data", "input", "string"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-        PinDef(_gen_id(), "EntityID", "data", "output", "int"),
-    ],
-    "Search scene",
+    "Add camera",
 ))
 
 _reg(NodeTypeDef(
@@ -324,7 +318,44 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "Visible", "data", "input", "bool"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Show / Hide",
+    "Show or hide entity",
+))
+
+
+# ═══════════════════════════════════════════════════════════════
+# 向量节点 (Vector) — 纯数据，无 exec 引脚
+# ═══════════════════════════════════════════════════════════════
+
+_reg(NodeTypeDef(
+    "MakeVec3", "Make Vec3", "Math", MATH_COLOR,
+    [
+        PinDef(_gen_id(), "X", "data", "input", "float"),
+        PinDef(_gen_id(), "Y", "data", "input", "float"),
+        PinDef(_gen_id(), "Z", "data", "input", "float"),
+        PinDef(_gen_id(), "Vec3", "data", "output", "vec3"),
+    ],
+    "X, Y, Z to Vec3",
+))
+
+_reg(NodeTypeDef(
+    "BreakVec3", "Break Vec3", "Math", MATH_COLOR,
+    [
+        PinDef(_gen_id(), "Vec3", "data", "input", "vec3"),
+        PinDef(_gen_id(), "X", "data", "output", "float"),
+        PinDef(_gen_id(), "Y", "data", "output", "float"),
+        PinDef(_gen_id(), "Z", "data", "output", "float"),
+    ],
+    "Vec3 to X, Y, Z",
+))
+
+_reg(NodeTypeDef(
+    "VecMath", "Vec Math", "Math", MATH_COLOR,
+    [
+        PinDef(_gen_id(), "A", "data", "input", "vec3"),
+        PinDef(_gen_id(), "B", "data", "input", "vec3"),
+        PinDef(_gen_id(), "Result", "data", "output", "variant"),
+    ],
+    "Vector operations",
 ))
 
 
@@ -340,7 +371,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "Value", "data", "input", "variant"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Store value by name",
+    "Write variable",
 ))
 
 _reg(NodeTypeDef(
@@ -351,7 +382,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_out", "exec", "output"),
         PinDef(_gen_id(), "Value", "data", "output", "variant"),
     ],
-    "Read value by name",
+    "Read variable",
 ))
 
 _reg(NodeTypeDef(
@@ -359,7 +390,7 @@ _reg(NodeTypeDef(
     [
         PinDef(_gen_id(), "Result", "data", "output", "float"),
     ],
-    "Fixed float value",
+    "A number value",
 ))
 
 
@@ -374,7 +405,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "Value", "data", "input", "variant"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Print to console",
+    "Print value",
 ))
 
 _reg(NodeTypeDef(
@@ -383,5 +414,5 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_in", "exec", "input"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Print custom message",
+    "Print message",
 ))

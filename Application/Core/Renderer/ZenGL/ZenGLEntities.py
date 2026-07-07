@@ -1,11 +1,11 @@
-"""ZenGLEntityRenderer — ZenGL 实体渲染器"""
+"""ZenGLEntities — ZenGL 实体渲染器"""
 from __future__ import annotations
 import numpy as np
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Resource.ResourceManager import ResourceManager
 
 
-class ZenGLEntityRenderer:
+class ZenGLEntities:
     @classmethod
     def _RenderEntities(cls, view: np.ndarray, proj: np.ndarray) -> None:
         for eid in SceneManager.GetRenderableEntities():
@@ -16,7 +16,8 @@ class ZenGLEntityRenderer:
                 e.pipeline.uniforms['model'][:] = model.astype('f4').tobytes()
                 e.pipeline.uniforms['view'][:] = view.astype('f4').tobytes()
                 e.pipeline.uniforms['projection'][:] = proj.astype('f4').tobytes()
-            except: pass
+            except Exception:
+                pass
             # ── 材质 uniform — 每帧从 Material 读取最新值上传 ──
             try:
                 material = ResourceManager.GetMaterial(e.material_id)

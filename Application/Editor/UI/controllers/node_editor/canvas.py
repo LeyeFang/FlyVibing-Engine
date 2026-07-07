@@ -10,6 +10,7 @@ from typing import Optional
 
 from .data_model import NodeInstance, LinkInstance, _gen_id
 from .node_types import _TYPES
+from . import data_model  # 用于访问 _next_id
 
 
 class NodeCanvas:
@@ -124,3 +125,83 @@ class NodeCanvas:
                 self._nodes[nid] = NodeInstance(
                     nid, tn, (80, 80 + i * 200), pin_ids=pin_ids,
                 )
+
+    # ── 序列化 ───────────────────────────────────────────
+
+    def to_dict(self) -> dict:
+        """序列化画布状态为纯 dict（可 JSON 导出）。
+
+        Returns:
+            {
+                "version": "0.1.0",
+                "nodes": {str(nid): {...}, ...},
+                "links": {str(lid): {...}, ...},
+                "next_id": int,
+            }
+        """
+        import dataclasses
+
+        # 收集所有已分配的 ID，确定 next_id 下界
+        max_id = 1
+        nodes_dict: dict[str, dict] = {}
+        for nid, inst in self._nodes.items():
+            nd = dataclasses.asdict(inst)
+            nodes_dict[str(nid)] = nd
+            max_id = max(max_id, nid)
+            for pid in inst.pin_ids.values():
+                max_id = max(max_id, pid)
+
+        links_dict: dict[str, dict] = {}
+        for lid, lk in self._links.items():
+            links_dict[str(lid)] = dataclasses.asdict(lk)
+            max_id = max(max_id, lid, lk.from_pin, lk.to_pin)
+
+        return {
+            "version": "0.1.0",
+            "nodes": nodes_dict,
+            "links": links_dict,
+            "next_id": max_id + 1,
+        }
+
+    @staticmethod
+    def from_dict(data: dict) -> 'NodeCanvas':
+        """从 dict 恢复画布状态。
+
+        Args:
+            data: to_dict() 的输出
+
+        Returns:
+            新的 NodeCanvas 实例
+        """
+        global _next_id
+        canvas = NodeCanvas()
+
+        # ── 恢复节点 ──
+        for nid_str, nd in data.get("nodes", {}).items():
+            nid = int(nid_str)
+            canvas._nodes[nid] = NodeInstance(
+                id=nid,
+                node_type=nd["node_type"],
+                pos=tuple(nd.get("pos", (0.0, 0.0))),
+                props=nd.get("props", {}),
+                pin_ids={k: int(v) for k, v in nd.get("pin_ids", {}).items()},
+            )
+
+        # ── 恢复连线 ──
+        for lid_str, ld in data.get("links", {}).items():
+            lid = int(lid_str)
+            canvas._links[lid] = LinkInstance(
+                id=lid,
+                from_pin=int(ld["from_pin"]),
+                to_pin=int(ld["to_pin"]),
+            )
+
+        # ── 恢复 ID 生成器 ──
+        data_model._next_id = max(data_model._next_id, data.get("next_id", 1))
+
+        return canvas
+
+    def clear(self) -> None:
+        """清空画布（保留 _next_id 不重置）。"""
+        self._nodes.clear()
+        self._links.clear()

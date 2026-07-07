@@ -131,3 +131,50 @@ def _eval_random(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None
     _write_data_output(node_id, "Result", result, ctx, g)
 
 register_evaluator("Random", _eval_random)
+
+
+# ═══════════════════════════════════════════════════════════════
+# ScalarMath — 统一下拉 + 自增输入 (Sum / Sub / Mul / Div)
+# ═══════════════════════════════════════════════════════════════
+
+def _eval_scalar_math(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
+    inst = g._canvas.nodes[node_id]
+    op = inst.props.get("operation", "sum")
+    nd = g._types[inst.node_type]
+
+    # 收集所有已连接的输入值（跳过未连接的 pin）
+    values = []
+    for i in range(8):
+        pin_name = f"In_{i}"
+        for p in nd.pins:
+            if p.name == pin_name:
+                pid = inst.pin_ids.get(p.name)
+                if pid is not None:
+                    val = g._read_input(pid, ctx)
+                    if val is not None:
+                        values.append(float(val))
+
+    if not values:
+        _write_data_output(node_id, "Result", 0.0, ctx, g)
+        return
+
+    if op == "sum":
+        result = sum(values)
+    elif op == "subtract":
+        result = values[0]
+        for v in values[1:]:
+            result -= v
+    elif op == "multiply":
+        result = values[0]
+        for v in values[1:]:
+            result *= v
+    elif op == "divide":
+        result = values[0]
+        for v in values[1:]:
+            result = result / v if v != 0.0 else 0.0
+    else:
+        result = 0.0
+
+    _write_data_output(node_id, "Result", result, ctx, g)
+
+register_evaluator("ScalarMath", _eval_scalar_math)

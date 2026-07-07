@@ -1,5 +1,5 @@
 """
-OpenGLEntityRenderer — PyOpenGL 实体渲染器 (Mixin, 通过 MRO 访问资源注册表)。
+OpenGLEntities — PyOpenGL 实体渲染器 (Mixin, 通过 MRO 访问资源注册表)。
 
 职责:
   - 遍历可渲染实体并提交 GL 绘制命令
@@ -9,7 +9,7 @@ OpenGLEntityRenderer — PyOpenGL 实体渲染器 (Mixin, 通过 MRO 访问资�
 设计:
   - Mixin 模式: 通过 cls.registered_entities/shaders/meshes/textures 访问资源
   - 须置于 OpenGLResourceManager 之后的 MRO 位置
-  - cls._scene_fbo_override / cls._outline_selected_ids 由 openGLRenderer 提供
+  - cls._scene_fbo_override / cls._outline_selected_ids 由 OpenGLRenderer 提供
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Scene.SceneManager import SceneManager
 
 
-class OpenGLEntityRenderer:
+class OpenGLEntities:
     """PyOpenGL 实体渲染器 — 核心实体绘制管线。"""
 
     @classmethod

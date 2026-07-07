@@ -1,4 +1,4 @@
-"""ZenGLRenderer — ZenGL 渲染器 MRO 编排层。对应主线 openGLRenderer。"""
+"""ZenGLRenderer — ZenGL 渲染器 MRO 编排层。对应主线 OpenGLRenderer。"""
 from __future__ import annotations
 from typing import Callable
 import numpy as np
@@ -6,14 +6,14 @@ import numpy as np
 from Application.Core.Renderer.Renderer import Renderer, RenderResourceManger
 from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
 from Application.Core.Renderer.ZenGL.ZenGLResourceManager import ZenGLResourceManager
-from Application.Core.Renderer.ZenGL.ZenGLEntityRenderer import ZenGLEntityRenderer
-from Application.Core.Renderer.ZenGL.ZenGLOverlayRenderer import ZenGLOverlayRenderer
+from Application.Core.Renderer.ZenGL.ZenGLEntities import ZenGLEntities
+from Application.Core.Renderer.ZenGL.ZenGLOverlays import ZenGLOverlays
 from Application.Core.Renderer.ZenGL.ZenGLPostProcess import ZenGLPostProcess
 
 
 class ZenGLRenderer(
     ZenGLCore, ZenGLResourceManager,
-    ZenGLEntityRenderer, ZenGLOverlayRenderer,
+    ZenGLEntities, ZenGLOverlays,
     ZenGLPostProcess,
     Renderer, RenderResourceManger,
 ):

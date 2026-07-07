@@ -1,5 +1,5 @@
 """
-openGLRenderer — PyOpenGL 渲染器 (MRO 编排层)。
+OpenGLRenderer — PyOpenGL 渲染器 (MRO 编排层)。
 
 特性:
   - 使用 PyOpenGL (opengl) 直接管理 GL 对象
@@ -8,12 +8,12 @@ openGLRenderer — PyOpenGL 渲染器 (MRO 编排层)。
   - pre-overlay hook 系统 (实体渲染前介入点, 支持 FBO 重定向 + stencil 注入)
 
 架构 (Mixin 继承链, 按 MRO 顺序):
-  openGLRenderer 继承:
+  OpenGLRenderer 继承:
     - OpenGLCore              : GL 状态 / 视口 / 清屏
     - OpenGLResourceManager   : 资源注册表
     - OpenGLPickSystem        : Pick FBO + Pass + Cache + API
-    - OpenGLEntityRenderer    : 实体渲染 (_RenderEntities)
-    - OpenGLOverlayRenderer   : overlay drawable 渲染 (_render_overlay_drawables)
+    - OpenGLEntities          : 实体渲染 (_RenderEntities)
+    - OpenGLOverlays          : overlay drawable 渲染 (_render_overlay_drawables)
     - OpenGLPostProcess       : 后处理管线 (MRT + 边缘检测 + 合成)
     - Renderer                : 生命周期接口 + overlay 回调
     - RenderResourceManger    : 资源管理抽象接口
@@ -34,17 +34,17 @@ from Application.Core.Renderer.CommandQueue import CommandQueue
 from Application.Core.Renderer.OpenGL.OpenGLCore import OpenGLCore
 from Application.Core.Renderer.OpenGL.OpenGLResourceManager import OpenGLResourceManager
 from Application.Core.Renderer.OpenGL.OpenGLPickSystem import OpenGLPickSystem
-from Application.Core.Renderer.OpenGL.OpenGLOverlayRenderer import OpenGLOverlayRenderer
-from Application.Core.Renderer.OpenGL.OpenGLEntityRenderer import OpenGLEntityRenderer
+from Application.Core.Renderer.OpenGL.OpenGLOverlays import OpenGLOverlays
+from Application.Core.Renderer.OpenGL.OpenGLEntities import OpenGLEntities
 from Application.Core.Renderer.OpenGL.OpenGLPostProcess import OpenGLPostProcess
 
 
-class openGLRenderer(
+class OpenGLRenderer(
     OpenGLCore,
     OpenGLResourceManager,
     OpenGLPickSystem,
-    OpenGLEntityRenderer,
-    OpenGLOverlayRenderer,
+    OpenGLEntities,
+    OpenGLOverlays,
     OpenGLPostProcess,
     Renderer,
     RenderResourceManger
@@ -52,7 +52,7 @@ class openGLRenderer(
     """PyOpenGL 渲染器 — MRO 编排层。
 
     MRO (C3 linearization):
-      openGLRenderer → OpenGLOverlayRenderer → OpenGLEntityRenderer
+      OpenGLRenderer → OpenGLOverlays → OpenGLEntities
         → OpenGLPickSystem → OpenGLResourceManager → OpenGLCore
         → Renderer → RenderResourceManger
 
@@ -110,7 +110,7 @@ class openGLRenderer(
     def Create(
         cls,
         window: 'Window' = None,
-    ) -> "openGLRenderer":
+    ) -> "OpenGLRenderer":
         """初始化 OpenGL 渲染器。
 
         Args:

@@ -151,6 +151,7 @@ class TransformGizmo:
     _target_pos: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
     _active_drag_key: str | None = None  # 当前被拖拽的 overlay key
     _visible: bool = False               # 无选中实体时隐藏
+    _VERBOSE: bool = False               # 拖拽细节日志（调试时改为 True）
 
     # ════════════════════════════════════════════════════════════
     # 手柄亮度 (供 renderer via callable uniform 每帧读取)
@@ -598,14 +599,17 @@ class TransformGizmo:
         """射线与平面求交。"""
         denom = np.dot(ray_dir, plane_normal)
         if abs(denom) < 1e-8:
-            print(f"  [DBG-GIZMO] ray_plane_intersection FAIL: denom={denom:.6f} (ray_dir∥plane_normal)")
+            if TransformGizmo._VERBOSE:
+                print(f"  [DBG-GIZMO] ray_plane_intersection FAIL: denom={denom:.6f}")
             return None
         t = np.dot(plane_point - ray_origin, plane_normal) / denom
         if t < 0:
-            print(f"  [DBG-GIZMO] ray_plane_intersection FAIL: t={t:.3f}<0 (behind ray)")
+            if TransformGizmo._VERBOSE:
+                print(f"  [DBG-GIZMO] ray_plane_intersection FAIL: t={t:.3f}<0")
             return None
         hit = ray_origin + ray_dir * t
-        print(f"  [DBG-GIZMO] ray_plane_intersection OK: denom={denom:.4f} t={t:.3f} hit=({hit[0]:.2f},{hit[1]:.2f},{hit[2]:.2f})")
+        if TransformGizmo._VERBOSE:
+            print(f"  [DBG-GIZMO] ray_plane_intersection OK: denom={denom:.4f} t={t:.3f} hit=({hit[0]:.2f},{hit[1]:.2f},{hit[2]:.2f})")
         return hit
 
     @staticmethod
@@ -637,10 +641,11 @@ class TransformGizmo:
         entity_pos = np.asarray(entity_pos, dtype=np.float32)
         cam_arr = np.asarray(cam_pos, dtype=np.float32)
 
-        print(f"  [DBG-GIZMO] begin_axis_drag: entity=({entity_pos[0]:.2f},{entity_pos[1]:.2f},{entity_pos[2]:.2f})")
-        print(f"    axis_dir=({axis_dir[0]:.3f},{axis_dir[1]:.3f},{axis_dir[2]:.3f})")
-        print(f"    cam_pos=({cam_arr[0]:.2f},{cam_arr[1]:.2f},{cam_arr[2]:.2f})")
-        print(f"    ray_o=({ray_o[0]:.2f},{ray_o[1]:.2f},{ray_o[2]:.2f}) ray_d=({ray_d[0]:.3f},{ray_d[1]:.3f},{ray_d[2]:.3f})")
+        if cls._VERBOSE:
+            print(f"  [DBG-GIZMO] begin_axis_drag: entity=({entity_pos[0]:.2f},{entity_pos[1]:.2f},{entity_pos[2]:.2f})")
+            print(f"    axis_dir=({axis_dir[0]:.3f},{axis_dir[1]:.3f},{axis_dir[2]:.3f})")
+            print(f"    cam_pos=({cam_arr[0]:.2f},{cam_arr[1]:.2f},{cam_arr[2]:.2f})")
+            print(f"    ray_o=({ray_o[0]:.2f},{ray_o[1]:.2f},{ray_o[2]:.2f}) ray_d=({ray_d[0]:.3f},{ray_d[1]:.3f},{ray_d[2]:.3f})")
 
         # 构建拖拽平面: 法线 = axis × camera_right (面朝摄像机, 射线不会退化)
         view_dir = entity_pos - cam_arr
@@ -657,8 +662,9 @@ class TransformGizmo:
             plane_normal = np.cross(axis_dir, world_up)
         plane_normal = plane_normal / max(np.linalg.norm(plane_normal), 1e-8)
 
-        print(f"    view_dir=({view_dir[0]:.3f},{view_dir[1]:.3f},{view_dir[2]:.3f})")
-        print(f"    plane_normal=({plane_normal[0]:.3f},{plane_normal[1]:.3f},{plane_normal[2]:.3f})")
+        if cls._VERBOSE:
+            print(f"    view_dir=({view_dir[0]:.3f},{view_dir[1]:.3f},{view_dir[2]:.3f})")
+            print(f"    plane_normal=({plane_normal[0]:.3f},{plane_normal[1]:.3f},{plane_normal[2]:.3f})")
 
         hit = cls.ray_plane_intersection(ray_o, ray_d, entity_pos, plane_normal)
         mouse_start = (
@@ -743,7 +749,8 @@ class TransformGizmo:
         hit = cls.ray_plane_intersection(
             ray_o, ray_d, ds['plane_point'], ds['plane_normal'])
         if hit is None:
-            print(f"  [DBG-GIZMO] update_drag: no hit (mode={ds['mode']})")
+            if cls._VERBOSE:
+                print(f"  [DBG-GIZMO] update_drag: no hit (mode={ds['mode']})")
             return None
 
         if ds['mode'] == 'axis':
@@ -753,7 +760,8 @@ class TransformGizmo:
             delta = hit - ds['mouse_start']
 
         new_pos = ds['start_pos'] + delta
-        print(f"  [DBG-GIZMO] update_drag: mode={ds['mode']} delta=({delta[0]:.3f},{delta[1]:.3f},{delta[2]:.3f}) new=({new_pos[0]:.2f},{new_pos[1]:.2f},{new_pos[2]:.2f})")
+        if cls._VERBOSE:
+            print(f"  [DBG-GIZMO] update_drag: mode={ds['mode']} delta=({delta[0]:.3f},{delta[1]:.3f},{delta[2]:.3f}) new=({new_pos[0]:.2f},{new_pos[1]:.2f},{new_pos[2]:.2f})")
         return new_pos
 
     @classmethod

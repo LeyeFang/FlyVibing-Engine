@@ -25,6 +25,13 @@ class SceneBrowserController:
 
     selected_entity_id: Optional[int] = None
 
+    # ── Spawn 模板 ─────────────────────────────────────────
+    ENTITY_TEMPLATES: dict[str, list[str]] = {
+        "Empty":  ["Transform"],
+        "Cube":   ["Transform", "MeshRenderer"],
+        "Camera": ["Transform", "Camera"],
+    }
+
     # ── 实体列表 ────────────────────────────────────────────
 
     @classmethod

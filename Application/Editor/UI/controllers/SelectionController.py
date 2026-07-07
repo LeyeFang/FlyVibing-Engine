@@ -18,8 +18,8 @@ from __future__ import annotations
 from typing import Optional
 
 from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
-from Application.Editor.Rendering.OutlinerID import OutlinerID
-from Application.Editor.Rendering.TransformGizmo import TransformGizmo
+from Application.Editor.Gizmos.OutlinerID import OutlinerID
+from Application.Editor.Gizmos.TransformGizmo import TransformGizmo
 from Application.Core.Scene.SceneManager import SceneManager
 
 

@@ -15,7 +15,8 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional
+import os
+from typing import Callable, Optional, Union
 
 from imgui_bundle import portable_file_dialogs as pfd
 
@@ -44,12 +45,19 @@ SHADER_FILTERS: list[str] = [
     "*",
 ]
 
+JSON_FILTERS: list[str] = [
+    "JSON Files",
+    "*.json",
+    "All Files",
+    "*",
+]
+
 
 class FileDialog:
     """原生 OS 文件对话框 — 非阻塞，轮询 ready() 获取结果。"""
 
-    # 内部状态
-    _active_dialog: Optional[pfd.open_file] = None
+    # 内部状态（open_file 或 save_file，接口兼容）
+    _active_dialog: Optional[Union[pfd.open_file, pfd.save_file]] = None
     _callback: Optional[Callable[[str], None]] = None
 
     # ============================================================
@@ -101,6 +109,37 @@ class FileDialog:
         )
         cls._callback = callback
 
+    @classmethod
+    def open_json(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str = ".",
+    ) -> None:
+        """打开"导入 JSON"对话框 — 非阻塞，结果通过 callback(path) 返回。"""
+        cls._active_dialog = pfd.open_file(
+            "Import JSON",
+            start_dir,
+            JSON_FILTERS,
+            pfd.opt.none,
+        )
+        cls._callback = callback
+
+    @classmethod
+    def save_json(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str = ".",
+        default_name: str = "graph.json",
+    ) -> None:
+        """打开"导出 JSON"保存对话框 — 非阻塞，结果通过 callback(path) 返回。"""
+        cls._active_dialog = pfd.save_file(
+            "Export JSON",
+            os.path.join(start_dir, default_name),
+            JSON_FILTERS,
+            pfd.opt.none,
+        )
+        cls._callback = callback
+
     # ============================================================
     # 每帧轮询 (在 UIManager.draw_all 末尾调用)
     # ============================================================
@@ -116,10 +155,15 @@ class FileDialog:
             return
 
         if cls._active_dialog.ready():
-            results: list[str] = cls._active_dialog.result()
-            if results and len(results) > 0:
-                path = results[0]
-                if cls._callback:
-                    cls._callback(path)
+            raw = cls._active_dialog.result()
+            # save_file 返回 str，open_file 返回 list[str]，统一处理
+            if isinstance(raw, str):
+                path = raw
+            elif isinstance(raw, list) and len(raw) > 0:
+                path = raw[0]
+            else:
+                path = ""
+            if path and cls._callback:
+                cls._callback(path)
             cls._active_dialog = None
             cls._callback = None

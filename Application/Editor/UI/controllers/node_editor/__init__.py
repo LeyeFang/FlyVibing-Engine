@@ -27,6 +27,7 @@ from .evaluators import (  # noqa: F401
     debug,
     math,
     entity,
+    vector,
     variable,
     flow,
     action,

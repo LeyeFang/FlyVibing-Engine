@@ -28,6 +28,8 @@ from Application.Editor.Gizmos.OutlinerID import OutlinerID
 from Application.Editor.Gizmos.TransformGizmo import TransformGizmo
 from Application.Editor.Gizmos.ViewGizmo import ViewGizmo
 from Application.Editor.Gizmos.CameraFrustum import CameraFrustum
+from Application.Editor.Gizmos.Camera2DBoundary import Camera2DBoundary
+from Application.Editor.Gizmos.CameraIconGizmo import CameraIconGizmo
 from Application.Editor.UI.UIManager import UIManager
 
 # ★ 先导入 Controller（触发 auto-register 到 ControllerRegistry），再导入 Panel
@@ -36,7 +38,7 @@ from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowse
 from Application.Editor.UI.controllers.ResourceBrowserController import ResourceBrowserController  # noqa: F401
 from Application.Editor.UI.controllers.ViewportController import ViewportController  # noqa: F401
 from Application.Editor.UI.controllers.SelectionController import SelectionController  # noqa: F401
-from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel
+from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel, ResourcePanel
 
 
 import numpy as np
@@ -115,6 +117,7 @@ class EditorLayer(Layer):
         # ── SceneCameraUpdateEvent: 始终处理 (ViewportController / DebugLayer 触发) ──
         if isinstance(event, SceneCameraUpdateEvent):
             cls._sync_camera_to_renderer()
+            cls._camera_gizmo_state_hash = -1  # 模式切换 → 强制刷新 gizmo
             return
         # ── 窗口 resize 始终处理，不受面板鼠标拦截影响 ──
         if isinstance(event, WindowResizeEvent):
@@ -123,6 +126,12 @@ class EditorLayer(Layer):
             io.display_size = (float(w), float(h))
             # 投影矩阵依赖 aspect_ratio，resize 后需重新推送
             cls._sync_camera_to_renderer()
+            return
+        # ── 键盘事件: 始终处理 (SPACE 预览等)，不受面板鼠标拦截影响 ──
+        if isinstance(event, KeyboardButtonEvent):
+            if (event.key == KeyButtonCode.Space
+                    and event.action == KeyActionCode.Press):
+                cls._toggle_preview_camera()
             return
         if cls._mouse_in_any_panel():
             return
@@ -157,22 +166,43 @@ class EditorLayer(Layer):
 
     _camera_gizmo_keys: set[str] = set()
     """当前已注册的 camera gizmo overlay key 集合。"""
-    _camera_gizmo_entity_ids: frozenset[int] = frozenset()
-    """上次刷新时的 Camera entity ID 集合，用于检测是否需要重建。"""
+    _camera_gizmo_state_hash: int = -1
+    """上次刷新时的状态哈希 (entity_id + world_pos + rotation + type + selected)，
+    用于检测 transform 变化而不仅仅是 entity 增删。"""
+    _preview_entity_id: int | None = None
+    """SPACE 预览模式: 非 None 时使用该 entity 的摄像机, None 时用 EditorCamera。"""
+
+    @classmethod
+    def _toggle_preview_camera(cls) -> None:
+        """SPACE: 切换编辑器摄像机 / entity 摄像机预览。"""
+        from Application.Editor.UI.controllers.ViewportController import ViewportController
+        from Application.Core.Scene.SceneManager import SceneManager
+        if cls._preview_entity_id is not None:
+            cls._preview_entity_id = None
+            print("[EditorLayer] Preview: OFF (editor camera)")
+        else:
+            is_2d = ViewportController.is_2d()
+            cls._preview_entity_id = (
+                SceneManager.main_camera_2d_id if is_2d else SceneManager.main_camera_id
+            )
+            print(f"[EditorLayer] Preview: ON (entity {cls._preview_entity_id})")
+        cls._camera_gizmo_state_hash = -1  # 强制刷新 gizmo (隐藏预览自身)
+        cls._sync_camera_to_renderer()
 
     @classmethod
     def _refresh_camera_gizmos(cls) -> None:
         """遍历 ECS 中所有 Camera entity，注册/更新对应的 gizmo overlay。
 
-        仅在 Camera entity 集合发生变化时才重建 GPU 资源。
+        仅在 entity 增删、position/rotation 变化或选中状态变化时重建 GPU 资源。
         """
         if cls.renderer is None:
             return
 
-        # ── 查询当前 Camera entity ID 集合 ──
         from Application.Core.Scene.GizmoQuery import GizmoQuery
+        from Application.Core.Math.Transform import calculate_entity_model
         from Application.Editor.UI.controllers.SelectionController import SelectionController
-        from Application.Core.Renderer.RenderCommand import OverlayRegistrationCommand
+        from Application.Core.Renderer.RenderCommand import (
+            OverlayRegistrationCommand, OverlayUnregistrationCommand)
 
         try:
             selected_id = SelectionController.get_selected()
@@ -185,17 +215,55 @@ class EditorLayer(Layer):
         except Exception:
             return
 
-        # ── 快速比较: 如果 entity ID 集合未变，跳过重建 ──
-        current_ids = frozenset(cd.entity_id for cd in cam_list)
-        if current_ids == cls._camera_gizmo_entity_ids:
+        # ── 状态哈希: entity_id + world_pos + rotation + type + selected ──
+        state_parts: list[tuple] = []
+        for cd in cam_list:
+            model = calculate_entity_model(
+                position=cd.position, rotation=cd.rotation, scale=cd.scale)
+            world_pos = (round(float(model[3, 0]), 4),
+                         round(float(model[3, 1]), 4),
+                         round(float(model[3, 2]), 4))
+            rot = tuple(round(r, 4) for r in cd.rotation)
+            state_parts.append((cd.entity_id, world_pos, rot,
+                                cd.is_perspective, cd.is_selected))
+        new_hash = hash(frozenset(state_parts))
+
+        if new_hash == cls._camera_gizmo_state_hash:
             return
-        cls._camera_gizmo_entity_ids = current_ids
+        cls._camera_gizmo_state_hash = new_hash
 
         # ── 有变化 → 注销旧 + 注册新 ──
+        from Application.Editor.UI.controllers.ViewportController import ViewportController
+        is_2d = ViewportController.is_2d()
+        preview_eid = cls._preview_entity_id
         cls._unregister_all_camera_gizmos()
         for cam_data in cam_list:
+            # 预览模式: 隐藏预览自身的 gizmo
+            if preview_eid is not None and cam_data.entity_id == preview_eid:
+                continue
+            # 模式过滤: 2D 模式只显示正交摄像机, 3D 模式只显示透视摄像机
+            if is_2d and cam_data.is_perspective:
+                continue
+            if not is_2d and not cam_data.is_perspective:
+                continue
+
             if cam_data.is_perspective:
+                # 3D: 椎体线框 + 原点图标
                 overlay = CameraFrustum.build_overlay(cam_data)
+                cls.renderer.enqueue(OverlayRegistrationCommand(overlay))
+                cls._camera_gizmo_keys.add(overlay.key)
+
+                model = calculate_entity_model(
+                    position=cam_data.position, rotation=cam_data.rotation,
+                    scale=cam_data.scale)
+                world_pos = (float(model[3, 0]), float(model[3, 1]), float(model[3, 2]))
+                icon = CameraIconGizmo.build_icon_overlay(
+                    cam_data.entity_id, world_pos)
+                cls.renderer.enqueue(OverlayRegistrationCommand(icon))
+                cls._camera_gizmo_keys.add(icon.key)
+            else:
+                # 2D: 正交边界框
+                overlay = Camera2DBoundary.build_overlay(cam_data)
                 cls.renderer.enqueue(OverlayRegistrationCommand(overlay))
                 cls._camera_gizmo_keys.add(overlay.key)
 
@@ -226,14 +294,20 @@ class EditorLayer(Layer):
         if selected is None:
             return
 
-        # 获取实体世界位置 (GL 坐标)
+        # 获取实体 WORLD 位置 (GL 坐标, 非 pre-rotation)
         from Application.Core.Scene.SceneManager import SceneManager
+        from Application.Core.Math.Transform import calculate_entity_model
         try:
             t = SceneManager.GetEntityTransform(selected)
+            model = calculate_entity_model(
+                position=(t.position_x, t.position_y, t.position_z),
+                rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
+                scale=(t.scale_x, t.scale_y, t.scale_z),
+            )
+            entity_pos = np.array(
+                [float(model[3, 0]), float(model[3, 1]), float(model[3, 2])], dtype=np.float32)
         except Exception:
             return
-        entity_pos = np.array(
-            [t.position_x, t.position_y, t.position_z], dtype=np.float32)
 
         # 计算射线
         vp_w = cls.renderer.viewport_width
@@ -270,13 +344,18 @@ class EditorLayer(Layer):
         if new_pos is None:
             return
 
-        # ── 写入实体 Transform (GL 坐标) ──
+        # ── 写入实体 Transform: world pos → pre-rotation pos ──
         selected = SelectionController.get_selected()
         if selected is not None:
             from Application.Core.Scene.SceneManager import SceneManager
+            from Application.Core.Math.Transform import _build_R_T
+            t = SceneManager.GetEntityTransform(selected)
+            R_T = _build_R_T(t.rotation_x, t.rotation_y, t.rotation_z)
+            wp = np.array([float(new_pos[0]), float(new_pos[1]), float(new_pos[2])])
+            pre_pos = wp @ R_T
             SceneManager.SetEntityTransform(
                 selected,
-                position_xyz=(float(new_pos[0]), float(new_pos[1]), float(new_pos[2])))
+                position_xyz=(float(pre_pos[0]), float(pre_pos[1]), float(pre_pos[2])))
             TransformGizmo.set_target_position(new_pos)
 
     @classmethod
@@ -285,6 +364,8 @@ class EditorLayer(Layer):
         # ── gizmo 拖拽结束 ──
         if TransformGizmo.is_dragging():
             TransformGizmo.end_drag()
+            cls._camera_gizmo_state_hash = -1  # 强制下次刷新
+            cls._refresh_camera_gizmos()
             return
 
         # ── 现有 pick 逻辑 ──
@@ -386,13 +467,15 @@ class EditorLayer(Layer):
     def _init_ui_panels(cls):
         """注册编辑器 UI 面板 (幂等, 仅首次调用生效)。
 
-        默认隐藏 Scene 面板和 Node Editor 面板 — 用户通过 View 菜单手动打开。
+        默认隐藏 Scene / Node Editor / Resources 面板 — 用户通过 View 菜单打开。
         """
         if not hasattr(cls, '_panels_registered'):
             scene_panel = UIManager.register(ScenePanel())
             node_panel = UIManager.register(NodeEditorPanel())
+            res_panel = UIManager.register(ResourcePanel())
             scene_panel.visible = False
             node_panel.visible = False
+            res_panel.visible = False
             cls._panels_registered = True
 
     # ════════════════════════════════════════════════════════════
@@ -411,22 +494,51 @@ class EditorLayer(Layer):
 
     @classmethod
     def _sync_camera_to_renderer(cls) -> None:
-        """计算当前 EditorCamera 的 view/proj 矩阵并推送到渲染器。
-
-        渲染器不再持有相机引用，矩阵由逻辑线程计算后通过
-        SetViewProjectionCommand 单向推送。
-
-        同时推送相机元数据 (orbit_target, distance 等),
-        供渲染器动态 uniform 解析使用 (如 Grid fade_center/fade_radius)。
-
-        调用时机:
-          - OnAttach: 初始矩阵
-          - 摄像机操作 (orbit/pan/dolly/scroll): 每次变更后
-          - WindowResizeEvent: 投影矩阵依赖 aspect_ratio
-          - SceneCameraUpdateEvent: ViewportController / DebugLayer 触发
-        """
+        """推送 view/proj 矩阵到渲染器。预览模式下使用 entity 摄像机。"""
         if cls.renderer is None:
             return
+
+        if cls._preview_entity_id is not None:
+            # ── 预览模式: 使用 entity 的摄像机 ──
+            import numpy as np
+            from Application.Core.Scene.SceneManager import SceneManager
+            from Application.Core.Math.Transform import calculate_entity_model
+            from Application.Core.Scene.BasicComponents import Camera
+            import esper
+            try:
+                t = SceneManager.GetEntityTransform(cls._preview_entity_id)
+                model = calculate_entity_model(
+                    position=(t.position_x, t.position_y, t.position_z),
+                    rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
+                    scale=(t.scale_x, t.scale_y, t.scale_z),
+                )
+                view = np.linalg.inv(model)
+                cam_comp = esper.component_for_entity(cls._preview_entity_id, Camera)
+                if cam_comp.projection_type.value == 'orthographic':
+                    aspect = cls.renderer.aspect_ratio
+                    half_h = cam_comp.ortho_size
+                    half_w = half_h * aspect
+                    from pyrr import matrix44
+                    proj = matrix44.create_orthogonal_projection(
+                        -half_w, half_w, -half_h, half_h,
+                        cam_comp.near_plane, cam_comp.far_plane,
+                    ).astype(np.float32)
+                else:
+                    from pyrr import matrix44
+                    proj = matrix44.create_perspective_projection(
+                        cam_comp.fov, cls.renderer.aspect_ratio,
+                        cam_comp.near_plane, cam_comp.far_plane,
+                    ).astype(np.float32)
+                cls.renderer.enqueue(SetViewProjectionCommand(
+                    view=view, proj=proj,
+                    orbit_target=np.array([0.0, 0.0, 0.0], dtype=np.float32),
+                    orbit_distance=float(np.linalg.norm(
+                        [t.position_x, t.position_y, t.position_z])),
+                ))
+                return
+            except Exception:
+                cls._preview_entity_id = None  # 出错则回退
+
         cam = EditorCamera.get_instance()
         cls.renderer.enqueue(SetViewProjectionCommand(
             view=cam.get_view_matrix(),

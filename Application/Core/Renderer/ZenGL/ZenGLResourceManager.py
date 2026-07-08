@@ -394,7 +394,7 @@ class ZenGLResourceManager:
                 fmt = 'rgba8unorm' if ch>=3 else 'r8unorm'
                 if ch==3: p=np.zeros((h,w,4),'uint8'); p[:,:,:3]=px; px=p
                 ot = ctx.image((w,h), fmt, px.tobytes())
-                tl = [{'name':'uLetterTex','binding':0}]
+                tl = [{'name': getattr(overlay, 'texture_uniform', 'uLetterTex') or 'uLetterTex', 'binding': 0}]
                 tr = [{'type':'sampler','binding':0,'image':ot,'min_filter':'linear','mag_filter':'linear'}]
         kw['layout'] = tl; kw['resources'] = tr
 

@@ -41,12 +41,18 @@ class SelectionController:
         """
         SceneBrowserController.select(entity_id)
         OutlinerID.set_selected_entities({entity_id})
-        # ── Gizmo 跟随实体位置 ──
+        # ── Gizmo 跟随实体 WORLD 位置 (非 pre-rotation) ──
         TransformGizmo._visible = True
         try:
+            from Application.Core.Math.Transform import calculate_entity_model
             t = SceneManager.GetEntityTransform(entity_id)
+            model = calculate_entity_model(
+                position=(t.position_x, t.position_y, t.position_z),
+                rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
+                scale=(t.scale_x, t.scale_y, t.scale_z),
+            )
             TransformGizmo.set_target_position(
-                (t.position_x, t.position_y, t.position_z))
+                (float(model[3, 0]), float(model[3, 1]), float(model[3, 2])))
         except Exception:
             pass
 

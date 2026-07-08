@@ -171,7 +171,7 @@ class MockSceneBrowserController:
         cls._selected = None
 
     @classmethod
-    def get_summary(cls, entity_id: int):
+    def get_summary(cls, entity_id: int, use_local: bool = False):
         """返回预设摘要或 None。"""
         preset = cls._summaries.get(entity_id)
         if preset:

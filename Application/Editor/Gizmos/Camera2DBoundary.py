@@ -35,8 +35,9 @@ from Application.Core.Renderer.Renderer import RenderResourceManger
 # 常量
 # ════════════════════════════════════════════════════════════════
 
-COLOR_SELECTED = np.array([0.2, 0.8, 1.0, 0.9], dtype=np.float32)   # 浅蓝
-COLOR_UNSELECTED = np.array([0.7, 0.7, 0.7, 0.5], dtype=np.float32)  # 半透明白
+# 2D 边界框颜色 (绿色调，区别于 3D frustum 白色)
+COLOR_SELECTED = np.array([0.35, 1.0, 0.55, 0.95], dtype=np.float32)    # 亮绿
+COLOR_UNSELECTED = np.array([0.4, 0.85, 0.5, 0.5], dtype=np.float32)    # 半透绿
 
 OVERLAY_KEY_PREFIX = "editor_camera_boundary_2d"
 
@@ -70,6 +71,8 @@ void main() {
 class Camera2DBoundary:
     """正交摄像机视口边界 — 纯几何计算 + overlay 数据生成。"""
 
+    VIS_DEPTH: float = 1.5   # 矩形距摄像机的固定可视化距离 (世界单位)
+
     @staticmethod
     def build_overlay(
         cam_data: CameraGizmoData,
@@ -93,43 +96,43 @@ class Camera2DBoundary:
             vs_src=_BOUNDARY_VS,
             fs_src=_BOUNDARY_FS,
             draw_mode='lines',
-            depth_test=True,
+            depth_test=False,
             blend=True,
-            line_width=1.5,
+            line_width=2.0,
             uniforms={
                 'uColor': color,
             },
             pick_type=0,
-            render_layer=0,
+            render_layer=1,   # screen-space，始终覆盖实体
         )
 
     @staticmethod
     def _build_boundary_geometry(
         cam_data: CameraGizmoData,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """构建正交视口矩形 + 方向箭头的顶点和索引。
+        """构建正交视口矩形的 4 个角点 + 8 个索引 (4 条线段)。
 
-        矩形在摄像机的 local XZ 平面 (y=0, GL XZ = Editor XY 地面) 上，
-        覆盖 ortho_size 范围。对于俯视 2D 摄像机，矩形自然落在世界地面。
+        矩形落在世界地面 (GL XZ 平面, Y=0, = 编辑器 XY 平面)。
+        T@R 约定: world_Y = local_z + position[2] (当 Rx=90° 俯视时)。
+        令 world_Y=0 → local_z = -position[2]。
 
         Returns:
-            (vertices: (N, 3) float32, indices: (M,) uint32)
+            (vertices: (4, 3) float32, indices: (8,) uint32)
         """
         half_h = cam_data.ortho_size
         half_w = half_h * cam_data.aspect_ratio
+        # 抵消预旋转位移，使 world Y = 0 (地面)
+        ground_z = -cam_data.position[2]
 
-        # ── local 空间: 矩形四角在 XZ 平面 (y=0) ──
-        # 摄像机看向 local -Z, 矩形在垂直于 forward 的 XZ 平面
-        tl = np.array([-half_w, 0.0,  half_h], dtype=np.float32)  # XZ: top-left
-        tr = np.array([ half_w, 0.0,  half_h], dtype=np.float32)  # XZ: top-right
-        br = np.array([ half_w, 0.0, -half_h], dtype=np.float32)  # XZ: bottom-right
-        bl = np.array([-half_w, 0.0, -half_h], dtype=np.float32)  # XZ: bottom-left
+        # ── local 空间: 矩形四角在 XY 平面, z = ground_z ──
+        local_corners = np.array([
+            [-half_w,  half_h, ground_z],   # TL
+            [ half_w,  half_h, ground_z],   # TR
+            [ half_w, -half_h, ground_z],   # BR
+            [-half_w, -half_h, ground_z],   # BL
+        ], dtype=np.float32)
 
-        # ── 方向箭头 (朝向 local -Z, 在矩形中心前方) ──
-        arrow_base = np.array([0.0, 0.0,  half_h * 0.85], dtype=np.float32)
-        arrow_tip  = np.array([0.0, 0.0,  half_h * 1.15], dtype=np.float32)
-
-        # ── TRS 模型矩阵 ──
+        # ── TRS 模型矩阵 (local → world) ──
         model = calculate_entity_model(
             position=cam_data.position,
             rotation=cam_data.rotation,
@@ -141,21 +144,12 @@ class Camera2DBoundary:
             wp = p4 @ model
             return wp[:3]
 
-        # ── 变换到世界空间 ──
-        corners_w = np.array([_transform(p) for p in (tl, tr, br, bl)], dtype=np.float32)
-        arrow_w = np.array([_transform(arrow_base), _transform(arrow_tip)], dtype=np.float32)
+        corners_world = np.array([_transform(c) for c in local_corners], dtype=np.float32)
 
-        # ── 顶点布局 ──
-        # 0-3: rect corners, 4-5: arrow base/tip
-        vertices = np.vstack([corners_w, arrow_w], dtype=np.float32)
+        # ── 4 条边: TL→TR, TR→BR, BR→BL, BL→TL ──
+        indices = np.array([0, 1, 1, 2, 2, 3, 3, 0], dtype=np.uint32)
 
-        # ── 索引: 4 条矩形边 + 2 条箭头线 ──
-        indices = np.array([
-            0, 1,   1, 2,   2, 3,   3, 0,    # rect
-            4, 5,                               # arrow
-        ], dtype=np.uint32)
-
-        return vertices, indices
+        return corners_world, indices
 
     @staticmethod
     def overlay_key_for(entity_id: int) -> str:

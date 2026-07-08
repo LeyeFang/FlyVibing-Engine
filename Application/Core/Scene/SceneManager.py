@@ -16,7 +16,36 @@ class SceneManager:
     scene_camera: Camera = None
     scene_camera_id: int = None
     main_camera_id: int = None
+    main_camera_2d_id: int = None
     _entity_names: dict[int, str] = {}  # entity_id → human-readable name
+    _entity_parent: dict[int, int] = {}  # child_id → parent_id (父子关系)
+
+    # ============================================================
+    # 父子关系 / Parent-Child Hierarchy
+    # ============================================================
+    @classmethod
+    def SetEntityParent(cls, child_id: int, parent_id: int) -> None:
+        """设置实体的父实体。传入 parent_id=0 或 None 可解除父子关系。"""
+        if parent_id and parent_id != 0:
+            cls._entity_parent[child_id] = parent_id
+        else:
+            cls._entity_parent.pop(child_id, None)
+
+    @classmethod
+    def GetEntityParent(cls, entity_id: int) -> int | None:
+        """获取实体的父实体 ID，无父实体返回 None。"""
+        return cls._entity_parent.get(entity_id)
+
+    @classmethod
+    def GetEntityChildren(cls, entity_id: int) -> list[int]:
+        """获取实体的所有直接子实体 ID 列表。"""
+        return [cid for cid, pid in cls._entity_parent.items() if pid == entity_id]
+
+    @classmethod
+    def GetRootEntities(cls) -> list[int]:
+        """获取所有根实体（无父实体的 entity）。"""
+        all_ids = list(cls.entities.keys())
+        return [int(eid) for eid in all_ids if int(eid) not in cls._entity_parent]
 
     # ============================================================
     # 生命周期 / Lifecycle
@@ -28,9 +57,29 @@ class SceneManager:
     ) -> None:
         cls.app = app
         cls.scene["default"] = "default"
+        # ── 3D 透视摄像机 ──
         cls.main_camera_id = esper.create_entity(Transform(), Camera(True))
         cls.scene_camera_id = cls.main_camera_id
         cls.scene_camera = esper.component_for_entity(cls.scene_camera_id, Camera)
+        cls.entities[f'{cls.main_camera_id}'] = 1
+        cls._entity_names[cls.main_camera_id] = "Camera"
+
+        # ── 2D 正交俯视摄像机 ──
+        import math
+        cls.main_camera_2d_id = esper.create_entity(
+            Transform(
+                position_x=0.0, position_y=0.0, position_z=10.0,  # T@R: world=(0,10,0)
+                rotation_x=math.pi / 2.0,                          # Rx(90°) → 俯视 GL -Y
+            ),
+            Camera(is_primary=False),
+        )
+        cam_2d = esper.component_for_entity(cls.main_camera_2d_id, Camera)
+        cam_2d.projection_type = ProjectionType.ORTHOGRAPHIC
+        cam_2d.ortho_size = 10.0
+        cam_2d.near_plane = 0.1
+        cam_2d.far_plane = 100.0
+        cls.entities[f'{cls.main_camera_2d_id}'] = 1
+        cls._entity_names[cls.main_camera_2d_id] = "Camera2D"
 
     @classmethod
     def CreateScene(
@@ -74,7 +123,8 @@ class SceneManager:
             [{ 'entity_id': int, 'name': str, 'has_mesh': bool, 'has_camera': bool }, ...]
         """
         result = []
-        for entity_id in cls.GetRenderableEntities():
+        all_ids = [int(k) for k in cls.entities.keys()]
+        for entity_id in all_ids:
             info = {
                 'entity_id': entity_id,
                 'name': cls.GetEntityName(entity_id),
@@ -442,6 +492,63 @@ class SceneManager:
             transform.rotation_x, transform.rotation_y, transform.rotation_z = rotation_xyz
             modified = True
         if scale_xyz is not None:
+            transform.scale_x, transform.scale_y, transform.scale_z = scale_xyz
+            modified = True
+
+        if modified:
+            ComponentModifiedEvent.Pack(entity_id, transform, engine=cls.app)
+
+    # --- 本地 / 世界 Transform 读写 ---
+
+    @classmethod
+    def GetEntityLocalTransformEditor(cls, entity_id: int) -> dict:
+        """获取实体的**本地** Transform（编辑器坐标系）。
+
+        对于根实体（无父实体），本地 = 世界。
+        """
+        t = esper.component_for_entity(entity_id, Transform)
+        return {
+            'position': cls.gl_to_editor_position(
+                t.local_pos_x, t.local_pos_y, t.local_pos_z),
+            'rotation': (t.local_rot_x, t.local_rot_y, t.local_rot_z),
+            'scale': (t.local_scl_x, t.local_scl_y, t.local_scl_z),
+        }
+
+    @classmethod
+    def SetEntityLocalTransformEditor(
+        cls,
+        entity_id: int,
+        position_xyz: tuple = None,
+        rotation_xyz: tuple = None,
+        scale_xyz: tuple = None,
+    ) -> None:
+        """设置实体的**本地** Transform（编辑器坐标系），自动同步世界 Transform。
+
+        对于根实体：世界 = 本地。
+        对于子实体：世界 = 父世界 * 本地（当前简化：直接复制，后续完善层级计算）。
+        """
+        if entity_id is None:
+            raise ValueError("Must specify entity ID")
+
+        transform = esper.component_for_entity(entity_id, Transform)
+        modified = False
+
+        if position_xyz is not None:
+            gl_x, gl_y, gl_z = cls.editor_to_gl_position(*position_xyz)
+            transform.local_pos_x = gl_x
+            transform.local_pos_y = gl_y
+            transform.local_pos_z = gl_z
+            # 同步世界（根实体或后续完善层级计算前，直接复制）
+            transform.position_x = gl_x
+            transform.position_y = gl_y
+            transform.position_z = gl_z
+            modified = True
+        if rotation_xyz is not None:
+            transform.local_rot_x, transform.local_rot_y, transform.local_rot_z = rotation_xyz
+            transform.rotation_x, transform.rotation_y, transform.rotation_z = rotation_xyz
+            modified = True
+        if scale_xyz is not None:
+            transform.local_scl_x, transform.local_scl_y, transform.local_scl_z = scale_xyz
             transform.scale_x, transform.scale_y, transform.scale_z = scale_xyz
             modified = True
 

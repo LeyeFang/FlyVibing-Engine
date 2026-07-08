@@ -193,6 +193,7 @@ class UIManager:
                 for target_name in [
                     "Scene",
                     "Node Editor",
+                    "Resources",
                     "Properties",
                     "Console"
                 ]:

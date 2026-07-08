@@ -481,6 +481,7 @@ class TransformGizmo:
         if cls._renderer is None:
             cls.register_to(renderer)
             cls._renderer = renderer
+        cls._visible = True
         try:
             t = SceneManager.GetEntityTransform(entity_id)
             cls.set_target_position((t.position_x, t.position_y, t.position_z))
@@ -490,6 +491,7 @@ class TransformGizmo:
     @classmethod
     def hide(cls) -> None:
         """隐藏 gizmo — 注销干净。"""
+        cls._visible = False
         if cls._renderer is not None:
             cls.unregister_from(cls._renderer)
             cls._renderer = None
@@ -649,7 +651,12 @@ class TransformGizmo:
 
         # 构建拖拽平面: 法线 = axis × camera_right (面朝摄像机, 射线不会退化)
         view_dir = entity_pos - cam_arr
-        view_dir = view_dir / max(np.linalg.norm(view_dir), 1e-8)
+        view_len = float(np.linalg.norm(view_dir))
+        if view_len < 1e-4:
+            # entity 与摄像机几乎重合 (如 2D 俯视摄像机) → 默认向下看
+            view_dir = np.array([0.0, -1.0, 0.0], dtype=np.float32)
+        else:
+            view_dir = view_dir / view_len
         world_up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
         camera_right = np.cross(view_dir, world_up)
         if np.linalg.norm(camera_right) < 1e-6:

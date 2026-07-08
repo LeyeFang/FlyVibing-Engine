@@ -33,9 +33,9 @@ from Application.Core.Renderer.Renderer import RenderResourceManger
 # 常量
 # ════════════════════════════════════════════════════════════════
 
-# 选中 / 未选中颜色
-COLOR_SELECTED = np.array([0.2, 0.8, 1.0, 0.9], dtype=np.float32)   # 浅蓝
-COLOR_UNSELECTED = np.array([0.5, 0.5, 0.5, 0.5], dtype=np.float32)  # 半透明灰
+# 选中 / 未选中颜色 — 纯白线框
+COLOR_SELECTED = np.array([1.0, 1.0, 1.0, 0.9], dtype=np.float32)    # 亮白
+COLOR_UNSELECTED = np.array([1.0, 1.0, 1.0, 0.45], dtype=np.float32) # 半透白
 
 OVERLAY_KEY_PREFIX = "editor_camera_frustum"
 
@@ -94,7 +94,7 @@ class CameraFrustum:
             draw_mode='lines',
             depth_test=False,
             blend=True,
-            line_width=1.5,
+            line_width=2.5,
             uniforms={
                 'uColor': color,
             },

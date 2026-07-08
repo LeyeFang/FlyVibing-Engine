@@ -17,6 +17,7 @@ class ObjectInfo:
 
 @component
 class Transform:
+    # ── 世界空间 (World / Global) ──
     position_x: float = 0
     position_y: float = 0
     position_z: float = 0
@@ -27,17 +28,22 @@ class Transform:
     scale_y: float = 1
     scale_z: float = 1
 
+    # ── 本地空间 (Local, 相对于父实体) ──
+    local_pos_x: float = 0
+    local_pos_y: float = 0
+    local_pos_z: float = 0
+    local_rot_x: float = 0
+    local_rot_y: float = 0
+    local_rot_z: float = 0
+    local_scl_x: float = 1
+    local_scl_y: float = 1
+    local_scl_z: float = 1
+
     def __init__(
         self,
-        position_x=0,
-        position_y=0,
-        position_z=0,
-        rotation_x=0,
-        rotation_y=0,
-        rotation_z=0,
-        scale_x=1,
-        scale_y=1,
-        scale_z=1,
+        position_x=0, position_y=0, position_z=0,
+        rotation_x=0, rotation_y=0, rotation_z=0,
+        scale_x=1, scale_y=1, scale_z=1,
     ):
         self.position_x = position_x
         self.position_y = position_y
@@ -48,6 +54,16 @@ class Transform:
         self.scale_x = scale_x
         self.scale_y = scale_y
         self.scale_z = scale_z
+        # local 初始等于 world（根实体）
+        self.local_pos_x = position_x
+        self.local_pos_y = position_y
+        self.local_pos_z = position_z
+        self.local_rot_x = rotation_x
+        self.local_rot_y = rotation_y
+        self.local_rot_z = rotation_z
+        self.local_scl_x = scale_x
+        self.local_scl_y = scale_y
+        self.local_scl_z = scale_z
 
 
 

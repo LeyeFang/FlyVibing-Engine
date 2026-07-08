@@ -60,9 +60,13 @@ class SceneBrowserController:
     # ── 实体检视 ────────────────────────────────────────────
 
     @classmethod
-    def get_summary(cls, entity_id: int) -> Optional[EntitySummary]:
+    def get_summary(cls, entity_id: int, use_local: bool = False) -> Optional[EntitySummary]:
+        """获取实体组件摘要。use_local=True 时返回本地 Transform。"""
         try:
-            t = SceneManager.GetEntityTransformEditor(entity_id)
+            if use_local:
+                t = SceneManager.GetEntityLocalTransformEditor(entity_id)
+            else:
+                t = SceneManager.GetEntityTransformEditor(entity_id)
             # Transform 组件存储弧度为内部约定，UI 层转为角度显示
             rot_rad = t['rotation']
             rot_deg = tuple(math.degrees(r) for r in rot_rad)
@@ -93,23 +97,35 @@ class SceneBrowserController:
     # ── 实体属性编辑 ────────────────────────────────────────
 
     @classmethod
-    def set_position(cls, entity_id: int, position: tuple[float, float, float]) -> None:
-        """设置实体位置（编辑器坐标系）。"""
-        SceneManager.SetEntityTransformEditor(entity_id, position_xyz=position)
+    def set_position(cls, entity_id: int, position: tuple[float, float, float],
+                     use_local: bool = False) -> None:
+        """设置实体位置（编辑器坐标系）。use_local=True 写本地坐标。"""
+        if use_local:
+            SceneManager.SetEntityLocalTransformEditor(entity_id, position_xyz=position)
+        else:
+            SceneManager.SetEntityTransformEditor(entity_id, position_xyz=position)
 
     @classmethod
-    def set_rotation(cls, entity_id: int, rotation: tuple[float, float, float]) -> None:
+    def set_rotation(cls, entity_id: int, rotation: tuple[float, float, float],
+                     use_local: bool = False) -> None:
         """设置实体旋转（欧拉角，角度制）。
         
         UI 层使用角度 (degrees)，内部存储为弧度 (radians)。
         """
         rot_rad = tuple(math.radians(r) for r in rotation)
-        SceneManager.SetEntityTransformEditor(entity_id, rotation_xyz=rot_rad)
+        if use_local:
+            SceneManager.SetEntityLocalTransformEditor(entity_id, rotation_xyz=rot_rad)
+        else:
+            SceneManager.SetEntityTransformEditor(entity_id, rotation_xyz=rot_rad)
 
     @classmethod
-    def set_scale(cls, entity_id: int, scale: tuple[float, float, float]) -> None:
+    def set_scale(cls, entity_id: int, scale: tuple[float, float, float],
+                  use_local: bool = False) -> None:
         """设置实体缩放。"""
-        SceneManager.SetEntityTransformEditor(entity_id, scale_xyz=scale)
+        if use_local:
+            SceneManager.SetEntityLocalTransformEditor(entity_id, scale_xyz=scale)
+        else:
+            SceneManager.SetEntityTransformEditor(entity_id, scale_xyz=scale)
 
     @classmethod
     def set_name(cls, entity_id: int, name: str) -> None:
@@ -125,13 +141,75 @@ class SceneBrowserController:
             return {
                 'projection': cam.projection_type.value
                     if hasattr(cam.projection_type, 'value') else str(cam.projection_type),
+                'is_perspective': cam.projection_type.value == 'perspective'
+                    if hasattr(cam.projection_type, 'value') else True,
                 'fov': cam.fov,
+                'ortho_size': cam.ortho_size,
+                'aspect_ratio': cam.aspect_ratio,
                 'near': cam.near_plane,
                 'far': cam.far_plane,
                 'is_primary': cam.is_primary,
             }
         except Exception:
             return None
+
+    @classmethod
+    def set_camera_fov(cls, entity_id: int, fov: float) -> None:
+        import esper
+        cam = esper.component_for_entity(entity_id, Camera)
+        cam.fov = max(1.0, min(179.0, fov))
+
+    @classmethod
+    def set_camera_ortho_size(cls, entity_id: int, size: float) -> None:
+        import esper
+        cam = esper.component_for_entity(entity_id, Camera)
+        cam.ortho_size = max(0.01, size)
+
+    @classmethod
+    def set_camera_clip(cls, entity_id: int, near: float, far: float) -> None:
+        import esper
+        cam = esper.component_for_entity(entity_id, Camera)
+        cam.near_plane = max(0.001, near)
+        cam.far_plane = max(cam.near_plane + 0.01, far)
+
+    @classmethod
+    def set_camera_projection(cls, entity_id: int, is_perspective: bool) -> None:
+        import esper
+        from Application.Core.Scene.BasicComponents import ProjectionType
+        cam = esper.component_for_entity(entity_id, Camera)
+        cam.projection_type = (
+            ProjectionType.PERSPECTIVE if is_perspective else ProjectionType.ORTHOGRAPHIC)
+
+    # ── 实体层级 / Entity Hierarchy ───────────────────────────
+
+    @classmethod
+    def get_root_entities(cls) -> list[int]:
+        """获取所有根实体（无父实体的）。"""
+        return SceneManager.GetRootEntities()
+
+    @classmethod
+    def get_entity_children(cls, entity_id: int) -> list[int]:
+        """获取实体的直接子实体 ID 列表。"""
+        return SceneManager.GetEntityChildren(entity_id)
+
+    @classmethod
+    def get_entity_parent(cls, entity_id: int) -> int | None:
+        """获取实体的父实体 ID。"""
+        return SceneManager.GetEntityParent(entity_id)
+
+    @classmethod
+    def set_entity_parent(cls, child_id: int, parent_id: int) -> None:
+        """设置父子关系。"""
+        SceneManager.SetEntityParent(child_id, parent_id)
+
+    @classmethod
+    def get_entity_info(cls, entity_id: int) -> dict | None:
+        """获取单个实体的摘要信息。"""
+        infos = SceneManager.GetAllEntityInfos()
+        for info in infos:
+            if info['entity_id'] == entity_id:
+                return info
+        return None
 
 
 # ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──

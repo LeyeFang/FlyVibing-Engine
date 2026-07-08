@@ -51,7 +51,7 @@ from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowse
 from Application.Editor.UI.controllers.ResourceBrowserController import ResourceBrowserController  # noqa: F401
 from Application.Editor.UI.controllers.ViewportController import ViewportController  # noqa: F401
 from Application.Editor.UI.UIManager import UIManager
-from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel
+from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel, ResourcePanel
 
 # ── EditorCamera（ViewportController 需要单例） ──
 from Application.Editor.EditorCamera import EditorCamera
@@ -159,6 +159,7 @@ def main():
     # ── 5. 注册主线面板 ──
     UIManager.register(ScenePanel())
     UIManager.register(NodeEditorPanel())
+    UIManager.register(ResourcePanel())
 
     # ── 6. 首帧预交换（避免白屏闪烁） ──
     gl.glClearColor(0.11, 0.11, 0.11, 1.0)

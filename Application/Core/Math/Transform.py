@@ -99,3 +99,25 @@ def calculate_entity_model(
          1.0],
     ], dtype=np.float64)
     return M
+
+
+def _build_R_T(rx: float, ry: float, rz: float) -> 'np.ndarray':
+    """构建 R^T (旋转逆矩阵), 用于 world pos → pre-rotation pos 转换。
+
+    pre_pos = world_pos @ R_T
+
+    Args:
+        rx, ry, rz: 欧拉角 (弧度), 与 calculate_entity_model 约定一致。
+    Returns:
+        (3, 3) float64 ndarray
+    """
+    import math
+    cx, sx = math.cos(rx), math.sin(rx)
+    cy, sy = math.cos(ry), math.sin(ry)
+    cz, sz = math.cos(rz), math.sin(rz)
+    # R^T from calculate_entity_model's R = Rz @ Ry @ Rx
+    return np.array([
+        [cz * cy,                      sz * cy,                      -sy],
+        [cz * sy * sx - sz * cx,       sz * sy * sx + cz * cx,       cy * sx],
+        [cz * sy * cx + sz * sx,       sz * sy * cx - cz * sx,       cy * cx],
+    ], dtype=np.float64)

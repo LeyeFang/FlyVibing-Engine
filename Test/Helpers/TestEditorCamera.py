@@ -183,9 +183,13 @@ class TestEditorCamera:
             self.yaw = old_yaw + math.atan2(cross_xz, dot_xz)
 
     def zoom(self, delta: float) -> None:
-        """缩放 — 正值靠近, 负值远离。"""
-        self.distance *= (1.0 - delta * 0.1)
-        self.distance = max(self.distance, 0.01)
+        """缩放 — 3D: 调整距离; 2D: 调整 ortho_size。"""
+        if self._orthographic:
+            self._ortho_size *= (1.0 - delta * 0.1)
+            self._ortho_size = max(self._ortho_size, 0.01)
+        else:
+            self.distance *= (1.0 - delta * 0.1)
+            self.distance = max(self.distance, 0.01)
 
     def on_scroll(self, y_offset: float) -> None:
         """滚轮缩放 — 与 EditorCamera.on_scroll 签名兼容。"""

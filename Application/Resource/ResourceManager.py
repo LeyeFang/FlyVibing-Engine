@@ -20,8 +20,8 @@ DEFAULT_MODEL_NAME = [
     'Cube'
 ]
 DEFAULT_MODEL_FILE = [
-    'Square.obj',
-    'Cube.obj'
+    '2D/Square.obj',
+    '3D/Cube.obj'
 ]
 DEFAULT_SHADER_NAME = [
     'Basic',
@@ -35,6 +35,20 @@ DEFAULT_TEXTURE_NAME = [
     'Default',
     'Checkerboard',
 ]
+
+# ── 预设调色板 ─────────────────────────────────────────────
+COLOR_PRESETS = {
+    'White':   (1.0, 1.0, 1.0, 1.0),
+    'Red':     (1.0, 0.0, 0.0, 1.0),
+    'Green':   (0.0, 1.0, 0.0, 1.0),
+    'Blue':    (0.0, 0.0, 1.0, 1.0),
+    'Yellow':  (1.0, 1.0, 0.0, 1.0),
+    'Cyan':    (0.0, 1.0, 1.0, 1.0),
+    'Magenta': (1.0, 0.0, 1.0, 1.0),
+    'Black':   (0.0, 0.0, 0.0, 1.0),
+    'Gray':    (0.5, 0.5, 0.5, 1.0),
+    'Orange':  (1.0, 0.5, 0.0, 1.0),
+}
 
 
 class ResourceManager:
@@ -391,6 +405,116 @@ class ResourceManager:
         cls.loaded_material[f"{current_material_id}"] = material
         return current_material_id
 
+    @classmethod
+    def SetMaterialColor(
+        cls,
+        material_id: int,
+        r: float, g: float, b: float, a: float = 1.0
+    ) -> None:
+        """设置材质的 uColor uniform（要求 shader 支持 vec4 uColor）。
+        常用于颜色调色盘实时改色。
+        """
+        mat = cls.GetMaterial(material_id)
+        mat.uniforms_data['uColor'] = np.array([r, g, b, a], dtype=np.float32)
+
+    @classmethod
+    def GetMaterialColor(
+        cls,
+        material_id: int
+    ) -> tuple[float, float, float, float] | None:
+        """获取材质的 uColor uniform 值。无 uColor 时返回 None。"""
+        mat = cls.GetMaterial(material_id)
+        c = mat.uniforms_data.get('uColor')
+        if c is not None and hasattr(c, '__len__') and len(c) == 4:
+            return (float(c[0]), float(c[1]), float(c[2]), float(c[3]))
+        return None
+
+    @classmethod
+    def GetShaderName(
+        cls,
+        shader_id: int
+    ) -> str:
+        """获取 shader 的名称（如 'Basic', 'SSVEP'）。"""
+        entry = cls.loaded_shader.get(str(shader_id))
+        return entry['name'] if entry else 'Unknown'
+
+    @classmethod
+    def AddMaterialTexture(
+        cls,
+        material_id: int,
+        texture_id: int
+    ) -> None:
+        """给材质追加一个纹理引用。"""
+        mat = cls.GetMaterial(material_id)
+        if texture_id not in mat.texture_id_list:
+            mat.texture_id_list.append(texture_id)
+
+    @classmethod
+    def RemoveMaterialTexture(
+        cls,
+        material_id: int,
+        slot_index: int
+    ) -> None:
+        """从材质中移除指定槽位的纹理。"""
+        mat = cls.GetMaterial(material_id)
+        if 0 <= slot_index < len(mat.texture_id_list):
+            mat.texture_id_list.pop(slot_index)
+
+    # ==============================================================
+    # 资源删除 / Asset Deletion
+    # ==============================================================
+
+    @classmethod
+    def DeleteMesh(cls, mesh_id: int) -> bool:
+        """删除指定网格资源。返回是否成功。"""
+        key = str(mesh_id)
+        if key not in cls.loaded_mesh:
+            return False
+        del cls.loaded_mesh[key]
+        return True
+
+    @classmethod
+    def DeleteShader(cls, shader_id: int) -> bool:
+        """删除指定着色器资源。若被 Material 引用则拒绝删除。"""
+        key = str(shader_id)
+        if key not in cls.loaded_shader:
+            return False
+        # 检查是否被任何 Material 引用
+        for mat_key, mat in cls.loaded_material.items():
+            if getattr(mat, 'shader_id', None) == shader_id:
+                raise RuntimeError(
+                    f"Cannot delete Shader #{shader_id}: "
+                    f"still referenced by Material #{mat_key}"
+                )
+        del cls.loaded_shader[key]
+        return True
+
+    @classmethod
+    def DeleteTexture(cls, texture_id: int) -> bool:
+        """删除指定纹理资源。若被 Material 引用则拒绝删除。"""
+        key = str(texture_id)
+        if key not in cls.loaded_texture:
+            return False
+        # 检查是否被任何 Material 引用
+        for mat_key, mat in cls.loaded_material.items():
+            tex_list = getattr(mat, 'texture_id_list', [])
+            if texture_id in tex_list:
+                raise RuntimeError(
+                    f"Cannot delete Texture #{texture_id}: "
+                    f"still referenced by Material #{mat_key}"
+                )
+        del cls.loaded_texture[key]
+        return True
+
+    @classmethod
+    def DeleteMaterial(cls, material_id: int) -> bool:
+        """删除指定材质资源。返回是否成功。"""
+        key = str(material_id)
+        if key not in cls.loaded_material:
+            return False
+        del cls.loaded_material[key]
+        return True
+
 
     # Functions that only used in this class
     # ==============================================================
@@ -398,7 +522,7 @@ class ResourceManager:
     def __load_default_mesh(
         cls
     ) -> None:
-        default_model_dir = 'Resource/DefaultObjects'
+        default_model_dir = 'Resource/Meshes/Builtin'
         for mesh_name, file_name in zip(DEFAULT_MODEL_NAME, DEFAULT_MODEL_FILE):
             model_file_path = join(default_model_dir, file_name)
             cls.__load_mesh_from_file(model_file_path, mesh_name)
@@ -407,7 +531,7 @@ class ResourceManager:
     def __load_default_shader(
         cls
     ) -> None:
-        default_shader_dir = 'Resource/DefaultShaders'
+        default_shader_dir = 'Resource/Shaders/Builtin'
         for shader_name, (vert_file, frag_file) in zip(DEFAULT_SHADER_NAME, DEFAULT_SHADER_FILE):
             vert_path = join(default_shader_dir, vert_file)
             frag_path = join(default_shader_dir, frag_file)

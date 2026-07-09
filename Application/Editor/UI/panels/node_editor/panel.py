@@ -37,7 +37,18 @@ from .styling import (
 
 
 # ═══════════════════════════════════════════════════════════════
-# Add 菜单辅助
+# 辅助: combo 弹窗位置修正 (节点编辑器坐标系下 ImGui 自动定位偏移)
+# ═══════════════════════════════════════════════════════════════
+
+def _ne_combo(label: str, idx: int, items: list[str]) -> tuple[bool, int]:
+    """imgui.combo() 包装 — 修正 node editor 内弹窗位置。"""
+    pos = imgui.get_cursor_screen_pos()
+    imgui.set_next_window_pos(imgui.ImVec2(pos.x, pos.y + imgui.get_text_line_height_with_spacing()))
+    return imgui.combo(label, idx, items)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Add 菜单辅助 (鼠标悬停展开级联子菜单)
 # ═══════════════════════════════════════════════════════════════
 
 _SUB_HDR_COLOR = imgui.ImVec4(0.500, 0.500, 0.500, 0.60)
@@ -49,35 +60,34 @@ def _draw_add_menu_section(
     canvas: NodeCanvas,
     avail: imgui.ImVec2,
 ) -> None:
-    """在 Add 弹出菜单中绘制一个分类区块（子菜单展平为视觉分组）。"""
-    imgui.spacing()
-    imgui.text_colored(_HDR_COLOR, title)
-    imgui.separator()
-    for item in items:
-        _draw_menu_item(item[0], item[1], canvas, _depth=0)
+    """在 Add 弹出菜单中绘制一个顶级分类（悬停展开子菜单）。"""
+    if imgui.begin_menu(title):
+        for item in items:
+            _draw_menu_item(item[0], item[1], canvas)
+        imgui.end_menu()
 
 
 def _draw_menu_item(
     label: str,
     target,
     canvas: NodeCanvas,
-    _depth: int = 0,
 ) -> None:
-    """绘制菜单项 —— 列表 = 子分组头（纯展示），字符串 = 可点击菜单项。"""
+    """绘制菜单项:
+      target 为 list → 子分组标题 + 展平子项
+      target 为 str  → 可点击菜单项 (创建节点)
+    """
     if isinstance(target, list):
-        # 子分组 → 绘制只读小标题 + 展平子项
         imgui.spacing()
         imgui.text_colored(_SUB_HDR_COLOR, f"  {label}")
+        imgui.separator()
         for sub_label, sub_value in target:
-            _draw_menu_item(sub_label, sub_value, canvas, _depth=1)
+            _draw_menu_item(sub_label, sub_value, canvas)
     else:
-        prefix = "    " if _depth > 0 else ""
-        changed, _selected = imgui.menu_item(f"{prefix}{label}", "", False, True)
+        changed, _selected = imgui.menu_item(label, "", False, True)
         if changed:
             max_y = max((inst.pos[1] for inst in canvas.nodes.values()), default=40)
-            cx = 80.0
-            cy = max_y + 200.0
-            canvas.add_node(target, (cx, cy))
+            canvas.add_node(target, (80, max_y + 200))
+            imgui.close_current_popup()
             imgui.close_current_popup()
 
 
@@ -166,7 +176,9 @@ class NodeEditorPanel(BasePanel):
 
         # ── 工具栏: Add / Import / Export ──
         if imgui.small_button("Add Node"):
-            self._add_popup_pos = imgui.get_item_rect_min()
+            rect_min = imgui.get_item_rect_min()
+            rect_max = imgui.get_item_rect_max()
+            self._add_popup_pos = imgui.ImVec2(rect_min.x, rect_max.y)
             imgui.open_popup("Create Node")
 
         imgui.same_line()
@@ -267,6 +279,10 @@ class NodeEditorPanel(BasePanel):
             if inst.node_type == "ScalarMath":
                 self._draw_scalar_math_widgets(nid, inst)
 
+            # Compare 节点 UI 控件
+            if inst.node_type == "Compare":
+                self._draw_compare_widgets(nid, inst)
+
             # TimeTrigger 节点 UI 控件
             if inst.node_type == "TimeTrigger":
                 self._draw_time_trigger_widgets(nid, inst)
@@ -287,6 +303,16 @@ class NodeEditorPanel(BasePanel):
             if inst.node_type == "EntitySpawn":
                 self._draw_entity_spawn_widgets(nid, inst)
 
+            # CameraConfigure 节点 UI 控件
+            if inst.node_type == "CameraConfigure":
+                self._draw_camera_configure_widgets(nid, inst)
+
+            # ComponentAdd / ComponentRemove / ComponentSetProperty UI 控件
+            if inst.node_type in ("ComponentAdd", "ComponentRemove"):
+                self._draw_component_select_widgets(nid, inst)
+            if inst.node_type == "ComponentSetProperty":
+                self._draw_component_set_property_widgets(nid, inst)
+
             # VecMath 节点 UI 控件
             if inst.node_type == "VecMath":
                 self._draw_vec_math_widgets(nid, inst)
@@ -305,7 +331,7 @@ class NodeEditorPanel(BasePanel):
         dist = inst.props.get("distribution", "uniform")
         dist_labels = ["Uniform", "Gaussian"]
         dist_idx = 0 if dist == "uniform" else 1
-        changed, new_idx = imgui.combo(
+        changed, new_idx = _ne_combo(
             f"##rand_dist_{nid}", dist_idx, dist_labels,
         )
         if changed:
@@ -361,11 +387,33 @@ class NodeEditorPanel(BasePanel):
             idx = next(i for i, o in enumerate(ops) if o.lower() == op)
         except StopIteration:
             idx = 0
-        changed, new_idx = imgui.combo(
+        changed, new_idx = _ne_combo(
             f"##scalar_op_{nid}", idx, ops,
         )
         if changed:
             inst.props["operation"] = ops[new_idx].lower()
+
+        imgui.same_line()
+        imgui.text_disabled("Op")
+        imgui.pop_item_width()
+
+    # ── Compare 节点专用控件 ───────────────────────────────
+
+    def _draw_compare_widgets(self, nid: int, inst) -> None:
+        """在 Compare 节点体内绘制比较运算符下拉框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(80)
+
+        op = inst.props.get("operation", "gt")
+        labels = [">", "<", "==", "!=", ">=", "<="]
+        keys = ["gt", "lt", "eq", "neq", "gte", "lte"]
+        try:
+            idx = keys.index(op)
+        except ValueError:
+            idx = 0
+        changed, new_idx = _ne_combo(f"##cmp_op_{nid}", idx, labels)
+        if changed:
+            inst.props["operation"] = keys[new_idx]
 
         imgui.same_line()
         imgui.text_disabled("Op")
@@ -419,7 +467,7 @@ class NodeEditorPanel(BasePanel):
         except ValueError:
             idx = len(existing)  # "Custom..." 位置
 
-        changed, new_idx = imgui.combo(f"##var_{label}_{nid}", idx, items)
+        changed, new_idx = _ne_combo(f"##var_{label}_{nid}", idx, items)
         if changed:
             if new_idx < len(existing):
                 inst.props["var_name"] = existing[new_idx]
@@ -489,17 +537,27 @@ class NodeEditorPanel(BasePanel):
     # ── EntitySpawn 节点专用控件 ───────────────────────────
 
     def _draw_entity_spawn_widgets(self, nid: int, inst) -> None:
-        """在 EntitySpawn 节点体内绘制 Template 下拉框。"""
-        imgui.dummy(imgui.ImVec2(0, 2))
-        imgui.push_item_width(105)
+        """在 EntitySpawn 节点体内绘制 Template 下拉框。
 
-        template = inst.props.get("template", "Empty")
-        labels = ["Empty", "Cube", "Camera"]
+        Template 列表来自 Scene.entities 注册表中的实体定义名称。
+        若 Scene 不可用则回退到内置占位列表。
+        """
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(120)
+
+        template = inst.props.get("template", "")
+
+        # ── 从 Scene.entities 获取可用模板名 ──
+        labels = self._get_scene_template_names()
+        if not labels:
+            labels = ["(no scene)"]
+
         try:
-            idx = labels.index(template)
+            idx = labels.index(template) if template in labels else 0
         except ValueError:
             idx = 0
-        changed, new_idx = imgui.combo(
+
+        changed, new_idx = _ne_combo(
             f"##spawn_tpl_{nid}", idx, labels,
         )
         if changed:
@@ -507,6 +565,141 @@ class NodeEditorPanel(BasePanel):
 
         imgui.same_line()
         imgui.text_disabled("Template")
+        imgui.pop_item_width()
+
+    @staticmethod
+    def _get_scene_template_names() -> list[str]:
+        """从 EditorHost 获取当前 Scene 的实体模板名列表。"""
+        try:
+            from Application.Editor.EditorHost import EditorHost
+            scene = EditorHost.get_active_scene()
+            if scene is not None:
+                names = scene.get_entity_names()
+                if not names:
+                    print("[NodeEditor] Scene is set but has no entity templates")
+                return names
+            else:
+                # ── Fallback: 尝试从 SceneManager 初始化一个默认 Scene ──
+                print("[NodeEditor] No active scene — attempting fallback init")
+                try:
+                    from Application.Core.Scene.Scene import Scene, GameType
+                    from Application.Core.Scene.SceneManager import SceneManager
+                    from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
+                    import esper, copy
+
+                    scene = Scene("Default", game_type=GameType.GAME_3D)
+                    _sys_ids = {SceneManager.get_main_camera_id(), SceneManager.get_main_camera_2d_id()}
+                    for eid, (xform,) in esper.get_components(Transform):
+                        if eid in _sys_ids:
+                            continue
+                        name = SceneManager.GetEntityName(eid)
+                        comps = {"Transform": copy.deepcopy(xform)}
+                        try:
+                            cam = esper.component_for_entity(eid, Camera)
+                            comps["Camera"] = copy.deepcopy(cam)
+                        except Exception:
+                            pass
+                        try:
+                            mr = esper.component_for_entity(eid, MeshRenderer)
+                            comps["MeshRenderer"] = copy.deepcopy(mr)
+                        except Exception:
+                            pass
+                        scene.add_entity(name=name, **comps)
+                    EditorHost.set_active_scene(scene)
+                    print(f"[NodeEditor] Fallback scene created: {len(scene.entities)} templates")
+                    return scene.get_entity_names()
+                except Exception as e:
+                    print(f"[NodeEditor] Fallback init failed: {e}")
+        except Exception as e:
+            print(f"[NodeEditor] _get_scene_template_names error: {e}")
+        return []
+
+    # ── CameraConfigure 节点专用控件 ────────────────────────
+
+    def _draw_camera_configure_widgets(self, nid: int, inst) -> None:
+        """在 CameraConfigure 节点体内绘制投影类型下拉框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(130)
+
+        proj = inst.props.get("projection", "perspective")
+        labels = ["Perspective", "Orthographic"]
+        try:
+            idx = 0 if proj == "perspective" else 1
+        except (ValueError, IndexError):
+            idx = 0
+        changed, new_idx = _ne_combo(
+            f"##cam_proj_{nid}", idx, labels,
+        )
+        if changed:
+            inst.props["projection"] = "perspective" if new_idx == 0 else "orthographic"
+
+        imgui.same_line()
+        imgui.text_disabled("Projection")
+        imgui.pop_item_width()
+
+    # ── Component 节点通用控件 ─────────────────────────────
+
+    @staticmethod
+    def _get_component_type_names() -> list[str]:
+        """获取已注册的组件类型名列表（排除 Transform — 每个实体自带）。"""
+        try:
+            from Application.Core.Scene.SceneManager import SceneManager
+            reg = SceneManager.GetRegisteredComponents()
+            return sorted([n for n in reg if n != "Transform"], key=lambda n: n.lower())
+        except Exception:
+            return ["Camera", "MeshRenderer"]
+
+    def _draw_component_select_widgets(self, nid: int, inst) -> None:
+        """ComponentAdd / ComponentRemove: 组件类型下拉选择。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(130)
+
+        comp_name = inst.props.get("component", "")
+        labels = self._get_component_type_names()
+        if not labels:
+            labels = ["(none)"]
+        try:
+            idx = labels.index(comp_name) if comp_name in labels else 0
+        except ValueError:
+            idx = 0
+
+        changed, new_idx = _ne_combo(f"##comp_type_{nid}", idx, labels)
+        if changed:
+            inst.props["component"] = labels[new_idx]
+
+        imgui.same_line()
+        imgui.text_disabled("Type")
+        imgui.pop_item_width()
+
+    def _draw_component_set_property_widgets(self, nid: int, inst) -> None:
+        """ComponentSetProperty: 组件类型下拉 + 属性名输入框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+
+        # ── 组件类型 ──
+        imgui.push_item_width(130)
+        comp_name = inst.props.get("component", "")
+        labels = self._get_component_type_names()
+        if not labels:
+            labels = ["(none)"]
+        try:
+            idx = labels.index(comp_name) if comp_name in labels else 0
+        except ValueError:
+            idx = 0
+        changed, new_idx = _ne_combo(f"##csp_comp_{nid}", idx, labels)
+        if changed:
+            inst.props["component"] = labels[new_idx]
+        imgui.same_line()
+        imgui.text_disabled("Comp")
+        imgui.pop_item_width()
+
+        # ── 属性名 ──
+        imgui.push_item_width(130)
+        prop = inst.props.get("property", "")
+        changed, new_prop = imgui.input_text(f"##csp_prop_{nid}", prop, 64)
+        if changed:
+            inst.props["property"] = new_prop
+        imgui.same_line()
+        imgui.text_disabled("Prop")
         imgui.pop_item_width()
 
     # ── VecMath 节点专用控件 ───────────────────────────────
@@ -524,7 +717,7 @@ class NodeEditorPanel(BasePanel):
                 next(o for o in ops if o.lower() == op))
         except (ValueError, StopIteration):
             idx = 0
-        changed, new_idx = imgui.combo(
+        changed, new_idx = _ne_combo(
             f"##vec_op_{nid}", idx, ops,
         )
         if changed:
@@ -553,6 +746,13 @@ class NodeEditorPanel(BasePanel):
             op = inst.props.get("operation", "add")
             if op in ("normalize", "length"):
                 return [p for p in nd.pins if p.name != "B"]
+        # ── CameraConfigure: 按投影类型过滤 FOV / OrthoSize pin ──
+        if inst.node_type == "CameraConfigure":
+            proj = inst.props.get("projection", "perspective")
+            if proj == "perspective":
+                return [p for p in nd.pins if p.name != "OrthoSize"]
+            else:
+                return [p for p in nd.pins if p.name != "FOV"]
         # ── ScalarMath: 自增输入 pin（有连线才显示） ──
         if inst.node_type == "ScalarMath":
             if canvas is not None:

@@ -27,17 +27,20 @@ def _reg(t: NodeTypeDef) -> NodeTypeDef:
 # 颜色常量
 # ═══════════════════════════════════════════════════════════════
 
-_SUCCESS_GREEN  = (0.471, 0.714, 0.471)
-_ERROR_RED      = (0.788, 0.471, 0.471)
-_COLOR_EVENT    = (0.420, 0.650, 0.920)
-_COLOR_FLOW     = (0.600, 0.600, 0.600)
-_BLENDER_ORANGE = (0.878, 0.416, 0.153)
-MATH_COLOR      = (0.420, 0.550, 0.920)
-TIME_COLOR      = (0.878, 0.753, 0.314)
-ENTITY_COLOR    = (0.314, 0.784, 0.471)
-VAR_COLOR       = (0.650, 0.420, 0.920)
-VECTOR_COLOR    = (0.314, 0.710, 0.710)  # 保留兼容，新节点用 MATH_COLOR
-DEBUG_COLOR     = (0.600, 0.600, 0.600)
+_SUCCESS_GREEN   = (0.471, 0.714, 0.471)
+_ERROR_RED       = (0.788, 0.471, 0.471)
+_COLOR_EVENT     = (0.420, 0.650, 0.920)
+_COLOR_FLOW      = (0.600, 0.600, 0.600)
+_BLENDER_ORANGE  = (0.878, 0.416, 0.153)
+MATH_COLOR       = (0.420, 0.550, 0.920)
+TIME_COLOR       = (0.878, 0.753, 0.314)
+ENTITY_COLOR     = (0.314, 0.784, 0.471)
+VAR_COLOR        = (0.650, 0.420, 0.920)
+VECTOR_COLOR     = (0.314, 0.710, 0.710)  # 保留兼容，新节点用 MATH_COLOR
+DEBUG_COLOR      = (0.600, 0.600, 0.600)
+SCENE_COLOR      = (0.878, 0.416, 0.153)  # 场景级操作 (同 Blender Orange)
+CAMERA_COLOR     = (0.314, 0.650, 0.920)  # 摄像机操作
+COMPONENT_COLOR  = (0.314, 0.710, 0.710)  # 组件操作
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -70,31 +73,6 @@ _reg(NodeTypeDef(
 
 
 # ═══════════════════════════════════════════════════════════════
-# Action 节点
-# ═══════════════════════════════════════════════════════════════
-
-_reg(NodeTypeDef(
-    "CreateWindow", "Create Window", "Action",
-    _BLENDER_ORANGE,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-    ],
-    "Open a game window",
-))
-
-_reg(NodeTypeDef(
-    "DestroyWindow", "Destroy Window", "Action",
-    _BLENDER_ORANGE,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-    ],
-    "",
-))
-
-
-# ═══════════════════════════════════════════════════════════════
 # Flow 节点
 # ═══════════════════════════════════════════════════════════════
 
@@ -104,6 +82,18 @@ _reg(NodeTypeDef(
     [PinDef(_gen_id(), "exec_in", "exec", "input")]
     + [PinDef(_gen_id(), f"out_{i}", "exec", "output") for i in range(3)],
     "Chain in order",
+))
+
+_reg(NodeTypeDef(
+    "Branch", "Branch", "Flow",
+    _COLOR_FLOW,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Condition", "data", "input", "bool"),
+        PinDef(_gen_id(), "True", "exec", "output"),
+        PinDef(_gen_id(), "False", "exec", "output"),
+    ],
+    "If / Else",
 ))
 
 
@@ -124,6 +114,18 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "Result", "data", "output", "float"),
     ],
     "Sum / Sub / Mul / Div",
+))
+
+# ── Compare 比较节点 (纯数据, 运算下拉) ──
+
+_reg(NodeTypeDef(
+    "Compare", "Compare", "Math", MATH_COLOR,
+    [
+        PinDef(_gen_id(), "A", "data", "input", "float"),
+        PinDef(_gen_id(), "B", "data", "input", "float"),
+        PinDef(_gen_id(), "Result", "data", "output", "bool"),
+    ],
+    "A > < == != >= <= B",
 ))
 
 # ── 旧版四则运算 (保留兼容，菜单中不再出现) ──
@@ -251,31 +253,22 @@ _reg(NodeTypeDef(
 
 
 # ═══════════════════════════════════════════════════════════════
-# Entity 节点 (Entity)
+# Entity 节点 (Entity) — 实体生命周期
 # ═══════════════════════════════════════════════════════════════
 
-_reg(NodeTypeDef(
-    "EntityCreate", "Create Entity", "Entity", ENTITY_COLOR,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "Name", "data", "input", "string"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-        PinDef(_gen_id(), "EntityID", "data", "output", "int"),
-    ],
-    "Create empty entity",
-))
-
-# ── v2: 类型安全 EntityRef ───────────────────────────────────
+# ── v2: 类型安全 EntityRef，从 Scene.entities 读取模板 ────────
 
 _reg(NodeTypeDef(
     "EntitySpawn", "Spawn Entity", "Entity", ENTITY_COLOR,
     [
         PinDef(_gen_id(), "exec_in", "exec", "input"),
         PinDef(_gen_id(), "Name", "data", "input", "string"),
+        PinDef(_gen_id(), "Position", "data", "input", "vec3"),
+        PinDef(_gen_id(), "Rotation", "data", "input", "vec3"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
         PinDef(_gen_id(), "Entity", "data", "output", "entity_ref"),
     ],
-    "Cube / Camera / Empty",
+    "Instantiate from Scene template",
 ))
 
 _reg(NodeTypeDef(
@@ -285,7 +278,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "EntityID", "data", "input", "int"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Remove entity",
+    "Remove entity instance",
 ))
 
 _reg(NodeTypeDef(
@@ -307,7 +300,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "EntityID", "data", "input", "int"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Add camera",
+    "Add camera component to entity",
 ))
 
 _reg(NodeTypeDef(
@@ -319,6 +312,92 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
     "Show or hide entity",
+))
+
+
+# ═══════════════════════════════════════════════════════════════
+# Camera 节点 (Camera) — 摄像机配置与控制
+# ═══════════════════════════════════════════════════════════════
+
+_reg(NodeTypeDef(
+    "CameraSetMain", "Set Main Camera", "Camera", CAMERA_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+    ],
+    "Set active render camera",
+))
+
+_reg(NodeTypeDef(
+    "CameraConfigure", "Configure Camera", "Camera", CAMERA_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
+        PinDef(_gen_id(), "FOV", "data", "input", "float"),
+        PinDef(_gen_id(), "OrthoSize", "data", "input", "float"),
+        PinDef(_gen_id(), "NearPlane", "data", "input", "float"),
+        PinDef(_gen_id(), "FarPlane", "data", "input", "float"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+    ],
+    "Perspective / Orthographic",
+))
+
+_reg(NodeTypeDef(
+    "GetCameraInfo", "Get Camera Info", "Camera", CAMERA_COLOR,
+    [
+        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
+        PinDef(_gen_id(), "Position", "data", "output", "vec3"),
+        PinDef(_gen_id(), "Forward", "data", "output", "vec3"),
+        PinDef(_gen_id(), "FOV", "data", "output", "float"),
+        PinDef(_gen_id(), "OrthoSize", "data", "output", "float"),
+        PinDef(_gen_id(), "IsValid", "data", "output", "bool"),
+    ],
+    "Read camera state",
+))
+
+_reg(NodeTypeDef(
+    "ExitGame", "Exit Game", "Camera", _ERROR_RED,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+    ],
+    "Stop GameRuntime",
+))
+
+
+# ═══════════════════════════════════════════════════════════════
+# Component 节点 — 通用组件 CRUD
+# ═══════════════════════════════════════════════════════════════
+
+_reg(NodeTypeDef(
+    "ComponentAdd", "Add Component", "Component", COMPONENT_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+    ],
+    "Camera / MeshRenderer / ...",
+))
+
+_reg(NodeTypeDef(
+    "ComponentRemove", "Remove Component", "Component", COMPONENT_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+    ],
+    "Remove component from entity",
+))
+
+_reg(NodeTypeDef(
+    "ComponentSetProperty", "Set Property", "Component", COMPONENT_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
+        PinDef(_gen_id(), "Value", "data", "input", "variant"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+    ],
+    "Set component property",
 ))
 
 

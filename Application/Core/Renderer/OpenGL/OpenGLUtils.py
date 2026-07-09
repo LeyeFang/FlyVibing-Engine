@@ -163,6 +163,34 @@ class OpenGLUtils:
         gl.glUniform1i(loc, value)
 
     @staticmethod
+    def set_uniform_vec4(
+        registered_shaders: dict,
+        shader_id: int,
+        name: str,
+        value
+    ) -> None:
+        """设置 vec4 uniform (float32 数组)。"""
+        loc = OpenGLUtils.get_uniform_location(registered_shaders, shader_id, name)
+        if loc < 0:
+            return
+        data = np.ascontiguousarray(value, dtype=np.float32)
+        gl.glUniform4fv(loc, 1, data)
+
+    @staticmethod
+    def set_uniform_vec3(
+        registered_shaders: dict,
+        shader_id: int,
+        name: str,
+        value
+    ) -> None:
+        """设置 vec3 uniform (float32 数组)。"""
+        loc = OpenGLUtils.get_uniform_location(registered_shaders, shader_id, name)
+        if loc < 0:
+            return
+        data = np.ascontiguousarray(value, dtype=np.float32)
+        gl.glUniform3fv(loc, 1, data)
+
+    @staticmethod
     def set_uniform_value(
         registered_shaders: dict,
         shader_id: int,
@@ -188,6 +216,10 @@ class OpenGLUtils:
 
         if glsl_type == 'mat4' or (isinstance(value, np.ndarray) and value.ndim == 2):
             OpenGLUtils.set_uniform_mat4(registered_shaders, shader_id, name, value)
+        elif glsl_type == 'vec4':
+            OpenGLUtils.set_uniform_vec4(registered_shaders, shader_id, name, value)
+        elif glsl_type == 'vec3':
+            OpenGLUtils.set_uniform_vec3(registered_shaders, shader_id, name, value)
         elif glsl_type in ('float', 'double'):
             OpenGLUtils.set_uniform_float(registered_shaders, shader_id, name, float(value))
         elif glsl_type in ('int', 'sampler2D', 'sampler'):

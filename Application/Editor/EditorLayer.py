@@ -18,7 +18,7 @@ from Application.Core.Events.Enum.InputEnum import (
     MouseActionCode,
     KeyButtonCode,
     KeyActionCode,)
-from Application.Core.Input.InputState import IsShiftPressed
+from Application.Core.Input.InputState import IsShiftPressed, IsKeyDown
 from Application.Core.Layers.Layer import Layer
 
 # ── 应用层: 编辑器 ──
@@ -69,7 +69,7 @@ class EditorLayer(Layer):
         os.makedirs(cls._config_dir, exist_ok=True)
         io = imgui.get_io()
         io.config_flags |= imgui.ConfigFlags_.docking_enable
-        io.set_ini_filename(os.path.join(cls._config_dir, "imgui.ini"))
+        io.set_ini_filename("")   # 不保存/读取 imgui.ini，每次启动用默认布局
         cls._load_fonts()
         editor_window = EditorHost.get_editor_window()
         window_address = ctypes.cast(editor_window.glfw_window, ctypes.c_void_p).value
@@ -127,11 +127,13 @@ class EditorLayer(Layer):
             # 投影矩阵依赖 aspect_ratio，resize 后需重新推送
             cls._sync_camera_to_renderer()
             return
-        # ── 键盘事件: 始终处理 (SPACE 预览等)，不受面板鼠标拦截影响 ──
+        # ── 键盘事件: ImGui 捕获键盘时跳过 (如正在文本框输入) ──
         if isinstance(event, KeyboardButtonEvent):
-            if (event.key == KeyButtonCode.Space
-                    and event.action == KeyActionCode.Press):
-                cls._toggle_preview_camera()
+            io = imgui.get_io()
+            if not io.want_capture_keyboard:
+                if (event.key == KeyButtonCode.Space
+                        and event.action == KeyActionCode.Press):
+                    cls._toggle_preview_camera()
             return
         if cls._mouse_in_any_panel():
             return
@@ -183,7 +185,7 @@ class EditorLayer(Layer):
         else:
             is_2d = ViewportController.is_2d()
             cls._preview_entity_id = (
-                SceneManager.main_camera_2d_id if is_2d else SceneManager.main_camera_id
+                SceneManager.get_main_camera_2d_id() if is_2d else SceneManager.get_main_camera_id()
             )
             print(f"[EditorLayer] Preview: ON (entity {cls._preview_entity_id})")
         cls._camera_gizmo_state_hash = -1  # 强制刷新 gizmo (隐藏预览自身)
@@ -374,7 +376,10 @@ class EditorLayer(Layer):
         dt = (time.perf_counter() - t0) * 1000
         if pick_type == 'entity':
             # print(f"[EditorLayer] Click → Entity#{pick_value}  ({dt:.3f}ms)")
-            SelectionController.select(pick_value)
+            if IsKeyDown(KeyButtonCode.G):
+                SelectionController.select_with_gizmo(pick_value)
+            else:
+                SelectionController.select(pick_value)
         elif pick_type == 'overlay' and pick_value:
             prefix = ViewGizmo.OVERLAY_KEY_PREFIX
             if pick_value.startswith(prefix):
@@ -473,9 +478,7 @@ class EditorLayer(Layer):
             scene_panel = UIManager.register(ScenePanel())
             node_panel = UIManager.register(NodeEditorPanel())
             res_panel = UIManager.register(ResourcePanel())
-            scene_panel.visible = False
-            node_panel.visible = False
-            res_panel.visible = False
+            # 默认可见 — dock builder 需要在首帧找到这些窗口才能正确分配布局
             cls._panels_registered = True
 
     # ════════════════════════════════════════════════════════════

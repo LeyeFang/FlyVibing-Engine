@@ -1,6 +1,7 @@
 """模拟状态机 — 统一管理 Run / Pause / Stop 状态"""
 from enum import Enum, auto
 
+from Application.Core.Engine import RendererType, WindowType
 from Application.Core.Events.EngineEvent import EngineLifecycleEvent
 from Application.Editor.EditorHost import EditorHost
 
@@ -89,7 +90,12 @@ class SimulationController:
 
         GameRuntime.push_layer(RuntimeLayer)
         GameRuntime.push_layer(RuntimeDebugLayer)
-        GameRuntime.start()
+        # ── 统一后端: PIE 使用与编辑器相同的窗口/渲染器类型 ──
+        #     若 EditorHost 未初始化 (如测试环境), 回退到 GLFW + OpenGL
+        GameRuntime.start(
+            window_type=EditorHost.window_type or WindowType.GLFW,
+            renderer_type=EditorHost.renderer_type or RendererType.OpenGL
+        )
         cls._state = SimulationState.RUNNING
         EngineLifecycleEvent.Pack(
             stage="simulation", message="Runtime started", engine=EditorHost

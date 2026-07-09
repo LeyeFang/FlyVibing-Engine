@@ -2,7 +2,7 @@
 Evaluators: Entity 节点 — 实体生命周期 + 类型安全引用 (EntityRef)。
 
 原有节点 (v1, 裸 int EntityID):
-  EntityCreate, EntityDestroy, EntitySetTransform, EntityGetTransform,
+  EntityDestroy, EntitySetTransform, EntityGetTransform,
   EntityAddMesh, EntityAddCamera, EntityFindByName, EntitySetVisibility
 
 新节点 (v2, EntityRef):
@@ -12,7 +12,7 @@ Evaluators: Entity 节点 — 实体生命周期 + 类型安全引用 (EntityRef
 import esper
 
 from ...evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
-from ..math import _read_data_input, _write_data_output
+from ..math import _read_data_input
 
 
 # ── 辅助 ──────────────────────────────────────────────────────
@@ -26,19 +26,6 @@ def _get_scene_manager():
 # ═══════════════════════════════════════════════════════════════
 # v1: 裸 int EntityID 节点 (保持向后兼容)
 # ═══════════════════════════════════════════════════════════════
-
-# ── EntityCreate ──────────────────────────────────────────────
-
-def _eval_entity_create(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
-    name = _read_data_input(node_id, "Name", ctx, g, "")
-    sm = _get_scene_manager()
-    eid = sm.AddEntity()
-    if name:
-        sm.SetEntityName(eid, str(name))
-    _write_data_output(node_id, "EntityID", float(eid), ctx, g)
-
-register_evaluator("EntityCreate", _eval_entity_create)
-
 
 # ── EntityDestroy ─────────────────────────────────────────────
 
@@ -115,3 +102,5 @@ register_evaluator("EntitySetVisibility", _eval_entity_set_visibility)
 # ═══════════════════════════════════════════════════════════════
 
 from . import lifecycle  # noqa: E402, F401 — EntitySpawn
+from . import camera     # noqa: E402, F401 — CameraSetMain, CameraConfigure, GetCameraInfo
+from . import component  # noqa: E402, F401 — ComponentAdd, ComponentRemove, ComponentSetProperty

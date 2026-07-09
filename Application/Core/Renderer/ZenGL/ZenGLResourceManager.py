@@ -110,11 +110,11 @@ class ZenGLResourceManager:
         VertexLayout.check_shader_consistency(
             mesh_layout, shader_data.vs_src, f"entity shader '{shader_id}'")
 
-        pipeline = ZenGLCore.ctx.pipeline(
+        pipeline = cls.ctx.pipeline(
             vertex_shader=shader_data.vs_src,
             fragment_shader=shader_data.fs_src,
             uniforms=uniforms, layout=layout, resources=resources,
-            framebuffer=ZenGLCore.get_framebuffer(),
+            framebuffer=cls.get_framebuffer(),
             topology='triangles', cull_face='none',
             depth={'func': 'less', 'write': True},
             vertex_buffers=zengl.bind(
@@ -165,11 +165,11 @@ class ZenGLResourceManager:
                     mesh_layout, shader_data.vs_src, f"entity shader '{entity.shader_id}'")
 
                 # ★ 关键: 用当前 framebuffer 重建管线
-                new_pipeline = ZenGLCore.ctx.pipeline(
+                new_pipeline = cls.ctx.pipeline(
                     vertex_shader=shader_data.vs_src,
                     fragment_shader=shader_data.fs_src,
                     uniforms=uniforms, layout=layout, resources=resources,
-                    framebuffer=ZenGLCore.get_framebuffer(),
+                    framebuffer=cls.get_framebuffer(),
                     topology='triangles', cull_face='none',
                     depth={'func': 'less', 'write': True},
                     vertex_buffers=zengl.bind(
@@ -187,7 +187,7 @@ class ZenGLResourceManager:
     def _rebuild_overlay_pipelines(cls) -> None:
         """resize 后重建所有 overlay 管线 — 用当前 framebuffer 重建。"""
         from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
-        ctx = ZenGLCore.ctx
+        ctx = cls.ctx
         for key, gpu in list(cls._overlay_gpu_resources.items()):
             try:
                 if not gpu._orig_vs or gpu._orig_vertices is None:
@@ -216,7 +216,7 @@ class ZenGLResourceManager:
                 vs_p = _re.sub(r'uniform\s+sampler(\S+)\s+(\w+)\s*;', r'layout(binding=0) uniform sampler\1 \2;', gpu._orig_vs)
 
                 kw = {'vertex_shader': vs_p, 'fragment_shader': fs_p,
-                      'framebuffer': ZenGLCore.get_overlay_framebuffer(),
+                      'framebuffer': cls.get_overlay_framebuffer(),
                       'topology': topo, 'vertex_buffers': vb, 'vertex_count': vc}
                 if ebo: kw['index_buffer'] = ebo
                 kw['depth'] = {'func':'less','write':True} if gpu.depth_test else {'func':'always','write':False}
@@ -264,8 +264,8 @@ class ZenGLResourceManager:
         from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
         vn = np.hstack((mesh.vertices, mesh.uvs, mesh.normals)).astype('f4')
         idx = mesh.indices.astype('i4')
-        vbo = ZenGLCore.ctx.buffer(vn.tobytes())
-        ebo = ZenGLCore.ctx.buffer(idx.tobytes(), index=True)
+        vbo = cls.ctx.buffer(vn.tobytes())
+        ebo = cls.ctx.buffer(idx.tobytes(), index=True)
         cls.registered_meshes[mesh_id] = cls.mesh_data_struct(
             vbo=vbo, ebo=ebo,
             elements_count=int(idx.size), ref_count=1,
@@ -293,12 +293,12 @@ class ZenGLResourceManager:
         fmt = 'rgba8unorm' if ch>=3 else 'r8unorm'
         if ch==3:
             p = np.zeros((h,w,4),'uint8'); p[:,:,:3]=px; px=p
-        img = ZenGLCore.ctx.image((w,h), fmt, px.tobytes())
+        img = cls.ctx.image((w,h), fmt, px.tobytes())
         cls.registered_textures[texture_id] = cls.texture_data_struct(image=img, ref_count=1)
 
     @classmethod
     def register_overlay_drawable(cls, overlay: 'RRM.overlay_drawable_struct') -> None:
-        from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore; ctx = ZenGLCore.ctx
+        from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore; ctx = cls.ctx
         verts = overlay.vertices
         vbo = ctx.buffer(verts.tobytes() if isinstance(verts, np.ndarray) else verts)
         ebo = None
@@ -342,7 +342,7 @@ class ZenGLResourceManager:
         vs_p = re.sub(r'uniform\s+sampler(\S+)\s+(\w+)\s*;', r'layout(binding=0) uniform sampler\1 \2;', overlay.vs_src)
 
         kw = {'vertex_shader': vs_p, 'fragment_shader': fs_p,
-              'framebuffer': ZenGLCore.get_overlay_framebuffer(),
+              'framebuffer': cls.get_overlay_framebuffer(),
               'topology': topo, 'vertex_buffers': vb, 'vertex_count': vc}
         if ebo: kw['index_buffer'] = ebo
         kw['depth'] = {'func':'less','write':True} if overlay.depth_test else {'func':'always','write':False}

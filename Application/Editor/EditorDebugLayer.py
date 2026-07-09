@@ -31,39 +31,6 @@ class DebugLayer(Layer):
     def OnAttach(cls):
         from Application.Editor.EditorHost import EditorHost
 
-        square_mesh_id = ResourceManager.GetDefaultMesh("Square")
-        cube_mesh_id = ResourceManager.GetDefaultMesh("Cube")
-        tex_id = ResourceManager.GetDefaultTexture('Checkerboard')
-        ssvep_shader_id = ResourceManager.GetDefaultShader("SSVEP")
-        # Entity 1 Cube
-        cls.entity_id_1 = SceneManager.AddEntity()
-        SceneManager.AddComponentToEntity(
-            entity_id=cls.entity_id_1,
-            component_instance=MeshRenderer(mesh_id=cube_mesh_id))
-        SceneManager.SetEntityTransform(
-            cls.entity_id_1,
-            position_xyz=(-3, 0, 0),
-            scale_xyz=(1, 1, 1))
-        SceneManager.SetEntityTexture(
-            cls.entity_id_1,
-            tex_id)
-
-        # Entity 2 SSVEP
-        cls.entity_id_2 = SceneManager.AddEntity()
-        SceneManager.AddComponentToEntity(
-            entity_id=cls.entity_id_2,
-            component_instance=MeshRenderer(mesh_id=square_mesh_id))
-        SceneManager.SetEntityTransform(
-            cls.entity_id_2,
-            position_xyz=(3, 0, 0),
-            scale_xyz=(1, 1, 1))
-        SceneManager.SetEntityShader(
-            cls.entity_id_2,
-            ssvep_shader_id)
-        SceneManager.SetMaterialParams(
-            cls.entity_id_2,
-            {"freq": 15})
-
         # 通知渲染器刷新相机矩阵
         SceneCameraUpdateEvent.Pack(engine=EditorHost)
 
@@ -75,9 +42,18 @@ class DebugLayer(Layer):
     @classmethod
     def OnRender(cls) -> None:
         run_time = GetRunTime()
-        SceneManager.SetMaterialParams(
-            cls.entity_id_2,
-            {'time': run_time})
+        # 仅在 entity 的 material 支持 'time' 参数时才设置
+        try:
+            import esper
+            from Application.Core.Scene.BasicComponents import MeshRenderer
+            mr = esper.component_for_entity(cls.entity_id_2, MeshRenderer)
+            from Application.Resource.ResourceManager import ResourceManager
+            mat = ResourceManager.GetMaterial(mr.material_id)
+            if mat and 'time' in mat.uniforms_data:
+                SceneManager.SetMaterialParams(
+                    cls.entity_id_2, {'time': run_time})
+        except Exception:
+            pass
 
     @classmethod
     def OnUpdate(cls) -> None:

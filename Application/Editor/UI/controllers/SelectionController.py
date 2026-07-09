@@ -34,14 +34,28 @@ class SelectionController:
 
     @classmethod
     def select(cls, entity_id: int) -> None:
-        """选中指定实体 — 同时更新数据层 & 渲染层。
+        """选中指定实体 — 仅轮廓高亮，不显示 Gizmo。
+
+        适用于普通鼠标点击选中。
 
         Args:
             entity_id: 实体 ID
         """
         SceneBrowserController.select(entity_id)
         OutlinerID.set_selected_entities({entity_id})
-        # ── Gizmo 跟随实体 WORLD 位置 (非 pre-rotation) ──
+        TransformGizmo._visible = False
+
+    @classmethod
+    def select_with_gizmo(cls, entity_id: int) -> None:
+        """选中指定实体 — 轮廓高亮 + 显示移动 Gizmo。
+
+        适用于 G+点击 选中实体并进入平移操作模式。
+
+        Args:
+            entity_id: 实体 ID
+        """
+        SceneBrowserController.select(entity_id)
+        OutlinerID.set_selected_entities({entity_id})
         TransformGizmo._visible = True
         try:
             from Application.Core.Math.Transform import calculate_entity_model

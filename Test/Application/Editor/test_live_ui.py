@@ -135,6 +135,7 @@ def main():
 
     ResourceManager.Init(mock_app)
     SceneManager.Init(mock_app)
+    SceneManager.set_thread_active("MockApp")
 
     # 创建测试 Entity — ScenePanel 会显示它们
     entity_ids = _create_test_entities(3)
@@ -145,7 +146,7 @@ def main():
     io = imgui.get_io()
     io.config_flags |= imgui.ConfigFlags_.docking_enable
     io.config_flags |= imgui.ConfigFlags_.nav_enable_keyboard
-    io.set_ini_filename(os.path.join(os.path.dirname(__file__), "imgui.ini"))
+    io.set_ini_filename("")
     _load_font(io)
 
     # GLFW + OpenGL3 后端

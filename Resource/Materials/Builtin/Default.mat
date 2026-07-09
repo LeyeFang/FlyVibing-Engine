@@ -1,0 +1,10 @@
+{
+    "name": "Default",
+    "shader": "Basic",
+    "textures": ["Default"],
+    "uniforms": {
+        "uModel": "mat4",
+        "uView": "mat4",
+        "uProjection": "mat4"
+    }
+}

@@ -132,6 +132,16 @@ void main() {
     @classmethod
     def _rebuild_pick_fbo(cls, w: int, h: int) -> None:
         """重建拾取 FBO (内部实现)。"""
+        # ── 防御: 清空所有残留的 GL 错误 (避免前序操作污染 FBO 创建) ──
+        while gl.glGetError() != gl.GL_NO_ERROR:
+            pass
+
+        if w <= 0 or h <= 0:
+            raise RuntimeError(
+                f"Pick FBO: invalid dimensions ({w}, {h}) — "
+                f"window may not be fully initialized yet"
+            )
+
         if cls._pick_fbo:
             gl.glDeleteFramebuffers(1, [cls._pick_fbo])
         if cls._pick_color:
@@ -168,8 +178,30 @@ void main() {
             gl.GL_DEPTH_ATTACHMENT,
             gl.GL_RENDERBUFFER,
             cls._pick_depth)
-        if gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER) != gl.GL_FRAMEBUFFER_COMPLETE:
-            raise RuntimeError("Pick FBO incomplete")
+
+        # ── 检查前先 drain 所有 GL 错误 ──
+        gl_err = gl.glGetError()
+        while gl_err != gl.GL_NO_ERROR:
+            gl_err = gl.glGetError()
+
+        fb_status = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
+        if fb_status != gl.GL_FRAMEBUFFER_COMPLETE:
+            # 映射常见状态码到可读字符串
+            _status_names = {
+                0x8CD6: "GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT",
+                0x8CD7: "GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT",
+                0x8CDD: "GL_FRAMEBUFFER_UNSUPPORTED",
+                0x8CDB: "GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER",
+                0x8CDC: "GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER",
+                0x8D56: "GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE",
+                0x8DA8: "GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS",
+            }
+            status_name = _status_names.get(fb_status, f"0x{fb_status:04X}")
+            raise RuntimeError(
+                f"Pick FBO incomplete: status={status_name}, "
+                f"size=({w},{h}), fbo={cls._pick_fbo}, "
+                f"color_tex={cls._pick_color}, depth_rb={cls._pick_depth}"
+            )
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
         cls._pick_fbo_w, cls._pick_fbo_h = w, h
 
@@ -206,10 +238,13 @@ void main() {
         proj: np.ndarray,
     ) -> None:
         """每帧将实体 ID 渲染到拾取 FBO — 通过 MRO 访问 cls.registered_entities。"""
+        # ── 防御: pick FBO 尚未创建 (如 PIE 停止后编辑器尚未重建) ──
+        if not cls._pick_fbo or not cls._pick_prog:
+            cls._pick_cache = -1
+            cls._pick_overlay_key = None
+            return
         entities = SceneManager.GetRenderableEntities()
         if not entities:
-            # Only print when verbose debugging is needed
-            # print("[PICK-DBG] NO renderable entities, skipping pick pass")
             cls._finalize_pick_read()
             return
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, cls._pick_fbo)
@@ -265,6 +300,11 @@ void main() {
         vp_h: int,
     ) -> None:
         """渲染可拾取 overlay → pick FBO — 通过 MRO 访问 cls._overlay_gpu_resources。"""
+        # ── 防御: pick FBO 尚未创建 ──
+        if not cls._pick_fbo or not cls._overlay_pick_prog:
+            cls._pick_cache = -1
+            cls._pick_overlay_key = None
+            return
         pickable = [(k, g) for k, g in cls._overlay_gpu_resources.items() if g.pick_type > 0]
         if not pickable:
             cls._finalize_pick_read()
@@ -333,6 +373,13 @@ void main() {
         render thread 专用, 包含 glFinish + glReadPixels。
         main thread 通过 get_pick() / pick_at() 零 GL 读取。
         """
+        # ── 防御: pick FBO 不存在时直接清空缓存 ──
+        if not cls._pick_fbo:
+            cls._pick_cache = -1
+            cls._pick_overlay_key = None
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+            return
+
         sx, sy = cls._pick_mouse
         px = max(0, min(int(round(sx)), cls._pick_fbo_w - 1))
         py = max(0, min(int(round(sy)), cls._pick_fbo_h - 1))

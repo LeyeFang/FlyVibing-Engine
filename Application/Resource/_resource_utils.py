@@ -39,12 +39,13 @@ def parse_shader_files(
 
     # 提取 uniform 元信息 (普通 uniform + sampler + push_constant block)
     uniforms = {}
-    # ① 普通 uniform: layout(...) uniform type name;
+    # ① 普通 uniform: layout(...) uniform type name [= init]; 
     uniform_pattern = re.compile(
         r'(?:layout\s*\([^)]*\)\s*)?uniform\s+'
         r'(\w+)\s+'
         r'(\w+)\s*'
-        r'(?:\[[^\]]*\])?\s*;',
+        r'(?:\[[^\]]*\])?\s*'
+        r'(?:=[^;]*)?\s*;',
         re.MULTILINE
     )
     # ② push_constant block 成员: layout(push_constant) uniform Name { type member; ... }

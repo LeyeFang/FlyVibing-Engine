@@ -127,7 +127,7 @@ class OpenGLRenderer(
                 window_size = _glfw.get_framebuffer_size(_glfw_win)
             else:
                 window_size = (800, 600)
-        OpenGLCore.init_core(window_size)
+        cls.init_core(window_size)
         cls.viewport_width = window_size[0]
         cls.viewport_height = window_size[1]
         cls.aspect_ratio = window_size[0] / window_size[1]
@@ -146,9 +146,12 @@ class OpenGLRenderer(
     def _do_start_frame(cls) -> None:
         if cls._pending_resize is not None:
             w, h = cls._pending_resize
-            OpenGLCore.update_viewport(w, h)
+            cls.update_viewport(w, h)
             cls.rebuild_pick_fbo(w, h)
             cls._pending_resize = None
+        # ── 恢复: pick FBO 被外部销毁后自动重建 (如 PIE 停止后编辑器恢复) ──
+        if not cls._pick_fbo and cls.viewport_width > 0 and cls.viewport_height > 0:
+            cls.rebuild_pick_fbo(cls.viewport_width, cls.viewport_height)
         view = cls._cached_view
         proj = cls._cached_proj
         # ── 兜底: 无相机时使用单位矩阵 (PIE 首帧 / 未注入相机) ──
@@ -158,7 +161,7 @@ class OpenGLRenderer(
             proj = np.identity(4, dtype=np.float32)
         vp_w, vp_h = cls.viewport_width, cls.viewport_height
         # ── 1. 清屏 ──
-        OpenGLCore.clear_frame()
+        cls.clear_frame()
         # ── 2. Entity pick → pick FBO (FBO 不解绑) ──
         cls._render_entities_pick_pass(view, proj)
         # ── 2b. Overlay pick → pick FBO (最后解绑 + 预读缓存) ──

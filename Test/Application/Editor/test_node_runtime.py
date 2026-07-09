@@ -184,12 +184,13 @@ def main():
     BindPackCallback(lambda e: None)
     ResourceManager.Init(mock_app)
     SceneManager.Init(mock_app)
+    SceneManager.set_thread_active("MockApp")
 
     # ── 3. ImGui ──
     imgui.create_context()
     io = imgui.get_io()
     io.config_flags |= imgui.ConfigFlags_.docking_enable
-    io.set_ini_filename(os.path.join(os.path.dirname(__file__), "imgui.ini"))
+    io.set_ini_filename("")
     for fp in [
         "Resource/Fonts/Inter-Regular.ttf",
         "C:/Windows/Fonts/segoeui.ttf",

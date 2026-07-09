@@ -92,6 +92,29 @@ def _eval_random_gaussian(node_id: int, ctx: ExecutionContext, g: GraphEvaluator
 register_evaluator("MathRandomGaussian", _eval_random_gaussian)
 
 
+# ── Compare 比较节点 ─────────────────────────────────────────
+
+def _eval_compare(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
+    """Compare — 根据 operation 属性比较 A 和 B，输出 bool。"""
+    a = _read_data_input(node_id, "A", ctx, g, 0.0)
+    b = _read_data_input(node_id, "B", ctx, g, 0.0)
+    inst = g._canvas.nodes[node_id]
+    op = inst.props.get("operation", "gt")
+
+    ops = {
+        "gt":  lambda: a > b,
+        "lt":  lambda: a < b,
+        "eq":  lambda: abs(a - b) < 1e-9,
+        "neq": lambda: abs(a - b) >= 1e-9,
+        "gte": lambda: a >= b,
+        "lte": lambda: a <= b,
+    }
+    result = ops.get(op, ops["gt"])()
+    _write_data_output(node_id, "Result", float(result), ctx, g)
+
+register_evaluator("Compare", _eval_compare)
+
+
 # ── 统一 Random 节点 (Manual / Pin 双模式) ────────────────────
 
 def _eval_random(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:

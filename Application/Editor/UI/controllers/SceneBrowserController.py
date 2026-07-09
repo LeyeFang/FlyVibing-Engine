@@ -7,6 +7,12 @@ from typing import Optional
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Scene.BasicComponents import Camera
 
+# ── 输入安全常量 ─────────────────────────────────────────
+_SCALE_MIN: float = 0.0001          # Scale 下限 (防止零除/反转法线)
+_POSITION_MAX: float = 1e6          # Position 绝对值上限 (世界单位)
+_SCALE_MAX: float = 1e4             # Scale 绝对值上限
+_ROTATION_MAX_DEG: float = 360.0    # Rotation 单轴最大值 (角度制, 超出后取模)
+
 
 @dataclass
 class EntitySummary:
@@ -100,10 +106,18 @@ class SceneBrowserController:
     def set_position(cls, entity_id: int, position: tuple[float, float, float],
                      use_local: bool = False) -> None:
         """设置实体位置（编辑器坐标系）。use_local=True 写本地坐标。"""
+        # ── 安全检查: 拒绝 NaN/Inf, 钳制绝对值 ──
+        px, py, pz = float(position[0]), float(position[1]), float(position[2])
+        if not (math.isfinite(px) and math.isfinite(py) and math.isfinite(pz)):
+            return
+        px = max(-_POSITION_MAX, min(_POSITION_MAX, px))
+        py = max(-_POSITION_MAX, min(_POSITION_MAX, py))
+        pz = max(-_POSITION_MAX, min(_POSITION_MAX, pz))
+        safe_pos = (px, py, pz)
         if use_local:
-            SceneManager.SetEntityLocalTransformEditor(entity_id, position_xyz=position)
+            SceneManager.SetEntityLocalTransformEditor(entity_id, position_xyz=safe_pos)
         else:
-            SceneManager.SetEntityTransformEditor(entity_id, position_xyz=position)
+            SceneManager.SetEntityTransformEditor(entity_id, position_xyz=safe_pos)
 
     @classmethod
     def set_rotation(cls, entity_id: int, rotation: tuple[float, float, float],
@@ -112,7 +126,14 @@ class SceneBrowserController:
         
         UI 层使用角度 (degrees)，内部存储为弧度 (radians)。
         """
-        rot_rad = tuple(math.radians(r) for r in rotation)
+        # ── 安全检查: 拒绝 NaN/Inf, 归一化到 [-360, 360] ──
+        rx, ry, rz = float(rotation[0]), float(rotation[1]), float(rotation[2])
+        if not (math.isfinite(rx) and math.isfinite(ry) and math.isfinite(rz)):
+            return
+        rx = rx % _ROTATION_MAX_DEG if rx >= 0 else -(-rx % _ROTATION_MAX_DEG)
+        ry = ry % _ROTATION_MAX_DEG if ry >= 0 else -(-ry % _ROTATION_MAX_DEG)
+        rz = rz % _ROTATION_MAX_DEG if rz >= 0 else -(-rz % _ROTATION_MAX_DEG)
+        rot_rad = (math.radians(rx), math.radians(ry), math.radians(rz))
         if use_local:
             SceneManager.SetEntityLocalTransformEditor(entity_id, rotation_xyz=rot_rad)
         else:
@@ -121,16 +142,29 @@ class SceneBrowserController:
     @classmethod
     def set_scale(cls, entity_id: int, scale: tuple[float, float, float],
                   use_local: bool = False) -> None:
-        """设置实体缩放。"""
+        """设置实体缩放（编辑器坐标系）。"""
+        # ── 安全检查: 拒绝 NaN/Inf/≤0, 钳制范围 ──
+        sx, sy, sz = float(scale[0]), float(scale[1]), float(scale[2])
+        if not (math.isfinite(sx) and math.isfinite(sy) and math.isfinite(sz)):
+            return
+        sx = max(_SCALE_MIN, min(_SCALE_MAX, sx))
+        sy = max(_SCALE_MIN, min(_SCALE_MAX, sy))
+        sz = max(_SCALE_MIN, min(_SCALE_MAX, sz))
+        safe_scale = (sx, sy, sz)
         if use_local:
-            SceneManager.SetEntityLocalTransformEditor(entity_id, scale_xyz=scale)
+            SceneManager.SetEntityLocalTransformEditor(entity_id, scale_xyz=safe_scale)
         else:
-            SceneManager.SetEntityTransformEditor(entity_id, scale_xyz=scale)
+            SceneManager.SetEntityTransformEditor(entity_id, scale_xyz=safe_scale)
 
     @classmethod
     def set_name(cls, entity_id: int, name: str) -> None:
-        """设置实体名称。"""
+        """设置实体名称，同步到 Scene.entities。"""
         SceneManager.SetEntityName(entity_id, name)
+        try:
+            from Application.Editor.UI.panels.ScenePanel import ScenePanel
+            ScenePanel._on_entity_renamed(entity_id, name)
+        except Exception as e:
+            print(f"[SceneBrowser] _on_entity_renamed failed: {e}")
 
     @classmethod
     def get_camera_info(cls, entity_id: int) -> Optional[dict]:
@@ -210,6 +244,147 @@ class SceneBrowserController:
             if info['entity_id'] == entity_id:
                 return info
         return None
+
+    # ── Entity CRUD ───────────────────────────────────────────
+
+    @classmethod
+    def add_entity(cls, name: str = "") -> int:
+        """创建新实体，双写到 Scene.entities 注册表。"""
+        eid = SceneManager.AddEntity(name=name or "Entity")
+        if cls.selected_entity_id is not None:
+            SceneManager.SetEntityParent(eid, cls.selected_entity_id)
+        try:
+            from Application.Editor.UI.panels.ScenePanel import ScenePanel
+            ScenePanel._on_entity_added(eid, name or "Entity")
+        except Exception as e:
+            print(f"[SceneBrowser] _on_entity_added failed: {e}")
+        return eid
+
+    @classmethod
+    def delete_entity(cls, entity_id: int) -> bool:
+        """删除实体，同步从 Scene.entities 移除。"""
+        if cls.selected_entity_id == entity_id:
+            cls.selected_entity_id = None
+        result = SceneManager.DeleteEntity(entity_id)
+        if result:
+            try:
+                from Application.Editor.UI.panels.ScenePanel import ScenePanel
+                ScenePanel._on_entity_deleted(entity_id)
+            except Exception as e:
+                print(f"[SceneBrowser] _on_entity_deleted failed: {e}")
+        return result
+
+    @classmethod
+    def delete_selected(cls) -> bool:
+        """删除当前选中的实体。"""
+        if cls.selected_entity_id is None:
+            return False
+        return cls.delete_entity(cls.selected_entity_id)
+
+    # ── Component 管理 ────────────────────────────────────────
+
+    @classmethod
+    def get_available_components(cls) -> dict[str, type]:
+        """获取所有已注册的可用 Component 类型。"""
+        return SceneManager.GetRegisteredComponents()
+
+    @classmethod
+    def add_component(cls, entity_id: int, component_name: str) -> bool:
+        """给实体添加指定名称的 Component。"""
+        return SceneManager.AddComponentToEntityByName(entity_id, component_name)
+
+    @classmethod
+    def get_entity_components(cls, entity_id: int) -> list[str]:
+        """获取实体当前拥有的 Component 名称列表。"""
+        comps = cls.get_available_components()
+        result = []
+        for name, comp_cls in comps.items():
+            try:
+                import esper
+                if esper.has_component(entity_id, comp_cls):
+                    result.append(name)
+            except Exception:
+                pass
+        return result
+
+    # ── MeshRenderer 编辑 ─────────────────────────────────────
+
+    @classmethod
+    def get_entity_mesh_id(cls, entity_id: int) -> int | None:
+        try:
+            return SceneManager.GetEntityMesh(entity_id)
+        except Exception:
+            return None
+
+    @classmethod
+    def get_entity_material_id(cls, entity_id: int) -> int | None:
+        try:
+            return SceneManager.GetEntityMaterial(entity_id)
+        except Exception:
+            return None
+
+    @classmethod
+    def set_entity_mesh(cls, entity_id: int, mesh_id: int) -> None:
+        SceneManager.SetEntityMeshRenderer(entity_id, mesh_id=mesh_id)
+
+    @classmethod
+    def set_entity_material(cls, entity_id: int, material_id: int) -> None:
+        SceneManager.SetEntityMaterial(entity_id, material_id)
+
+    @classmethod
+    def get_entity_material_info(cls, entity_id: int) -> dict | None:
+        """获取实体当前 material 的详细信息（shader, textures, uniforms）。"""
+        try:
+            mid = SceneManager.GetEntityMaterial(entity_id)
+            from Application.Resource.ResourceManager import ResourceManager
+            mat = ResourceManager.GetMaterial(mid)
+            return {
+                'material_id': mid,
+                'shader_id': mat.shader_id,
+                'shader_name': ResourceManager.GetShaderName(mat.shader_id),
+                'texture_ids': list(mat.texture_id_list),
+                'uniforms': dict(mat.uniforms_data),
+            }
+        except Exception:
+            return None
+
+    @classmethod
+    def set_material_uniform(cls, entity_id: int, name: str, value) -> None:
+        """设置 entity material 的单个 uniform 参数。"""
+        SceneManager.SetMaterialParams(entity_id, {name: value})
+
+    @classmethod
+    def create_material_for_entity(cls, entity_id: int) -> int | None:
+        """为实体创建默认材质（Basic shader + Default 纹理）并绑定。返回 material_id。"""
+        from Application.Resource.ResourceManager import ResourceManager
+        mid = ResourceManager.NewMaterial()
+        SceneManager.SetEntityMaterial(entity_id, mid)
+        return mid
+
+    @classmethod
+    def remove_material_texture(cls, entity_id: int, slot_index: int) -> None:
+        """移除实体材质指定槽位的纹理（含渲染器同步）。"""
+        from Application.Resource.ResourceManager import ResourceManager
+        mid = SceneManager.GetEntityMaterial(entity_id)
+        ResourceManager.RemoveMaterialTexture(mid, slot_index)
+        # ★ 渲染器缓存了 entity.texture_id（读自 slot 0），
+        #    移除 slot 0 后须触发 ComponentModifiedEvent 刷新缓存。
+        if slot_index == 0:
+            mat = ResourceManager.GetMaterial(mid)
+            new_tex = mat.texture_id_list[0] if mat.texture_id_list else 0
+            SceneManager.SetEntityTexture(entity_id, new_tex, slot=0)
+
+    @classmethod
+    def add_material_texture(cls, entity_id: int, texture_id: int) -> None:
+        """给实体材质追加一个纹理。"""
+        from Application.Resource.ResourceManager import ResourceManager
+        mid = SceneManager.GetEntityMaterial(entity_id)
+        ResourceManager.AddMaterialTexture(mid, texture_id)
+
+    @classmethod
+    def set_material_shader(cls, entity_id: int, shader_id: int) -> None:
+        """切换实体的 shader。"""
+        SceneManager.SetEntityShader(entity_id, shader_id)
 
 
 # ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──

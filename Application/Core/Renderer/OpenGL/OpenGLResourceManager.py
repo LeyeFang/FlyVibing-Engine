@@ -144,8 +144,11 @@ class OpenGLResourceManager:
         cls.register_mesh(mesh, mesh_id)
         cls.register_shader(shader, shader_id)
 
+        # ★ 纹理保护: tex_id=0 或无效时跳过
+        tex_id = 0
         if material.texture_id_list:
             tex_id = material.texture_id_list[0]
+        if tex_id > 0 and str(tex_id) in ResourceManager.loaded_texture:
             texture = ResourceManager.GetTexture(tex_id)
             cls.register_texture(texture, tex_id)
         else:

@@ -8,7 +8,7 @@ from Application.Editor.EditorHost import EditorHost
 from Application.Editor.EditorPlugin import EditorPlugin
 
 
-EditorHost.init(window_type='GLFW', renderer_type='ZenGL')
+EditorHost.init(window_type='GLFW', renderer_type='OpenGL')
 
 
 EditorHost.load_plugin(EditorPlugin())

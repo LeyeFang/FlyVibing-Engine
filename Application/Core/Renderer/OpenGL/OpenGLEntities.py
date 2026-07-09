@@ -44,6 +44,12 @@ class OpenGLEntities:
             if entity is None:
                 continue
 
+            # ★ 资源保护: 跳过已失效的实体（shader/mesh 被删除后残留的缓存）
+            if entity.shader_id not in cls.registered_shaders:
+                continue
+            if entity.mesh_id not in cls.registered_meshes:
+                continue
+
             # ── Stencil 写入: 被选实体写 stencil=1 (由 OutlineOverlay 注入) ──
             if has_outline:
                 if entity_id in cls._outline_selected_ids:
@@ -72,12 +78,16 @@ class OpenGLEntities:
                     OpenGLUtils.set_uniform_int(
                         cls.registered_shaders, entity.shader_id, 'uTexture', 0)
             # ── 材质 uniform ──
-            material = ResourceManager.GetMaterial(entity.material_id)
-            for u_name, u_value in material.uniforms_data.items():
-                if u_name in ('model', 'view', 'projection'):
-                    continue
-                OpenGLUtils.set_uniform_value(
-                    cls.registered_shaders, entity.shader_id, u_name, u_value)
+            try:
+                material = ResourceManager.GetMaterial(entity.material_id)
+            except Exception:
+                material = None
+            if material is not None:
+                for u_name, u_value in material.uniforms_data.items():
+                    if u_name in ('model', 'view', 'projection'):
+                        continue
+                    OpenGLUtils.set_uniform_value(
+                        cls.registered_shaders, entity.shader_id, u_name, u_value)
             # ── 绘制 ──
             gl.glBindVertexArray(entity.vao)
             mesh_data = cls.registered_meshes[entity.mesh_id]

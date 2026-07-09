@@ -4,7 +4,7 @@
 用法:
     python Scripts/compile_shaders.py
 
-扫描 Resource/DefaultShaders/ 下所有 .vert 和 .frag 文件，
+扫描 Resource/Shaders/Builtin/ 下所有 .vert 和 .frag 文件，
 调用 glslc 编译为 .vert.spv / .frag.spv。
 """
 
@@ -13,7 +13,7 @@ import os
 import shutil
 import sys
 
-SHADER_DIR = os.path.join(os.path.dirname(__file__), "..", "Resource", "DefaultShaders")
+SHADER_DIR = os.path.join(os.path.dirname(__file__), "..", "Resource", "Shaders", "Builtin")
 
 
 def find_glslc():

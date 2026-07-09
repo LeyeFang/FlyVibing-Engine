@@ -19,7 +19,19 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional
+
+
+# ═══════════════════════════════════════════════════════════════
+# GameType — 场景游戏类型
+# ═══════════════════════════════════════════════════════════════
+
+class GameType(Enum):
+    """场景的游戏类型，决定默认摄像机系统和可用节点。"""
+    GAME_3D = "3d"
+    GAME_2D = "2d"
+    OVERLAY = "overlay"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -83,6 +95,9 @@ class Scene:
 
     name: str = "Untitled"
 
+    # 游戏类型 — 决定默认摄像机系统和可用节点
+    game_type: GameType = GameType.GAME_3D
+
     # {entity_id: EntityData}
     entities: dict[int, EntityData] = field(default_factory=dict)
 
@@ -139,6 +154,24 @@ class Scene:
     def get_entity(self, entity_id: int) -> Optional[EntityData]:
         """获取实体定义。"""
         return self.entities.get(entity_id)
+
+    def get_entity_by_name(self, name: str) -> Optional[tuple[int, EntityData]]:
+        """按名称查找实体定义。
+
+        Returns:
+            (entity_id, EntityData) 或 None
+        """
+        for eid, ed in self.entities.items():
+            if ed.name == name:
+                return (eid, ed)
+        return None
+
+    def get_entity_names(self) -> list[str]:
+        """返回所有实体定义的名称列表（按 ID 排序）。"""
+        return sorted(
+            [ed.name for ed in self.entities.values()],
+            key=lambda n: n.lower(),
+        )
 
     def get_component(
         self,
@@ -238,6 +271,7 @@ class Scene:
 
         result: dict = {
             "name": self.name,
+            "game_type": self.game_type.value,
             "entities": entities_dict,
             "main_camera_entity_id": self.main_camera_entity_id,
             "next_eid": self._next_eid,
@@ -268,6 +302,12 @@ class Scene:
         scene = cls(name=data.get("name", "Untitled"))
         scene._next_eid = data.get("next_eid", 1)
         scene.main_camera_entity_id = data.get("main_camera_entity_id")
+        # ── 恢复 game_type ──
+        gt_raw = data.get("game_type", "3d")
+        try:
+            scene.game_type = GameType(gt_raw)
+        except ValueError:
+            scene.game_type = GameType.GAME_3D
 
         for eid_str, ed_data in data.get("entities", {}).items():
             eid = int(eid_str)

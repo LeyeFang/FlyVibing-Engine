@@ -181,6 +181,7 @@ class TestHarness:
         BindPackCallback(lambda e: None)                    # 静默事件
         ResourceManager.Init(self.mock_app)
         SceneManager.Init(self.mock_app)
+        SceneManager.set_thread_active("MockApp")           # 测试线程绑定
 
     # ── 3. 渲染器 ──────────────────────────────────────────────
 

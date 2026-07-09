@@ -27,7 +27,7 @@ class ZenGLPostProcess(PostProcess):
     # Highlight GPU 资源 (ZenGL)
     # ════════════════════════════════════════════════════════
 
-    _pp_ctx = None                          # ZenGL context (ZenGLCore.ctx)
+    _pp_ctx = None                          # ZenGL context (cls.ctx)
 
     # ── MRT Images ──
     _pp_color_img = None                    # rgba8unorm
@@ -50,7 +50,7 @@ class ZenGLPostProcess(PostProcess):
     def _init_highlight(cls, config: HighlightEffectConfig) -> None:
         """获取 ZenGL context → 创建 MRT Images → 编译 shader 模板。"""
         from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
-        cls._pp_ctx = ZenGLCore.ctx
+        cls._pp_ctx = cls.ctx
         cls._create_fbo(
             cls.viewport_width, cls.viewport_height)
         cls._compile_entity_shaders()
@@ -198,7 +198,7 @@ void main() {
             resources=[{'type': 'sampler', 'binding': 0,
                         'image': out_edge_img}],
             uniforms={'uOutlineColor': outline_col},
-            framebuffer=[ZenGLCore._color_image, ZenGLCore._depth_image],
+            framebuffer=[cls._color_image, cls._depth_image],
             blend={'enable': True, 'src_color': 'src_alpha',
                    'dst_color': 'one_minus_src_alpha'},
             topology='triangles',
@@ -280,7 +280,7 @@ void main() {
         cls.registered_textures 已在 MRO 中可用 (由 ZenGLResourceManager 提供)。
         """
         from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
-        ctx = ZenGLCore.ctx
+        ctx = cls.ctx
         entity = cls.registered_entities.get(eid)
         if entity is None:
             return
@@ -293,8 +293,8 @@ void main() {
         tex_id = entity.texture_id
         tex_resources = []
         tex_layout = []
-        if tex_id and tex_id in ZRM.registered_textures:
-            td = ZRM.registered_textures[tex_id]
+        if tex_id and tex_id in cls.registered_textures:
+            td = cls.registered_textures[tex_id]
             tex_layout.append({'name': 'uTexture', 'binding': 0})
             tex_resources.append({
                 'type': 'sampler', 'binding': 0, 'image': td.image,

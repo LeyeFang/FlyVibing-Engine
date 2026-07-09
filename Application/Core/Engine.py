@@ -58,6 +58,36 @@ class WindowType(Enum):
 
 
 # ════════════════════════════════════════════════════════════════
+# 帧同步 — 多引擎场景 (PIE) 下协调渲染线程
+# ════════════════════════════════════════════════════════════════
+
+class FrameSync:
+    """单生产者单消费者帧同步。
+
+    master (Editor) 每帧结束后调用 master_tick()，
+    slave  (PIE)    每帧开始前调用 slave_wait()。
+    导出模式下不创建 FrameSync → 零开销。
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Condition()
+        self._counter: int = 0
+
+    def master_tick(self) -> None:
+        """master 完成一帧后调用 — 唤醒等待中的 slave。"""
+        with self._lock:
+            self._counter += 1
+            self._lock.notify_all()
+
+    def slave_wait(self) -> None:
+        """slave 开始新帧前调用 — 阻塞直到 master 完成当前帧。"""
+        with self._lock:
+            current = self._counter
+            while self._counter == current:
+                self._lock.wait()
+
+
+# ════════════════════════════════════════════════════════════════
 # Engine — 核心运行时
 # ════════════════════════════════════════════════════════════════
 
@@ -119,6 +149,12 @@ class Engine:
     _logic_thread: Thread | None = None
     target_frame_time: float = 0.0
     _instance: 'Engine' = None
+
+    # ── 帧同步 (多引擎场景, 如 PIE) ──
+    #     master (Editor) 每帧结束后 signal, slave (GameRuntime) 每帧开始前 wait
+    #     导出模式下 _frame_sync 保持 None, 零开销
+    _frame_sync: 'FrameSync | None' = None
+    _is_frame_sync_master: bool = False
 
     # ════════════════════════════════════════════════════════════
     # 工厂方法（子类覆写）
@@ -241,6 +277,8 @@ class Engine:
         # 3. 初始化子系统
         ResourceManager.Init(cls)
         SceneManager.Init(cls)
+        # 将当前线程绑定到本 Engine 的场景（多线程安全）
+        SceneManager.set_thread_active(cls.__name__)
         # 4. 创建窗口（子类决定窗口类型）
         cls.window = cls._create_window()
         cls.window._engine = cls  # 窗口知道谁拥有它，事件路由到正确的 Engine
@@ -340,6 +378,7 @@ class Engine:
         不调用任何 GLFW 函数。窗口事件和生命周期全部由主线程管理。
         本线程仅执行游戏逻辑更新。
         """
+        SceneManager.set_thread_active(cls.__name__)  # 线程绑定
         cls._state()['run_ready'].set()
         while cls.run_state:
             cls._tick_timing()
@@ -487,6 +526,7 @@ class Engine:
     @classmethod
     def _render_loop(cls) -> None:
         """渲染线程入口 — 创建渲染器 → 等待 run_ready → 进入渲染循环。"""
+        SceneManager.set_thread_active(cls.__name__)  # 线程绑定
         try:
             cls.renderer = cls._create_renderer()
             cls._state()['renderer_ready'].set()
@@ -533,6 +573,10 @@ class Engine:
         cls
     ) -> None:
         """渲染一帧 — 子类可覆写以扩展（如 EditorHost 在 EndFrame 后加 ImGui 绘制）。"""
+        # ── 帧同步: slave 等待 master (PIE 等 Editor) ──
+        if cls._frame_sync is not None and not cls._is_frame_sync_master:
+            cls._frame_sync.slave_wait()
+
         renderer = cls.renderer
         window = cls.window
         # ── 帧开始 ──
@@ -547,6 +591,10 @@ class Engine:
             window.SwapBuffer()
         # ── 性能统计 ──
         cls._get_profiler().tick()
+
+        # ── 帧同步: master 唤醒 slave (Editor → PIE) ──
+        if cls._frame_sync is not None and cls._is_frame_sync_master:
+            cls._frame_sync.master_tick()
 
     # ════════════════════════════════════════════════════════════
     # 全局访问入口

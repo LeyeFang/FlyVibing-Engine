@@ -113,6 +113,8 @@ class glfwWindow(Window):
             print("无法创建窗口")
             glfw.terminate()
             return
+        # 释放当前线程的 GL 上下文 — 渲染线程会通过 MakeContextCurrent 接管
+        glfw.make_context_current(None)
         return glfw_window
 
     @classmethod

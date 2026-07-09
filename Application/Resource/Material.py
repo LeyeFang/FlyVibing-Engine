@@ -20,6 +20,10 @@ class Material:
         for u_name, u_type in uniforms_name_type.items():
             if u_type == 'mat4':
                 self.uniforms_data[u_name] = np.zeros((4, 4), dtype=np.float32)
+            elif u_type == 'vec4':
+                self.uniforms_data[u_name] = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+            elif u_type == 'vec3':
+                self.uniforms_data[u_name] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
             elif u_type == 'float':
                 self.uniforms_data[u_name] = np.float32(0)
             elif u_type == 'double':
@@ -35,6 +39,10 @@ class Material:
         for u_name, u_type in uniforms_name_type.items():
             if u_type == 'mat4':
                 self.uniforms_data[u_name] = np.zeros((4, 4), dtype=np.float32)
+            elif u_type == 'vec4':
+                self.uniforms_data[u_name] = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+            elif u_type == 'vec3':
+                self.uniforms_data[u_name] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
             elif u_type == 'float':
                 self.uniforms_data[u_name] = np.float32(0)
             elif u_type == 'double':

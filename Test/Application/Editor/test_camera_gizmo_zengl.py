@@ -171,7 +171,7 @@ def main():
     #     引擎约定 M = T @ R (先位移后旋转), world_pos = position @ R
     #     要到达 world_pos=(5,3,8) 且看向原点, 需解 position @ R = (5,3,8)
     #     → position = (5,3,8) @ R^T = (0, 0, √98) ≈ (0, 0, 9.899)
-    cam_eid = SceneManager.main_camera_id
+    cam_eid = SceneManager.get_main_camera_id()
     dx, dy, dz = -5.0, -3.0, -8.0   # 摄像机 → 原点方向
     _len = math.sqrt(dx*dx + dy*dy + dz*dz)
     rx = math.atan2(-dy, -dz)        # pitch 绕 X

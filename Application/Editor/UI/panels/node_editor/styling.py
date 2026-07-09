@@ -54,6 +54,7 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ]),
         ("Calculate", [
             ("Scalar Math", "ScalarMath"),
+            ("Compare", "Compare"),
             ("Random", "Random"),
             ("Vec Math", "VecMath"),
         ]),
@@ -64,13 +65,27 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ("Delay", "TimeDelay"),
         ("Time Trigger", "TimeTrigger"),
     ]),
-    ("Entity", [
-        ("Create Entity", "EntityCreate"),
-        ("Spawn Entity", "EntitySpawn"),
-        ("Destroy Entity", "EntityDestroy"),
-        ("Add Mesh Component", "EntityAddMesh"),
-        ("Add Camera Component", "EntityAddCamera"),
-        ("Set Visibility", "EntitySetVisibility"),
+    ("Flow", [
+        ("Sequence", "Sequence"),
+        ("Branch", "Branch"),
+    ]),
+    ("Scene", [
+        ("Camera", [
+            ("Set Main Camera", "CameraSetMain"),
+            ("Configure Camera", "CameraConfigure"),
+            ("Get Camera Info", "GetCameraInfo"),
+            ("Add Camera Component", "EntityAddCamera"),
+            ("Exit Game", "ExitGame"),
+        ]),
+        ("Entity", [
+            ("Spawn Entity", "EntitySpawn"),
+            ("Destroy Entity", "EntityDestroy"),
+        ]),
+        ("Component", [
+            ("Add Component", "ComponentAdd"),
+            ("Remove Component", "ComponentRemove"),
+            ("Set Property", "ComponentSetProperty"),
+        ]),
     ]),
     ("Debug", [
         ("Print", "Print"),

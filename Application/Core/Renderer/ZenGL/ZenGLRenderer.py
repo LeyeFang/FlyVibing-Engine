@@ -51,7 +51,7 @@ class ZenGLRenderer(
                 sz = _glfw.get_framebuffer_size(_glfw_win)
             else:
                 sz = (800, 600)
-        ZenGLCore.init_core(sz)
+        cls.init_core(sz)
         cls.viewport_width, cls.viewport_height = sz
         cls.aspect_ratio = sz[0]/sz[1]
         # 相机矩阵由逻辑线程通过 SetViewProjectionCommand 推送
@@ -61,16 +61,16 @@ class ZenGLRenderer(
 
     @classmethod
     def _do_start_frame(cls) -> None:
-        ctx = ZenGLCore.ctx
+        ctx = cls.ctx
         ctx.new_frame()
         if cls._pending_resize:
-            w,h = cls._pending_resize; ZenGLCore.rebuild_images(w,h); cls._pending_resize = None
+            w,h = cls._pending_resize; cls.rebuild_images(w,h); cls._pending_resize = None
             # ★ 重建实体/overlay 管线 — 新 framebuffer images 已创建，旧管线仍引用旧 images
             cls._rebuild_entity_pipelines()
             cls._rebuild_overlay_pipelines()
         view = cls._cached_view if cls._cached_view is not None else np.identity(4, 'f4')
         proj = cls._cached_proj if cls._cached_proj is not None else np.identity(4, 'f4')
-        ZenGLCore.clear_frame()
+        cls.clear_frame()
         for cb in cls._pre_overlay_callbacks:
             try: cb(view, proj, cls.viewport_width, cls.viewport_height)
             except: pass
@@ -87,8 +87,12 @@ class ZenGLRenderer(
         # 每帧结束后读取 pick buffer
         cls._read_pick_buffer()
         # ★ 最终 blit: 确保 layer 1 (screen overlay) 写入 color_image 后刷到屏幕
-        try: ZenGLCore._color_image.blit()
-        except Exception: pass
+        try:
+            cls._color_image.blit()
+        except Exception as _e:
+            import traceback as _tb
+            print(f"[ZenGL] blit FAILED: {_e}")
+            _tb.print_exc()
 
     @classmethod
     def EndFrame(cls) -> None: pass
@@ -117,8 +121,7 @@ class ZenGLRenderer(
         cls._outline_selected_ids.clear()
         cls._scene_fbo_override = 0
         cls._outliner = None
-        from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
-        ZenGLCore.destroy_core()
+        cls.destroy_core()
         super().Shutdown()
 
 
@@ -137,7 +140,7 @@ class ZenGLRenderer(
     @classmethod
     def _ensure_pick_images(cls, w: int, h: int) -> None:
         """确保 overlay pick 图像存在且尺寸匹配。resize 时清空 pick pipeline 缓存。"""
-        ctx = ZenGLCore.ctx
+        ctx = cls.ctx
         if cls._zg_overlay_pick_img is None or cls._zg_overlay_pick_img.size != (w, h):
             cls._zg_overlay_pick_img = ctx.image((w, h), 'rgba8unorm')
             cls._zg_overlay_pick_img.clear_value = (0.0, 0.0, 0.0, 1.0)
@@ -158,7 +161,7 @@ class ZenGLRenderer(
             return
         img.clear()
         vp_w, vp_h = cls.viewport_width, cls.viewport_height
-        ctx = ZenGLCore.ctx
+        ctx = cls.ctx
         # ★ Pick VS — 极简, 只用 location=0, 根据 overlay 实际声明的矩阵选择变体
         _PICK_FS = """#version 440 core
 uniform float uPickType;
@@ -317,7 +320,8 @@ void main() {
 
     @classmethod
     def register_overlay_drawable(cls, overlay):
-        ZenGLResourceManager.register_overlay_drawable(overlay)
+        # 通过 MRO 委托到 ZenGLResourceManager，确保 cls 正确传递（支持隔离子类）
+        super().register_overlay_drawable(overlay)
     @classmethod
     def unregister_overlay_drawable(cls, key):
-        ZenGLResourceManager.unregister_overlay_drawable(key)
+        super().unregister_overlay_drawable(key)

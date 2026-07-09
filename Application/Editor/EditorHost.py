@@ -17,7 +17,7 @@ from __future__ import annotations
 import ctypes
 from typing import TYPE_CHECKING
 
-from Application.Core.Engine import Engine
+from Application.Core.Engine import Engine, FrameSync
 from Application.Core.Events.Event import Event
 from Application.Core.Events.EngineEvent import EngineLifecycleEvent
 from Application.Core.Window.Window import Window
@@ -38,6 +38,7 @@ class EditorHost(Engine):
 
     # ── 编辑器专属状态 ──────────────────────────────────────────
     _editor_plugin: Plugin | None = None
+    _active_scene: object | None = None     # 当前编辑的 Scene 对象
 
     # ── 编辑器窗口/渲染器 (由 _create_window / _create_renderer 显式赋值) ──
     # Engine 基类用 window/renderer 管理生命周期，
@@ -45,6 +46,20 @@ class EditorHost(Engine):
     # 保证不管哪个子类调 init()，这两个属性始终可用。
     editor_window: 'EditorWindow' = None
     editor_renderer: Renderer = None
+
+    # ════════════════════════════════════════════════════════════
+    # 场景管理
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def get_active_scene(cls) -> object | None:
+        """返回当前编辑的 Scene 对象。"""
+        return cls._active_scene
+
+    @classmethod
+    def set_active_scene(cls, scene: object) -> None:
+        """设置当前编辑的 Scene 对象。"""
+        cls._active_scene = scene
 
     # ════════════════════════════════════════════════════════════
     # 工厂方法（Engine 要求子类覆写）
@@ -69,6 +84,19 @@ class EditorHost(Engine):
         renderer_cls = cls._get_renderer_class(cls.renderer_type)
         EditorHost.editor_renderer = renderer_cls.Create(window=cls.window)
         return EditorHost.editor_renderer
+
+    # ════════════════════════════════════════════════════════════
+    # 生命周期
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def init(cls, window_type='GLFW', renderer_type='ZenGL') -> 'EditorHost':
+        """初始化编辑器 — 同时建立帧同步（Editor 是 master）。"""
+        super().init(window_type=window_type, renderer_type=renderer_type)
+        # ── 帧同步: Editor 是 master, PIE 是 slave ──
+        cls._frame_sync = FrameSync()
+        cls._is_frame_sync_master = True
+        return cls
 
     # ════════════════════════════════════════════════════════════
     # 事件分发（过渡期: 桥接到 Renderer）

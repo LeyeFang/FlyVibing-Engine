@@ -88,6 +88,18 @@ class SimulationController:
             GameRuntime.push_layer(RuntimeNodeLayer)
             print("[Simulation] Node graph injected for PIE")
 
+        # ── 注入 Scene (EntitySpawn 模板来源) ──
+        from Application.Core.Scene.Scene import Scene
+        import copy
+        editor_scene = EditorHost.get_active_scene()
+        if editor_scene is not None:
+            runtime_scene = copy.deepcopy(editor_scene)
+            RuntimeNodeLayer.set_scene(runtime_scene)
+            print(f"[Simulation] Scene injected: {runtime_scene.name} "
+                  f"({len(runtime_scene.entities)} entity templates)")
+        else:
+            print("[Simulation] WARNING: No active scene — EntitySpawn will have no templates")
+
         GameRuntime.push_layer(RuntimeLayer)
         GameRuntime.push_layer(RuntimeDebugLayer)
         # ── 统一后端: PIE 使用与编辑器相同的窗口/渲染器类型 ──
@@ -135,6 +147,9 @@ class SimulationController:
 
         from Application.Runtime.GameRuntime import GameRuntime
         GameRuntime.stop()
+        # ★ PIE 停止后切回 EditorHost 的 ECS 世界
+        from Application.Core.Scene.SceneManager import SceneManager
+        SceneManager.set_thread_active("EditorHost")
         cls._state = SimulationState.STOPPED
         EngineLifecycleEvent.Pack(
             stage="simulation", message="Runtime stopped", engine=EditorHost

@@ -126,6 +126,9 @@ class GameRuntime(Engine):
         cls.renderer = None
         cls.renderer_thread = None
         cls._logic_thread = None
+        # ★ 清除隔离子类缓存 — 确保下次 start() 创建全新的 GL 资源
+        cls._isolated_renderer_cls = None
+        cls._isolated_renderer_type = None
         # ── 脱离帧同步 ──
         cls._frame_sync = None
         cls._is_frame_sync_master = False

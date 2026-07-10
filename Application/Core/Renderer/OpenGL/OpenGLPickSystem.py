@@ -1,5 +1,5 @@
 """
-OpenGLPickSystem — PyOpenGL 拾取系统 (Mixin, 通过 MRO 访问资源注册表)。
+OpenGLPickSystem — PyOpenGL 拾取系统 (独立组件, 组合到 OpenGLRenderer)。
 
 职责:
   - 持久拾取 FBO 的创建/重建/销毁
@@ -9,14 +9,8 @@ OpenGLPickSystem — PyOpenGL 拾取系统 (Mixin, 通过 MRO 访问资源注册
   - 公共拾取 API: update_pick_mouse / get_pick / pick_at
 
 设计:
-  - Mixin 模式: 通过 self.registered_entities / self._overlay_gpu_resources 访问资源
-  - 须置于 OpenGLResourceManager 之后的 MRO 位置
-  - 着色器源码内嵌 (编译时无外部文件依赖)
-
-MRO 约定:
-  openGLRenderer(..., OpenGLResourceManager, OpenGLPickSystem, ...)
-  → self.registered_entities 由 OpenGLResourceManager 提供
-  → self._overlay_gpu_resources 由 OpenGLResourceManager 提供
+  - 组合模式: 持有一个 _renderer 回引用来访问 registered_entities 等资源注册表
+  - 不再通过 MRO 继承 — 避免 classmethod/instancemethod 冲突
 """
 
 from __future__ import annotations
@@ -81,8 +75,16 @@ void main() {
 }
 """
 
-    def __init__(self) -> None:
-        super().__init__()
+    # ── 类级默认: 防止 classmethod → instancemethod 调用链崩溃 ──
+    _overlay_pick_key_map: dict = {}
+
+    def __init__(self, renderer) -> None:
+        """初始化拾取系统。
+
+        Args:
+            renderer: 父 OpenGLRenderer 实例 (回引用, 用于访问资源注册表)
+        """
+        self._renderer = renderer
         self._pick_fbo: int = 0
         self._pick_color: int = 0
         self._pick_depth: int = 0
@@ -251,7 +253,7 @@ void main() {
         view_f32 = np.ascontiguousarray(view.astype('float32'))
         proj_f32 = np.ascontiguousarray(proj.astype('float32'))
         for entity_id in entities:
-            gpu = self.registered_entities.get(entity_id)
+            gpu = self._renderer.registered_entities.get(entity_id)
             if gpu is None:
                 continue
             model = SceneManager.GetEntityModelMatrix(entity_id)
@@ -265,7 +267,7 @@ void main() {
             if loc_id >= 0:
                 gl.glUniform1f(loc_id, float(entity_id))
             gl.glBindVertexArray(gpu.vao)
-            mesh_data = self.registered_meshes[gpu.mesh_id]
+            mesh_data = self._renderer.registered_meshes[gpu.mesh_id]
             gl.glDrawElements(
                 gl.GL_TRIANGLES,
                 mesh_data.elements_count,
@@ -292,7 +294,7 @@ void main() {
             self._pick_cache = -1
             self._pick_overlay_key = None
             return
-        pickable = [(k, g) for k, g in self._overlay_gpu_resources.items() if g.pick_type > 0]
+        pickable = [(k, g) for k, g in self._renderer._overlay_gpu_resources.items() if g.pick_type > 0]
         if not pickable:
             self._finalize_pick_read()
             return
@@ -303,7 +305,7 @@ void main() {
         loc_vp   = gl.glGetUniformLocation(self._overlay_pick_prog, 'uViewProj')
         loc_type = gl.glGetUniformLocation(self._overlay_pick_prog, 'uPickType')
         loc_id   = gl.glGetUniformLocation(self._overlay_pick_prog, 'uPickID')
-        for _key, gpu in self._overlay_gpu_resources.items():
+        for _key, gpu in self._renderer._overlay_gpu_resources.items():
             if gpu.pick_type <= 0:
                 continue
             if loc_type >= 0:

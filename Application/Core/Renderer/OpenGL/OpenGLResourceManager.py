@@ -39,6 +39,17 @@ from Application.Core.Scene.SceneManager import SceneManager
 class OpenGLResourceManager:
     """PyOpenGL GPU 资源管理器 — Mesh/Shader/Texture/Entity 的注册与生命周期。"""
 
+    def __init__(self) -> None:
+        self.registered_entities: dict = {}
+        self.registered_meshes: dict = {}
+        self.registered_shaders: dict = {}
+        self.registered_textures: dict = {}
+        self._overlay_gpu_resources: dict = {}
+        self._DRAW_MODE_MAP: dict = {
+            'lines': gl.GL_LINES,
+            'triangles': gl.GL_TRIANGLES,
+        }
+
     # ════════════════════════════════════════════════════════════
     # GPU 资源数据结构
     # ════════════════════════════════════════════════════════════
@@ -110,15 +121,6 @@ class OpenGLResourceManager:
         ref_count: int = 0
         gl_handle: int = 0
         texture_unit: int = -1
-
-    # ════════════════════════════════════════════════════════════
-    # 资源注册表 (key 为资源 ID)
-    # ════════════════════════════════════════════════════════════
-
-    registered_entities: dict[str, entity_data_struct] = {}
-    registered_meshes: dict[str, mesh_data_struct] = {}
-    registered_shaders: dict[str, shader_data_struct] = {}
-    registered_textures: dict[str, texture_data_struct] = {}
 
     # ════════════════════════════════════════════════════════════
     # 资源注册
@@ -459,14 +461,6 @@ class OpenGLResourceManager:
         pick_type: int = 0
         pick_id: int = 0
         model_is_ndc: bool = False  # True=model_matrix_cb 返回完整 MVP (如 TransformGizmo)
-    # GPU 端 overlay 注册表: key → overlay_gpu_data (实例级, 见 __init__)
-    def __init__(self) -> None:
-        super().__init__()
-        self._overlay_gpu_resources: dict[str, 'overlay_gpu_data'] = {}
-    _DRAW_MODE_MAP: dict[str, int] = {
-        'lines': gl.GL_LINES,
-        'triangles': gl.GL_TRIANGLES,
-    }
 
     def register_overlay_drawable(
         self,

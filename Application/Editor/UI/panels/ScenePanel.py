@@ -74,8 +74,8 @@ class ScenePanel(BasePanel):
     def draw(
         self
     ) -> None:
-        """四区域布局绘制。"""
-        # ── 区域 1: 场景信息 + 运行控制 ──
+        """四区域布局 — 橙色标题 + separator 分隔，区域内无线条。"""
+        # ── 区域 1: Scene Information ──
         self._draw_section_title("Scene Information")
         self._draw_header()
         self._draw_controls()
@@ -86,19 +86,19 @@ class ScenePanel(BasePanel):
         self._draw_section_title("Scene Type")
         self._draw_viewport_mode()
 
-        # ── 区域 3: Entity 层级 ──
+        # ── 区域 3: Entities ──
         imgui.spacing()
         imgui.separator()
         self._draw_section_title("Entities")
         self._draw_entity_tree()
 
-        # ── 区域 4: 组件检视 (含实体名) ──
+        # ── 区域 4: Inspector (含实体名) ──
         selected = self._selection_ctrl.get_selected()
         if selected is not None:
-            imgui.spacing()
-            imgui.separator()
             info = self._browser_ctrl.get_entity_info(selected)
             entity_name = (info.get('name', '') if info else '') or f"Entity #{selected}"
+            imgui.spacing()
+            imgui.separator()
             self._draw_section_title(f"Inspector  —  \"{entity_name}\"")
             self._draw_entity_summary(selected)
 
@@ -109,11 +109,10 @@ class ScenePanel(BasePanel):
     def _draw_header(
         self
     ) -> None:
-        """场景下拉选择器 — Scene: [列表▼]   [+ New]"""
+        """场景下拉选择器 — Scene: [▼列表] [+]新建。"""
         scene_names = self._browser_ctrl.get_scene_names()
         current_name = self._browser_ctrl.get_active_scene_name()
 
-        # ── 标签 + 下拉 ──
         imgui.text("Scene:")
         imgui.same_line()
         imgui.set_next_item_width(imgui.get_content_region_avail().x - 74)
@@ -126,7 +125,6 @@ class ScenePanel(BasePanel):
                     imgui.set_item_default_focus()
             imgui.end_combo()
 
-        # ── 新建按钮 (combo 外) ──
         imgui.same_line()
         if imgui.small_button(f"{fa.ICON_FA_PLUS}##new_scene_btn"):
             imgui.open_popup("new_scene_popup")
@@ -203,7 +201,7 @@ class ScenePanel(BasePanel):
 
     @staticmethod
     def _draw_section_title(title: str) -> None:
-        """绘制统一的区域标题 — 橙色，上下留白充足，无分隔线。"""
+        """统一的区域标题 — 橙色文字，上下留白。"""
         imgui.spacing()
         imgui.spacing()
         imgui.text_colored(
@@ -410,7 +408,7 @@ class ScenePanel(BasePanel):
         imgui.same_line()
         imgui.text_disabled(f"Entity #{summary.entity_id}")
 
-        # ── Transform（可展开、可编辑） ──
+        # ── Transform ──
         if imgui.collapsing_header("Transform", imgui.TreeNodeFlags_.default_open):
             # ── Local / Global 切换 ──
             av = imgui.get_content_region_avail().x

@@ -14,6 +14,7 @@ from Application.Core.Scene.BasicComponents import MeshRenderer
 from Application.Core.Timer.Timer import GetRunTime
 from Application.Core.Events.InputEvent import *
 from Application.Core.Events.SceneEvent import *
+from Application.Core.Events.StatsEvent import *
 
 mask_events = [
     MouseMoveEvent,
@@ -21,6 +22,7 @@ mask_events = [
     MouseButtonEvent,
     ScrollerEvent,
     SceneCameraUpdateEvent,
+    PerformanceStatsEvent,
 ]
 
 

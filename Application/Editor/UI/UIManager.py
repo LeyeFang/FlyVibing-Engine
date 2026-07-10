@@ -87,7 +87,6 @@ class UIManager:
             | imgui.WindowFlags_.no_move
             | imgui.WindowFlags_.no_bring_to_front_on_focus
             | imgui.WindowFlags_.no_nav_focus
-            | imgui.WindowFlags_.no_docking
         )
 
         # 取消圆角、边框、内边距，背景透明（让 3D 场景透出来，面板贴边）
@@ -222,29 +221,20 @@ class UIManager:
         dockspace_id: int
     ) -> None:
         """
-        创建默认分栏布局：
-          ┌────────────────────────┬──────────┐
-          │                        │  Scene   │
-          │    Viewport / Main     │  Node Ed │  ← 右侧 1/3
-          │      (left 2/3)       │ Resources│
-          └────────────────────────┴──────────┘
+        Scene + Node Editor + Resources → 右侧 1/4 标签页。
         """
         internal = imgui_internal.internal
 
-        # 直接对已存在的 dockspace 节点进行分割（不要 remove/add，否则会破坏窗口引用）
-        _, dock_main, dock_right = internal.dock_builder_split_node_py(
-            dockspace_id, imgui.Dir_.left, 0.67
+        # 分割: 右侧 1/4
+        result = internal.dock_builder_split_node(
+            dockspace_id, imgui.Dir_.right, 0.25,
         )
+        dock_right = result.id_at_dir
 
-        # 再在右侧上下分割: Scene (上) / Node Editor (中) / Resources (下)
-        dock_r_top, dock_r_bottom = internal.dock_builder_split_node_py(
-            dock_right, imgui.Dir_.up, 0.40
-        )[1:]
-
-        # 将面板分配到右侧
-        internal.dock_builder_dock_window("Scene", dock_r_top)
-        internal.dock_builder_dock_window("Node Editor", dock_r_bottom)
-        internal.dock_builder_dock_window("Resources", dock_r_bottom)
+        # 停靠到右侧 (同一节点 → 自动标签页)
+        internal.dock_builder_dock_window("Scene", dock_right)
+        internal.dock_builder_dock_window("Node Editor", dock_right)
+        internal.dock_builder_dock_window("Resources", dock_right)
 
         internal.dock_builder_finish(dockspace_id)
 

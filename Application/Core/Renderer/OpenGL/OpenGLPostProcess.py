@@ -1,18 +1,13 @@
 """
-OpenGLPostProcess — PyOpenGL 屏幕空间后处理管线 (Mixin)。
+OpenGLPostProcess — PyOpenGL 屏幕空间后处理管线 (组合到 OpenGLRenderer)。
 
 职责:
   - Highlight 效果: MRT FBO 管理 + 边缘检测 shader + 全屏四边形
   - 管理后处理专用的 GPU 资源 (不与 entity/overlay 共享)
 
-管线 (每帧 _render_highlight):
-  Pass 1 — Scene MRT:  遍历实体 → MRT FBO (color + entity_id + depth)
-  Pass 2 — Edge Detect: 读 id_tex → Roberts Cross 边缘检测 → edge_tex (R8)
-  Pass 3 — Composite:   读 edge_tex → alpha blend 叠加到默认帧缓冲
-
-MRO 位置:
-  openGLRenderer → ... → OpenGLOverlayRenderer → OpenGLPostProcess → Renderer → ...
-  (需要 MRO 已提供 self.registered_entities / self.registered_meshes / self.registered_textures)
+设计:
+  - 组合模式: 通过 _renderer 回引用访问资源注册表
+  - 不再通过 MRO 继承
 """
 
 from __future__ import annotations
@@ -26,8 +21,9 @@ from Application.Core.Renderer.PostProcess import PostProcess, HighlightEffectCo
 class OpenGLPostProcess(PostProcess):
     """PyOpenGL 后处理管线 — 当前支持 Highlight 效果。"""
 
-    def __init__(self) -> None:
+    def __init__(self, renderer) -> None:
         super().__init__()
+        self._renderer = renderer
         self._pp_fbo: int = 0
         self._pp_color_tex: int = 0
         self._pp_id_tex: int = 0
@@ -50,7 +46,7 @@ class OpenGLPostProcess(PostProcess):
         self._compile_shaders()
         self._create_quad()
         self._ensure_fbo(
-            self.viewport_width, self.viewport_height)
+            self._renderer.viewport_width, self._renderer.viewport_height)
 
     def _release_highlight(self) -> None:
         """释放所有 highlight GPU 资源。"""
@@ -66,7 +62,8 @@ class OpenGLPostProcess(PostProcess):
 
     def _render_highlight(self, view: np.ndarray, proj: np.ndarray) -> None:
         """Pass 1 MRT → Pass 2 Edge → Pass 3 Composite。"""
-        vp_w, vp_h = self.viewport_width, self.viewport_height
+        r = self._renderer
+        vp_w, vp_h = r.viewport_width, r.viewport_height
         if vp_w == 0 or vp_h == 0:
             return
 
@@ -112,7 +109,7 @@ class OpenGLPostProcess(PostProcess):
         active_ids = self._highlight_config.selected_ids if self._highlight_config else set()
 
         for eid in SceneManager.GetRenderableEntities():
-            entity = self.registered_entities.get(eid)
+            entity = r.registered_entities.get(eid)
             if entity is None:
                 continue
 
@@ -127,7 +124,7 @@ class OpenGLPostProcess(PostProcess):
                 gl.glUniform1ui(loc_oid, obj_id)
 
             gl.glBindVertexArray(entity.vao)
-            mesh_data = self.registered_meshes[entity.mesh_id]
+            mesh_data = r.registered_meshes[entity.mesh_id]
             gl.glDrawElements(gl.GL_TRIANGLES, mesh_data.elements_count,
                               gl.GL_UNSIGNED_INT, None)
             gl.glBindVertexArray(0)

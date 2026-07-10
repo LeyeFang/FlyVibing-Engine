@@ -82,11 +82,21 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
 
 
 def _get_active_scene():
-    """获取当前活跃的 Scene 对象 (从 EditorHost 上下文获取)。
+    """获取当前活跃的 Scene 对象。
 
-    注意: 这是编辑器侧的查询，Runtime 中不可用。
-    Runtime 使用深拷贝的 Scene 副本。
+    优先级:
+      1. RuntimeNodeLayer._scene (PIE / 导出模式注入)
+      2. EditorHost.get_active_scene() (编辑器侧回退)
     """
+    # ── Runtime 注入 ──
+    try:
+        from Application.Runtime.RuntimeNodeLayer import RuntimeNodeLayer
+        if RuntimeNodeLayer._scene is not None:
+            return RuntimeNodeLayer._scene
+    except Exception:
+        pass
+
+    # ── Editor 回退 ──
     try:
         from Application.Editor.EditorHost import EditorHost
         return EditorHost.get_active_scene()

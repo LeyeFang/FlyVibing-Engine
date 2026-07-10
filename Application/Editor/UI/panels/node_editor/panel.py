@@ -239,26 +239,33 @@ class NodeEditorPanel(BasePanel):
 
     @staticmethod
     def _ensure_default_scene() -> None:
-        """确保 EditorHost 有一个活跃的 Scene。若没有则从 ECS 世界创建默认 Scene。
-
-        饥渴调用（每帧 draw 入口），不等 EntitySpawn 下拉触发。
-        幂等：Scene 已存在时不重复创建。
-        """
+        """确保 EditorHost 的活跃 Scene 始终与 ECS 世界同步。"""
         from Application.Editor.EditorHost import EditorHost
-        if EditorHost.get_active_scene() is not None:
-            return
-
         from Application.Core.Scene.Scene import Scene
         from Application.Core.Scene.SceneManager import SceneManager
         from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
         import esper, copy
 
-        scene = Scene("Default", game_type=SceneManager.GetGameType())
+        # ★ 显式切到 EditorHost 的 ECS 世界（避免主线程被 GameRuntime 绑定覆盖）
+        try:
+            ed_st = SceneManager._state_for("EditorHost")
+            esper.switch_world(ed_st.world_name)
+        except Exception as e:
+            print(f"[NodeEditor] _ensure_default_scene: EditorHost not ready ({e})")
+            return
+
+        scene = EditorHost.get_active_scene()
+        if scene is None:
+            scene = Scene("Default", game_type=SceneManager.GetGameType())
+            EditorHost.set_active_scene(scene)
+
         _sys_ids = {SceneManager.get_main_camera_id(), SceneManager.get_main_camera_2d_id()}
+        scene.entities.clear()
+        count = 0
         for eid, (xform,) in esper.get_components(Transform):
             if eid in _sys_ids:
                 continue
-            name = SceneManager.GetEntityName(eid)
+            name = SceneManager.GetEntityName(eid) or f"Entity_{eid}"
             comps = {"Transform": copy.deepcopy(xform)}
             try:
                 cam = esper.component_for_entity(eid, Camera)
@@ -270,10 +277,7 @@ class NodeEditorPanel(BasePanel):
                 comps["MeshRenderer"] = copy.deepcopy(mr)
             except Exception:
                 pass
-            scene.add_entity(name=name or f"Entity_{eid}", **comps)
-
-        EditorHost.set_active_scene(scene)
-        print(f"[NodeEditor] Default scene created: {len(scene.entities)} entity templates")
+            scene.add_entity(name=name, **comps)
 
     def _draw_scene_info(self) -> None:
         """绘制 Scene 选择器 combo — 显示当前场景名 + GameType。"""

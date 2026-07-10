@@ -1,14 +1,13 @@
 """
-OpenGLOverlays — PyOpenGL 叠加层渲染器 (Mixin, 通过 MRO 访问资源)。
+OpenGLOverlays — PyOpenGL 叠加层渲染器 (组合到 OpenGLRenderer)。
 
 职责:
   - 遍历已注册的 overlay drawable 并提交 GL 绘制命令
   - 管理 overlay 渲染时的 GL 状态 (深度/混合/面剔除/线宽)
 
 设计:
-  - Mixin 模式: 覆写 Renderer._render_overlay_drawables() 的 no-op
-  - 通过 self._overlay_gpu_resources 访问资源 (由 OpenGLResourceManager 提供)
-  - 须置于 OpenGLResourceManager 之后、Renderer 之前的 MRO 位置
+  - 组合模式: 通过 _renderer 回引用访问 _overlay_gpu_resources
+  - 不再通过 MRO 继承
 """
 
 from __future__ import annotations
@@ -18,6 +17,9 @@ from OpenGL import GL as gl
 
 class OpenGLOverlays:
     """PyOpenGL 叠加层渲染器 — 编辑器的 Grid/Gizmo 等 overlay 绘制。"""
+
+    def __init__(self, renderer) -> None:
+        self._renderer = renderer
 
     def _render_overlay_drawables(
         self,
@@ -35,7 +37,8 @@ class OpenGLOverlays:
         vp = gl.glGetIntegerv(gl.GL_VIEWPORT)
         vp_w, vp_h = vp[2], vp[3]
         # Layer 1 的 depth 清理在 _render_all_overlays 中由 _clear_depth_for_overlays 完成
-        for _key, gpu in self._overlay_gpu_resources.items():
+        r = self._renderer
+        for _key, gpu in r._overlay_gpu_resources.items():
             if layer >= 0 and getattr(gpu, 'render_layer', 0) != layer:
                 if layer >= 0:
                     pass  # filtered
@@ -91,7 +94,7 @@ class OpenGLOverlays:
             #    overlay.uniforms = {'uColor': np.array(...), 'uFadeCenter': 'camera.fade_center', ...}
             #    渲染器基类 _resolve_overlay_uniforms 将动态源解析为当前帧值
             if gpu.uniforms:
-                resolved = self._resolve_overlay_uniforms(gpu.uniforms)
+                resolved = self._renderer._resolve_overlay_uniforms(gpu.uniforms)
                 for uname, uval in resolved.items():
                     loc = gl.glGetUniformLocation(gpu.program, uname)
                     if loc < 0:

@@ -43,7 +43,7 @@ import glfw
 from Application.Core.Events.Event import BindPackCallback
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Scene.SceneManager import SceneManager
-from Application.Core.Renderer.OpenGL.openGLRenderer import OpenGLRenderer
+from Application.Core.Renderer.OpenGL.OpenGLRenderer import OpenGLRenderer
 from Application.Core.Renderer.OpenGL.OpenGLCore import OpenGLCore
 from Application.Editor.EditorCamera import EditorCamera
 from Test.Helpers.TestEditorCamera import TestEditorCamera

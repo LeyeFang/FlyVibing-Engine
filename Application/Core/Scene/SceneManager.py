@@ -44,6 +44,7 @@ class _SceneState:
     )
 
     def __init__(self):
+        from Application.Core.Scene.Scene import GameType
         self.app = None
         self.scene: dict = {}
         self.entities: dict = {}
@@ -54,9 +55,7 @@ class _SceneState:
         self._entity_names: dict[int, str] = {}
         self._entity_parent: dict[int, int] = {}
         self.world_name: str = ""
-        # ── 场景游戏类型 ──
-        from Application.Core.Scene.Scene import GameType
-        self.game_type: GameType = GameType.GAME_3D
+        self.game_type = GameType.GAME_3D
 
 
 class SceneManager:
@@ -170,9 +169,6 @@ class SceneManager:
         st.entities[f'{st.main_camera_2d_id}'] = 1
         st._entity_names[st.main_camera_2d_id] = "DefaultCamera2D"
 
-        # ── 根据 game_type 选择默认活跃摄像机 ──
-        cls._apply_game_type_camera(st)
-
         # ── 首次 Init 时自动注册内置 Component ──
         if not cls._component_registry:
             cls.RegisterComponent("Camera", Camera)
@@ -199,73 +195,40 @@ class SceneManager:
         except Exception:
             pass  # 世界可能已被删除或不存在
 
-    # ============================================================
-    # 场景游戏类型 / GameType
-    # ============================================================
-
-    @classmethod
-    def SetGameType(cls, game_type) -> None:
-        """设置场景游戏类型，并自动切换默认活跃摄像机。
-
-        GAME_3D  → scene_camera_id = main_camera_id (DefaultCamera3D)
-        GAME_2D  → scene_camera_id = main_camera_2d_id (DefaultCamera2D)
-        OVERLAY  → scene_camera_id = main_camera_id (暂同 3D)
-
-        注意: 如果用户通过 CameraSetMain 节点手动指定了摄像机，
-        本方法不会覆盖用户的选择。仅在场景类型切换时更新默认值。
-
-        Args:
-            game_type: GameType 枚举值或字符串 ("3d" / "2d" / "overlay")
-        """
-        from Application.Core.Scene.Scene import GameType
-        if isinstance(game_type, str):
-            game_type = GameType(game_type)
-        st = cls._state()
-        old_type = st.game_type
-        if old_type == game_type:
-            return
-        st.game_type = game_type
-        cls._apply_game_type_camera(st)
-        print(f"[SceneManager] GameType: {old_type.value} → {game_type.value}")
-
-    @classmethod
-    def GetGameType(cls):
-        """返回当前场景的 GameType 枚举值。"""
-        return cls._state().game_type
-
-    @classmethod
-    def _apply_game_type_camera(cls, st: _SceneState) -> None:
-        """根据 st.game_type 选择默认活跃摄像机 + 更新 scene_camera 引用。
-
-        仅在 scene_camera_id 指向默认摄像机时更新；
-        若用户通过 CameraSetMain 手动指定了自定义摄像机，保持不覆盖。
-        """
-        from Application.Core.Scene.Scene import GameType
-        # 判断当前是否指向某个默认摄像机
-        is_default_3d = (st.scene_camera_id == st.main_camera_id)
-        is_default_2d = (st.scene_camera_id == st.main_camera_2d_id)
-        is_default_cam = is_default_3d or is_default_2d
-
-        if not is_default_cam:
-            # 用户手动指定了自定义摄像机 — 不覆盖
-            return
-
-        if st.game_type == GameType.GAME_2D and st.main_camera_2d_id is not None:
-            st.scene_camera_id = st.main_camera_2d_id
-        else:
-            st.scene_camera_id = st.main_camera_id
-
-        if st.scene_camera_id is not None:
-            try:
-                st.scene_camera = esper.component_for_entity(
-                    st.scene_camera_id, Camera)
-            except Exception:
-                st.scene_camera = None
-
     @classmethod
     def CreateScene(cls, new_scene_name: str) -> None:
         st = cls._state()
         st.scene[new_scene_name] = new_scene_name
+
+    # ============================================================
+    # GameType
+    # ============================================================
+
+    @classmethod
+    def SetGameType(cls, game_type) -> None:
+        """设置场景游戏类型并自动切换默认摄像机。"""
+        from Application.Core.Scene.Scene import GameType
+        if isinstance(game_type, str):
+            game_type = GameType(game_type)
+        st = cls._state()
+        if st.game_type == game_type:
+            return
+        st.game_type = game_type
+        cls._apply_game_type_camera(st)
+
+    @classmethod
+    def GetGameType(cls):
+        """返回当前场景 GameType。"""
+        return cls._state().game_type
+
+    @classmethod
+    def _apply_game_type_camera(cls, st) -> None:
+        """根据 game_type 选择默认摄像机。"""
+        from Application.Core.Scene.Scene import GameType
+        if st.game_type == GameType.GAME_2D and st.main_camera_2d_id is not None:
+            st.scene_camera_id = st.main_camera_2d_id
+        else:
+            st.scene_camera_id = st.main_camera_id
 
     # ============================================================
     # 父子关系 / Parent-Child Hierarchy
@@ -505,27 +468,16 @@ class SceneManager:
         if entity_id is None:
             raise ValueError("Must specify entity ID")
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
-        changed = False
         if visible is not None:
             mesh_rend.visible = visible
-            changed = True
         if mesh_id is not None:
             mesh_rend.mesh_id = mesh_id
-            changed = True
         if material_id is not None:
-            if material_id == 0:
-                # ── 兜底: material=0 时自动创建新材质，避免渲染崩溃 ──
-                material_id = ResourceManager.NewMaterial()
             mesh_rend.material_id = material_id
-            changed = True
-        if changed:
-            _renderer = getattr(st.app, 'renderer', None)
-            if _renderer is not None:
-                _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
-        if visible is not None:
-            _renderer = getattr(st.app, 'renderer', None)
-            if _renderer is not None:
-                _renderer.enqueue(EntityRegistrationCommand(entity_id, register=visible))
+        # ★ 通知渲染器重新注册 (刷新缓存的 mesh / material / texture 等)
+        _renderer = getattr(st.app, 'renderer', None)
+        if _renderer is not None:
+            _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
         ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=st.app)
 
     @classmethod
@@ -546,12 +498,7 @@ class SceneManager:
     def SetEntityMaterial(cls, entity_id: int, material_id: int) -> None:
         st = cls._state()
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
-        if material_id == 0:
-            material_id = ResourceManager.NewMaterial()
         mesh_rend.material_id = material_id
-        _renderer = getattr(st.app, 'renderer', None)
-        if _renderer is not None:
-            _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
         ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=st.app)
         # ★ 通知渲染器重新注册 (刷新缓存的 material_id / shader_id / texture_id)
         _renderer = getattr(st.app, 'renderer', None)

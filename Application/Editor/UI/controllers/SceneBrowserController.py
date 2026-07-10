@@ -6,7 +6,6 @@ from typing import Optional
 
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Scene.BasicComponents import Camera
-from Application.Resource.Material import Material
 
 # ── 输入安全常量 ─────────────────────────────────────────
 _SCALE_MIN: float = 0.0001          # Scale 下限 (防止零除/反转法线)
@@ -212,28 +211,43 @@ class SceneBrowserController:
 
     @classmethod
     def set_camera_aspect_ratio(cls, entity_id: int, ratio: float) -> None:
-        """设置摄像机视口比例 (width / height)。"""
         import esper
         cam = esper.component_for_entity(entity_id, Camera)
         cam.aspect_ratio = max(0.1, min(10.0, ratio))
 
-    # ── Scene GameType ───────────────────────────────────────
-
     @classmethod
     def get_game_type(cls) -> str:
-        """返回当前场景的 GameType 字符串值 ('3d', '2d', 'overlay')。"""
-        gt = SceneManager.GetGameType()
+        """返回 GameType 字符串 ('3d' / '2d' / 'overlay') — 直接读 _SceneState。"""
+        st = SceneManager._state()
+        gt = st.game_type
         return gt.value if hasattr(gt, 'value') else str(gt)
 
     @classmethod
     def set_game_type(cls, game_type_str: str) -> None:
-        """设置场景 GameType ('3d' / '2d' / 'overlay')。
+        """设置 GameType — 直接写 _SceneState + 切换默认摄像机。"""
+        from Application.Core.Scene.Scene import GameType
+        gt = GameType(game_type_str)
+        st = SceneManager._state()
+        if st.game_type == gt:
+            return
+        st.game_type = gt
+        # 切换默认摄像机
+        import esper
+        from Application.Core.Scene.BasicComponents import Camera
+        is_default = (st.scene_camera_id == st.main_camera_id
+                      or st.scene_camera_id == st.main_camera_2d_id)
+        if is_default:
+            if gt == GameType.GAME_2D and st.main_camera_2d_id is not None:
+                st.scene_camera_id = st.main_camera_2d_id
+            else:
+                st.scene_camera_id = st.main_camera_id
+            if st.scene_camera_id is not None:
+                try:
+                    st.scene_camera = esper.component_for_entity(st.scene_camera_id, Camera)
+                except Exception:
+                    st.scene_camera = None
 
-        会自动切换 SceneManager 的默认活跃摄像机。
-        """
-        SceneManager.SetGameType(game_type_str)
-
-    # ── Scene CRUD / 场景管理 ───────────────────────────────
+    # ── Scene CRUD ───────────────────────────────────────────
 
     @classmethod
     def get_scene_names(cls) -> list[str]:
@@ -363,38 +377,14 @@ class SceneBrowserController:
     @classmethod
     def set_entity_mesh(cls, entity_id: int, mesh_id: int) -> None:
         SceneManager.SetEntityMeshRenderer(entity_id, mesh_id=mesh_id)
-        cls._sync_component_to_scene(entity_id, "MeshRenderer")
 
     @classmethod
     def set_entity_material(cls, entity_id: int, material_id: int) -> None:
         SceneManager.SetEntityMaterial(entity_id, material_id)
-        cls._sync_component_to_scene(entity_id, "MeshRenderer")
-
-    @classmethod
-    def _sync_component_to_scene(cls, entity_id: int, comp_name: str) -> None:
-        """将 ECS 实体的指定组件同步到 Scene.entities。"""
-        try:
-            from Application.Editor.EditorHost import EditorHost
-            scene = EditorHost.get_active_scene()
-            if scene is None:
-                return
-            ed = scene.entities.get(entity_id)
-            if ed is None:
-                return
-            import esper, copy
-            from Application.Core.Scene.BasicComponents import MeshRenderer, Camera
-            comp_map = {"MeshRenderer": MeshRenderer, "Camera": Camera}
-            comp_cls = comp_map.get(comp_name)
-            if comp_cls is None:
-                return
-            comp = esper.component_for_entity(entity_id, comp_cls)
-            ed.components[comp_name] = copy.deepcopy(comp)
-        except Exception as e:
-            print(f"[SceneBrowser] _sync_component_to_scene failed: {e}")
 
     @classmethod
     def get_entity_material_info(cls, entity_id: int) -> dict | None:
-        """获取实体当前 material 的详细信息。"""
+        """获取实体当前 material 的详细信息（含 meta）。"""
         try:
             mid = SceneManager.GetEntityMaterial(entity_id)
             from Application.Resource.ResourceManager import ResourceManager
@@ -436,7 +426,6 @@ class SceneBrowserController:
             shader = ResourceManager.GetShader(shader_id)
             mat.set_new_shader(shader_id, shader.uniforms_name_type)
             mat.mark_modified()
-            # 更新 renderer
             SceneManager.SetEntityMaterial(entity_id, mid)
         except Exception:
             pass
@@ -458,18 +447,22 @@ class SceneBrowserController:
     def load_material_from_file(cls, entity_id: int, file_path: str) -> bool:
         """从 .mat 文件加载 material 并绑定到 entity。"""
         try:
-            from Application.Resource.ResourceManager import ResourceManager
+            from Application.Resource.Material import Material
             mat = Material.load_from_file(file_path)
-            # 注册到 ResourceManager
+            from Application.Resource.ResourceManager import ResourceManager
             new_mid = ResourceManager.material_count + 1
             ResourceManager.material_count = new_mid
             ResourceManager.loaded_material[str(new_mid)] = mat
-            # 绑定到 entity
             SceneManager.SetEntityMaterial(entity_id, new_mid)
             return True
         except Exception as e:
             print(f"[SceneBrowser] load_material failed: {e}")
             return False
+
+    @classmethod
+    def set_material_uniform(cls, entity_id: int, name: str, value) -> None:
+        """设置 entity material 的单个 uniform 参数。"""
+        SceneManager.SetMaterialParams(entity_id, {name: value})
 
     @classmethod
     def create_material_for_entity(cls, entity_id: int) -> int | None:
@@ -485,8 +478,6 @@ class SceneBrowserController:
         from Application.Resource.ResourceManager import ResourceManager
         mid = SceneManager.GetEntityMaterial(entity_id)
         ResourceManager.RemoveMaterialTexture(mid, slot_index)
-        # ★ 渲染器缓存了 entity.texture_id（读自 slot 0），
-        #    移除 slot 0 后须触发 ComponentModifiedEvent 刷新缓存。
         if slot_index == 0:
             mat = ResourceManager.GetMaterial(mid)
             new_tex = mat.texture_id_list[0] if mat.texture_id_list else 0
@@ -498,8 +489,6 @@ class SceneBrowserController:
         from Application.Resource.ResourceManager import ResourceManager
         mid = SceneManager.GetEntityMaterial(entity_id)
         ResourceManager.AddMaterialTexture(mid, texture_id)
-
-
 # ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──
 from Application.Editor.Services.ControllerRegistry import register, NAME_SCENE_BROWSER
 register(NAME_SCENE_BROWSER, SceneBrowserController)

@@ -36,8 +36,9 @@ from Application.Editor.UI.controllers.GraphEvaluator import (
 class RuntimeNodeLayer(Layer):
     """由节点图驱动的游戏逻辑层。"""
 
-    # ── 外部注入: 节点图 ────────────────────────────────────
+    # ── 外部注入: 节点图 + 场景 ─────────────────────────────
     _canvas = None          # NodeCanvas 实例
+    _scene = None           # Scene 对象 (EntitySpawn 模板来源)
     _evaluator: GraphEvaluator | None = None
     _context: ExecutionContext | None = None
 
@@ -45,6 +46,16 @@ class RuntimeNodeLayer(Layer):
     def set_canvas(cls, canvas) -> None:
         """注入节点图。必须在 push_layer 之前调用。"""
         cls._canvas = canvas
+
+    @classmethod
+    def set_scene(cls, scene) -> None:
+        """注入 Scene 对象 (提供 EntitySpawn 的 entity 模板)。
+
+        必须在 push_layer 之前调用。
+        PIE 模式: EditorHost.get_active_scene() 深拷贝
+        导出模式: 从 .scene 文件反序列化
+        """
+        cls._scene = scene
 
     # ════════════════════════════════════════════════════════════
     # Layer 生命周期

@@ -15,7 +15,6 @@ esper 世界命名规则:
 生命周期:
   EditorHost.Init() → SceneManager.Init(EditorHost)     → 创建 scene_EditorHost 世界
   GameRuntime.Init() → SceneManager.Init(GameRuntime)   → 创建 scene_GameRuntime 世界
-  GameRuntime.Stop() → SceneManager.Shutdown(GameRuntime) → 删除 scene_GameRuntime 世界
 """
 
 import esper
@@ -174,26 +173,6 @@ class SceneManager:
             cls.RegisterComponent("Camera", Camera)
             cls.RegisterComponent("MeshRenderer", MeshRenderer)
             cls.RegisterComponent("Transform", Transform)
-
-    @classmethod
-    def Shutdown(cls, engine_name: str) -> None:
-        """清理指定 Engine 的场景数据和 ECS 世界。"""
-        if engine_name not in cls._registry:
-            return
-        st = cls._registry.pop(engine_name)
-        st.entities.clear()
-        st._entity_names.clear()
-        st._entity_parent.clear()
-
-        # ── 删除 ECS 世界 ──
-        #     esper.delete_world() 不允许删除当前活跃的世界，
-        #     先切回默认世界再删除
-        world_to_delete = st.world_name
-        try:
-            esper.switch_world("default")
-            esper.delete_world(world_to_delete)
-        except Exception:
-            pass  # 世界可能已被删除或不存在
 
     @classmethod
     def CreateScene(cls, new_scene_name: str) -> None:
@@ -377,13 +356,6 @@ class SceneManager:
     # ============================================================
 
     @classmethod
-    def GetSceneCamera(cls) -> tuple[Camera, Transform]:
-        st = cls._state()
-        camera = esper.component_for_entity(st.scene_camera_id, Camera)
-        transform = esper.component_for_entity(st.scene_camera_id, Transform)
-        return camera, transform
-
-    @classmethod
     def GetRenderableEntities(cls) -> list:
         cls._state()
         entity_id_list = []
@@ -419,15 +391,6 @@ class SceneManager:
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
         return mesh_rend.material_id
 
-    @classmethod
-    def GetEntityTexture(cls, entity_id: int, slot: int = 0) -> int:
-        cls._state()
-        mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
-        material = ResourceManager.GetMaterial(mesh_rend.material_id)
-        if slot < len(material.texture_id_list):
-            return material.texture_id_list[slot]
-        return 0
-
     # ============================================================
     # 修改接口 / Modification Interface
     # ============================================================
@@ -437,6 +400,7 @@ class SceneManager:
         cls, entity_id: int = None,
         position_xyz: tuple = None, rotation_xyz: tuple = None, scale_xyz: tuple = None,
     ) -> None:
+        """[deprecated] 直接设 GL 坐标。新代码请用 SetEntityTransformEditor。"""
         st = cls._state()
         if entity_id is None:
             raise ValueError("Must specify entity ID")
@@ -448,21 +412,6 @@ class SceneManager:
         if scale_xyz is not None:
             transform.scale_x, transform.scale_y, transform.scale_z = scale_xyz
         ComponentModifiedEvent.Pack(entity_id, transform, engine=st.app)
-
-    @classmethod
-    def SetMainCameraTransform(
-        cls,
-        position_x: float = None, position_y: float = None, position_z: float = None,
-        rotation_x: float = None, rotation_y: float = None, rotation_z: float = None,
-    ) -> None:
-        st = cls._state()
-        transform = esper.component_for_entity(st.main_camera_id, Transform)
-        if position_x is not None: transform.position_x = position_x
-        if position_y is not None: transform.position_y = position_y
-        if position_z is not None: transform.position_z = position_z
-        if rotation_x is not None: transform.rotation_x = rotation_x
-        if rotation_y is not None: transform.rotation_y = rotation_y
-        if rotation_z is not None: transform.rotation_z = rotation_z
 
     @classmethod
     def SetEntityMeshRenderer(
@@ -484,20 +433,6 @@ class SceneManager:
         if _renderer is not None:
             _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
         ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=st.app)
-
-    @classmethod
-    def NewEntityMaterial(cls, entity_id: int, shader_id: int = None) -> int:
-        if shader_id is not None:
-            new_material_id = ResourceManager.NewMaterial()
-            material = ResourceManager.GetMaterial(new_material_id)
-            uniforms_name_type = ResourceManager.GetShader(shader_id).uniforms_name_type
-            material.set_new_shader(shader_id, uniforms_name_type)
-        else:
-            new_material_id = ResourceManager.NewMaterial()
-        mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
-        mesh_rend.material_id = new_material_id
-        ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=cls._state().app)
-        return new_material_id
 
     @classmethod
     def SetEntityMaterial(cls, entity_id: int, material_id: int) -> None:
@@ -647,20 +582,8 @@ class SceneManager:
             ComponentModifiedEvent.Pack(entity_id, transform, engine=st.app)
 
     # ============================================================
-    # 跨 Engine 场景操作
+    # 便捷访问器
     # ============================================================
-
-    @classmethod
-    def get_engine_name(cls) -> str:
-        """返回当前活跃的 Engine 名称。"""
-        return cls._active_name
-
-    @classmethod
-    def get_active_app(cls):
-        """返回当前活跃 Engine 的 app 引用。"""
-        return cls._state().app
-
-    # ── 便捷访问器 (兼容旧代码直接引用 main_camera_id 等) ──
 
     @classmethod
     def get_main_camera_id(cls) -> int | None:
@@ -669,11 +592,3 @@ class SceneManager:
     @classmethod
     def get_main_camera_2d_id(cls) -> int | None:
         return cls._state().main_camera_2d_id
-
-    @classmethod
-    def get_scene_camera_id(cls) -> int | None:
-        return cls._state().scene_camera_id
-
-    @classmethod
-    def get_scene_camera(cls) -> Camera | None:
-        return cls._state().scene_camera

@@ -50,25 +50,26 @@ class SimulationController:
 
     @staticmethod
     def _sync_ecs_to_scene(scene) -> None:
-        """将当前 ECS 世界中的实体同步到 Scene.entities 注册表。
+        """将当前 ECS 世界中的实体全量同步到 Scene.entities 注册表。
 
-        跳过系统摄像机（DefaultCamera3D / DefaultCamera2D）。
-        已存在于 Scene.entities 中的实体不会被覆盖。
+        先清空再重建，避免与 _ensure_default_scene 产生重复条目。
+        跳过系统摄像机。
         """
         import esper, copy
         from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
         from Application.Core.Scene.SceneManager import SceneManager
+        from Application.Core.Scene.Scene import EntityData
 
         _sys_ids = {
             SceneManager.get_main_camera_id(),
             SceneManager.get_main_camera_2d_id(),
         }
 
+        # ★ 清空并用 ECS 最新数据重建，消除与 _ensure_default_scene 的重复
+        scene.entities.clear()
         for eid, (xform,) in esper.get_components(Transform):
             if eid in _sys_ids:
                 continue
-            if eid in scene.entities:
-                continue  # 已存在，不覆盖
             name = SceneManager.GetEntityName(eid)
             comps = {"Transform": copy.deepcopy(xform)}
             try:
@@ -81,11 +82,7 @@ class SimulationController:
                 comps["MeshRenderer"] = copy.deepcopy(mr)
             except Exception:
                 pass
-            from Application.Core.Scene.Scene import EntityData
             scene.entities[eid] = EntityData(name=name, components=comps)
-            print(f"[Simulation] Synced entity to scene: '{name}' (eid={eid})")
-        else:
-            return "Not running"
 
     # ── 状态变更 ────────────────────────────────────────────
 

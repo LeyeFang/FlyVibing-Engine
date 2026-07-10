@@ -3,19 +3,26 @@ Test: Node Graph Runtime — 节点图驱动 GameRuntime（复用 ScenePanel 启
 ═══════════════════════════════════════════════════════════════════════════════
 
 复用主线 ScenePanel 的 Play/Stop 按钮启动真 GameRuntime (PIE 模式)。
-节点图: 编辑器中已有的 OnFrameUpdate → Get Time → Print（自动连线）。
+节点图: 运行 10s 后自动退出 — 测试 Compare / Branch / ExitGame 新节点。
 
 连线说明:
   OnFrameUpdate.exec ──→ Get Time.exec_in
-  Get Time.exec_out  ──→ Print.exec_in
-  Get Time.Elapsed   ──→ Print.Value
+  Get Time.exec_out   ──→ Branch.exec_in
+
+  Get Time.Elapsed ──→ Compare.A          } 数据: 比较 elapsed >= 10?
+  Constant(10.0)   ──→ Compare.B          }
+  Compare.Result   ──→ Branch.Condition
+
+  Branch.True  ──→ PrintString("10s reached, exiting...").exec_in
+                   PrintString.exec_out ──→ ExitGame.exec_in
+  Branch.False ──→ Print(Elapsed).exec_in
 
 运行: python Test/Application/Editor/test_node_runtime.py
 操作:
-  1. Scene 面板点击 ▶ Run → 启动 GameRuntime（弹出 PIE 窗口）
-  2. 控制台每帧输出 [Node:Print] <elapsed_time>
-  3. Scene 面板点击 ■ Stop → 停止
-  4. ESC → 退出
+  1. Scene 面板点击 ▶ Run → 启动 GameRuntime
+  2. 控制台每帧输出 elapsed time
+  3. 10s 后自动输出 "10s reached, exiting..." → GameRuntime 停止
+  4. ESC → 退出编辑器
 """
 
 from __future__ import annotations
@@ -59,72 +66,53 @@ from Test._test_harness import MockApp, MockWindow
 
 
 # ═══════════════════════════════════════════════════════════════
-# 初始图：找到编辑器中已有的 OnFrameUpdate，挂 GetTime + Print
+# 初始图：运行 10s 后自动退出 (测试 Compare / Branch / ExitGame)
 # ═══════════════════════════════════════════════════════════════
 
 def _build_initial_graph(canvas: NodeCanvas) -> None:
-    """搭建 '每隔1秒触发 PrintString' 的示例图。
-
-    ═══════════════════════════════════════════════════════════════
-    Pin 速查表
-    ═══════════════════════════════════════════════════════════════
-    exec  pin (白色三角形):  执行流 — 左边进、右边出，决定"谁先谁后"
-    data  pin (彩色圆形):    数据流 — 传数值，不决定执行顺序
-    ═══════════════════════════════════════════════════════════════
+    """搭建 '10s 后自动退出' 的示例图。
 
     图结构:
-      OnGameStart.exec ──→ VarSet("next_time", Manual=1).exec_in
-             ↑ 游戏启动时执行一次，初始化变量 next_time = 1
+      OnFrameUpdate.exec ──→ Get Time.exec_in
+        ↑ 每帧触发
 
-      OnFrameUpdate.exec ──→ TimeTrigger(Pin模式).exec_in
-             ↑ 每帧检查：引擎时间 ≥ next_time？
+      Get Time.exec_out ──→ Branch.exec_in
+        ↑ 获取运行时长后进入条件分支
 
-      TimeTrigger.out_0 ──→ VarSet("next_time", Pin).exec_in
-             ↑ 触发时：把 next_time 加 1 后存回去
+      Get Time.Elapsed ──→ Compare.A       }
+      Constant(10.0)    ──→ Compare.B       }  数据: elapsed >= 10?
+      Compare.Result    ──→ Branch.Condition }
 
-      VarSet.exec_out ──→ PrintString("tick").exec_in
-             ↑ 更新完变量后：打印 "tick"
+      Branch.True  ──→ PrintString("10s reached, exiting...")
+                         └─ exec_out ──→ ExitGame
+        ↑ 时间到 → 打印消息 → 退出
 
-      Data 链路（不需要 exec，自动求值）:
-        VarGet("next_time").Value ──→ MathAdd.A       }   VarGet 读当前值
-        Constant(1.0).Result      ──→ MathAdd.B       }   + Constant 提供 +1
-        MathAdd.Result            ──→ VarSet.Value     }   → 写回 VarSet
-        VarGet("next_time").Value ──→ TimeTrigger.Time }   TimeTrigger 读阈值
+      Branch.False ──→ Print(Elapsed)
+        ↑ 时间未到 → 打印当前运行时长
     """
 
     # ── 找已有的默认事件节点 ──
-    n_start = n_update = None
+    n_update = None
     for nid, inst in canvas.nodes.items():
-        if inst.node_type == "OnGameStart":
-            n_start = nid
-        elif inst.node_type == "OnFrameUpdate":
+        if inst.node_type == "OnFrameUpdate":
             n_update = nid
-    if n_start is None or n_update is None:
-        print("[Graph] Event nodes not found — abort")
+    if n_update is None:
+        print("[Graph] OnFrameUpdate not found — abort")
         return
 
     # ── 创建节点 ──
-    n_vs_init  = canvas.add_node("VarSet",      (400, 60))    # 初始化 next_time=1
-    n_vg       = canvas.add_node("VarGet",      (400, 260))   # 读 next_time
-    n_const    = canvas.add_node("Constant",    (180, 360))   # 常量 1.0
-    n_add      = canvas.add_node("MathAdd",     (400, 400))   # next_time + 1
-    n_trig     = canvas.add_node("TimeTrigger", (680, 100))   # 时间触发器
-    n_print    = canvas.add_node("PrintString", (980, 140))   # 打印
-    n_vs_inc   = canvas.add_node("VarSet",      (680, 360))   # 更新 next_time
+    n_time    = canvas.add_node("TimeGetElapsed", (400, 60))
+    n_const   = canvas.add_node("Constant",       (180, 200))
+    n_cmp     = canvas.add_node("Compare",        (400, 200))
+    n_branch  = canvas.add_node("Branch",         (680, 80))
+    n_print_t = canvas.add_node("PrintString",    (980, 40))   # True 分支
+    n_exit    = canvas.add_node("ExitGame",       (1280, 40))
+    n_print_f = canvas.add_node("Print",          (980, 160))  # False 分支
 
     # ── 配置节点属性 ──
-    canvas.nodes[n_vs_init].props.update(
-        {"var_name": "next_time", "mode": "manual", "value": 1.0})
-    canvas.nodes[n_vg].props.update(
-        {"var_name": "next_time"})
-    canvas.nodes[n_const].props.update(
-        {"value": 1.0})
-    canvas.nodes[n_trig].props.update(
-        {"mode": "pin"})                          # Pin 模式: 阈值从 Time pin 读
-    canvas.nodes[n_print].props.update(
-        {"message": "tick"})
-    canvas.nodes[n_vs_inc].props.update(
-        {"var_name": "next_time", "mode": "pin"}) # Pin 模式: 值从 Value pin 读
+    canvas.nodes[n_const].props.update({"value": 10.0})
+    canvas.nodes[n_cmp].props.update({"operation": "gte"})       # >=
+    canvas.nodes[n_print_t].props.update({"message": "10s reached, exiting..."})
 
     def _pin(node_id: int, name: str) -> int:
         inst = canvas.nodes[node_id]
@@ -135,25 +123,26 @@ def _build_initial_graph(canvas: NodeCanvas) -> None:
         raise KeyError(f"Pin '{name}' not found in {inst.node_type}")
 
     # ══════════════════════════════════════════════════════════
-    # Exec 连线（执行顺序）
+    # Exec 连线
     # ══════════════════════════════════════════════════════════
-    canvas.add_link(_pin(n_start,   "exec"),    _pin(n_vs_init, "exec_in"))
-    canvas.add_link(_pin(n_update,  "exec"),    _pin(n_trig,    "exec_in"))
-    canvas.add_link(_pin(n_trig,    "out_0"),   _pin(n_vs_inc,  "exec_in"))
-    canvas.add_link(_pin(n_vs_inc,  "exec_out"), _pin(n_print,   "exec_in"))
+    canvas.add_link(_pin(n_update, "exec"),    _pin(n_time,    "exec_in"))
+    canvas.add_link(_pin(n_time,   "exec_out"), _pin(n_branch,  "exec_in"))
+    canvas.add_link(_pin(n_branch, "True"),    _pin(n_print_t, "exec_in"))
+    canvas.add_link(_pin(n_print_t,"exec_out"), _pin(n_exit,    "exec_in"))
+    canvas.add_link(_pin(n_branch, "False"),   _pin(n_print_f, "exec_in"))
 
     # ══════════════════════════════════════════════════════════
-    # Data 连线（数值传递，引擎自动按需求值）
+    # Data 连线
     # ══════════════════════════════════════════════════════════
-    canvas.add_link(_pin(n_vg,    "Value"),  _pin(n_add,   "A"))
-    canvas.add_link(_pin(n_const, "Result"), _pin(n_add,   "B"))
-    canvas.add_link(_pin(n_add,   "Result"), _pin(n_vs_inc, "Value"))
-    canvas.add_link(_pin(n_vg,    "Value"),  _pin(n_trig,  "Time"))
+    canvas.add_link(_pin(n_time,  "Elapsed"), _pin(n_cmp,    "A"))
+    canvas.add_link(_pin(n_const, "Result"),  _pin(n_cmp,    "B"))
+    canvas.add_link(_pin(n_cmp,   "Result"),  _pin(n_branch, "Condition"))
+    canvas.add_link(_pin(n_time,  "Elapsed"), _pin(n_print_f,"Value"))
 
-    print("[Graph] Built: 1s interval trigger → PrintString")
-    print("  OnGameStart ──→ VarSet(next_time=1)")
-    print("  OnFrameUpdate ──→ TimeTrigger(Pin: reads VarGet)")
-    print("  TimeTrigger.out_0 ──→ VarSet(next_time+1) ──→ PrintString(tick)")
+    print("[Graph] Built: 10s auto-exit")
+    print("  OnFrameUpdate ──→ GetTime ──→ Branch(Condition: Elapsed >= 10)")
+    print("  Branch.True  ──→ PrintString ──→ ExitGame")
+    print("  Branch.False ──→ Print(Elapsed)")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -221,6 +210,9 @@ def main():
     # ── 6. 主循环 ──
     while not glfw.window_should_close(window):
         glfw.poll_events()
+
+        # ── 确保主窗口 GL 上下文 (PIE 启动后会被 Runtime 窗口切换) ──
+        glfw.make_context_current(window)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 
         imgui.backends.glfw_new_frame()

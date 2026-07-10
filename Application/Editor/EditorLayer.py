@@ -217,7 +217,7 @@ class EditorLayer(Layer):
         except Exception:
             return
 
-        # ── 状态哈希: entity_id + world_pos + rotation + type + selected ──
+        # ── 状态哈希: entity_id + world_pos + rotation + camera params + type + selected ──
         state_parts: list[tuple] = []
         for cd in cam_list:
             model = calculate_entity_model(
@@ -227,7 +227,10 @@ class EditorLayer(Layer):
                          round(float(model[3, 2]), 4))
             rot = tuple(round(r, 4) for r in cd.rotation)
             state_parts.append((cd.entity_id, world_pos, rot,
-                                cd.is_perspective, cd.is_selected))
+                                cd.is_perspective, cd.is_selected,
+                                round(cd.aspect_ratio, 4),
+                                round(cd.fov, 2),
+                                round(cd.ortho_size, 2)))
         new_hash = hash(frozenset(state_parts))
 
         if new_hash == cls._camera_gizmo_state_hash:

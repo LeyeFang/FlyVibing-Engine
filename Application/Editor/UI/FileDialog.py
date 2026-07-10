@@ -11,10 +11,15 @@
 
     # 2. 每帧在 UIManager.draw_all 末尾调用 (poll ready)
     FileDialog.render()
+
+目录记忆:
+    通过 .editor_cache.json 记录每种对话框上次打开的目录，
+    下次打开时自动定位到该目录，避免反复在复杂文件结构中导航。
 """
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Callable, Optional, Union
 
@@ -52,13 +57,101 @@ JSON_FILTERS: list[str] = [
     "*",
 ]
 
+MAT_FILTERS: list[str] = [
+    "Material Files",
+    "*.mat",
+    "All Files",
+    "*",
+]
+
+
+# ════════════════════════════════════════════════════════════════
+# 目录记忆 — 轻量 JSON 持久化
+# ════════════════════════════════════════════════════════════════
+
+def _cache_path() -> str:
+    """返回缓存文件路径 (项目根目录下的 .editor_cache.json)。"""
+    # FileDialog.py 位于 Application/Editor/UI/
+    # 项目根目录 = 向上 4 级
+    this_dir = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.normpath(os.path.join(this_dir, "..", "..", ".."))
+    return os.path.join(root, ".editor_cache.json")
+
+
+class _DialogMemory:
+    """读取/写入文件对话框目录记忆（线程安全由 GIL 保证）。"""
+
+    _cache: dict[str, str] = {}
+    _loaded: bool = False
+
+    @classmethod
+    def _ensure_loaded(cls) -> None:
+        if cls._loaded:
+            return
+        cls._loaded = True
+        path = _cache_path()
+        if not os.path.isfile(path):
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                cls._cache = {
+                    k: v for k, v in data.items()
+                    if isinstance(v, str) and os.path.isdir(v)
+                }
+        except (OSError, json.JSONDecodeError):
+            pass  # 缓存损坏，丢弃即可
+
+    @classmethod
+    def get_dir(cls, dialog_type: str, fallback: str = ".") -> str:
+        """获取指定类型对话框的上次目录。"""
+        cls._ensure_loaded()
+        d = cls._cache.get(dialog_type)
+        if d and os.path.isdir(d):
+            return d
+        return fallback
+
+    @classmethod
+    def set_dir(cls, dialog_type: str, directory: str) -> None:
+        """记录指定类型对话框的目录并持久化。"""
+        cls._ensure_loaded()
+        if not directory or not os.path.isdir(directory):
+            return
+        if cls._cache.get(dialog_type) == directory:
+            return  # 没变化，跳过写入
+        cls._cache[dialog_type] = directory
+        cls._save()
+
+    @classmethod
+    def update_from_file_path(cls, dialog_type: str, file_path: str) -> None:
+        """从用户选择的文件路径中提取父目录并记录。"""
+        if not file_path:
+            return
+        parent = os.path.dirname(os.path.abspath(file_path))
+        cls.set_dir(dialog_type, parent)
+
+    @classmethod
+    def _save(cls) -> None:
+        path = _cache_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(cls._cache, fh, indent=2, ensure_ascii=False)
+        except OSError:
+            pass  # 写入失败不影响 UI
+
 
 class FileDialog:
-    """原生 OS 文件对话框 — 非阻塞，轮询 ready() 获取结果。"""
+    """原生 OS 文件对话框 — 非阻塞，轮询 ready() 获取结果。
+
+    自动记忆每种对话框的上次目录，通过 .editor_cache.json 持久化。
+    """
 
     # 内部状态（open_file 或 save_file，接口兼容）
     _active_dialog: Optional[Union[pfd.open_file, pfd.save_file]] = None
     _callback: Optional[Callable[[str], None]] = None
+    _active_type: str = ""   # 记录当前对话框类型，用于记忆目录
 
     # ============================================================
     # 打开对话框 (渲染线程调用)
@@ -68,77 +161,107 @@ class FileDialog:
     def open_mesh(
         cls,
         callback: Callable[[str], None],
-        start_dir: str = ".",
+        start_dir: str | None = None,
     ) -> None:
         """打开"导入网格"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("mesh")
         cls._active_dialog = pfd.open_file(
-            "Import 3D Model",
-            start_dir,
-            MESH_FILTERS,
-            pfd.opt.none,
+            "Import 3D Model", d, MESH_FILTERS, pfd.opt.none,
         )
         cls._callback = callback
+        cls._active_type = "mesh"
 
     @classmethod
     def open_texture(
         cls,
         callback: Callable[[str], None],
-        start_dir: str = ".",
+        start_dir: str | None = None,
     ) -> None:
         """打开"导入纹理"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("texture")
         cls._active_dialog = pfd.open_file(
-            "Import Texture",
-            start_dir,
-            TEXTURE_FILTERS,
-            pfd.opt.none,
+            "Import Texture", d, TEXTURE_FILTERS, pfd.opt.none,
         )
         cls._callback = callback
+        cls._active_type = "texture"
 
     @classmethod
     def open_shader(
         cls,
         callback: Callable[[str], None],
-        start_dir: str = ".",
+        start_dir: str | None = None,
     ) -> None:
         """打开"导入着色器"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("shader")
         cls._active_dialog = pfd.open_file(
-            "Import Shader",
-            start_dir,
-            SHADER_FILTERS,
-            pfd.opt.none,
+            "Import Shader", d, SHADER_FILTERS, pfd.opt.none,
         )
         cls._callback = callback
+        cls._active_type = "shader"
 
     @classmethod
     def open_json(
         cls,
         callback: Callable[[str], None],
-        start_dir: str = ".",
+        start_dir: str | None = None,
     ) -> None:
-        """打开"导入 JSON"对话框 — 非阻塞，结果通过 callback(path) 返回。"""
+        """打开"导入 JSON"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("json_open")
         cls._active_dialog = pfd.open_file(
-            "Import JSON",
-            start_dir,
-            JSON_FILTERS,
-            pfd.opt.none,
+            "Import JSON", d, JSON_FILTERS, pfd.opt.none,
         )
         cls._callback = callback
+        cls._active_type = "json_open"
 
     @classmethod
     def save_json(
         cls,
         callback: Callable[[str], None],
-        start_dir: str = ".",
+        start_dir: str | None = None,
         default_name: str = "graph.json",
     ) -> None:
-        """打开"导出 JSON"保存对话框 — 非阻塞，结果通过 callback(path) 返回。"""
+        """打开"导出 JSON"保存对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("json_save")
         cls._active_dialog = pfd.save_file(
             "Export JSON",
-            os.path.join(start_dir, default_name),
+            os.path.join(d, default_name),
             JSON_FILTERS,
             pfd.opt.none,
         )
         cls._callback = callback
+        cls._active_type = "json_save"
+
+    @classmethod
+    def open_mat(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+    ) -> None:
+        """打开"导入材质"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("mat")
+        cls._active_dialog = pfd.open_file(
+            "Load Material", d, MAT_FILTERS, pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "mat"
+
+    @classmethod
+    def save_mat(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+        default_name: str = "material.mat",
+    ) -> None:
+        """打开"保存材质"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("mat_save")
+        cls._active_dialog = pfd.save_file(
+            "Save Material",
+            os.path.join(d, default_name),
+            MAT_FILTERS,
+            pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "mat_save"
 
     # ============================================================
     # 每帧轮询 (在 UIManager.draw_all 末尾调用)
@@ -148,8 +271,10 @@ class FileDialog:
     def render(cls) -> None:
         """每帧调用: 检查原生对话框是否完成。
 
-        当用户关闭对话框时，触发 callback(path) 或丢弃。
-        放在 UIManager.draw_all() 末尾即可。
+        当用户关闭对话框时:
+          1. 触发 callback(path)
+          2. 记录所选文件的父目录到缓存
+          3. 清理内部状态
         """
         if cls._active_dialog is None:
             return
@@ -163,7 +288,12 @@ class FileDialog:
                 path = raw[0]
             else:
                 path = ""
+
             if path and cls._callback:
                 cls._callback(path)
+                # ── 记住父目录 ──
+                _DialogMemory.update_from_file_path(cls._active_type, path)
+
             cls._active_dialog = None
             cls._callback = None
+            cls._active_type = ""

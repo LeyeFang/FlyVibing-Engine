@@ -1,4 +1,6 @@
 import numpy as np
+import json
+import os
 
 from dataclasses import dataclass, field
 
@@ -9,14 +11,21 @@ class Material:
     shader_id: int = 1
     texture_id_list: list = field(default_factory=list)
     uniforms_data: dict[str, np.ndarray] = field(default_factory=dict)
+    name: str = ""
+    _is_saved: bool = False        # 是否已保存到磁盘
+    _file_path: str = ""           # 关联的 .mat 文件路径
 
     def __init__(
         self,
         shader_id: int,
         uniforms_name_type: dict
     ) -> None:
+        self.texture_id_list = []
         self.uniforms_data = {}
         self.shader_id = shader_id
+        self.name = "*Untitled"
+        self._is_saved = False
+        self._file_path = ""
         for u_name, u_type in uniforms_name_type.items():
             if u_type == 'mat4':
                 self.uniforms_data[u_name] = np.zeros((4, 4), dtype=np.float32)
@@ -47,6 +56,77 @@ class Material:
                 self.uniforms_data[u_name] = np.float32(0)
             elif u_type == 'double':
                 self.uniforms_data[u_name] = np.float64(0)
+
+    @property
+    def display_name(self) -> str:
+        """用于 UI 显示的材质名（未保存时前加 *）。"""
+        if self._is_saved:
+            return self.name
+        # 不重复加 *
+        nn = self.name
+        if nn.startswith("*"):
+            return nn
+        return f"*{nn}"
+
+    def mark_modified(self) -> None:
+        """标记材质已被修改，保存按钮变为可用。"""
+        self._is_saved = False
+
+    def mark_saved(self, file_path: str = "") -> None:
+        """标记材质已保存。"""
+        self._is_saved = True
+        if file_path:
+            self._file_path = file_path
+
+    def to_dict(self) -> dict:
+        """序列化为 .mat JSON 格式。"""
+        uniforms_serializable = {}
+        for k, v in self.uniforms_data.items():
+            if hasattr(v, 'tolist'):
+                uniforms_serializable[k] = v.tolist()
+            else:
+                uniforms_serializable[k] = v
+        return {
+            "version": "0.1.0",
+            "name": self.name,
+            "shader_id": self.shader_id,
+            "texture_ids": list(self.texture_id_list),
+            "uniforms": uniforms_serializable,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict,
+                  uniforms_name_type: dict | None = None) -> 'Material':
+        """从 .mat JSON dict 恢复 Material。"""
+        uniforms_data = {}
+        for k, v in data.get("uniforms", {}).items():
+            uniforms_data[k] = np.array(v, dtype=np.float32)
+        mat = cls.__new__(cls)
+        mat.shader_id = data.get("shader_id", 1)
+        mat.texture_id_list = data.get("texture_ids", [])
+        mat.uniforms_data = uniforms_data
+        mat.name = data.get("name", "Untitled")
+        mat._is_saved = True
+        mat._file_path = ""
+        return mat
+
+    def save_to_file(self, file_path: str) -> None:
+        """保存材质到 .mat 文件。"""
+        os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+        self.mark_saved(file_path)
+
+    @classmethod
+    def load_from_file(cls, file_path: str,
+                       shader_uniforms: dict | None = None) -> 'Material':
+        """从 .mat 文件加载材质。"""
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        mat = cls.from_dict(data)
+        mat._file_path = file_path
+        mat._is_saved = True
+        return mat
 
 
 @dataclass

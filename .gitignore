@@ -6,6 +6,7 @@ dist/
 wheels/
 *.egg-info
 Application/Editor/Config
+.editor_cache.json
 
 # Virtual environments
 .venv

@@ -19,23 +19,19 @@ from Application.Editor.Services.ControllerRegistry import (
 # ── Font Awesome 6 图标 (imgui_bundle 内置矢量图标方案) ─────
 from imgui_bundle import icons_fontawesome_6 as fa
 
+from Application.Editor.UI.FileDialog import FileDialog
+
 
 class ScenePanel(BasePanel):
-    """场景管理器面板 — 五区域布局:
-      0. 场景管理 (新建/切换)
-      1. 运行控制
+    """场景管理器面板 — 四区域布局:
+      1. 场景信息 + 运行控制
       2. 2D / 3D / Overlay 视口模式
-      3. Entity 树
+      3. Entity 树 (可展开，父子层级)
       4. 选中 Entity 的组件检视
     """
 
     name = "Scene"
     flags = imgui.WindowFlags_.none
-
-    # ── Scene 数据管理 (类变量, 跨实例共享) ────────────────
-    _scene_initialized: bool = False
-    _scene_names: list[str] = []
-    _active_scene_name: str = ""
 
     def __init__(
         self
@@ -49,191 +45,67 @@ class ScenePanel(BasePanel):
         self._viewport_ctrl = get_ctrl(NAME_VIEWPORT)
         self._selection_ctrl = get_ctrl(NAME_SELECTION)
         # ── Transform 空间模式: True=Local, False=Global ──
-        self._transform_local: bool = True
+        self._transform_local: bool = False  # 默认 Global
         # ── 新建场景输入缓冲 ──
         self._new_scene_name: str = ""
 
     # ============================================================
-    # Scene 数据管理 (类方法)
+    # Material I/O 回调
     # ============================================================
 
-    @classmethod
-    def _ensure_scene_initialized(cls) -> None:
-        """确保 Scene 数据对象已创建并设为 EditorHost 活跃场景。"""
-        if cls._scene_initialized:
-            return
-        cls._scene_initialized = True
+    @staticmethod
+    def _on_mat_save(entity_id: int, file_path: str) -> None:
+        """FileDialog 回调: 保存 material 到 .mat 文件。"""
+        from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
+        if file_path:
+            SceneBrowserController.save_material_to_file(entity_id, file_path)
 
-        from Application.Core.Scene.Scene import Scene, GameType
-        from Application.Editor.EditorHost import EditorHost
-
-        scene = Scene("Default", game_type=GameType.GAME_3D)
-        cls._sync_ecs_to_scene(scene)
-        EditorHost.set_active_scene(scene)
-        cls._active_scene_name = scene.name
-        cls._scene_names = [scene.name]
-        print(f"[ScenePanel] Initialized scene '{scene.name}' "
-              f"with {len(scene.entities)} templates, game_type={scene.game_type.value}")
-
-    @classmethod
-    def _sync_ecs_to_scene(cls, scene) -> None:
-        """将 ECS 世界中的非系统实体同步到 Scene.entities 注册表。
-
-        使用 ECS entity ID 作为 Scene.entities 的 key，
-        便于编辑器侧改名/删改等操作的直接查找。
-        """
-        from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
-        from Application.Core.Scene.SceneManager import SceneManager
-        from Application.Core.Scene.Scene import EntityData
-        import esper, copy
-
-        _sys_ids = {SceneManager.get_main_camera_id(),
-                     SceneManager.get_main_camera_2d_id()}
-
-        for eid, (xform,) in esper.get_components(Transform):
-            if eid in _sys_ids:
-                continue
-            name = SceneManager.GetEntityName(eid)
-            comps = {"Transform": copy.deepcopy(xform)}
-            try:
-                cam = esper.component_for_entity(eid, Camera)
-                comps["Camera"] = copy.deepcopy(cam)
-            except Exception:
-                pass
-            try:
-                mr = esper.component_for_entity(eid, MeshRenderer)
-                comps["MeshRenderer"] = copy.deepcopy(mr)
-            except Exception:
-                pass
-            scene.entities[eid] = EntityData(name=name, components=comps)
-
-    @classmethod
-    def _on_entity_added(cls, eid: int, name: str = "") -> None:
-        """ECS 新增实体 → 同步到 Scene.entities (以 ECS ID 为 key)。"""
-        from Application.Editor.EditorHost import EditorHost
-        scene = EditorHost.get_active_scene()
-        if scene is None:
-            return
-        from Application.Core.Scene.Scene import EntityData
-        from Application.Core.Scene.BasicComponents import Transform
-        import esper, copy
-        try:
-            xform = esper.component_for_entity(eid, Transform)
-            scene.entities[eid] = EntityData(
-                name=name or f"Entity #{eid}",
-                components={"Transform": copy.deepcopy(xform)},
-            )
-        except Exception as e:
-            print(f"[ScenePanel] _on_entity_added failed eid={eid}: {e}")
-
-    @classmethod
-    def _on_entity_renamed(cls, eid: int, new_name: str) -> None:
-        """ECS 实体改名 → 同步 Scene.entities 中的名称。"""
-        from Application.Editor.EditorHost import EditorHost
-        scene = EditorHost.get_active_scene()
-        if scene is None:
-            return
-        ed = scene.entities.get(eid)
-        if ed is not None:
-            ed.name = new_name
-
-    @classmethod
-    def _on_entity_deleted(cls, eid: int) -> None:
-        """ECS 删除实体 → 同步从 Scene.entities 移除。"""
-        from Application.Editor.EditorHost import EditorHost
-        scene = EditorHost.get_active_scene()
-        if scene is not None:
-            scene.entities.pop(eid, None)
-
-    @classmethod
-    def _create_new_scene(cls, name: str) -> None:
-        """创建新 Scene 对象并设为活跃。"""
-        from Application.Core.Scene.Scene import Scene, GameType
-        from Application.Editor.EditorHost import EditorHost
-        scene = Scene(name, game_type=GameType.GAME_3D)
-        EditorHost.set_active_scene(scene)
-        cls._active_scene_name = name
-        if name not in cls._scene_names:
-            cls._scene_names.append(name)
-        cls._scene_names.sort(key=lambda n: n.lower())
-
-    @classmethod
-    def _sync_game_type(cls, mode: str) -> None:
-        """同步 2D/3D/Overlay 模式到 Scene.game_type。"""
-        from Application.Core.Scene.Scene import GameType
-        from Application.Editor.EditorHost import EditorHost
-        scene = EditorHost.get_active_scene()
-        if scene is None:
-            return
-        gt_map = {"3d": GameType.GAME_3D, "2d": GameType.GAME_2D,
-                   "overlay": GameType.OVERLAY}
-        new_gt = gt_map.get(mode, GameType.GAME_3D)
-        if scene.game_type != new_gt:
-            scene.game_type = new_gt
+    @staticmethod
+    def _on_mat_load(entity_id: int, file_path: str) -> None:
+        """FileDialog 回调: 从 .mat 文件加载 material。"""
+        from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
+        if file_path:
+            SceneBrowserController.load_material_from_file(entity_id, file_path)
 
     # ============================================================
     # 主绘制入口
     # ============================================================
 
-    def draw(self) -> None:
-        cls = type(self)
-        cls._ensure_scene_initialized()
-        self._draw_scene_manager()
+    def draw(
+        self
+    ) -> None:
+        """四区域布局绘制。"""
+        # ── 区域 1: 场景信息 + 运行控制 ──
+        self._draw_header()
         self._draw_controls()
+
+        # ── 区域 2: 2D / 3D / Overlay 视口模式 ──
         self._draw_viewport_mode()
         imgui.separator()
+
+        # ── 区域 3: Entity 树 (可展开父子层级) ──
         self._draw_entity_tree()
+
+        # ── 区域 4: 选中 Entity 的组件检视 ──
         selected = self._selection_ctrl.get_selected()
         if selected is not None:
             imgui.separator()
             self._draw_entity_summary(selected)
 
     # ============================================================
-    # 区域 0: 场景管理
+    # 区域 1: 场景名 + 运行控制
     # ============================================================
 
-    def _draw_scene_manager(self) -> None:
-        cls = type(self)
-        imgui.push_item_width(imgui.get_content_region_avail().x - 90)
-        try:
-            idx = cls._scene_names.index(cls._active_scene_name)
-        except ValueError:
-            idx = 0
-        changed, new_idx = imgui.combo("##scene_select", idx, cls._scene_names)
-        if changed and 0 <= new_idx < len(cls._scene_names):
-            cls._active_scene_name = cls._scene_names[new_idx]
-        imgui.pop_item_width()
+    def _draw_header(
+        self
+    ) -> None:
+        """显示当前场景名称。"""
+        imgui.text("Scene: ")
         imgui.same_line()
-        if imgui.small_button(f"{fa.ICON_FA_PLUS} New"):
-            imgui.open_popup("New Scene")
-        self._draw_new_scene_popup()
+        imgui.text_colored(
+            imgui.ImVec4(*BLENDER_ORANGE, 1.00), "default"
+        )
         imgui.separator()
-
-    def _draw_new_scene_popup(self) -> None:
-        cls = type(self)
-        if not imgui.begin_popup_modal("New Scene", None,
-                                        imgui.WindowFlags_.always_auto_resize)[0]:
-            return
-        imgui.text("Scene name:")
-        imgui.push_item_width(250)
-        changed, self._new_scene_name = imgui.input_text(
-            "##new_scene_name", self._new_scene_name)
-        imgui.pop_item_width()
-        imgui.spacing()
-        name = self._new_scene_name.strip()
-        if not name:
-            imgui.begin_disabled(True)
-        if imgui.button("Create", imgui.ImVec2(100, 0)):
-            cls._create_new_scene(name)
-            self._new_scene_name = ""
-            imgui.close_current_popup()
-        if not name:
-            imgui.end_disabled()
-        imgui.same_line()
-        if imgui.button("Cancel", imgui.ImVec2(100, 0)):
-            self._new_scene_name = ""
-            imgui.close_current_popup()
-        imgui.end_popup()
 
     def _draw_controls(
         self
@@ -296,7 +168,6 @@ class ScenePanel(BasePanel):
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
         if imgui.button("3D", (btn_w, 0)):
             self._viewport_ctrl.switch_to_3d()
-            type(self)._sync_game_type("3d")
         if not is_2d:
             imgui.pop_style_color(1)
 
@@ -308,7 +179,6 @@ class ScenePanel(BasePanel):
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
         if imgui.button("2D", (btn_w, 0)):
             self._viewport_ctrl.switch_to_2d()
-            type(self)._sync_game_type("2d")
         if is_2d:
             imgui.pop_style_color(1)
 
@@ -480,20 +350,20 @@ class ScenePanel(BasePanel):
             av = imgui.get_content_region_avail().x
             btn_w = (av - imgui.get_style().item_spacing.x) / 2.0
 
-            if use_local:
-                imgui.push_style_color(
-                    imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.50))
-            if imgui.button("Local", (btn_w, 0)):
-                self._transform_local = True
-            if use_local:
-                imgui.pop_style_color(1)
-            imgui.same_line()
             if not use_local:
                 imgui.push_style_color(
                     imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.50))
             if imgui.button("Global", (btn_w, 0)):
                 self._transform_local = False
             if not use_local:
+                imgui.pop_style_color(1)
+            imgui.same_line()
+            if use_local:
+                imgui.push_style_color(
+                    imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.50))
+            if imgui.button("Local", (btn_w, 0)):
+                self._transform_local = True
+            if use_local:
                 imgui.pop_style_color(1)
 
             imgui.spacing()
@@ -545,6 +415,28 @@ class ScenePanel(BasePanel):
                         if changed:
                             self._browser_ctrl.set_camera_ortho_size(entity_id, new_size)
 
+                    # ── Aspect Ratio 预设 (联动 Camera Gizmo 2D 边界框) ──
+                    _ASPECT_PRESETS = [
+                        ("16:9",   16.0 / 9.0),
+                        ("16:10",  16.0 / 10.0),
+                        ("4:3",    4.0 / 3.0),
+                        ("21:9",   21.0 / 9.0),
+                        ("1:1",    1.0),
+                    ]
+                    current_ar = float(cam.get('aspect_ratio', 16.0 / 9.0))
+                    preset_idx = min(
+                        range(len(_ASPECT_PRESETS)),
+                        key=lambda i: abs(_ASPECT_PRESETS[i][1] - current_ar)
+                    )
+                    changed_ar, new_idx = imgui.combo(
+                        "Aspect Ratio", preset_idx,
+                        [p[0] for p in _ASPECT_PRESETS]
+                    )
+                    if changed_ar:
+                        self._browser_ctrl.set_camera_aspect_ratio(
+                            entity_id, _ASPECT_PRESETS[new_idx][1])
+                        cam['aspect_ratio'] = _ASPECT_PRESETS[new_idx][1]
+
                     # ── 裁剪平面 ──
                     near_val = float(cam.get('near', 0.1))
                     far_val = float(cam.get('far', 1000.0))
@@ -566,71 +458,91 @@ class ScenePanel(BasePanel):
         self._draw_add_component(entity_id)
 
     def _draw_mesh_renderer_editor(self, entity_id: int, summary) -> None:
-        """绘制 MeshRenderer 编辑区域 — Mesh 下拉 + Material 子区域。"""
+        """绘制 MeshRenderer 编辑区域 — Mesh / Material 并列子节点。"""
         mesh_options = self._resource_ctrl.get_mesh_options()
-        mat_options = self._resource_ctrl.get_material_options()
 
-        # ── Mesh 下拉 ──
-        current_mesh_id = summary.mesh_id or 0
-        mesh_names = {mid: name for mid, name in mesh_options}
-        current_mesh_name = mesh_names.get(current_mesh_id, f"Mesh #{current_mesh_id}")
+        # ── Mesh 子节点 ──
+        if imgui.tree_node_ex("Mesh##mesh_tree", imgui.TreeNodeFlags_.default_open):
+            current_mesh_id = summary.mesh_id or 0
+            mesh_names = {mid: name for mid, name in mesh_options}
+            current_mesh_name = mesh_names.get(current_mesh_id, f"Mesh #{current_mesh_id}")
 
-        if imgui.begin_combo("Mesh", current_mesh_name):
-            for mid, mname in mesh_options:
-                selected = (mid == current_mesh_id)
-                if imgui.selectable(f"{mname}##mesh_{mid}", selected)[0]:
-                    self._browser_ctrl.set_entity_mesh(entity_id, mid)
-                if selected:
-                    imgui.set_item_default_focus()
-            imgui.end_combo()
+            if imgui.begin_combo("Mesh##mesh_select", current_mesh_name):
+                for mid, mname in mesh_options:
+                    selected = (mid == current_mesh_id)
+                    if imgui.selectable(f"{mname}##mesh_{mid}", selected)[0]:
+                        self._browser_ctrl.set_entity_mesh(entity_id, mid)
+                    if selected:
+                        imgui.set_item_default_focus()
+                imgui.end_combo()
+            imgui.tree_pop()
 
-        # ── Material 区域（tree node，始终可见） ──
+        # ── Material 子节点 ──
         has_mat = summary.material_id is not None and summary.material_id != 0
-        if imgui.tree_node_ex("Material##mat_tree", imgui.TreeNodeFlags_.default_open if has_mat else 0):
+        if imgui.tree_node_ex("Material##mat_tree",
+                               imgui.TreeNodeFlags_.default_open if has_mat else 0):
             self._draw_material_section(entity_id, summary)
             imgui.tree_pop()
 
     def _draw_material_section(self, entity_id: int, summary) -> None:
-        """绘制 Material 子区域 — 材质选择 + Shader/Textures/Uniforms 编辑。"""
+        """绘制 Material 子区域。
+
+        层级:
+          Material Name: *MyMat   [Save] [Load]   ← 只读标签 + 按钮
+          Name:  [MyMat          ]                ← 可编辑
+          Shader / Textures / Uniforms
+        """
         from Application.Resource.ResourceManager import ResourceManager
-        mat_options = self._resource_ctrl.get_material_options()
         shader_options = self._resource_ctrl.get_shader_options()
         tex_options = self._resource_ctrl.get_texture_options()
 
         current_mat_id = summary.material_id or 0
-        mat_names = {mid: name for mid, name in mat_options}
-        current_mat_name = mat_names.get(current_mat_id, "(none)")
-
-        # ── Material 选择 ──
-        if imgui.begin_combo("Material##mat_select", current_mat_name):
-            if imgui.selectable("(none)##mat_none", current_mat_id == 0)[0]:
-                self._browser_ctrl.set_entity_material(entity_id, 0)
-            for mid, mname in mat_options:
-                selected = (mid == current_mat_id)
-                if imgui.selectable(f"{mname}##mat_{mid}", selected)[0]:
-                    self._browser_ctrl.set_entity_material(entity_id, mid)
-                if selected:
-                    imgui.set_item_default_focus()
-            imgui.end_combo()
-        imgui.same_line()
-        if imgui.small_button(f"{fa.ICON_FA_PLUS}##new_mat_{entity_id}"):
-            self._browser_ctrl.create_material_for_entity(entity_id)
-        if imgui.is_item_hovered():
-            imgui.set_tooltip("New Material (Basic)")
-
-        # ── 无材质时仅显示提示 ──
-        if current_mat_id == 0:
-            imgui.text_disabled("(no material assigned)")
-            return
-
         info = self._browser_ctrl.get_entity_material_info(entity_id)
-        if info is None:
-            imgui.text_disabled("(material info unavailable)")
+        if current_mat_id == 0 or info is None:
+            imgui.text_disabled("(no material)")
             return
 
-        # ── Shader 下拉 ──
+        is_saved = info.get('is_saved', False)
+        display_name = info.get('display_name', '*Untitled')
+        current_name = info.get('material_name', 'Untitled')
+        file_path = info.get('file_path', '')
+
+        # ── Material Name 只读行 + Save / Load ──
+        imgui.text("Material Name:")
+        imgui.same_line()
+        imgui.text_colored(
+            imgui.ImVec4(*BLENDER_ORANGE, 1.00), display_name)
+        imgui.same_line()
+
+        _btn_w = 55
+        can_save = not is_saved
+        if not can_save:
+            imgui.begin_disabled(True)
+        save_label = "Save As" if (not is_saved and file_path == "") else "Save"
+        if imgui.button(f"{save_label}##mat_save_{entity_id}", (_btn_w, 0)):
+            default_name = f"{current_name}.mat" if current_name else "material.mat"
+            FileDialog.save_mat(
+                callback=lambda p: self._on_mat_save(entity_id, p),
+                default_name=default_name,
+            )
+        if not can_save:
+            imgui.end_disabled()
+
+        imgui.same_line()
+        if imgui.button(f"Load##mat_load_{entity_id}", (_btn_w, 0)):
+            FileDialog.open_mat(
+                callback=lambda p: self._on_mat_load(entity_id, p),
+            )
+
+        # ── Name 可编辑 ──
+        changed, new_name = imgui.input_text("Name##mat_name", current_name, 64)
+        if changed and new_name.strip():
+            self._browser_ctrl.set_material_name(entity_id, new_name.strip())
+
+        # ── Shader ──
         shader_names = {sid: name for sid, name in shader_options}
-        current_shader_name = shader_names.get(info['shader_id'], info.get('shader_name', f"#{info['shader_id']}"))
+        current_shader_name = shader_names.get(
+            info['shader_id'], info.get('shader_name', f"#{info['shader_id']}"))
         if imgui.begin_combo("Shader##mat_shader", current_shader_name):
             for sid, sname in shader_options:
                 selected = (sid == info['shader_id'])
@@ -640,7 +552,7 @@ class ScenePanel(BasePanel):
                     imgui.set_item_default_focus()
             imgui.end_combo()
 
-        # ── ★ Basic Shader 专属: 颜色调色盘 ──
+        # ── Basic Shader 颜色 ──
         if info.get('shader_name') == 'Basic':
             self._draw_color_picker(entity_id, info)
 

@@ -6,6 +6,7 @@ from typing import Optional
 
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Scene.BasicComponents import Camera
+from Application.Resource.Material import Material
 
 # ── 输入安全常量 ─────────────────────────────────────────
 _SCALE_MIN: float = 0.0001          # Scale 下限 (防止零除/反转法线)
@@ -158,13 +159,8 @@ class SceneBrowserController:
 
     @classmethod
     def set_name(cls, entity_id: int, name: str) -> None:
-        """设置实体名称，同步到 Scene.entities。"""
+        """设置实体名称。"""
         SceneManager.SetEntityName(entity_id, name)
-        try:
-            from Application.Editor.UI.panels.ScenePanel import ScenePanel
-            ScenePanel._on_entity_renamed(entity_id, name)
-        except Exception as e:
-            print(f"[SceneBrowser] _on_entity_renamed failed: {e}")
 
     @classmethod
     def get_camera_info(cls, entity_id: int) -> Optional[dict]:
@@ -214,6 +210,13 @@ class SceneBrowserController:
         cam.projection_type = (
             ProjectionType.PERSPECTIVE if is_perspective else ProjectionType.ORTHOGRAPHIC)
 
+    @classmethod
+    def set_camera_aspect_ratio(cls, entity_id: int, ratio: float) -> None:
+        """设置摄像机视口比例 (width / height)。"""
+        import esper
+        cam = esper.component_for_entity(entity_id, Camera)
+        cam.aspect_ratio = max(0.1, min(10.0, ratio))
+
     # ── 实体层级 / Entity Hierarchy ───────────────────────────
 
     @classmethod
@@ -249,30 +252,18 @@ class SceneBrowserController:
 
     @classmethod
     def add_entity(cls, name: str = "") -> int:
-        """创建新实体，双写到 Scene.entities 注册表。"""
+        """创建新实体（仅 Transform），返回 entity_id。"""
         eid = SceneManager.AddEntity(name=name or "Entity")
         if cls.selected_entity_id is not None:
             SceneManager.SetEntityParent(eid, cls.selected_entity_id)
-        try:
-            from Application.Editor.UI.panels.ScenePanel import ScenePanel
-            ScenePanel._on_entity_added(eid, name or "Entity")
-        except Exception as e:
-            print(f"[SceneBrowser] _on_entity_added failed: {e}")
         return eid
 
     @classmethod
     def delete_entity(cls, entity_id: int) -> bool:
-        """删除实体，同步从 Scene.entities 移除。"""
+        """删除实体及其子实体。若删除的是当前选中实体，则清除选中。"""
         if cls.selected_entity_id == entity_id:
             cls.selected_entity_id = None
-        result = SceneManager.DeleteEntity(entity_id)
-        if result:
-            try:
-                from Application.Editor.UI.panels.ScenePanel import ScenePanel
-                ScenePanel._on_entity_deleted(entity_id)
-            except Exception as e:
-                print(f"[SceneBrowser] _on_entity_deleted failed: {e}")
-        return result
+        return SceneManager.DeleteEntity(entity_id)
 
     @classmethod
     def delete_selected(cls) -> bool:
@@ -326,20 +317,48 @@ class SceneBrowserController:
     @classmethod
     def set_entity_mesh(cls, entity_id: int, mesh_id: int) -> None:
         SceneManager.SetEntityMeshRenderer(entity_id, mesh_id=mesh_id)
+        cls._sync_component_to_scene(entity_id, "MeshRenderer")
 
     @classmethod
     def set_entity_material(cls, entity_id: int, material_id: int) -> None:
         SceneManager.SetEntityMaterial(entity_id, material_id)
+        cls._sync_component_to_scene(entity_id, "MeshRenderer")
+
+    @classmethod
+    def _sync_component_to_scene(cls, entity_id: int, comp_name: str) -> None:
+        """将 ECS 实体的指定组件同步到 Scene.entities。"""
+        try:
+            from Application.Editor.EditorHost import EditorHost
+            scene = EditorHost.get_active_scene()
+            if scene is None:
+                return
+            ed = scene.entities.get(entity_id)
+            if ed is None:
+                return
+            import esper, copy
+            from Application.Core.Scene.BasicComponents import MeshRenderer, Camera
+            comp_map = {"MeshRenderer": MeshRenderer, "Camera": Camera}
+            comp_cls = comp_map.get(comp_name)
+            if comp_cls is None:
+                return
+            comp = esper.component_for_entity(entity_id, comp_cls)
+            ed.components[comp_name] = copy.deepcopy(comp)
+        except Exception as e:
+            print(f"[SceneBrowser] _sync_component_to_scene failed: {e}")
 
     @classmethod
     def get_entity_material_info(cls, entity_id: int) -> dict | None:
-        """获取实体当前 material 的详细信息（shader, textures, uniforms）。"""
+        """获取实体当前 material 的详细信息。"""
         try:
             mid = SceneManager.GetEntityMaterial(entity_id)
             from Application.Resource.ResourceManager import ResourceManager
             mat = ResourceManager.GetMaterial(mid)
             return {
                 'material_id': mid,
+                'material_name': mat.name,
+                'display_name': mat.display_name,
+                'is_saved': mat._is_saved,
+                'file_path': mat._file_path,
                 'shader_id': mat.shader_id,
                 'shader_name': ResourceManager.GetShaderName(mat.shader_id),
                 'texture_ids': list(mat.texture_id_list),
@@ -349,9 +368,62 @@ class SceneBrowserController:
             return None
 
     @classmethod
-    def set_material_uniform(cls, entity_id: int, name: str, value) -> None:
-        """设置 entity material 的单个 uniform 参数。"""
-        SceneManager.SetMaterialParams(entity_id, {name: value})
+    def set_material_name(cls, entity_id: int, new_name: str) -> None:
+        """设置 material 名称并标记为已修改。"""
+        try:
+            mid = SceneManager.GetEntityMaterial(entity_id)
+            from Application.Resource.ResourceManager import ResourceManager
+            mat = ResourceManager.GetMaterial(mid)
+            if mat.name != new_name:
+                mat.name = new_name
+                mat.mark_modified()
+        except Exception:
+            pass
+
+    @classmethod
+    def set_material_shader(cls, entity_id: int, shader_id: int) -> None:
+        """切换 material 的 shader 并标记修改。"""
+        try:
+            mid = SceneManager.GetEntityMaterial(entity_id)
+            from Application.Resource.ResourceManager import ResourceManager
+            mat = ResourceManager.GetMaterial(mid)
+            shader = ResourceManager.GetShader(shader_id)
+            mat.set_new_shader(shader_id, shader.uniforms_name_type)
+            mat.mark_modified()
+            # 更新 renderer
+            SceneManager.SetEntityMaterial(entity_id, mid)
+        except Exception:
+            pass
+
+    @classmethod
+    def save_material_to_file(cls, entity_id: int, file_path: str) -> bool:
+        """保存 entity 的 material 到 .mat 文件。"""
+        try:
+            mid = SceneManager.GetEntityMaterial(entity_id)
+            from Application.Resource.ResourceManager import ResourceManager
+            mat = ResourceManager.GetMaterial(mid)
+            mat.save_to_file(file_path)
+            return True
+        except Exception as e:
+            print(f"[SceneBrowser] save_material failed: {e}")
+            return False
+
+    @classmethod
+    def load_material_from_file(cls, entity_id: int, file_path: str) -> bool:
+        """从 .mat 文件加载 material 并绑定到 entity。"""
+        try:
+            from Application.Resource.ResourceManager import ResourceManager
+            mat = Material.load_from_file(file_path)
+            # 注册到 ResourceManager
+            new_mid = ResourceManager.material_count + 1
+            ResourceManager.material_count = new_mid
+            ResourceManager.loaded_material[str(new_mid)] = mat
+            # 绑定到 entity
+            SceneManager.SetEntityMaterial(entity_id, new_mid)
+            return True
+        except Exception as e:
+            print(f"[SceneBrowser] load_material failed: {e}")
+            return False
 
     @classmethod
     def create_material_for_entity(cls, entity_id: int) -> int | None:
@@ -380,11 +452,6 @@ class SceneBrowserController:
         from Application.Resource.ResourceManager import ResourceManager
         mid = SceneManager.GetEntityMaterial(entity_id)
         ResourceManager.AddMaterialTexture(mid, texture_id)
-
-    @classmethod
-    def set_material_shader(cls, entity_id: int, shader_id: int) -> None:
-        """切换实体的 shader。"""
-        SceneManager.SetEntityShader(entity_id, shader_id)
 
 
 # ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──

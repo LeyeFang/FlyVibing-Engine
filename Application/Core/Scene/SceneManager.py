@@ -431,12 +431,23 @@ class SceneManager:
         if entity_id is None:
             raise ValueError("Must specify entity ID")
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+        changed = False
         if visible is not None:
             mesh_rend.visible = visible
+            changed = True
         if mesh_id is not None:
             mesh_rend.mesh_id = mesh_id
+            changed = True
         if material_id is not None:
+            if material_id == 0:
+                # ── 兜底: material=0 时自动创建新材质，避免渲染崩溃 ──
+                material_id = ResourceManager.NewMaterial()
             mesh_rend.material_id = material_id
+            changed = True
+        if changed:
+            _renderer = getattr(st.app, 'renderer', None)
+            if _renderer is not None:
+                _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
         if visible is not None:
             _renderer = getattr(st.app, 'renderer', None)
             if _renderer is not None:
@@ -461,7 +472,12 @@ class SceneManager:
     def SetEntityMaterial(cls, entity_id: int, material_id: int) -> None:
         st = cls._state()
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+        if material_id == 0:
+            material_id = ResourceManager.NewMaterial()
         mesh_rend.material_id = material_id
+        _renderer = getattr(st.app, 'renderer', None)
+        if _renderer is not None:
+            _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
         ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=st.app)
         # ★ 通知渲染器重新注册 (刷新缓存的 material_id / shader_id / texture_id)
         _renderer = getattr(st.app, 'renderer', None)

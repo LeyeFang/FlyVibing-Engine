@@ -653,6 +653,11 @@ class NodeEditorPanel(BasePanel):
         if not labels:
             labels = ["(no scene)"]
 
+        # ★ 自动选中第一个有效模板（新节点 template 为空时）
+        if not template and labels and labels[0] != "(no scene)":
+            inst.props["template"] = labels[0]
+            template = labels[0]
+
         try:
             idx = labels.index(template) if template in labels else 0
         except ValueError:

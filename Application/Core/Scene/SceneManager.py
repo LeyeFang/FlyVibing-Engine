@@ -385,6 +385,7 @@ class SceneManager:
 
     @classmethod
     def GetRenderableEntities(cls) -> list:
+        cls._state()
         entity_id_list = []
         for entity_id, rend in esper.get_component(MeshRenderer):
             if rend.visible:
@@ -393,6 +394,7 @@ class SceneManager:
 
     @classmethod
     def GetEntityTransform(cls, entity_id) -> Transform:
+        cls._state()
         return esper.component_for_entity(entity_id, Transform)
 
     @classmethod
@@ -407,16 +409,19 @@ class SceneManager:
 
     @classmethod
     def GetEntityMesh(cls, entity_id: int) -> int:
+        cls._state()
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
         return mesh_rend.mesh_id
 
     @classmethod
     def GetEntityMaterial(cls, entity_id: int) -> int:
+        cls._state()
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
         return mesh_rend.material_id
 
     @classmethod
     def GetEntityTexture(cls, entity_id: int, slot: int = 0) -> int:
+        cls._state()
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
         material = ResourceManager.GetMaterial(mesh_rend.material_id)
         if slot < len(material.texture_id_list):

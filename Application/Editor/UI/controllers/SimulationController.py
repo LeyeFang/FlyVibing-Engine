@@ -44,6 +44,47 @@ class SimulationController:
         elif cls._state == SimulationState.PAUSED:
             return "Paused"
         else:
+            return "Stopped"
+
+    # ── ECS → Scene 同步 ────────────────────────────────────
+
+    @staticmethod
+    def _sync_ecs_to_scene(scene) -> None:
+        """将当前 ECS 世界中的实体同步到 Scene.entities 注册表。
+
+        跳过系统摄像机（DefaultCamera3D / DefaultCamera2D）。
+        已存在于 Scene.entities 中的实体不会被覆盖。
+        """
+        import esper, copy
+        from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
+        from Application.Core.Scene.SceneManager import SceneManager
+
+        _sys_ids = {
+            SceneManager.get_main_camera_id(),
+            SceneManager.get_main_camera_2d_id(),
+        }
+
+        for eid, (xform,) in esper.get_components(Transform):
+            if eid in _sys_ids:
+                continue
+            if eid in scene.entities:
+                continue  # 已存在，不覆盖
+            name = SceneManager.GetEntityName(eid)
+            comps = {"Transform": copy.deepcopy(xform)}
+            try:
+                cam = esper.component_for_entity(eid, Camera)
+                comps["Camera"] = copy.deepcopy(cam)
+            except Exception:
+                pass
+            try:
+                mr = esper.component_for_entity(eid, MeshRenderer)
+                comps["MeshRenderer"] = copy.deepcopy(mr)
+            except Exception:
+                pass
+            from Application.Core.Scene.Scene import EntityData
+            scene.entities[eid] = EntityData(name=name, components=comps)
+            print(f"[Simulation] Synced entity to scene: '{name}' (eid={eid})")
+        else:
             return "Not running"
 
     # ── 状态变更 ────────────────────────────────────────────
@@ -93,6 +134,8 @@ class SimulationController:
         import copy
         editor_scene = EditorHost.get_active_scene()
         if editor_scene is not None:
+            # ★ 先将 ECS 中的实体同步到 Scene.entities 注册表
+            cls._sync_ecs_to_scene(editor_scene)
             runtime_scene = copy.deepcopy(editor_scene)
             RuntimeNodeLayer.set_scene(runtime_scene)
             print(f"[Simulation] Scene injected: {runtime_scene.name} "

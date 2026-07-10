@@ -40,7 +40,7 @@ class _SceneState:
         'scene_camera', 'scene_camera_id',
         'main_camera_id', 'main_camera_2d_id',
         '_entity_names', '_entity_parent',
-        'world_name',
+        'world_name', 'game_type',
     )
 
     def __init__(self):
@@ -54,6 +54,9 @@ class _SceneState:
         self._entity_names: dict[int, str] = {}
         self._entity_parent: dict[int, int] = {}
         self.world_name: str = ""
+        # ── 场景游戏类型 ──
+        from Application.Core.Scene.Scene import GameType
+        self.game_type: GameType = GameType.GAME_3D
 
 
 class SceneManager:
@@ -140,11 +143,16 @@ class SceneManager:
         esper.switch_world(st.world_name)
 
         # ── 3D 透视摄像机 ──
-        st.main_camera_id = esper.create_entity(Transform(), Camera(True))
+        # 编辑坐标 (0, -10, 0) → GL (0, 0, 10)
+        # Camera.local_forward = (0, 0, -1) → 天然看向原点 (0, 0, 0)
+        st.main_camera_id = esper.create_entity(
+            Transform(position_x=0.0, position_y=0.0, position_z=10.0),
+            Camera(True),
+        )
         st.scene_camera_id = st.main_camera_id
         st.scene_camera = esper.component_for_entity(st.scene_camera_id, Camera)
         st.entities[f'{st.main_camera_id}'] = 1
-        st._entity_names[st.main_camera_id] = "Camera"
+        st._entity_names[st.main_camera_id] = "DefaultCamera3D"
 
         # ── 2D 正交俯视摄像机 ──
         st.main_camera_2d_id = esper.create_entity(
@@ -160,7 +168,10 @@ class SceneManager:
         cam_2d.near_plane = 0.1
         cam_2d.far_plane = 100.0
         st.entities[f'{st.main_camera_2d_id}'] = 1
-        st._entity_names[st.main_camera_2d_id] = "Camera2D"
+        st._entity_names[st.main_camera_2d_id] = "DefaultCamera2D"
+
+        # ── 根据 game_type 选择默认活跃摄像机 ──
+        cls._apply_game_type_camera(st)
 
         # ── 首次 Init 时自动注册内置 Component ──
         if not cls._component_registry:
@@ -187,6 +198,69 @@ class SceneManager:
             esper.delete_world(world_to_delete)
         except Exception:
             pass  # 世界可能已被删除或不存在
+
+    # ============================================================
+    # 场景游戏类型 / GameType
+    # ============================================================
+
+    @classmethod
+    def SetGameType(cls, game_type) -> None:
+        """设置场景游戏类型，并自动切换默认活跃摄像机。
+
+        GAME_3D  → scene_camera_id = main_camera_id (DefaultCamera3D)
+        GAME_2D  → scene_camera_id = main_camera_2d_id (DefaultCamera2D)
+        OVERLAY  → scene_camera_id = main_camera_id (暂同 3D)
+
+        注意: 如果用户通过 CameraSetMain 节点手动指定了摄像机，
+        本方法不会覆盖用户的选择。仅在场景类型切换时更新默认值。
+
+        Args:
+            game_type: GameType 枚举值或字符串 ("3d" / "2d" / "overlay")
+        """
+        from Application.Core.Scene.Scene import GameType
+        if isinstance(game_type, str):
+            game_type = GameType(game_type)
+        st = cls._state()
+        old_type = st.game_type
+        if old_type == game_type:
+            return
+        st.game_type = game_type
+        cls._apply_game_type_camera(st)
+        print(f"[SceneManager] GameType: {old_type.value} → {game_type.value}")
+
+    @classmethod
+    def GetGameType(cls):
+        """返回当前场景的 GameType 枚举值。"""
+        return cls._state().game_type
+
+    @classmethod
+    def _apply_game_type_camera(cls, st: _SceneState) -> None:
+        """根据 st.game_type 选择默认活跃摄像机 + 更新 scene_camera 引用。
+
+        仅在 scene_camera_id 指向默认摄像机时更新；
+        若用户通过 CameraSetMain 手动指定了自定义摄像机，保持不覆盖。
+        """
+        from Application.Core.Scene.Scene import GameType
+        # 判断当前是否指向某个默认摄像机
+        is_default_3d = (st.scene_camera_id == st.main_camera_id)
+        is_default_2d = (st.scene_camera_id == st.main_camera_2d_id)
+        is_default_cam = is_default_3d or is_default_2d
+
+        if not is_default_cam:
+            # 用户手动指定了自定义摄像机 — 不覆盖
+            return
+
+        if st.game_type == GameType.GAME_2D and st.main_camera_2d_id is not None:
+            st.scene_camera_id = st.main_camera_2d_id
+        else:
+            st.scene_camera_id = st.main_camera_id
+
+        if st.scene_camera_id is not None:
+            try:
+                st.scene_camera = esper.component_for_entity(
+                    st.scene_camera_id, Camera)
+            except Exception:
+                st.scene_camera = None
 
     @classmethod
     def CreateScene(cls, new_scene_name: str) -> None:

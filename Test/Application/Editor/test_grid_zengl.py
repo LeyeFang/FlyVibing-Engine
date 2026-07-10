@@ -30,8 +30,6 @@ import math, numpy as np, glfw
 from Application.Editor.Gizmos.Grid import Grid
 
 from Application.Core.Renderer.ZenGL.ZenGLRenderer import ZenGLRenderer
-from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
-from Application.Core.Renderer.CommandQueue import CommandQueue
 
 from Test._test_harness import TestHarness
 from Test._test_scene import setup_default_scene
@@ -60,12 +58,7 @@ def main():
     h.init_engine()
 
     fbw, fbh = glfw.get_framebuffer_size(window)
-    renderer = ZenGLRenderer
-    renderer.viewport_width = fbw
-    renderer.viewport_height = fbh
-    renderer.aspect_ratio = fbw / fbh if fbh else 1.0
-    ZenGLCore.init_core((fbw, fbh))
-    ZenGLRenderer._command_queue = CommandQueue()
+    renderer = ZenGLRenderer.Create()
     h.set_renderer(renderer)
     h.patch_default_shader_440()
     print(f"[ZenGL] Renderer {renderer.viewport_width}×{renderer.viewport_height}")

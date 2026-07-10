@@ -39,6 +39,7 @@ class EditorHost(Engine):
     # ── 编辑器专属状态 ──────────────────────────────────────────
     _editor_plugin: Plugin | None = None
     _active_scene: object | None = None     # 当前编辑的 Scene 对象
+    _scenes: dict[str, object] = {}          # name → Scene (所有已创建的场景)
 
     # ── 编辑器窗口/渲染器 (由 _create_window / _create_renderer 显式赋值) ──
     # Engine 基类用 window/renderer 管理生命周期，
@@ -60,6 +61,43 @@ class EditorHost(Engine):
     def set_active_scene(cls, scene: object) -> None:
         """设置当前编辑的 Scene 对象。"""
         cls._active_scene = scene
+
+    @classmethod
+    def list_scenes(cls) -> list[str]:
+        """返回所有已创建场景的名称列表。"""
+        # 合并 EditorHost._scenes 和 SceneManager 中的场景名
+        names = set(cls._scenes.keys())
+        try:
+            from Application.Core.Scene.SceneManager import SceneManager
+            st = SceneManager._state_for(cls.__name__)
+            names.update(st.scene.keys())
+        except Exception:
+            pass
+        return sorted(names)
+
+    @classmethod
+    def create_scene(cls, name: str) -> object:
+        """创建新场景并设为活跃。返回 Scene 对象。"""
+        from Application.Core.Scene.Scene import Scene
+        scene = Scene(name=name)
+        cls._scenes[name] = scene
+        if cls._active_scene is None:
+            cls._active_scene = scene
+        # 同步到 SceneManager
+        try:
+            from Application.Core.Scene.SceneManager import SceneManager
+            SceneManager.CreateScene(name)
+        except Exception:
+            pass
+        return scene
+
+    @classmethod
+    def switch_scene(cls, name: str) -> bool:
+        """切换到指定名称的场景。返回是否成功。"""
+        if name in cls._scenes:
+            cls._active_scene = cls._scenes[name]
+            return True
+        return False
 
     # ════════════════════════════════════════════════════════════
     # 工厂方法（Engine 要求子类覆写）

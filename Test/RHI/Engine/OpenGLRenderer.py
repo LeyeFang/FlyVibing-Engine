@@ -15,7 +15,7 @@ MRO (C3 linearization):
 
 from __future__ import annotations
 
-from Application.Core.Renderer.OpenGL.OpenGLRenderer import OpenGLRenderer as _BaseRenderer
+from Application.Core.Renderer.OpenGL.openGLRenderer import OpenGLRenderer as _BaseRenderer
 from Application.Core.Renderer.OpenGL.OpenGLCore import OpenGLCore
 from Application.Editor.EditorHost import EditorHost
 

@@ -63,134 +63,87 @@ class PostProcess:
     管线调用:
       Renderer._do_start_frame() 中:
         ...
-        cls._RenderEntities(view, proj)
-        cls._render_post_process(view, proj)   ← 由本 Mixin 提供
-        cls._render_all_overlays(view, proj)
+        self._RenderEntities(view, proj)
+        self._render_post_process(view, proj)
+        self._render_all_overlays(view, proj)
     """
 
-    # ── 后处理效果注册表 (当前仅 Highlight) ──
-    _highlight_config: HighlightEffectConfig = None
-
-    # ── 线程安全: 双缓冲选择状态 ──
-    _pending_selected_ids: set[int] = None
-    _active_selected_ids: set[int] = set()
+    def __init__(self) -> None:
+        super().__init__()
+        self._highlight_config: 'HighlightEffectConfig | None' = None
+        self._pending_selected_ids: 'set[int] | None' = None
+        self._active_selected_ids: set[int] = set()
 
     # ════════════════════════════════════════════════════════
     # 公开 API (Editor 层调用)
     # ════════════════════════════════════════════════════════
 
-    @classmethod
-    def register_highlight_effect(cls, config: HighlightEffectConfig) -> None:
-        """注册轮廓高亮后处理效果 — 编译 shader、创建 FBO/VAO。
+    def register_highlight_effect(self, config: HighlightEffectConfig) -> None:
+        """注册轮廓高亮后处理效果 — 编译 shader、创建 FBO/VAO。"""
+        self._highlight_config = config
+        self._init_highlight(config)
 
-        调用时机: EditorLayer.OnAttach() → OutlinerID.register_to(renderer)
-        前提: 已在渲染线程，GL 上下文有效。
-
-        Args:
-            config: 初始配置 (颜色/宽度/穿透模式)
-        """
-        cls._highlight_config = config
-        cls._init_highlight(config)
-
-    @classmethod
-    def unregister_highlight_effect(cls) -> None:
+    def unregister_highlight_effect(self) -> None:
         """注销轮廓高亮效果，释放全部 GPU 资源。"""
-        cls._release_highlight()
-        cls._highlight_config = None
-        cls._pending_selected_ids = None
-        cls._active_selected_ids = set()
+        self._release_highlight()
+        self._highlight_config = None
+        self._pending_selected_ids = None
+        self._active_selected_ids = set()
 
-    @classmethod
-    def update_highlight_selection(cls, selected_ids: set[int]) -> None:
-        """主线程安全: 更新待选实体 ID 集合。
+    def update_highlight_selection(self, selected_ids: set[int]) -> None:
+        """主线程安全: 更新待选实体 ID 集合。"""
+        self._pending_selected_ids = set(selected_ids) if selected_ids else set()
 
-        实际生效在下一帧 _render_post_process 中的 _sync_selection()。
-
-        Args:
-            selected_ids: 被选中的实体 ID 集合 (可为空)
-        """
-        cls._pending_selected_ids = set(selected_ids) if selected_ids else set()
-
-    @classmethod
     def update_highlight_config(
-        cls,
+        self,
         color: tuple[float, float, float] = None,
         width: int = None,
         xray: bool = None,
     ) -> None:
-        """更新轮廓渲染参数 — 不重建 GPU 资源。
-
-        Args:
-            color: 轮廓颜色 (r, g, b)
-            width: 边缘检测采样半径 (像素)
-            xray: 穿透模式
-        """
-        if cls._highlight_config is None:
+        """更新轮廓渲染参数 — 不重建 GPU 资源。"""
+        if self._highlight_config is None:
             return
         if color is not None:
-            cls._highlight_config.color = tuple(color)
+            self._highlight_config.color = tuple(color)
         if width is not None:
-            cls._highlight_config.width = max(1, int(width))
+            self._highlight_config.width = max(1, int(width))
         if xray is not None:
-            cls._highlight_config.xray = bool(xray)
-        cls._update_highlight_params()
+            self._highlight_config.xray = bool(xray)
+        self._update_highlight_params()
 
     # ════════════════════════════════════════════════════════
     # 管线入口 (Renderer 每帧调用)
     # ════════════════════════════════════════════════════════
 
-    @classmethod
-    def _render_post_process(cls, view: np.ndarray, proj: np.ndarray) -> None:
-        """后处理管线入口 — 由 Renderer._do_start_frame() 在 Entities 之后调用。
+    def _render_post_process(self, view: np.ndarray, proj: np.ndarray) -> None:
+        """后处理管线入口。"""
+        self._sync_selection()
+        if self._highlight_config is not None:
+            self._render_highlight(view, proj)
 
-        执行顺序:
-          1. 同步选择状态 (_pending → _active)
-          2. 渲染已注册的后处理效果 (当前仅 Highlight)
-        """
-        cls._sync_selection()
-        if cls._highlight_config is not None:
-            cls._render_highlight(view, proj)
-
-    @classmethod
-    def _sync_selection(cls) -> None:
+    def _sync_selection(self) -> None:
         """渲染线程: 原子交换选择状态 (pending → active)。"""
-        if cls._pending_selected_ids is not None:
-            cls._highlight_config.selected_ids = cls._pending_selected_ids
-            cls._active_selected_ids = cls._pending_selected_ids
-            cls._pending_selected_ids = None
+        if self._pending_selected_ids is not None:
+            self._highlight_config.selected_ids = self._pending_selected_ids
+            self._active_selected_ids = self._pending_selected_ids
+            self._pending_selected_ids = None
 
     # ════════════════════════════════════════════════════════
     # 子类必须实现
     # ════════════════════════════════════════════════════════
 
-    @classmethod
-    def _init_highlight(cls, config: HighlightEffectConfig) -> None:
-        """初始化 GPU 资源 — 编译 shader、创建 FBO/VAO/全屏四边形。
+    def _init_highlight(self, config: HighlightEffectConfig) -> None:
+        """初始化 GPU 资源。子类实现。"""
+        ...
 
-        子类实现 (OpenGLPostProcess / ZenGLPostProcess)。
-        """
-        raise NotImplementedError
+    def _release_highlight(self) -> None:
+        """释放 GPU 资源。子类实现。"""
+        ...
 
-    @classmethod
-    def _render_highlight(cls, view: np.ndarray, proj: np.ndarray) -> None:
-        """执行 highlight 后处理渲染 — MRT → 边缘检测 → 合成。
+    def _render_highlight(self, view: np.ndarray, proj: np.ndarray) -> None:
+        """渲染轮廓高亮。子类实现。"""
+        ...
 
-        子类实现 (OpenGLPostProcess / ZenGLPostProcess)。
-        """
-        raise NotImplementedError
-
-    @classmethod
-    def _release_highlight(cls) -> None:
-        """释放 highlight 相关 GPU 资源。
-
-        子类实现 (OpenGLPostProcess / ZenGLPostProcess)。
-        """
-        raise NotImplementedError
-
-    @classmethod
-    def _update_highlight_params(cls) -> None:
-        """更新可变渲染参数 (颜色/宽度等)，不重建 GPU 资源。
-
-        子类可选覆写。默认空操作 — 参数在每帧 _render_highlight 中读取。
-        """
+    def _update_highlight_params(self) -> None:
+        """更新参数 (不重建资源)。子类可选实现。"""
         pass

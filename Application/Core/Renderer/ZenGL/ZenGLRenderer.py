@@ -22,83 +22,76 @@ class ZenGLRenderer(
     _pre_overlay_callbacks: list = []
     _outliner: any = None
 
-    @classmethod
-    def register_pre_overlay_callback(cls, cb): 
-        if cb not in cls._pre_overlay_callbacks: cls._pre_overlay_callbacks.append(cb)
-    @classmethod
-    def unregister_pre_overlay_callback(cls, cb):
-        if cb in cls._pre_overlay_callbacks: cls._pre_overlay_callbacks.remove(cb)
-    @classmethod
-    def register_outliner(cls, o): cls._outliner = o
-    @classmethod
-    def unregister_outliner(cls): cls._outliner = None
+    def register_pre_overlay_callback(self, cb): 
+        if cb not in self._pre_overlay_callbacks: self._pre_overlay_callbacks.append(cb)
+    def unregister_pre_overlay_callback(self, cb):
+        if cb in self._pre_overlay_callbacks: self._pre_overlay_callbacks.remove(cb)
+    def register_outliner(self, o): self._outliner = o
+    def unregister_outliner(self): self._outliner = None
 
     @classmethod
     def Create(cls, window=None):
-        """初始化 ZenGL 渲染器。
+        """工厂方法 — 创建 ZenGLRenderer 实例。
 
         Args:
             window: Engine 传入的 Window 实例。通过 window.GetSize() 获取初始尺寸。
+        Returns:
+            ZenGLRenderer 实例
         """
         from Application.Core.Renderer.CommandQueue import CommandQueue
+        instance = cls()
         if window is not None:
             sz = window.GetSize()
         else:
-            # 回退: 从当前 GLFW 上下文获取 (兼容旧测试路径)
             import glfw as _glfw
             _glfw_win = _glfw.get_current_context()
             if _glfw_win is not None:
                 sz = _glfw.get_framebuffer_size(_glfw_win)
             else:
                 sz = (800, 600)
-        cls.init_core(sz)
-        cls.viewport_width, cls.viewport_height = sz
-        cls.aspect_ratio = sz[0]/sz[1]
-        # 相机矩阵由逻辑线程通过 SetViewProjectionCommand 推送
-        # 初始化命令队列
-        cls._command_queue = CommandQueue()
-        return cls
+        instance.init_core(sz)
+        instance.viewport_width, instance.viewport_height = sz
+        instance.aspect_ratio = sz[0]/sz[1]
+        instance._command_queue = CommandQueue()
+        return instance
 
-    @classmethod
-    def _do_start_frame(cls) -> None:
-        ctx = cls.ctx
+    def _do_start_frame(self) -> None:
+        ctx = self.ctx
         ctx.new_frame()
-        if cls._pending_resize:
-            w,h = cls._pending_resize; cls.rebuild_images(w,h); cls._pending_resize = None
+        if self._pending_resize:
+            w,h = self._pending_resize; self.rebuild_images(w,h); self._pending_resize = None
             # ★ 重建实体/overlay 管线 — 新 framebuffer images 已创建，旧管线仍引用旧 images
-            cls._rebuild_entity_pipelines()
-            cls._rebuild_overlay_pipelines()
-        view = cls._cached_view if cls._cached_view is not None else np.identity(4, 'f4')
-        proj = cls._cached_proj if cls._cached_proj is not None else np.identity(4, 'f4')
-        cls.clear_frame()
-        for cb in cls._pre_overlay_callbacks:
-            try: cb(view, proj, cls.viewport_width, cls.viewport_height)
+            self._rebuild_entity_pipelines()
+            self._rebuild_overlay_pipelines()
+        view = self._cached_view if self._cached_view is not None else np.identity(4, 'f4')
+        proj = self._cached_proj if self._cached_proj is not None else np.identity(4, 'f4')
+        self.clear_frame()
+        for cb in self._pre_overlay_callbacks:
+            try: cb(view, proj, self.viewport_width, self.viewport_height)
             except: pass
-        cls._RenderEntities(view, proj)
+        self._RenderEntities(view, proj)
         # ★ 后处理管线 (MRT → 边缘检测 → 合成)
-        cls._render_post_process(view, proj)
+        self._render_post_process(view, proj)
         # ★ 走 _render_all_overlays (分层: layer 0 → clear depth → layer 1)
-        cls._render_all_overlays(view, proj)
+        self._render_all_overlays(view, proj)
         # Overlay pick pass
         # ★ Overlay pick pass — 对齐 OpenGLPickSystem._render_overlays_pick_pass
-        cls._ensure_pick_images(cls.viewport_width, cls.viewport_height)
-        cls._render_overlay_pick_pass(view, proj)
+        self._ensure_pick_images(self.viewport_width, self.viewport_height)
+        self._render_overlay_pick_pass(view, proj)
         ctx.end_frame()
         # 每帧结束后读取 pick buffer
-        cls._read_pick_buffer()
+        self._read_pick_buffer()
         # ★ 最终 blit: 确保 layer 1 (screen overlay) 写入 color_image 后刷到屏幕
         try:
-            cls._color_image.blit()
+            self._color_image.blit()
         except Exception as _e:
             import traceback as _tb
             print(f"[ZenGL] blit FAILED: {_e}")
             _tb.print_exc()
 
-    @classmethod
-    def EndFrame(cls) -> None: pass
+    def EndFrame(self) -> None: pass
 
-    @classmethod
-    def Shutdown(cls) -> None:
+    def Shutdown(self) -> None:
         """释放所有 ZenGL GPU 资源 — 渲染线程、GL 上下文有效时调用。
 
         清理顺序:
@@ -109,19 +102,19 @@ class ZenGLRenderer(
           5. 核心: context + 主图像
           6. 基类: 命令队列 + overlay 回调 + 相机缓存
         """
-        cls._zg_pick_data = b''
-        cls._zg_overlay_pick_img = None
-        cls._zg_overlay_pick_data = b''
-        cls._zg_overlay_pick_size = (0, 0)
-        cls._unregister_all_entities()
-        cls._unregister_all_overlays()
-        cls.unregister_highlight_effect()
-        cls._overlay_pick_key_map.clear()
-        cls._pre_overlay_callbacks.clear()
-        cls._outline_selected_ids.clear()
-        cls._scene_fbo_override = 0
-        cls._outliner = None
-        cls.destroy_core()
+        self._zg_pick_data = b''
+        self._zg_overlay_pick_img = None
+        self._zg_overlay_pick_data = b''
+        self._zg_overlay_pick_size = (0, 0)
+        self._unregister_all_entities()
+        self._unregister_all_overlays()
+        self.unregister_highlight_effect()
+        self._overlay_pick_key_map.clear()
+        self._pre_overlay_callbacks.clear()
+        self._outline_selected_ids.clear()
+        self._scene_fbo_override = 0
+        self._outliner = None
+        self.destroy_core()
         super().Shutdown()
 
 
@@ -137,31 +130,29 @@ class ZenGLRenderer(
     _zg_overlay_pick_data: bytes = b''
     _zg_overlay_pick_size: tuple = (0, 0)
 
-    @classmethod
-    def _ensure_pick_images(cls, w: int, h: int) -> None:
+    def _ensure_pick_images(self, w: int, h: int) -> None:
         """确保 overlay pick 图像存在且尺寸匹配。resize 时清空 pick pipeline 缓存。"""
-        ctx = cls.ctx
-        if cls._zg_overlay_pick_img is None or cls._zg_overlay_pick_img.size != (w, h):
-            cls._zg_overlay_pick_img = ctx.image((w, h), 'rgba8unorm')
-            cls._zg_overlay_pick_img.clear_value = (0.0, 0.0, 0.0, 1.0)
+        ctx = self.ctx
+        if self._zg_overlay_pick_img is None or self._zg_overlay_pick_img.size != (w, h):
+            self._zg_overlay_pick_img = ctx.image((w, h), 'rgba8unorm')
+            self._zg_overlay_pick_img.clear_value = (0.0, 0.0, 0.0, 1.0)
             # resize → 清空惰性 pick pipeline, 下帧重建
-            for gpu in cls._overlay_gpu_resources.values():
+            for gpu in self._overlay_gpu_resources.values():
                 gpu.pick_pipeline = None
 
-    @classmethod
-    def _render_overlay_pick_pass(cls, view: np.ndarray, proj: np.ndarray) -> None:
+    def _render_overlay_pick_pass(self, view: np.ndarray, proj: np.ndarray) -> None:
         """Overlay 拾取 pass — 将 pick_type>0 的 overlay 渲染到 _zg_overlay_pick_img。
         编码: R=0 (标记 overlay), G=pick_type, B=pick_id
         """
-        img = cls._zg_overlay_pick_img
+        img = self._zg_overlay_pick_img
         if img is None:
             return
-        pickable = [(k, g) for k, g in cls._overlay_gpu_resources.items() if g.pick_type > 0]
+        pickable = [(k, g) for k, g in self._overlay_gpu_resources.items() if g.pick_type > 0]
         if not pickable:
             return
         img.clear()
-        vp_w, vp_h = cls.viewport_width, cls.viewport_height
-        ctx = cls.ctx
+        vp_w, vp_h = self.viewport_width, self.viewport_height
+        ctx = self.ctx
         # ★ Pick VS — 极简, 只用 location=0, 根据 overlay 实际声明的矩阵选择变体
         _PICK_FS = """#version 440 core
 uniform float uPickType;
@@ -262,52 +253,50 @@ void main() {
             try: pp.render()
             except Exception: pass
 
-    @classmethod
-    def _read_pick_buffer(cls) -> None:
+    def _read_pick_buffer(self) -> None:
         """每帧结束后读取 entity + overlay pick 图像。"""
         # Entity pick (PostProcess MRT)
-        if cls._pp_pick_img is not None:
+        if self._pp_pick_img is not None:
             try:
-                cls._zg_pick_data = cls._pp_pick_img.read()
-                cls._zg_pick_size = cls._pp_pick_img.size
+                self._zg_pick_data = self._pp_pick_img.read()
+                self._zg_pick_size = self._pp_pick_img.size
             except Exception:
                 pass
         # Overlay pick
-        if cls._zg_overlay_pick_img is not None:
+        if self._zg_overlay_pick_img is not None:
             try:
-                cls._zg_overlay_pick_data = cls._zg_overlay_pick_img.read()
-                cls._zg_overlay_pick_size = cls._zg_overlay_pick_img.size
+                self._zg_overlay_pick_data = self._zg_overlay_pick_img.read()
+                self._zg_overlay_pick_size = self._zg_overlay_pick_img.size
             except Exception:
                 pass
 
-    @classmethod
-    def pick_at(cls, x, y) -> tuple:
+    def pick_at(self, x, y) -> tuple:
         """统一拾取 → ('overlay', key) | ('entity', id) | (None, None)。"""
         # 1. Overlay pick (gizmo 在 entity 之上, 优先)
-        ow, oh = cls._zg_overlay_pick_size
-        if cls._zg_overlay_pick_data and ow > 0 and oh > 0:
+        ow, oh = self._zg_overlay_pick_size
+        if self._zg_overlay_pick_data and ow > 0 and oh > 0:
             try:
                 px = max(0, min(int(x), ow - 1))
                 py = max(0, min(oh - int(y) - 1, oh - 1))
                 offset = (py * ow + px) * 4
-                r = cls._zg_overlay_pick_data[offset]
-                g = cls._zg_overlay_pick_data[offset + 1]
-                b = cls._zg_overlay_pick_data[offset + 2]
+                r = self._zg_overlay_pick_data[offset]
+                g = self._zg_overlay_pick_data[offset + 1]
+                b = self._zg_overlay_pick_data[offset + 2]
                 if r == 0 and g > 0:
-                    key = cls._overlay_pick_key_map.get((g, b))
+                    key = self._overlay_pick_key_map.get((g, b))
                     if key is not None:
                         return ('overlay', key)
             except Exception:
                 pass
 
         # 2. Entity pick
-        w, h = cls._zg_pick_size
-        if cls._zg_pick_data and w > 0 and h > 0:
+        w, h = self._zg_pick_size
+        if self._zg_pick_data and w > 0 and h > 0:
             try:
                 px = max(0, min(int(x), w - 1))
                 py = max(0, min(h - int(y) - 1, h - 1))
                 offset = (py * w + px) * 4
-                entity_id = int.from_bytes(cls._zg_pick_data[offset:offset + 4], 'little')
+                entity_id = int.from_bytes(self._zg_pick_data[offset:offset + 4], 'little')
                 if entity_id > 0:
                     return ('entity', entity_id)
             except Exception:
@@ -315,13 +304,10 @@ void main() {
 
         return (None, None)
 
-    @classmethod
-    def update_pick_mouse(cls, x, y) -> None: pass
+    def update_pick_mouse(self, x, y) -> None: pass
 
-    @classmethod
-    def register_overlay_drawable(cls, overlay):
+    def register_overlay_drawable(self, overlay):
         # 通过 MRO 委托到 ZenGLResourceManager，确保 cls 正确传递（支持隔离子类）
         super().register_overlay_drawable(overlay)
-    @classmethod
-    def unregister_overlay_drawable(cls, key):
+    def unregister_overlay_drawable(self, key):
         super().unregister_overlay_drawable(key)

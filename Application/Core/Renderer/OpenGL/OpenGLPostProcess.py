@@ -12,7 +12,7 @@ OpenGLPostProcess — PyOpenGL 屏幕空间后处理管线 (Mixin)。
 
 MRO 位置:
   openGLRenderer → ... → OpenGLOverlayRenderer → OpenGLPostProcess → Renderer → ...
-  (需要 MRO 已提供 cls.registered_entities / cls.registered_meshes / cls.registered_textures)
+  (需要 MRO 已提供 self.registered_entities / self.registered_meshes / self.registered_textures)
 """
 
 from __future__ import annotations
@@ -26,70 +26,58 @@ from Application.Core.Renderer.PostProcess import PostProcess, HighlightEffectCo
 class OpenGLPostProcess(PostProcess):
     """PyOpenGL 后处理管线 — 当前支持 Highlight 效果。"""
 
-    # ════════════════════════════════════════════════════════════
-    # Highlight GPU 资源
-    # ════════════════════════════════════════════════════════════
-
-    # ── MRT FBO ──
-    _pp_fbo: int = 0
-    _pp_color_tex: int = 0       # GL_RGBA8  — attachment 0
-    _pp_id_tex: int = 0          # GL_R32UI  — attachment 1
-    _pp_ds_rbo: int = 0          # GL_DEPTH_COMPONENT24
-    _pp_fbo_w: int = 0
-    _pp_fbo_h: int = 0
-
-    # ── Edge FBO (持久化, resize 时重建) ──
-    _pp_edge_tex: int = 0        # GL_R8
-    _pp_edge_fbo: int = 0
-
-    # ── Shader Programs ──
-    _pp_mrt_prog: int = 0        # MRT 场景着色器
-    _pp_edge_prog: int = 0       # 边缘检测着色器
-    _pp_composite_prog: int = 0  # 合成着色器
-
-    # ── 全屏四边形 ──
-    _pp_quad_vao: int = 0
+    def __init__(self) -> None:
+        super().__init__()
+        self._pp_fbo: int = 0
+        self._pp_color_tex: int = 0
+        self._pp_id_tex: int = 0
+        self._pp_ds_rbo: int = 0
+        self._pp_fbo_w: int = 0
+        self._pp_fbo_h: int = 0
+        self._pp_edge_tex: int = 0
+        self._pp_edge_fbo: int = 0
+        self._pp_mrt_prog: int = 0
+        self._pp_edge_prog: int = 0
+        self._pp_composite_prog: int = 0
+        self._pp_quad_vao: int = 0
 
     # ════════════════════════════════════════════════════════
     # PostProcess 接口实现
     # ════════════════════════════════════════════════════════
 
-    @classmethod
-    def _init_highlight(cls, config: HighlightEffectConfig) -> None:
+    def _init_highlight(self, config: HighlightEffectConfig) -> None:
         """编译 shader → 创建全屏四边形 → 初始化 FBO。"""
-        cls._compile_shaders()
-        cls._create_quad()
-        cls._ensure_fbo(
-            cls.viewport_width, cls.viewport_height)
+        self._compile_shaders()
+        self._create_quad()
+        self._ensure_fbo(
+            self.viewport_width, self.viewport_height)
 
-    @classmethod
-    def _release_highlight(cls) -> None:
+    def _release_highlight(self) -> None:
         """释放所有 highlight GPU 资源。"""
-        cls._release_fbo()
-        cls._release_edge_fbo()
-        for prog in (cls._pp_mrt_prog, cls._pp_edge_prog, cls._pp_composite_prog):
+        self._release_fbo()
+        self._release_edge_fbo()
+        for prog in (self._pp_mrt_prog, self._pp_edge_prog, self._pp_composite_prog):
             if prog:
                 gl.glDeleteProgram(prog)
-        cls._pp_mrt_prog = cls._pp_edge_prog = cls._pp_composite_prog = 0
-        if cls._pp_quad_vao:
-            gl.glDeleteVertexArrays(1, [cls._pp_quad_vao])
-            cls._pp_quad_vao = 0
+        self._pp_mrt_prog = self._pp_edge_prog = self._pp_composite_prog = 0
+        if self._pp_quad_vao:
+            gl.glDeleteVertexArrays(1, [self._pp_quad_vao])
+            self._pp_quad_vao = 0
 
-    @classmethod
-    def _render_highlight(cls, view: np.ndarray, proj: np.ndarray) -> None:
+    def _render_highlight(self, view: np.ndarray, proj: np.ndarray) -> None:
         """Pass 1 MRT → Pass 2 Edge → Pass 3 Composite。"""
-        vp_w, vp_h = cls.viewport_width, cls.viewport_height
+        vp_w, vp_h = self.viewport_width, self.viewport_height
         if vp_w == 0 or vp_h == 0:
             return
 
         # ── 确保 FBO 尺寸匹配 (resize 时惰性重建) ──
-        cls._ensure_fbo(vp_w, vp_h)
-        cls._ensure_edge_fbo(vp_w, vp_h)
+        self._ensure_fbo(vp_w, vp_h)
+        self._ensure_edge_fbo(vp_w, vp_h)
 
         # ══════════════════════════════════════════════════
         # Pass 1: MRT Scene — 渲染实体到 color + id
         # ══════════════════════════════════════════════════
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, cls._pp_fbo)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self._pp_fbo)
         gl.glViewport(0, 0, vp_w, vp_h)
 
         # attachment 0 (rgba8) + attachment 1 (r32ui) + depth
@@ -103,12 +91,12 @@ class OpenGLPostProcess(PostProcess):
         gl.glDepthMask(gl.GL_TRUE)
         gl.glDisable(gl.GL_BLEND)
 
-        gl.glUseProgram(cls._pp_mrt_prog)
-        loc_model = gl.glGetUniformLocation(cls._pp_mrt_prog, 'model')
-        loc_view = gl.glGetUniformLocation(cls._pp_mrt_prog, 'view')
-        loc_proj = gl.glGetUniformLocation(cls._pp_mrt_prog, 'projection')
-        loc_tex = gl.glGetUniformLocation(cls._pp_mrt_prog, 'uTexture')
-        loc_oid = gl.glGetUniformLocation(cls._pp_mrt_prog, 'uObjID')
+        gl.glUseProgram(self._pp_mrt_prog)
+        loc_model = gl.glGetUniformLocation(self._pp_mrt_prog, 'model')
+        loc_view = gl.glGetUniformLocation(self._pp_mrt_prog, 'view')
+        loc_proj = gl.glGetUniformLocation(self._pp_mrt_prog, 'projection')
+        loc_tex = gl.glGetUniformLocation(self._pp_mrt_prog, 'uTexture')
+        loc_oid = gl.glGetUniformLocation(self._pp_mrt_prog, 'uObjID')
 
         view_f32 = np.ascontiguousarray(view.astype('float32'))
         proj_f32 = np.ascontiguousarray(proj.astype('float32'))
@@ -121,10 +109,10 @@ class OpenGLPostProcess(PostProcess):
 
         from Application.Core.Scene.SceneManager import SceneManager
 
-        active_ids = cls._highlight_config.selected_ids if cls._highlight_config else set()
+        active_ids = self._highlight_config.selected_ids if self._highlight_config else set()
 
         for eid in SceneManager.GetRenderableEntities():
-            entity = cls.registered_entities.get(eid)
+            entity = self.registered_entities.get(eid)
             if entity is None:
                 continue
 
@@ -139,7 +127,7 @@ class OpenGLPostProcess(PostProcess):
                 gl.glUniform1ui(loc_oid, obj_id)
 
             gl.glBindVertexArray(entity.vao)
-            mesh_data = cls.registered_meshes[entity.mesh_id]
+            mesh_data = self.registered_meshes[entity.mesh_id]
             gl.glDrawElements(gl.GL_TRIANGLES, mesh_data.elements_count,
                               gl.GL_UNSIGNED_INT, None)
             gl.glBindVertexArray(0)
@@ -148,23 +136,23 @@ class OpenGLPostProcess(PostProcess):
         # Pass 2: Edge Detection
         #   读 id_tex → Roberts Cross 边缘检测 → edge_tex (R8)
         # ══════════════════════════════════════════════════
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, cls._pp_edge_fbo)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self._pp_edge_fbo)
         gl.glViewport(0, 0, vp_w, vp_h)
         gl.glDisable(gl.GL_DEPTH_TEST)
 
-        gl.glUseProgram(cls._pp_edge_prog)
+        gl.glUseProgram(self._pp_edge_prog)
         gl.glActiveTexture(gl.GL_TEXTURE0)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, cls._pp_id_tex)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self._pp_id_tex)
 
-        loc_eid = gl.glGetUniformLocation(cls._pp_edge_prog, 'uIDTex')
+        loc_eid = gl.glGetUniformLocation(self._pp_edge_prog, 'uIDTex')
         if loc_eid >= 0:
             gl.glUniform1i(loc_eid, 0)
-        loc_w = gl.glGetUniformLocation(cls._pp_edge_prog, 'uWidth')
+        loc_w = gl.glGetUniformLocation(self._pp_edge_prog, 'uWidth')
         if loc_w >= 0:
-            w_val = cls._highlight_config.width if cls._highlight_config else 3
+            w_val = self._highlight_config.width if self._highlight_config else 3
             gl.glUniform1i(loc_w, w_val)
 
-        gl.glBindVertexArray(cls._pp_quad_vao)
+        gl.glBindVertexArray(self._pp_quad_vao)
         gl.glDrawArrays(gl.GL_TRIANGLE_STRIP, 0, 4)
         gl.glBindVertexArray(0)
 
@@ -177,21 +165,21 @@ class OpenGLPostProcess(PostProcess):
         gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
         gl.glEnable(gl.GL_BLEND)
 
-        gl.glUseProgram(cls._pp_composite_prog)
+        gl.glUseProgram(self._pp_composite_prog)
         gl.glActiveTexture(gl.GL_TEXTURE0)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, cls._pp_edge_tex)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self._pp_edge_tex)
 
-        loc_etex = gl.glGetUniformLocation(cls._pp_composite_prog, 'uEdgeTex')
+        loc_etex = gl.glGetUniformLocation(self._pp_composite_prog, 'uEdgeTex')
         if loc_etex >= 0:
             gl.glUniform1i(loc_etex, 0)
         loc_oc = gl.glGetUniformLocation(
-            cls._pp_composite_prog, 'uOutlineColor')
+            self._pp_composite_prog, 'uOutlineColor')
         if loc_oc >= 0:
-            col = cls._highlight_config.color if cls._highlight_config else (
+            col = self._highlight_config.color if self._highlight_config else (
                 0.878, 0.416, 0.153)
             gl.glUniform3f(loc_oc, *col)
 
-        gl.glBindVertexArray(cls._pp_quad_vao)
+        gl.glBindVertexArray(self._pp_quad_vao)
         gl.glDrawArrays(gl.GL_TRIANGLE_STRIP, 0, 4)
         gl.glBindVertexArray(0)
         gl.glDisable(gl.GL_BLEND)
@@ -199,8 +187,7 @@ class OpenGLPostProcess(PostProcess):
         # 恢复深度测试 (后续 overlay 需要)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
-    @classmethod
-    def _update_highlight_params(cls) -> None:
+    def _update_highlight_params(self) -> None:
         """参数更新 — 颜色/宽度在每帧 _render_highlight 中动态读取，无需额外操作。"""
         pass
 
@@ -208,8 +195,7 @@ class OpenGLPostProcess(PostProcess):
     # Shader 编译
     # ════════════════════════════════════════════════════════
 
-    @classmethod
-    def _compile_shaders(cls) -> None:
+    def _compile_shaders(self) -> None:
         """编译 MRT 场景着色器、边缘检测着色器、composite 着色器。"""
         from OpenGL.GL import shaders as gls
 
@@ -234,7 +220,7 @@ void main() {
     outColor = texture(uTexture, TexCoord);
     outObjID = uObjID;
 }'''
-        cls._pp_mrt_prog = gls.compileProgram(
+        self._pp_mrt_prog = gls.compileProgram(
             gls.compileShader(_MRT_VS, gl.GL_VERTEX_SHADER),
             gls.compileShader(_MRT_FS, gl.GL_FRAGMENT_SHADER),
         )
@@ -265,7 +251,7 @@ void main() {
     }
     outEdge = edge;
 }'''
-        cls._pp_edge_prog = gls.compileProgram(
+        self._pp_edge_prog = gls.compileProgram(
             gls.compileShader(_EDGE_VS, gl.GL_VERTEX_SHADER),
             gls.compileShader(_EDGE_FS, gl.GL_FRAGMENT_SHADER),
         )
@@ -287,7 +273,7 @@ void main() {
     float edge = texture(uEdgeTex, vUV).r;
     outColor = vec4(uOutlineColor, edge);
 }'''
-        cls._pp_composite_prog = gls.compileProgram(
+        self._pp_composite_prog = gls.compileProgram(
             gls.compileShader(_COMP_VS, gl.GL_VERTEX_SHADER),
             gls.compileShader(_COMP_FS, gl.GL_FRAGMENT_SHADER),
         )
@@ -296,14 +282,13 @@ void main() {
     # 全屏四边形
     # ════════════════════════════════════════════════════════
 
-    @classmethod
-    def _create_quad(cls) -> None:
+    def _create_quad(self) -> None:
         """创建全屏四边形 VAO (triangle strip)。"""
         from Application.Core.Renderer.VertexLayout import STD_LAYOUT
         verts = np.array([-1, -1, 1, -1, -1, 1, 1, 1], dtype='f4')
-        cls._pp_quad_vao = gl.glGenVertexArrays(1)
+        self._pp_quad_vao = gl.glGenVertexArrays(1)
         vbo = gl.glGenBuffers(1)
-        gl.glBindVertexArray(cls._pp_quad_vao)
+        gl.glBindVertexArray(self._pp_quad_vao)
         gl.glBindBuffer(gl.GL_ARRAY_BUFFER, vbo)
         gl.glBufferData(gl.GL_ARRAY_BUFFER, verts.nbytes, verts,
                         gl.GL_STATIC_DRAW)
@@ -319,16 +304,15 @@ void main() {
     # MRT FBO 管理
     # ════════════════════════════════════════════════════════
 
-    @classmethod
-    def _ensure_fbo(cls, w: int, h: int) -> None:
+    def _ensure_fbo(self, w: int, h: int) -> None:
         """确保 MRT FBO 尺寸匹配 (resize 时重建)。"""
-        if cls._pp_fbo and cls._pp_fbo_w == w and cls._pp_fbo_h == h:
+        if self._pp_fbo and self._pp_fbo_w == w and self._pp_fbo_h == h:
             return
-        cls._release_fbo()
+        self._release_fbo()
 
         # Color (RGBA8)
-        cls._pp_color_tex = gl.glGenTextures(1)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, cls._pp_color_tex)
+        self._pp_color_tex = gl.glGenTextures(1)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self._pp_color_tex)
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA8, w, h, 0,
                         gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, None)
         gl.glTexParameteri(gl.GL_TEXTURE_2D,
@@ -337,8 +321,8 @@ void main() {
                            gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
 
         # Object ID (R32UI)
-        cls._pp_id_tex = gl.glGenTextures(1)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, cls._pp_id_tex)
+        self._pp_id_tex = gl.glGenTextures(1)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self._pp_id_tex)
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_R32UI, w, h, 0,
                         gl.GL_RED_INTEGER, gl.GL_UNSIGNED_INT, None)
         gl.glTexParameteri(gl.GL_TEXTURE_2D,
@@ -347,23 +331,23 @@ void main() {
                            gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
 
         # Depth (D24)
-        cls._pp_ds_rbo = gl.glGenRenderbuffers(1)
-        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, cls._pp_ds_rbo)
+        self._pp_ds_rbo = gl.glGenRenderbuffers(1)
+        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self._pp_ds_rbo)
         gl.glRenderbufferStorage(
             gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24, w, h)
 
         # FBO
-        cls._pp_fbo = gl.glGenFramebuffers(1)
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, cls._pp_fbo)
+        self._pp_fbo = gl.glGenFramebuffers(1)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self._pp_fbo)
         gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER,
                                   gl.GL_COLOR_ATTACHMENT0,
-                                  gl.GL_TEXTURE_2D, cls._pp_color_tex, 0)
+                                  gl.GL_TEXTURE_2D, self._pp_color_tex, 0)
         gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER,
                                   gl.GL_COLOR_ATTACHMENT1,
-                                  gl.GL_TEXTURE_2D, cls._pp_id_tex, 0)
+                                  gl.GL_TEXTURE_2D, self._pp_id_tex, 0)
         gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER,
                                      gl.GL_DEPTH_ATTACHMENT,
-                                     gl.GL_RENDERBUFFER, cls._pp_ds_rbo)
+                                     gl.GL_RENDERBUFFER, self._pp_ds_rbo)
         gl.glDrawBuffers(2, [gl.GL_COLOR_ATTACHMENT0,
                          gl.GL_COLOR_ATTACHMENT1])
 
@@ -371,38 +355,36 @@ void main() {
             raise RuntimeError("OpenGLPostProcess: MRT FBO incomplete")
 
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
-        cls._pp_fbo_w, cls._pp_fbo_h = w, h
+        self._pp_fbo_w, self._pp_fbo_h = w, h
 
-    @classmethod
-    def _release_fbo(cls) -> None:
+    def _release_fbo(self) -> None:
         """释放 MRT FBO 及其附件。"""
-        if cls._pp_fbo:
-            gl.glDeleteFramebuffers(1, [cls._pp_fbo])
-            cls._pp_fbo = 0
-        if cls._pp_color_tex:
-            gl.glDeleteTextures(1, [cls._pp_color_tex])
-            cls._pp_color_tex = 0
-        if cls._pp_id_tex:
-            gl.glDeleteTextures(1, [cls._pp_id_tex])
-            cls._pp_id_tex = 0
-        if cls._pp_ds_rbo:
-            gl.glDeleteRenderbuffers(1, [cls._pp_ds_rbo])
-            cls._pp_ds_rbo = 0
-        cls._pp_fbo_w = cls._pp_fbo_h = 0
+        if self._pp_fbo:
+            gl.glDeleteFramebuffers(1, [self._pp_fbo])
+            self._pp_fbo = 0
+        if self._pp_color_tex:
+            gl.glDeleteTextures(1, [self._pp_color_tex])
+            self._pp_color_tex = 0
+        if self._pp_id_tex:
+            gl.glDeleteTextures(1, [self._pp_id_tex])
+            self._pp_id_tex = 0
+        if self._pp_ds_rbo:
+            gl.glDeleteRenderbuffers(1, [self._pp_ds_rbo])
+            self._pp_ds_rbo = 0
+        self._pp_fbo_w = self._pp_fbo_h = 0
 
     # ════════════════════════════════════════════════════════
     # Edge FBO 管理 (持久化, 不再每帧创建/销毁)
     # ════════════════════════════════════════════════════════
 
-    @classmethod
-    def _ensure_edge_fbo(cls, w: int, h: int) -> None:
+    def _ensure_edge_fbo(self, w: int, h: int) -> None:
         """确保边缘检测 FBO 尺寸匹配。"""
-        if cls._pp_edge_fbo and cls._pp_fbo_w == w and cls._pp_fbo_h == h:
+        if self._pp_edge_fbo and self._pp_fbo_w == w and self._pp_fbo_h == h:
             return
-        cls._release_edge_fbo()
+        self._release_edge_fbo()
 
-        cls._pp_edge_tex = gl.glGenTextures(1)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, cls._pp_edge_tex)
+        self._pp_edge_tex = gl.glGenTextures(1)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self._pp_edge_tex)
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_R8, w, h, 0,
                         gl.GL_RED, gl.GL_UNSIGNED_BYTE, None)
         gl.glTexParameteri(gl.GL_TEXTURE_2D,
@@ -410,19 +392,18 @@ void main() {
         gl.glTexParameteri(gl.GL_TEXTURE_2D,
                            gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
 
-        cls._pp_edge_fbo = gl.glGenFramebuffers(1)
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, cls._pp_edge_fbo)
+        self._pp_edge_fbo = gl.glGenFramebuffers(1)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self._pp_edge_fbo)
         gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER,
                                   gl.GL_COLOR_ATTACHMENT0,
-                                  gl.GL_TEXTURE_2D, cls._pp_edge_tex, 0)
+                                  gl.GL_TEXTURE_2D, self._pp_edge_tex, 0)
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
 
-    @classmethod
-    def _release_edge_fbo(cls) -> None:
+    def _release_edge_fbo(self) -> None:
         """释放边缘检测 FBO 及其纹理。"""
-        if cls._pp_edge_fbo:
-            gl.glDeleteFramebuffers(1, [cls._pp_edge_fbo])
-            cls._pp_edge_fbo = 0
-        if cls._pp_edge_tex:
-            gl.glDeleteTextures(1, [cls._pp_edge_tex])
-            cls._pp_edge_tex = 0
+        if self._pp_edge_fbo:
+            gl.glDeleteFramebuffers(1, [self._pp_edge_fbo])
+            self._pp_edge_fbo = 0
+        if self._pp_edge_tex:
+            gl.glDeleteTextures(1, [self._pp_edge_tex])
+            self._pp_edge_tex = 0

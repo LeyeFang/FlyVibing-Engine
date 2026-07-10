@@ -217,6 +217,52 @@ class SceneBrowserController:
         cam = esper.component_for_entity(entity_id, Camera)
         cam.aspect_ratio = max(0.1, min(10.0, ratio))
 
+    # ── Scene GameType ───────────────────────────────────────
+
+    @classmethod
+    def get_game_type(cls) -> str:
+        """返回当前场景的 GameType 字符串值 ('3d', '2d', 'overlay')。"""
+        gt = SceneManager.GetGameType()
+        return gt.value if hasattr(gt, 'value') else str(gt)
+
+    @classmethod
+    def set_game_type(cls, game_type_str: str) -> None:
+        """设置场景 GameType ('3d' / '2d' / 'overlay')。
+
+        会自动切换 SceneManager 的默认活跃摄像机。
+        """
+        SceneManager.SetGameType(game_type_str)
+
+    # ── Scene CRUD / 场景管理 ───────────────────────────────
+
+    @classmethod
+    def get_scene_names(cls) -> list[str]:
+        """返回所有已创建场景的名称列表。"""
+        from Application.Editor.EditorHost import EditorHost
+        return EditorHost.list_scenes()
+
+    @classmethod
+    def get_active_scene_name(cls) -> str:
+        """返回当前活跃场景的名称。"""
+        from Application.Editor.EditorHost import EditorHost
+        scene = EditorHost.get_active_scene()
+        if scene is not None:
+            return getattr(scene, 'name', 'Untitled')
+        return "default"
+
+    @classmethod
+    def switch_scene(cls, name: str) -> bool:
+        """切换到指定场景。返回是否成功。"""
+        from Application.Editor.EditorHost import EditorHost
+        return EditorHost.switch_scene(name)
+
+    @classmethod
+    def create_scene(cls, name: str) -> str:
+        """创建新场景并设为活跃。返回场景名称。"""
+        from Application.Editor.EditorHost import EditorHost
+        EditorHost.create_scene(name)
+        return name
+
     # ── 实体层级 / Entity Hierarchy ───────────────────────────
 
     @classmethod

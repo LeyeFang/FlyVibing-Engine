@@ -26,10 +26,6 @@ from Application.Core.Renderer.Renderer import Renderer
 class GameRuntime(Engine):
     """游戏运行时 — 可被编辑器管理（PIE）或独立运行（导出）。"""
 
-    # ── 缓存的隔离渲染器子类 ──
-    _isolated_renderer_cls: type = None
-    _isolated_renderer_type = None
-
     # ════════════════════════════════════════════════════════════
     # 工厂方法
     # ════════════════════════════════════════════════════════════
@@ -43,62 +39,10 @@ class GameRuntime(Engine):
 
     @classmethod
     def _create_renderer(cls) -> Renderer:
-        """创建运行时渲染器 — 使用动态子类隔离 Editor 和 GameRuntime 的类变量。
-
-        背景:
-          所有渲染器类 (OpenGLRenderer / ZenGLRenderer) 使用 @classmethod 单例，
-          GPU 句柄 (_pick_fbo)、资源注册表 (registered_entities)、
-          命令队列 (_command_queue) 等全部存储在类变量中。
-
-          如果 Editor 和 GameRuntime 直接共用同一个渲染器类，
-          一方创建/销毁 GPU 资源会覆盖另一方的句柄，
-          在不同 OpenGL 上下文之间产生悬空引用或状态污染。
-
-        解决方案:
-          通过 type() 动态创建渲染器基类的无状态子类。
-          新子类继承所有方法，但类变量写入独立的 __dict__，
-          与编辑器的渲染器类完全隔离。
-        """
+        """创建运行时渲染器 — 每次调用返回独立实例，与 Editor 完全隔离。"""
         cls.window.MakeContextCurrent()
-        renderer_base = cls._get_renderer_class(cls.renderer_type)
-
-        # ── 检查缓存的隔离子类是否仍匹配当前后端 ──
-        if (cls._isolated_renderer_type != cls.renderer_type
-                or cls._isolated_renderer_cls is None):
-            iso_name = f'Runtime_{renderer_base.__name__}'
-            iso_cls = type(iso_name, (renderer_base,), {})
-
-            # 将基类 MRO 中所有可变容器类变量拷贝到子类的 __dict__
-            # （dict/list/set 在 Python 中是引用类型，
-            #   不拷贝会导致子类与父类共享同一个容器对象）
-            _mutable = (dict, list, set)
-            for base in renderer_base.__mro__:
-                for k, v in base.__dict__.items():
-                    if k.startswith('__'):
-                        continue
-                    if isinstance(v, _mutable) and k not in iso_cls.__dict__:
-                        setattr(iso_cls, k, type(v)())
-
-            cls._isolated_renderer_cls = iso_cls
-            cls._isolated_renderer_type = cls.renderer_type
-
-        renderer = cls._isolated_renderer_cls.Create(window=cls.window)
-
-        # ── 重置从 Editor 继承的 GPU 句柄 (int 类型, 动态子类不会自动拷贝) ──
-        #     PostProcess 的 FBO、shader、config 在 Editor 的 GL 上下文中创建,
-        #     对 GameRuntime 的独立 GL 上下文无效。清零后 _render_highlight 会自动跳过。
-        _iso = cls._isolated_renderer_cls
-        _iso._highlight_config = None
-        _iso._highlight_enabled = False
-        for _attr in (
-            '_pp_fbo', '_pp_color_tex', '_pp_id_tex', '_pp_ds_rbo',
-            '_pp_edge_tex', '_pp_edge_fbo',
-            '_pp_mrt_prog', '_pp_edge_prog', '_pp_composite_prog',
-            '_pp_quad_vao', '_pp_fbo_w', '_pp_fbo_h',
-        ):
-            setattr(_iso, _attr, 0)
-
-        return renderer
+        renderer_cls = cls._get_renderer_class(cls.renderer_type)
+        return renderer_cls.Create(window=cls.window)
 
     # ════════════════════════════════════════════════════════════
     # 生命周期
@@ -113,6 +57,8 @@ class GameRuntime(Engine):
         """非阻塞启动 (PIE 模式)。"""
         cls._state()['_logic_thread_enabled'] = True
         cls.init(window_type=window_type, renderer_type=renderer_type)
+        # ── 从 Editor 同步场景状态到 Runtime ──
+        cls._sync_scene_from_editor()
         # ── 帧同步: PIE 作为 slave, 等待 Editor 每帧完成后再渲染 ──
         from Application.Editor.EditorHost import EditorHost
         if EditorHost._frame_sync is not None:
@@ -135,6 +81,27 @@ class GameRuntime(Engine):
     # ════════════════════════════════════════════════════════════
     # 控制接口 (PIE)
     # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _sync_scene_from_editor(cls) -> None:
+        """从 Editor 的 SceneManager 同步场景状态到 Runtime。
+
+        当前同步:
+          - game_type: 确保 Runtime 使用与 Editor 一致的游戏类型
+                       (GAME_3D → DefaultCamera3D, GAME_2D → DefaultCamera2D)
+
+        未来扩展:
+          - Scene.entities (EntitySpawn 模板)
+          - 主摄像机自定义配置
+        """
+        from Application.Core.Scene.SceneManager import SceneManager
+        try:
+            ed_st = SceneManager._state_for("EditorHost")
+            SceneManager.SetGameType(ed_st.game_type)
+            print(f"[GameRuntime] Synced game_type from editor: {ed_st.game_type.value}")
+        except Exception:
+            # EditorHost 未初始化 (导出模式) — 使用默认 GAME_3D
+            pass
 
     @classmethod
     def stop(cls) -> None:

@@ -76,20 +76,30 @@ class ScenePanel(BasePanel):
     ) -> None:
         """四区域布局绘制。"""
         # ── 区域 1: 场景信息 + 运行控制 ──
+        self._draw_section_title("Scene Information")
         self._draw_header()
         self._draw_controls()
 
-        # ── 区域 2: 2D / 3D / Overlay 视口模式 ──
-        self._draw_viewport_mode()
+        # ── 区域 2: Scene Type ──
+        imgui.spacing()
         imgui.separator()
+        self._draw_section_title("Scene Type")
+        self._draw_viewport_mode()
 
-        # ── 区域 3: Entity 树 (可展开父子层级) ──
+        # ── 区域 3: Entity 层级 ──
+        imgui.spacing()
+        imgui.separator()
+        self._draw_section_title("Entities")
         self._draw_entity_tree()
 
-        # ── 区域 4: 选中 Entity 的组件检视 ──
+        # ── 区域 4: 组件检视 (含实体名) ──
         selected = self._selection_ctrl.get_selected()
         if selected is not None:
+            imgui.spacing()
             imgui.separator()
+            info = self._browser_ctrl.get_entity_info(selected)
+            entity_name = (info.get('name', '') if info else '') or f"Entity #{selected}"
+            self._draw_section_title(f"Inspector  —  \"{entity_name}\"")
             self._draw_entity_summary(selected)
 
     # ============================================================
@@ -99,13 +109,53 @@ class ScenePanel(BasePanel):
     def _draw_header(
         self
     ) -> None:
-        """显示当前场景名称。"""
-        imgui.text("Scene: ")
+        """场景下拉选择器 — Scene: [列表▼]   [+ New]"""
+        scene_names = self._browser_ctrl.get_scene_names()
+        current_name = self._browser_ctrl.get_active_scene_name()
+
+        # ── 标签 + 下拉 ──
+        imgui.text("Scene:")
         imgui.same_line()
-        imgui.text_colored(
-            imgui.ImVec4(*BLENDER_ORANGE, 1.00), "default"
-        )
-        imgui.separator()
+        imgui.set_next_item_width(imgui.get_content_region_avail().x - 74)
+        if imgui.begin_combo("##scene_select", current_name):
+            for sname in scene_names:
+                is_sel = (sname == current_name)
+                if imgui.selectable(sname, is_sel)[0]:
+                    self._browser_ctrl.switch_scene(sname)
+                if is_sel:
+                    imgui.set_item_default_focus()
+            imgui.end_combo()
+
+        # ── 新建按钮 (combo 外) ──
+        imgui.same_line()
+        if imgui.small_button(f"{fa.ICON_FA_PLUS}##new_scene_btn"):
+            imgui.open_popup("new_scene_popup")
+
+        if imgui.begin_popup("new_scene_popup"):
+            imgui.text_colored(
+                imgui.ImVec4(*BLENDER_ORANGE, 0.90), "New Scene")
+            imgui.spacing()
+            imgui.push_item_width(180)
+            changed, self._new_scene_name = imgui.input_text_with_hint(
+                "##new_scene_input", "name...", self._new_scene_name, 64,
+            )
+            imgui.pop_item_width()
+            imgui.same_line()
+            name_ok = bool(self._new_scene_name.strip()) and (
+                self._new_scene_name.strip() not in scene_names
+            )
+            if not name_ok:
+                imgui.begin_disabled(True)
+            if imgui.button("Create") or (
+                name_ok and imgui.is_key_pressed(imgui.Key.enter)
+            ):
+                name = self._new_scene_name.strip()
+                self._browser_ctrl.create_scene(name)
+                self._new_scene_name = ""
+                imgui.close_current_popup()
+            if not name_ok:
+                imgui.end_disabled()
+            imgui.end_popup()
 
     def _draw_controls(
         self
@@ -147,37 +197,58 @@ class ScenePanel(BasePanel):
         # 状态提示
         imgui.text_disabled(self._sim_ctrl.get_state_label())
 
-        imgui.separator()
+    # ============================================================
+    # 通用: 区域标题
+    # ============================================================
+
+    @staticmethod
+    def _draw_section_title(title: str) -> None:
+        """绘制统一的区域标题 — 橙色，上下留白充足，无分隔线。"""
+        imgui.spacing()
+        imgui.spacing()
+        imgui.text_colored(
+            imgui.ImVec4(*BLENDER_ORANGE, 1.00), title)
+        imgui.spacing()
 
     # ============================================================
-    # 区域 2: 2D / 3D / Overlay 视口模式
+    # 区域 2: Scene Type (GameType + 视口模式联动)
     # ============================================================
 
     def _draw_viewport_mode(
         self
     ) -> None:
-        """绘制 2D | 3D | Overlay 视口模式切换按钮。"""
+        """绘制 Scene Type 切换按钮 — 同时控制 Scene.game_type 和编辑器视口模式。
+
+        点击 2D / 3D 会:
+          1. 更新 SceneManager.game_type → 切换默认活跃摄像机
+          2. 更新 ViewportController → 切换 EditorCamera 正交/透视
+        """
         av = imgui.get_content_region_avail().x
         btn_w = (av - imgui.get_style().item_spacing.x * 2) / 3.0
 
-        is_2d = self._viewport_ctrl.is_2d()
+        # ── 从 SceneManager 读取当前 game_type 作为信源 ──
+        current_gt = self._browser_ctrl.get_game_type()
+        is_3d = (current_gt == "3d")
+        is_2d = (current_gt == "2d")
 
-        # 3D 按钮
-        if not is_2d:
+        # ── 3D 按钮 ──
+        if is_3d:
             imgui.push_style_color(
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
         if imgui.button("3D", (btn_w, 0)):
+            self._browser_ctrl.set_game_type("3d")
             self._viewport_ctrl.switch_to_3d()
-        if not is_2d:
+        if is_3d:
             imgui.pop_style_color(1)
 
         imgui.same_line()
 
-        # 2D 按钮
+        # ── 2D 按钮 ──
         if is_2d:
             imgui.push_style_color(
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
         if imgui.button("2D", (btn_w, 0)):
+            self._browser_ctrl.set_game_type("2d")
             self._viewport_ctrl.switch_to_2d()
         if is_2d:
             imgui.pop_style_color(1)
@@ -199,7 +270,7 @@ class ScenePanel(BasePanel):
         """绘制 Entity 层级树 + 工具栏按钮。"""
         # ── 工具栏: Add / Delete ──
         self._draw_entity_toolbar()
-        imgui.separator()
+        imgui.spacing()
 
         root_ids = self._browser_ctrl.get_root_entities()
         if not root_ids:
@@ -324,14 +395,7 @@ class ScenePanel(BasePanel):
             imgui.text_disabled("(failed to load entity info)")
             return
 
-        # ── 实体名称（可编辑） ──
-        imgui.text_colored(
-            imgui.ImVec4(*BLENDER_ORANGE, 1.00),
-            f"Entity #{summary.entity_id}",
-        )
-        imgui.same_line()
-        imgui.text_disabled("—")
-        imgui.same_line()
+        # ── 实体名称（可编辑）+ ID（灰色） ──
         name_buf = summary.name or ""
         changed, new_name = imgui.input_text(
             "##entity_name", name_buf, 256,
@@ -341,8 +405,10 @@ class ScenePanel(BasePanel):
         if not summary.name:
             imgui.same_line()
             imgui.text_disabled("(click to name)")
-
-        imgui.separator()
+        imgui.same_line()
+        imgui.text_disabled("—")
+        imgui.same_line()
+        imgui.text_disabled(f"Entity #{summary.entity_id}")
 
         # ── Transform（可展开、可编辑） ──
         if imgui.collapsing_header("Transform", imgui.TreeNodeFlags_.default_open):
@@ -454,7 +520,6 @@ class ScenePanel(BasePanel):
 
         # ── Add Component ──
         imgui.spacing()
-        imgui.separator()
         self._draw_add_component(entity_id)
 
     def _draw_mesh_renderer_editor(self, entity_id: int, summary) -> None:
@@ -670,8 +735,8 @@ class ScenePanel(BasePanel):
             imgui.open_popup("add_component_popup")
 
         if imgui.begin_popup("add_component_popup"):
-            imgui.text("Add Component:")
-            imgui.separator()
+            imgui.text_colored(
+                imgui.ImVec4(*BLENDER_ORANGE, 0.90), "Add Component:")
             for comp_name in addable:
                 if imgui.menu_item(comp_name, "", False, True)[0]:
                     self._browser_ctrl.add_component(entity_id, comp_name)

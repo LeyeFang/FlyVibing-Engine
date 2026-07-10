@@ -42,15 +42,14 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
 
         Args:
             window: Engine 传入的 Window 实例。
-                    通过 window.GetSize() 获取尺寸，
-                    通过 window.GetNativeHandle() 获取 GLFW 窗口句柄用于 Surface 创建。
         """
+        from Application.Core.Renderer.CommandQueue import CommandQueue
+        instance = cls()
         if window is not None:
             window_size = window.GetSize()
             native_handle = window.GetNativeHandle()
             VulkanCore.init_core(native_handle, window_size)
         else:
-            # 回退: 从当前 GLFW 上下文获取 (兼容旧测试路径)
             import glfw as _glfw
             _glfw_win = _glfw.get_current_context()
             if _glfw_win is not None:
@@ -59,21 +58,19 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
             else:
                 window_size = (800, 600)
                 VulkanCore.init_core(None, window_size)
-        cls.viewport_width = window_size[0]
-        cls.viewport_height = window_size[1]
-        cls.aspect_ratio = window_size[0] / window_size[1]
-        # 相机矩阵由逻辑线程通过 SetViewProjectionCommand 推送
-        cls._command_queue = CommandQueue()
-        return cls
+        instance.viewport_width = window_size[0]
+        instance.viewport_height = window_size[1]
+        instance.aspect_ratio = window_size[0] / window_size[1]
+        instance._command_queue = CommandQueue()
+        return instance
 
-    @classmethod
-    def _do_start_frame(cls) -> None:
+    def _do_start_frame(self) -> None:
         """开始一帧渲染 — acquire → draw entities → present。"""
-        if cls._pending_resize is not None:
-            cls._pending_resize = None
+        if self._pending_resize is not None:
+            self._pending_resize = None
 
-        view = cls._cached_view
-        proj = cls._cached_proj
+        view = self._cached_view
+        proj = self._cached_proj
         vp = (proj @ view).astype('float32')
 
         try:
@@ -84,11 +81,11 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
         cmd = VulkanCore.cmd_buffer
         renderable_entities = SceneManager.GetRenderableEntities()
         for entity_id in renderable_entities:
-            if entity_id not in cls.registered_entities:
+            if entity_id not in self.registered_entities:
                 continue
-            entity = cls.registered_entities[entity_id]
-            shader_data = cls.registered_shaders.get(entity.shader_id)
-            mesh_data = cls.registered_meshes.get(entity.mesh_id)
+            entity = self.registered_entities[entity_id]
+            shader_data = self.registered_shaders.get(entity.shader_id)
+            mesh_data = self.registered_meshes.get(entity.mesh_id)
             if shader_data is None or mesh_data is None:
                 continue
 
@@ -116,6 +113,5 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
         VulkanCore.end_scene_pass()
         VulkanCore.end_frame(image_index)
 
-    @classmethod
-    def EndFrame(cls) -> None:
+    def EndFrame(self) -> None:
         pass

@@ -3,7 +3,8 @@ RuntimeNodeLayer — 由节点图驱动的 GameRuntime Layer。
 
 职责:
   - OnAttach:  从 NodeCanvas 构建 GraphEvaluator，触发 OnGameStart
-  - OnUpdate:  更新 ExecutionContext（deltaTime），触发 OnFrameUpdate
+  - OnUpdate:  更新 ExecutionContext（deltaTime），触发 OnFrameUpdate，
+               + 同步场景摄像机矩阵到渲染器
   - OnDetach:  触发 OnGameStop
 
 节点图来源:
@@ -18,9 +19,13 @@ RuntimeNodeLayer — 由节点图驱动的 GameRuntime Layer。
 
 from __future__ import annotations
 
+import numpy as np
+
 from Application.Core.Layers.Layer import Layer
 from Application.Core.Events.Event import Event
 from Application.Core.Events.EngineEvent import LayerLifecycleEvent
+from Application.Core.Renderer.RenderCommand import SetViewProjectionCommand
+from Application.Core.Scene.SceneManager import SceneManager
 from Application.Editor.UI.controllers.NodeEditorController import _TYPES
 from Application.Editor.UI.controllers.GraphEvaluator import (
     GraphEvaluator,
@@ -68,6 +73,9 @@ class RuntimeNodeLayer(Layer):
         cls._evaluator.trigger("OnGameStart", cls._context)
         print("[RuntimeNodeLayer] Graph execution started")
 
+        # ★ 首帧推送摄像机矩阵 — 确保渲染器第一帧就有合法的 view/proj
+        cls._sync_camera_to_renderer()
+
     @classmethod
     def OnDetach(cls):
         if cls._evaluator is not None and cls._context is not None:
@@ -92,10 +100,79 @@ class RuntimeNodeLayer(Layer):
                 cls._context.elapsed_time = cls._engine.get_elapsed_time()
             cls._evaluator.trigger("OnFrameUpdate", cls._context)
 
-    @classmethod
-    def OnEvent(cls, event: Event) -> None:
-        pass
+            # ★ 每帧同步场景摄像机矩阵到渲染器
+            cls._sync_camera_to_renderer()
 
     @classmethod
-    def OnRender(cls):
-        pass
+    def _sync_camera_to_renderer(cls) -> None:
+        """从 SceneManager.scene_camera_id 读取 Camera + Transform，
+        计算 view/proj 矩阵并通过 SetViewProjectionCommand 推送给渲染器。
+
+        支持透视和正交两种投影类型：
+          - perspective → pyrr perspective projection (fov + aspect_ratio)
+          - orthographic → pyrr orthogonal projection (ortho_size + aspect_ratio)
+
+        若 scene_camera_id 无效（实体不存在 / 缺少组件），跳过推送。
+        """
+        if cls._engine is None:
+            return
+        renderer = getattr(cls._engine, 'renderer', None)
+        if renderer is None:
+            return
+
+        import esper
+        from pyrr import matrix44
+        from Application.Core.Scene.BasicComponents import Camera, Transform, ProjectionType
+        from Application.Core.Math.Transform import calculate_entity_model
+
+        st = SceneManager._state()
+        cam_id = st.scene_camera_id
+        if cam_id is None or not esper.entity_exists(cam_id):
+            return
+
+        try:
+            cam = esper.component_for_entity(cam_id, Camera)
+            xform = esper.component_for_entity(cam_id, Transform)
+        except Exception:
+            return
+
+        # ── 视图矩阵: inverse(model) ──
+        model = calculate_entity_model(
+            position=(xform.position_x, xform.position_y, xform.position_z),
+            rotation=(xform.rotation_x, xform.rotation_y, xform.rotation_z),
+            scale=(xform.scale_x, xform.scale_y, xform.scale_z),
+        )
+        view = np.linalg.inv(model)
+
+        # ── 投影矩阵 ──
+        aspect = getattr(renderer, 'aspect_ratio', 16.0 / 9.0)
+        if cam.projection_type == ProjectionType.ORTHOGRAPHIC:
+            half_h = cam.ortho_size
+            half_w = half_h * aspect
+            proj = matrix44.create_orthogonal_projection(
+                -half_w, half_w, -half_h, half_h,
+                cam.near_plane, cam.far_plane,
+            ).astype(np.float32)
+            is_ortho = True
+            ortho_sz = cam.ortho_size
+        else:
+            proj = matrix44.create_perspective_projection(
+                cam.fov, aspect,
+                cam.near_plane, cam.far_plane,
+            ).astype(np.float32)
+            is_ortho = False
+            ortho_sz = 10.0
+
+        renderer.enqueue(SetViewProjectionCommand(
+            view=view,
+            proj=proj,
+            orbit_target=np.array(
+                [xform.position_x, xform.position_y, xform.position_z],
+                dtype=np.float32,
+            ),
+            orbit_distance=float(np.linalg.norm(
+                [xform.position_x, xform.position_y, xform.position_z],
+            )),
+            is_orthographic=is_ortho,
+            ortho_size=ortho_sz,
+        ))

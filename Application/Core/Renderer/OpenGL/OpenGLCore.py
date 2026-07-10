@@ -22,8 +22,7 @@ from OpenGL import GL as gl
 class OpenGLCore:
     """PyOpenGL 核心 — GL 状态管理与基础渲染配置。"""
 
-    @classmethod
-    def init_core(cls, window_size: tuple[int, int]) -> None:
+    def init_core(self, window_size: tuple[int, int]) -> None:
         """初始化 OpenGL 渲染状态。
 
         调用时机: 渲染线程，GL 上下文已由 GLFW 绑定。
@@ -41,13 +40,11 @@ class OpenGLCore:
         # ── 清屏颜色默认值 ──
         gl.glClearColor(0.2, 0.2, 0.2, 1.0)
 
-    @classmethod
-    def update_viewport(cls, width: int, height: int) -> None:
+    def update_viewport(self, width: int, height: int) -> None:
         """更新视口尺寸 (渲染线程调用)。"""
         gl.glViewport(0, 0, width, height)
 
-    @classmethod
-    def clear_frame(cls, r: float = 0.2, g: float = 0.2, b: float = 0.2, a: float = 1.0) -> None:
+    def clear_frame(self, r: float = 0.2, g: float = 0.2, b: float = 0.2, a: float = 1.0) -> None:
         """清屏 (深灰色默认)。
 
         Args:
@@ -56,7 +53,6 @@ class OpenGLCore:
         gl.glClearColor(r, g, b, a)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
-    @classmethod
-    def _clear_depth_for_overlays(cls) -> None:
+    def _clear_depth_for_overlays(self) -> None:
         """清理深度缓冲 (为 screen-space overlay 准备)."""
         gl.glClear(gl.GL_DEPTH_BUFFER_BIT)

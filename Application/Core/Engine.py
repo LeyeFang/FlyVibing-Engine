@@ -193,7 +193,7 @@ class Engine:
         延迟导入以避免循环依赖。
         """
         if renderer_type == RendererType.OpenGL:
-            from Application.Core.Renderer.OpenGL.OpenGLRenderer import OpenGLRenderer
+            from Application.Core.Renderer.OpenGL.openGLRenderer import OpenGLRenderer
             return OpenGLRenderer
         elif renderer_type == RendererType.ZenGL:
             from Application.Core.Renderer.ZenGL.ZenGLRenderer import ZenGLRenderer

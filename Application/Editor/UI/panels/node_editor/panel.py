@@ -166,6 +166,9 @@ class NodeEditorPanel(BasePanel):
             self._canvas.create_default_nodes()
             self._canvas_initialized = True
 
+        # ── 确保默认 Scene 存在（饥渴创建，不等 EntitySpawn 下拉触发） ──
+        self._ensure_default_scene()
+
         canvas = self._canvas
         avail = imgui.get_content_region_avail()
         if avail.x <= 0 or avail.y <= 0:
@@ -173,6 +176,9 @@ class NodeEditorPanel(BasePanel):
 
         ne = node_ed
         ne.set_current_editor(self._editor_context)
+
+        # ── 当前场景信息 ──
+        self._draw_scene_info()
 
         # ── 工具栏: Add / Import / Export ──
         if imgui.small_button("Add Node"):
@@ -226,6 +232,97 @@ class NodeEditorPanel(BasePanel):
 
         self._draw_add_popup(canvas, avail)
         self._sync_positions(canvas, ne)
+
+    # ============================================================
+    # Scene 管理
+    # ============================================================
+
+    @staticmethod
+    def _ensure_default_scene() -> None:
+        """确保 EditorHost 有一个活跃的 Scene。若没有则从 ECS 世界创建默认 Scene。
+
+        饥渴调用（每帧 draw 入口），不等 EntitySpawn 下拉触发。
+        幂等：Scene 已存在时不重复创建。
+        """
+        from Application.Editor.EditorHost import EditorHost
+        if EditorHost.get_active_scene() is not None:
+            return
+
+        from Application.Core.Scene.Scene import Scene
+        from Application.Core.Scene.SceneManager import SceneManager
+        from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
+        import esper, copy
+
+        scene = Scene("Default", game_type=SceneManager.GetGameType())
+        _sys_ids = {SceneManager.get_main_camera_id(), SceneManager.get_main_camera_2d_id()}
+        for eid, (xform,) in esper.get_components(Transform):
+            if eid in _sys_ids:
+                continue
+            name = SceneManager.GetEntityName(eid)
+            comps = {"Transform": copy.deepcopy(xform)}
+            try:
+                cam = esper.component_for_entity(eid, Camera)
+                comps["Camera"] = copy.deepcopy(cam)
+            except Exception:
+                pass
+            try:
+                mr = esper.component_for_entity(eid, MeshRenderer)
+                comps["MeshRenderer"] = copy.deepcopy(mr)
+            except Exception:
+                pass
+            scene.add_entity(name=name or f"Entity_{eid}", **comps)
+
+        EditorHost.set_active_scene(scene)
+        print(f"[NodeEditor] Default scene created: {len(scene.entities)} entity templates")
+
+    def _draw_scene_info(self) -> None:
+        """绘制 Scene 选择器 combo — 显示当前场景名 + GameType。"""
+        from Application.Editor.EditorHost import EditorHost
+        from Application.Core.Scene.SceneManager import SceneManager
+
+        scene = EditorHost.get_active_scene()
+        if scene is None:
+            imgui.text_colored(
+                imgui.ImVec4(0.55, 0.55, 0.55, 1.00),
+                "Scene: (none)",
+            )
+            return
+
+        scene_names = [scene.name]  # 未来扩展: 列出所有已加载的 Scene
+        current_name = scene.name
+        try:
+            idx = scene_names.index(current_name)
+        except ValueError:
+            idx = 0
+
+        gt = scene.game_type.value
+
+        # ── GameType 颜色 ──
+        if gt == "2d":
+            gt_color = imgui.ImVec4(0.35, 1.0, 0.55, 0.85)
+        elif gt == "overlay":
+            gt_color = imgui.ImVec4(0.55, 0.65, 1.0, 0.85)
+        else:
+            gt_color = imgui.ImVec4(1.0, 1.0, 1.0, 0.70)
+
+        # ── 标签 ──
+        imgui.text_colored(
+            imgui.ImVec4(0.55, 0.55, 0.55, 1.00),
+            "Scene:",
+        )
+        imgui.same_line()
+
+        # ── Combo: 场景名 + GameType 后缀 ──
+        display_labels = [f"{n}  ({SceneManager.GetGameType().value.upper()})" for n in scene_names]
+        imgui.push_item_width(180)
+        changed, new_idx = imgui.combo(
+            f"##scene_selector_{id(self)}", idx, display_labels,
+        )
+        imgui.pop_item_width()
+
+        if changed:
+            # 未来: 切换到 scene_names[new_idx]
+            pass
 
     # ============================================================
     # 子步骤: 节点渲染
@@ -569,50 +666,15 @@ class NodeEditorPanel(BasePanel):
 
     @staticmethod
     def _get_scene_template_names() -> list[str]:
-        """从 EditorHost 获取当前 Scene 的实体模板名列表。"""
-        try:
-            from Application.Editor.EditorHost import EditorHost
-            scene = EditorHost.get_active_scene()
-            if scene is not None:
-                names = scene.get_entity_names()
-                if not names:
-                    print("[NodeEditor] Scene is set but has no entity templates")
-                return names
-            else:
-                # ── Fallback: 尝试从 SceneManager 初始化一个默认 Scene ──
-                print("[NodeEditor] No active scene — attempting fallback init")
-                try:
-                    from Application.Core.Scene.Scene import Scene, GameType
-                    from Application.Core.Scene.SceneManager import SceneManager
-                    from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
-                    import esper, copy
+        """从 EditorHost 获取当前 Scene 的实体模板名列表。
 
-                    scene = Scene("Default", game_type=GameType.GAME_3D)
-                    _sys_ids = {SceneManager.get_main_camera_id(), SceneManager.get_main_camera_2d_id()}
-                    for eid, (xform,) in esper.get_components(Transform):
-                        if eid in _sys_ids:
-                            continue
-                        name = SceneManager.GetEntityName(eid)
-                        comps = {"Transform": copy.deepcopy(xform)}
-                        try:
-                            cam = esper.component_for_entity(eid, Camera)
-                            comps["Camera"] = copy.deepcopy(cam)
-                        except Exception:
-                            pass
-                        try:
-                            mr = esper.component_for_entity(eid, MeshRenderer)
-                            comps["MeshRenderer"] = copy.deepcopy(mr)
-                        except Exception:
-                            pass
-                        scene.add_entity(name=name, **comps)
-                    EditorHost.set_active_scene(scene)
-                    print(f"[NodeEditor] Fallback scene created: {len(scene.entities)} templates")
-                    return scene.get_entity_names()
-                except Exception as e:
-                    print(f"[NodeEditor] Fallback init failed: {e}")
-        except Exception as e:
-            print(f"[NodeEditor] _get_scene_template_names error: {e}")
-        return []
+        Scene 由 _ensure_default_scene() 饥渴创建，此处不再含 fallback。
+        """
+        from Application.Editor.EditorHost import EditorHost
+        scene = EditorHost.get_active_scene()
+        if scene is None:
+            return []
+        return scene.get_entity_names()
 
     # ── CameraConfigure 节点专用控件 ────────────────────────
 

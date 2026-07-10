@@ -122,8 +122,7 @@ class VulkanResourceManager:
     # 资源注册
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def register_entity(cls, entity_id: int) -> None:
+    def register_entity(self,
         """注册可渲染实体到 GPU — 级联注册 Mesh/Shader/Texture，创建 DescriptorSet。
 
         Args:
@@ -137,23 +136,23 @@ class VulkanResourceManager:
         shader = ResourceManager.GetShader(shader_id)
 
         # 级联注册依赖资源
-        cls.register_mesh(mesh, mesh_id)
-        cls.register_shader(shader, shader_id)
+        self.register_mesh(mesh, mesh_id)
+        self.register_shader(shader, shader_id)
 
         # 注册纹理 (取 material 的第一张纹理作为 diffuse)
         if material.texture_id_list:
             tex_id = material.texture_id_list[0]
             texture = ResourceManager.GetTexture(tex_id)
-            cls.register_texture(texture, tex_id)
+            self.register_texture(texture, tex_id)
         else:
             tex_id = 0
 
         # 分配描述符集 (绑定 UBO + 纹理)
-        descriptor_set = cls._allocate_descriptor_set(
+        descriptor_set = self._allocate_descriptor_set(
             shader_id, tex_id
         )
 
-        cls.registered_entities[entity_id] = cls.entity_data_struct(
+        self.registered_entities[entity_id] = self.entity_data_struct(
             shader_id=shader_id,
             texture_id=tex_id,
             mesh_id=mesh_id,
@@ -161,8 +160,7 @@ class VulkanResourceManager:
             descriptor_set=descriptor_set,
         )
 
-    @classmethod
-    def register_mesh(cls, mesh: Mesh, mesh_id: int) -> None:
+    def register_mesh(self,
         """上传网格数据到 GPU — 创建 VertexBuffer + IndexBuffer。
 
         交错顶点格式 (每顶点 8 个 float, 32 bytes):
@@ -172,8 +170,8 @@ class VulkanResourceManager:
             mesh    : CPU 端 Mesh 资源
             mesh_id : 网格资源 ID
         """
-        if mesh_id in cls.registered_meshes:
-            cls.registered_meshes[mesh_id].ref_count += 1
+        if mesh_id in self.registered_meshes:
+            self.registered_meshes[mesh_id].ref_count += 1
             return
 
         vertices = mesh.vertices
@@ -202,7 +200,7 @@ class VulkanResourceManager:
         idx_data = indices.astype('uint32')
         VulkanCore.copy_to_buffer(ibo_mem, idx_data.tobytes())
 
-        cls.registered_meshes[mesh_id] = cls.mesh_data_struct(
+        self.registered_meshes[mesh_id] = self.mesh_data_struct(
             vertex_buffer=vbo,
             vertex_memory=vbo_mem,
             index_buffer=ibo,
@@ -212,8 +210,7 @@ class VulkanResourceManager:
             ref_count=1,
         )
 
-    @classmethod
-    def register_shader(cls, shader: Shader, shader_id: int) -> None:
+    def register_shader(self,
         """编译 GLSL → SPIR-V → 创建 ShaderModule + Pipeline。
 
         若着色器已注册，仅增加引用计数。
@@ -222,8 +219,8 @@ class VulkanResourceManager:
             shader    : CPU 端 Shader 资源 (vs_src + fs_src + uniforms_name_type)
             shader_id : 着色器资源 ID
         """
-        if shader_id in cls.registered_shaders:
-            cls.registered_shaders[shader_id].ref_count += 1
+        if shader_id in self.registered_shaders:
+            self.registered_shaders[shader_id].ref_count += 1
             return
 
         # 编译 GLSL → SPIR-V (优先用预编译的 .spv，否则运行时编译)
@@ -249,7 +246,7 @@ class VulkanResourceManager:
             vs_module, fs_module, pipeline_layout
         )
 
-        cls.registered_shaders[shader_id] = cls.shader_data_struct(
+        self.registered_shaders[shader_id] = self.shader_data_struct(
             vs_module=vs_module,
             fs_module=fs_module,
             descriptor_set_layout=descriptor_set_layout,
@@ -258,8 +255,7 @@ class VulkanResourceManager:
             ref_count=1,
         )
 
-    @classmethod
-    def register_texture(cls, texture: Texture, texture_id: int) -> None:
+    def register_texture(self,
         """上传纹理数据到 GPU — 创建 Image + ImageView + Sampler。
 
         使用 staging buffer 将像素数据传输到 DEVICE_LOCAL 纹理内存。
@@ -272,8 +268,8 @@ class VulkanResourceManager:
         Raises:
             ValueError: 不支持的通道数
         """
-        if texture_id in cls.registered_textures:
-            cls.registered_textures[texture_id].ref_count += 1
+        if texture_id in self.registered_textures:
+            self.registered_textures[texture_id].ref_count += 1
             return
 
         # 通道数 → VkFormat
@@ -310,7 +306,7 @@ class VulkanResourceManager:
         )
 
         # Staging → Image 数据传输 (使用单次提交的命令缓冲)
-        cls._copy_buffer_to_image(staging_buf, image, texture.width, texture.height)
+        self._copy_buffer_to_image(staging_buf, image, texture.width, texture.height)
 
         # ImageView + Sampler
         view = VulkanCore.create_image_view(image, fmt)
@@ -319,7 +315,7 @@ class VulkanResourceManager:
         # 清理 staging
         VulkanCore.destroy_buffer(staging_buf, staging_mem)
 
-        cls.registered_textures[texture_id] = cls.texture_data_struct(
+        self.registered_textures[texture_id] = self.texture_data_struct(
             image=image,
             memory=image_mem,
             view=view,
@@ -331,58 +327,52 @@ class VulkanResourceManager:
     # 资源卸载
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def unregister_entity(cls, entity_id: int) -> None:
+    def unregister_entity(self,
         """从 GPU 卸载实体 — 释放 DescriptorSet，递减关联资源引用计数。"""
-        if entity_id not in cls.registered_entities:
+        if entity_id not in self.registered_entities:
             return
-        entity = cls.registered_entities[entity_id]
+        entity = self.registered_entities[entity_id]
         # 描述符集由 descriptor pool 统一管理，free descriptor set 通过 reset pool
         # (全局池不单独释放单个 set，池 reset 时统一回收)
-        cls._decref_mesh(entity.mesh_id)
-        cls._decref_shader(entity.shader_id)
-        cls._decref_texture(entity.texture_id)
-        del cls.registered_entities[entity_id]
+        self._decref_mesh(entity.mesh_id)
+        self._decref_shader(entity.shader_id)
+        self._decref_texture(entity.texture_id)
+        del self.registered_entities[entity_id]
 
-    @classmethod
-    def unregister_mesh(cls, mesh_id: int) -> None:
+    def unregister_mesh(self,
         """递减网格引用计数。"""
-        cls._decref_mesh(mesh_id)
+        self._decref_mesh(mesh_id)
 
-    @classmethod
-    def unregister_shader(cls, shader_id: int) -> None:
+    def unregister_shader(self,
         """递减着色器引用计数。"""
-        cls._decref_shader(shader_id)
+        self._decref_shader(shader_id)
 
-    @classmethod
-    def unregister_texture(cls, texture_id: int) -> None:
+    def unregister_texture(self,
         """递减纹理引用计数。"""
-        cls._decref_texture(texture_id)
+        self._decref_texture(texture_id)
 
     # ════════════════════════════════════════════════════════════
     # 引用计数辅助
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def _decref_mesh(cls, mesh_id: int) -> None:
+    def _decref_mesh(self,
         """递减网格引用计数，归零时释放 vertex/index buffer + memory。"""
-        if mesh_id not in cls.registered_meshes:
+        if mesh_id not in self.registered_meshes:
             return
-        data = cls.registered_meshes[mesh_id]
+        data = self.registered_meshes[mesh_id]
         data.ref_count -= 1
         if data.ref_count <= 0:
             if data.vertex_buffer is not None:
                 VulkanCore.destroy_buffer(data.vertex_buffer, data.vertex_memory)
             if data.index_buffer is not None:
                 VulkanCore.destroy_buffer(data.index_buffer, data.index_memory)
-            del cls.registered_meshes[mesh_id]
+            del self.registered_meshes[mesh_id]
 
-    @classmethod
-    def _decref_shader(cls, shader_id: int) -> None:
+    def _decref_shader(self,
         """递减着色器引用计数，归零时释放 Pipeline / ShaderModule / Layout。"""
-        if shader_id not in cls.registered_shaders:
+        if shader_id not in self.registered_shaders:
             return
-        data = cls.registered_shaders[shader_id]
+        data = self.registered_shaders[shader_id]
         data.ref_count -= 1
         if data.ref_count <= 0:
             dev = VulkanCore.device
@@ -396,14 +386,13 @@ class VulkanResourceManager:
                 vk.vkDestroyShaderModule(dev, data.fs_module, None)
             if data.vs_module is not None:
                 vk.vkDestroyShaderModule(dev, data.vs_module, None)
-            del cls.registered_shaders[shader_id]
+            del self.registered_shaders[shader_id]
 
-    @classmethod
-    def _decref_texture(cls, texture_id: int) -> None:
+    def _decref_texture(self,
         """递减纹理引用计数，归零时释放 Image / ImageView / Sampler / Memory。"""
-        if texture_id not in cls.registered_textures:
+        if texture_id not in self.registered_textures:
             return
-        data = cls.registered_textures[texture_id]
+        data = self.registered_textures[texture_id]
         data.ref_count -= 1
         if data.ref_count <= 0:
             dev = VulkanCore.device
@@ -415,20 +404,19 @@ class VulkanResourceManager:
                 vk.vkDestroyImage(dev, data.image, None)
             if data.memory is not None:
                 vk.vkFreeMemory(dev, data.memory, None)
-            del cls.registered_textures[texture_id]
+            del self.registered_textures[texture_id]
 
     # ════════════════════════════════════════════════════════════
     # 描述符集分配
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
     def _allocate_descriptor_set(
-        cls,
+        self,
         shader_id: int,
         texture_id: int
     ) -> object:
         """为实体分配 VkDescriptorSet — 无 sampler shader 时返回 None。"""
-        shader_data = cls.registered_shaders[shader_id]
+        shader_data = self.registered_shaders[shader_id]
         layout = shader_data.descriptor_set_layout
 
         # 无 binding 的 shader (纯 push_constant)，跳过 descriptor set
@@ -446,8 +434,8 @@ class VulkanResourceManager:
         )[0]
 
         # 绑定纹理 sampler (binding=0)
-        if texture_id and texture_id in cls.registered_textures:
-            tex_data = cls.registered_textures[texture_id]
+        if texture_id and texture_id in self.registered_textures:
+            tex_data = self.registered_textures[texture_id]
             image_info = vk.VkDescriptorImageInfo(
                 sampler=tex_data.sampler,
                 imageView=tex_data.view,
@@ -471,9 +459,8 @@ class VulkanResourceManager:
     # Staging → Image 传输
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
     def _copy_buffer_to_image(
-        cls,
+        self,
         buffer: object,
         image: object,
         width: int,

@@ -18,6 +18,16 @@ from Application.Core.Renderer.ZenGL.ZenGLOverlays import _DEBUG_ZENGL_OVERLAY
 
 
 class ZenGLResourceManager:
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.registered_entities: dict = {}
+        self.registered_meshes: dict = {}
+        self.registered_shaders: dict = {}
+        self.registered_textures: dict = {}
+        self._overlay_gpu_resources: dict = {}
+        self._overlay_pick_key_map: dict = {}
+
     @dataclass
     class entity_data_struct:
         shader_id: int; texture_id: int; mesh_id: int; material_id: int
@@ -59,15 +69,7 @@ class ZenGLResourceManager:
         _orig_vertices: any = None; _orig_indices: any = None
         _orig_stride: int = 0; _orig_attrs: tuple = ()
 
-    registered_entities: dict = {}
-    registered_meshes: dict = {}
-    registered_shaders: dict = {}
-    registered_textures: dict = {}
-    _overlay_gpu_resources: dict = {}
-    _overlay_pick_key_map: dict = {}
-
-    @classmethod
-    def register_entity(cls, entity_id: int) -> None:
+    def register_entity(self, entity_id: int) -> None:
         from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
         mesh_id = SceneManager.GetEntityMesh(entity_id)
         material_id = SceneManager.GetEntityMaterial(entity_id)
@@ -76,16 +78,16 @@ class ZenGLResourceManager:
         shader_id = material.shader_id
         shader: CPU_Shader = ResourceManager.GetShader(shader_id)
 
-        cls.register_mesh(mesh, mesh_id)
-        cls.register_shader(shader, shader_id)
+        self.register_mesh(mesh, mesh_id)
+        self.register_shader(shader, shader_id)
 
         tex_id = material.texture_id_list[0] if material.texture_id_list else 0
         if tex_id:
             tex = ResourceManager.GetTexture(tex_id)
-            cls.register_texture(tex, tex_id)
+            self.register_texture(tex, tex_id)
 
-        mesh_data = cls.registered_meshes[mesh_id]
-        shader_data = cls.registered_shaders[shader_id]
+        mesh_data = self.registered_meshes[mesh_id]
+        shader_data = self.registered_shaders[shader_id]
         from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
 
         # uniforms → flat list (ZenGL 要求)
@@ -99,8 +101,8 @@ class ZenGLResourceManager:
 
         # 纹理 — 只在 shader 中实际有 sampler 时才加 layout
         has_sampler = any(t in ('sampler2D', 'sampler') for t in shader_data.uniforms_type.values())
-        if tex_id and has_sampler and tex_id in cls.registered_textures:
-            td = cls.registered_textures[tex_id]
+        if tex_id and has_sampler and tex_id in self.registered_textures:
+            td = self.registered_textures[tex_id]
             layout.append({'name': 'uTexture', 'binding': 0})
             resources.append({'type': 'sampler', 'binding': 0, 'image': td.image,
                               'min_filter': 'linear', 'mag_filter': 'linear'})
@@ -110,11 +112,11 @@ class ZenGLResourceManager:
         VertexLayout.check_shader_consistency(
             mesh_layout, shader_data.vs_src, f"entity shader '{shader_id}'")
 
-        pipeline = cls.ctx.pipeline(
+        pipeline = self.ctx.pipeline(
             vertex_shader=shader_data.vs_src,
             fragment_shader=shader_data.fs_src,
             uniforms=uniforms, layout=layout, resources=resources,
-            framebuffer=cls.get_framebuffer(),
+            framebuffer=self.get_framebuffer(),
             topology='triangles', cull_face='none',
             depth={'func': 'less', 'write': True},
             vertex_buffers=zengl.bind(
@@ -125,20 +127,19 @@ class ZenGLResourceManager:
             vertex_count=mesh_data.elements_count,
         )
 
-        cls.registered_entities[entity_id] = cls.entity_data_struct(
+        self.registered_entities[entity_id] = self.entity_data_struct(
             shader_id=shader_id, texture_id=tex_id, mesh_id=mesh_id,
             material_id=material_id, pipeline=pipeline, vao=0)
 
-    @classmethod
-    def _rebuild_entity_pipelines(cls) -> None:
+    def _rebuild_entity_pipelines(self) -> None:
         """resize 后重建所有实体管线 — 新 framebuffer images 已创建，
         但已有 pipeline 仍引用旧 images。此方法用当前 framebuffer 重建管线。
         """
         from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
-        for entity_id, entity in list(cls.registered_entities.items()):
+        for entity_id, entity in list(self.registered_entities.items()):
             try:
-                mesh_data = cls.registered_meshes.get(entity.mesh_id)
-                shader_data = cls.registered_shaders.get(entity.shader_id)
+                mesh_data = self.registered_meshes.get(entity.mesh_id)
+                shader_data = self.registered_shaders.get(entity.shader_id)
                 if mesh_data is None or shader_data is None:
                     continue
 
@@ -153,8 +154,8 @@ class ZenGLResourceManager:
 
                 has_sampler = any(
                     t in ('sampler2D', 'sampler') for t in shader_data.uniforms_type.values())
-                if entity.texture_id and has_sampler and entity.texture_id in cls.registered_textures:
-                    td = cls.registered_textures[entity.texture_id]
+                if entity.texture_id and has_sampler and entity.texture_id in self.registered_textures:
+                    td = self.registered_textures[entity.texture_id]
                     layout.append({'name': 'uTexture', 'binding': 0})
                     resources.append({
                         'type': 'sampler', 'binding': 0, 'image': td.image,
@@ -165,11 +166,11 @@ class ZenGLResourceManager:
                     mesh_layout, shader_data.vs_src, f"entity shader '{entity.shader_id}'")
 
                 # ★ 关键: 用当前 framebuffer 重建管线
-                new_pipeline = cls.ctx.pipeline(
+                new_pipeline = self.ctx.pipeline(
                     vertex_shader=shader_data.vs_src,
                     fragment_shader=shader_data.fs_src,
                     uniforms=uniforms, layout=layout, resources=resources,
-                    framebuffer=cls.get_framebuffer(),
+                    framebuffer=self.get_framebuffer(),
                     topology='triangles', cull_face='none',
                     depth={'func': 'less', 'write': True},
                     vertex_buffers=zengl.bind(
@@ -183,12 +184,11 @@ class ZenGLResourceManager:
             except Exception:
                 pass
 
-    @classmethod
-    def _rebuild_overlay_pipelines(cls) -> None:
+    def _rebuild_overlay_pipelines(self) -> None:
         """resize 后重建所有 overlay 管线 — 用当前 framebuffer 重建。"""
         from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
-        ctx = cls.ctx
-        for key, gpu in list(cls._overlay_gpu_resources.items()):
+        ctx = self.ctx
+        for key, gpu in list(self._overlay_gpu_resources.items()):
             try:
                 if not gpu._orig_vs or gpu._orig_vertices is None:
                     continue
@@ -216,7 +216,7 @@ class ZenGLResourceManager:
                 vs_p = _re.sub(r'uniform\s+sampler(\S+)\s+(\w+)\s*;', r'layout(binding=0) uniform sampler\1 \2;', gpu._orig_vs)
 
                 kw = {'vertex_shader': vs_p, 'fragment_shader': fs_p,
-                      'framebuffer': cls.get_overlay_framebuffer(),
+                      'framebuffer': self.get_overlay_framebuffer(),
                       'topology': topo, 'vertex_buffers': vb, 'vertex_count': vc}
                 if ebo: kw['index_buffer'] = ebo
                 kw['depth'] = {'func':'less','write':True} if gpu.depth_test else {'func':'always','write':False}
@@ -257,34 +257,31 @@ class ZenGLResourceManager:
             except Exception:
                 pass
 
-    @classmethod
-    def register_mesh(cls, mesh: Mesh, mesh_id: int) -> None:
-        if mesh_id in cls.registered_meshes:
-            cls.registered_meshes[mesh_id].ref_count += 1; return
+    def register_mesh(self, mesh: Mesh, mesh_id: int) -> None:
+        if mesh_id in self.registered_meshes:
+            self.registered_meshes[mesh_id].ref_count += 1; return
         from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
         vn = np.hstack((mesh.vertices, mesh.uvs, mesh.normals)).astype('f4')
         idx = mesh.indices.astype('i4')
-        vbo = cls.ctx.buffer(vn.tobytes())
-        ebo = cls.ctx.buffer(idx.tobytes(), index=True)
-        cls.registered_meshes[mesh_id] = cls.mesh_data_struct(
+        vbo = self.ctx.buffer(vn.tobytes())
+        ebo = self.ctx.buffer(idx.tobytes(), index=True)
+        self.registered_meshes[mesh_id] = self.mesh_data_struct(
             vbo=vbo, ebo=ebo,
             elements_count=int(idx.size), ref_count=1,
             layout=mesh.layout or STD_LAYOUT.ENTITY_POS_UV_NORMAL,
         )
 
-    @classmethod
-    def register_shader(cls, shader: CPU_Shader, shader_id: int) -> None:
-        if shader_id in cls.registered_shaders:
-            cls.registered_shaders[shader_id].ref_count += 1; return
+    def register_shader(self, shader: CPU_Shader, shader_id: int) -> None:
+        if shader_id in self.registered_shaders:
+            self.registered_shaders[shader_id].ref_count += 1; return
         ut = shader.uniforms_name_type.copy()
-        cls.registered_shaders[shader_id] = cls.shader_data_struct(
+        self.registered_shaders[shader_id] = self.shader_data_struct(
             vs_src=shader.vs_src, fs_src=shader.fs_src,
             uniforms_type=ut, ref_count=1)
 
-    @classmethod
-    def register_texture(cls, texture: CPU_Texture, texture_id: int) -> None:
-        if texture_id in cls.registered_textures:
-            cls.registered_textures[texture_id].ref_count += 1; return
+    def register_texture(self, texture: CPU_Texture, texture_id: int) -> None:
+        if texture_id in self.registered_textures:
+            self.registered_textures[texture_id].ref_count += 1; return
         from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
         px = texture.image_data
         if px is None: px = np.array([[[255,255,255,255]]], 'uint8')
@@ -293,12 +290,11 @@ class ZenGLResourceManager:
         fmt = 'rgba8unorm' if ch>=3 else 'r8unorm'
         if ch==3:
             p = np.zeros((h,w,4),'uint8'); p[:,:,:3]=px; px=p
-        img = cls.ctx.image((w,h), fmt, px.tobytes())
-        cls.registered_textures[texture_id] = cls.texture_data_struct(image=img, ref_count=1)
+        img = self.ctx.image((w,h), fmt, px.tobytes())
+        self.registered_textures[texture_id] = self.texture_data_struct(image=img, ref_count=1)
 
-    @classmethod
-    def register_overlay_drawable(cls, overlay: 'RRM.overlay_drawable_struct') -> None:
-        from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore; ctx = cls.ctx
+    def register_overlay_drawable(self, overlay: 'RRM.overlay_drawable_struct') -> None:
+        from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore; ctx = self.ctx
         verts = overlay.vertices
         vbo = ctx.buffer(verts.tobytes() if isinstance(verts, np.ndarray) else verts)
         ebo = None
@@ -342,7 +338,7 @@ class ZenGLResourceManager:
         vs_p = re.sub(r'uniform\s+sampler(\S+)\s+(\w+)\s*;', r'layout(binding=0) uniform sampler\1 \2;', overlay.vs_src)
 
         kw = {'vertex_shader': vs_p, 'fragment_shader': fs_p,
-              'framebuffer': cls.get_overlay_framebuffer(),
+              'framebuffer': self.get_overlay_framebuffer(),
               'topology': topo, 'vertex_buffers': vb, 'vertex_count': vc}
         if ebo: kw['index_buffer'] = ebo
         kw['depth'] = {'func':'less','write':True} if overlay.depth_test else {'func':'always','write':False}
@@ -417,7 +413,7 @@ class ZenGLResourceManager:
                 print(f"[ZG-REGISTER]   auto-detected extras: {extra}")
             print(f"[ZG-REGISTER]   depth={kw.get('depth')}  blend={kw.get('blend')}")
 
-        cls._overlay_gpu_resources[overlay.key] = cls.overlay_gpu_struct(
+        self._overlay_gpu_resources[overlay.key] = self.overlay_gpu_struct(
             key=overlay.key, pipeline=pipeline, pick_pipeline=None,
             draw_mode=overlay.draw_mode,
             elements_count=vc, depth_test=overlay.depth_test, blend=overlay.blend,
@@ -440,85 +436,75 @@ class ZenGLResourceManager:
             _orig_stride=vs_stride, _orig_attrs=(getattr(overlay, 'vertex_attrs', None) or ol_layout.attributes),
         )
         if overlay.pick_type > 0:
-            cls._overlay_pick_key_map[(overlay.pick_type, overlay.pick_id)] = overlay.key
+            self._overlay_pick_key_map[(overlay.pick_type, overlay.pick_id)] = overlay.key
             # pick_pipeline 在首帧 _render_overlay_pick_pass 中惰性创建
 
-    @classmethod
-    def unregister_overlay_drawable(cls, key: str) -> None:
-        cls._overlay_gpu_resources.pop(key, None)
-        rm = [k for k,v in cls._overlay_pick_key_map.items() if v==key]
-        for k in rm: cls._overlay_pick_key_map.pop(k, None)
+    def unregister_overlay_drawable(self, key: str) -> None:
+        self._overlay_gpu_resources.pop(key, None)
+        rm = [k for k,v in self._overlay_pick_key_map.items() if v==key]
+        for k in rm: self._overlay_pick_key_map.pop(k, None)
 
     # ════════════════════════════════════════════════════════════
     # 资源卸载 (引用计数管理)
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def unregister_entity(cls, entity_id: int) -> None:
+    def unregister_entity(self, entity_id: int) -> None:
         """从 GPU 卸载实体 (ZenGL pipeline 由 GC 自动回收)。"""
-        if entity_id not in cls.registered_entities:
+        if entity_id not in self.registered_entities:
             return
-        entity = cls.registered_entities[entity_id]
-        cls._decref_mesh(entity.mesh_id)
-        cls._decref_shader(entity.shader_id)
-        cls._decref_texture(entity.texture_id)
-        del cls.registered_entities[entity_id]
+        entity = self.registered_entities[entity_id]
+        self._decref_mesh(entity.mesh_id)
+        self._decref_shader(entity.shader_id)
+        self._decref_texture(entity.texture_id)
+        del self.registered_entities[entity_id]
 
-    @classmethod
-    def unregister_mesh(cls, mesh_id: int) -> None:
-        cls._decref_mesh(mesh_id)
+    def unregister_mesh(self, mesh_id: int) -> None:
+        self._decref_mesh(mesh_id)
 
-    @classmethod
-    def unregister_shader(cls, shader_id: int) -> None:
-        cls._decref_shader(shader_id)
+    def unregister_shader(self, shader_id: int) -> None:
+        self._decref_shader(shader_id)
 
-    @classmethod
-    def unregister_texture(cls, texture_id: int) -> None:
-        cls._decref_texture(texture_id)
+    def unregister_texture(self, texture_id: int) -> None:
+        self._decref_texture(texture_id)
 
     # ════════════════════════════════════════════════════════════
     # 引用计数辅助
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def _decref_mesh(cls, mesh_id: int) -> None:
-        if mesh_id not in cls.registered_meshes:
+    def _decref_mesh(self, mesh_id: int) -> None:
+        if mesh_id not in self.registered_meshes:
             return
-        data = cls.registered_meshes[mesh_id]
+        data = self.registered_meshes[mesh_id]
         data.ref_count -= 1
         if data.ref_count <= 0:
-            del cls.registered_meshes[mesh_id]
+            del self.registered_meshes[mesh_id]
 
-    @classmethod
-    def _decref_shader(cls, shader_id: int) -> None:
-        if shader_id not in cls.registered_shaders:
+    def _decref_shader(self, shader_id: int) -> None:
+        if shader_id not in self.registered_shaders:
             return
-        data = cls.registered_shaders[shader_id]
+        data = self.registered_shaders[shader_id]
         data.ref_count -= 1
         if data.ref_count <= 0:
-            del cls.registered_shaders[shader_id]
+            del self.registered_shaders[shader_id]
 
-    @classmethod
-    def _decref_texture(cls, texture_id: int) -> None:
-        if texture_id not in cls.registered_textures:
+    def _decref_texture(self, texture_id: int) -> None:
+        if texture_id not in self.registered_textures:
             return
-        data = cls.registered_textures[texture_id]
+        data = self.registered_textures[texture_id]
         data.ref_count -= 1
         if data.ref_count <= 0:
-            del cls.registered_textures[texture_id]
+            del self.registered_textures[texture_id]
 
     # ════════════════════════════════════════════════════════════
     # 批量资源清理 (Shutdown 时调用)
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def _unregister_all_entities(cls) -> None:
+    def _unregister_all_entities(self) -> None:
         """卸载所有已注册实体的 GPU 资源，级联降引用 mesh/shader/texture。"""
-        for entity_id in list(cls.registered_entities.keys()):
-            cls.unregister_entity(entity_id)
+        for entity_id in list(self.registered_entities.keys()):
+            self.unregister_entity(entity_id)
 
-    @classmethod
-    def _unregister_all_overlays(cls) -> None:
+    def _unregister_all_overlays(self) -> None:
         """卸载所有 overlay 的 GPU 资源。"""
-        for key in list(cls._overlay_gpu_resources.keys()):
-            cls.unregister_overlay_drawable(key)
+        for key in list(self._overlay_gpu_resources.keys()):
+            self.unregister_overlay_drawable(key)

@@ -118,7 +118,7 @@ class VertexLayout:
 
         # ── 解析 shader 声明的 attribute: location → name ──
         shader_attrs: dict[int, str] = {}
-        for m in self._SHADER_ATTR_RE.finditer(vs_src):
+        for m in VertexLayout._SHADER_ATTR_RE.finditer(vs_src):
             shader_attrs[int(m.group(1))] = m.group(2)
 
         # ── 哪些在 main() 中被实际使用 ──
@@ -136,9 +136,8 @@ class VertexLayout:
                 result.append(-1)
         return result
 
-    @classmethod
+    @staticmethod
     def check_shader_consistency(
-        cls,
         layout: 'VertexLayout',
         vs_src: str,
         context: str = '',
@@ -161,7 +160,7 @@ class VertexLayout:
 
         # ── 解析 shader 中的 attribute 声明 ──
         shader_attrs: dict[int, str] = {}  # location → name
-        for m in cls._SHADER_ATTR_RE.finditer(vs_src):
+        for m in VertexLayout._SHADER_ATTR_RE.finditer(vs_src):
             shader_attrs[int(m.group(1))] = m.group(2)
 
         # ── 解析 shader 中实际使用的 attribute (main 函数体内被引用) ──

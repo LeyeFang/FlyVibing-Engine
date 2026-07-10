@@ -6,10 +6,9 @@ from Application.Resource.ResourceManager import ResourceManager
 
 
 class ZenGLEntities:
-    @classmethod
-    def _RenderEntities(cls, view: np.ndarray, proj: np.ndarray) -> None:
+    def _RenderEntities(self, view: np.ndarray, proj: np.ndarray) -> None:
         for eid in SceneManager.GetRenderableEntities():
-            e = cls.registered_entities.get(eid)
+            e = self.registered_entities.get(eid)
             if not e or not e.pipeline: continue
             model = SceneManager.GetEntityModelMatrix(eid)
             try:

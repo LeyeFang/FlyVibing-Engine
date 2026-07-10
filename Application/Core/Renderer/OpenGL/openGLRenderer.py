@@ -56,7 +56,7 @@ class OpenGLRenderer(
         → OpenGLPickSystem → OpenGLResourceManager → OpenGLCore
         → Renderer → RenderResourceManger
 
-    每个 Mixin 通过 cls.xxx 访问下层提供的资源注册表。
+    每个 Mixin 通过 self.xxx 访问下层提供的资源注册表。
     """
 
     # ════════════════════════════════════════════════════════════
@@ -74,17 +74,13 @@ class OpenGLRenderer(
     #     1) 回调式 overlay (轮廓 pass + blit)
     #     2) 声明式 drawable (Grid/Gizmo)
 
-    _pre_overlay_callbacks: list[Callable] = []
-    """实体渲染前回调列表: fn(view, proj, vp_w, vp_h) → None"""
+    def __init__(self) -> None:
+        super().__init__()
+        self._pre_overlay_callbacks: list[Callable] = []
+        self._scene_fbo_override: int = 0
+        self._outline_selected_ids: set[int] = set()
 
-    _scene_fbo_override: int = 0
-    """非零时 _RenderEntities 绑定此 FBO 而非默认帧缓冲 (由 pre-overlay 设置)"""
-
-    _outline_selected_ids: set[int] = set()
-    """被选实体 ID 集合 (由 OutlineOverlay 注入, _RenderEntities 据此写 stencil=1)"""
-
-    @classmethod
-    def register_pre_overlay_callback(cls, callback: Callable) -> None:
+    def register_pre_overlay_callback(self, callback: Callable) -> None:
         """注册实体渲染前回调。
 
         典型用法: OutlineOverlay 注册 _on_pre_render, 在其中创建 Scene FBO、
@@ -93,14 +89,13 @@ class OpenGLRenderer(
         Args:
             callback: fn(view, proj, vp_w, vp_h) → None
         """
-        if callback not in cls._pre_overlay_callbacks:
-            cls._pre_overlay_callbacks.append(callback)
+        if callback not in self._pre_overlay_callbacks:
+            self._pre_overlay_callbacks.append(callback)
 
-    @classmethod
-    def unregister_pre_overlay_callback(cls, callback: Callable) -> None:
+    def unregister_pre_overlay_callback(self, callback: Callable) -> None:
         """取消注册 pre-overlay 回调。"""
-        if callback in cls._pre_overlay_callbacks:
-            cls._pre_overlay_callbacks.remove(callback)
+        if callback in self._pre_overlay_callbacks:
+            self._pre_overlay_callbacks.remove(callback)
 
     # ════════════════════════════════════════════════════════════
     # 生命周期
@@ -117,6 +112,8 @@ class OpenGLRenderer(
             window: Engine 传入的 Window 实例。通过 window.GetSize() 获取初始尺寸。
                     调用方已在 Create 前调用 window.MakeContextCurrent()。
         """
+        from Application.Core.Renderer.CommandQueue import CommandQueue
+        instance = cls()
         if window is not None:
             window_size = window.GetSize()
         else:
@@ -127,61 +124,58 @@ class OpenGLRenderer(
                 window_size = _glfw.get_framebuffer_size(_glfw_win)
             else:
                 window_size = (800, 600)
-        cls.init_core(window_size)
-        cls.viewport_width = window_size[0]
-        cls.viewport_height = window_size[1]
-        cls.aspect_ratio = window_size[0] / window_size[1]
+        instance.init_core(window_size)
+        instance.viewport_width = window_size[0]
+        instance.viewport_height = window_size[1]
+        instance.aspect_ratio = window_size[0] / window_size[1]
         # ── 相机矩阵由逻辑线程通过 SetViewProjectionCommand 推送 ──
         # ── 初始化拾取系统 ──
-        cls.init_pick(window_size[0], window_size[1])
+        instance.init_pick(window_size[0], window_size[1])
         # ── 初始化命令队列 ──
-        cls._command_queue = CommandQueue()
-        return cls
+        instance._command_queue = CommandQueue()
+        return instance
 
     # ════════════════════════════════════════════════════════════
     # 帧渲染
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def _do_start_frame(cls) -> None:
-        if cls._pending_resize is not None:
-            w, h = cls._pending_resize
-            cls.update_viewport(w, h)
-            cls.rebuild_pick_fbo(w, h)
-            cls._pending_resize = None
+    def _do_start_frame(self) -> None:
+        if self._pending_resize is not None:
+            w, h = self._pending_resize
+            self.update_viewport(w, h)
+            self.rebuild_pick_fbo(w, h)
+            self._pending_resize = None
         # ── 恢复: pick FBO 被外部销毁后自动重建 (如 PIE 停止后编辑器恢复) ──
-        if not cls._pick_fbo and cls.viewport_width > 0 and cls.viewport_height > 0:
-            cls.rebuild_pick_fbo(cls.viewport_width, cls.viewport_height)
-        view = cls._cached_view
-        proj = cls._cached_proj
+        if not self._pick_fbo and self.viewport_width > 0 and self.viewport_height > 0:
+            self.rebuild_pick_fbo(self.viewport_width, self.viewport_height)
+        view = self._cached_view
+        proj = self._cached_proj
         # ── 兜底: 无相机时使用单位矩阵 (PIE 首帧 / 未注入相机) ──
         if view is None:
             view = np.identity(4, dtype=np.float32)
         if proj is None:
             proj = np.identity(4, dtype=np.float32)
-        vp_w, vp_h = cls.viewport_width, cls.viewport_height
+        vp_w, vp_h = self.viewport_width, self.viewport_height
         # ── 1. 清屏 ──
-        cls.clear_frame()
+        self.clear_frame()
         # ── 2. Entity pick → pick FBO (FBO 不解绑) ──
-        cls._render_entities_pick_pass(view, proj)
+        self._render_entities_pick_pass(view, proj)
         # ── 2b. Overlay pick → pick FBO (最后解绑 + 预读缓存) ──
-        cls._render_overlays_pick_pass(view, proj, vp_w, vp_h)
+        self._render_overlays_pick_pass(view, proj, vp_w, vp_h)
         # ── 3. Pre-overlay callbacks (FBO 创建 / stencil 预设) ──
-        for cb in cls._pre_overlay_callbacks:
+        for cb in self._pre_overlay_callbacks:
             cb(view, proj, vp_w, vp_h)
         # ── 4. 实体渲染 (可能重定向到 Scene FBO) ──
-        cls._RenderEntities(view, proj)
+        self._RenderEntities(view, proj)
         # ── 5. 后处理管线 (MRT → 边缘检测 → 合成) ──
-        cls._render_post_process(view, proj)
+        self._render_post_process(view, proj)
         # ── 6. 统一 overlay 入口: 先回调, 后 drawable ──
-        cls._render_all_overlays(view, proj)
+        self._render_all_overlays(view, proj)
 
-    @classmethod
-    def EndFrame(cls) -> None:
+    def EndFrame(self) -> None:
         pass
 
-    @classmethod
-    def Shutdown(cls) -> None:
+    def Shutdown(self) -> None:
         """释放所有 OpenGL GPU 资源 — 渲染线程、GL 上下文有效时调用。
 
         清理顺序 (逆 MRO):
@@ -191,13 +185,13 @@ class OpenGLRenderer(
           4. 后处理资源: FBO + shader + quad VAO
           5. 基类: 命令队列 + overlay 回调 + 相机缓存
         """
-        cls._destroy_pick()
-        cls._unregister_all_entities()
-        cls._unregister_all_overlays()
-        cls.unregister_highlight_effect()
-        cls._pre_overlay_callbacks.clear()
-        cls._outline_selected_ids.clear()
-        cls._scene_fbo_override = 0
+        self._destroy_pick()
+        self._unregister_all_entities()
+        self._unregister_all_overlays()
+        self.unregister_highlight_effect()
+        self._pre_overlay_callbacks.clear()
+        self._outline_selected_ids.clear()
+        self._scene_fbo_override = 0
         super().Shutdown()
 
 
@@ -206,17 +200,15 @@ class OpenGLRenderer(
     # Overlay drawable 注册扩展 — 维护 pick_key 查找表
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
     def register_overlay_drawable(
-        cls, overlay: 'RenderResourceManger.overlay_drawable_struct'
+        self, overlay: 'RenderResourceManger.overlay_drawable_struct'
     ) -> None:
         super().register_overlay_drawable(overlay)
         if overlay.pick_type > 0:
-            cls.register_pick_key(
+            self.register_pick_key(
                 overlay.pick_type, overlay.pick_id, overlay.key)
 
-    @classmethod
-    def unregister_overlay_drawable(cls, key: str) -> None:
-        cls.unregister_pick_key(key)
+    def unregister_overlay_drawable(self, key: str) -> None:
+        self.unregister_pick_key(key)
         super().unregister_overlay_drawable(key)
 

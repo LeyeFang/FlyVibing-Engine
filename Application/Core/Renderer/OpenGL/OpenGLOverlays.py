@@ -7,7 +7,7 @@ OpenGLOverlays — PyOpenGL 叠加层渲染器 (Mixin, 通过 MRO 访问资源)�
 
 设计:
   - Mixin 模式: 覆写 Renderer._render_overlay_drawables() 的 no-op
-  - 通过 cls._overlay_gpu_resources 访问资源 (由 OpenGLResourceManager 提供)
+  - 通过 self._overlay_gpu_resources 访问资源 (由 OpenGLResourceManager 提供)
   - 须置于 OpenGLResourceManager 之后、Renderer 之前的 MRO 位置
 """
 
@@ -19,9 +19,8 @@ from OpenGL import GL as gl
 class OpenGLOverlays:
     """PyOpenGL 叠加层渲染器 — 编辑器的 Grid/Gizmo 等 overlay 绘制。"""
 
-    @classmethod
     def _render_overlay_drawables(
-        cls,
+        self,
         view: np.ndarray,
         proj: np.ndarray,
         layer: int = -1,
@@ -36,7 +35,7 @@ class OpenGLOverlays:
         vp = gl.glGetIntegerv(gl.GL_VIEWPORT)
         vp_w, vp_h = vp[2], vp[3]
         # Layer 1 的 depth 清理在 _render_all_overlays 中由 _clear_depth_for_overlays 完成
-        for _key, gpu in cls._overlay_gpu_resources.items():
+        for _key, gpu in self._overlay_gpu_resources.items():
             if layer >= 0 and getattr(gpu, 'render_layer', 0) != layer:
                 if layer >= 0:
                     pass  # filtered
@@ -92,7 +91,7 @@ class OpenGLOverlays:
             #    overlay.uniforms = {'uColor': np.array(...), 'uFadeCenter': 'camera.fade_center', ...}
             #    渲染器基类 _resolve_overlay_uniforms 将动态源解析为当前帧值
             if gpu.uniforms:
-                resolved = cls._resolve_overlay_uniforms(gpu.uniforms)
+                resolved = self._resolve_overlay_uniforms(gpu.uniforms)
                 for uname, uval in resolved.items():
                     loc = gl.glGetUniformLocation(gpu.program, uname)
                     if loc < 0:

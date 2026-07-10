@@ -124,8 +124,7 @@ class OpenGLResourceManager:
     # 资源注册
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def register_entity(cls, entity_id: int) -> None:
+    def register_entity(self, entity_id: int) -> None:
         """注册可渲染实体到 GPU — 级联注册 Mesh/Shader/Texture，创建 VAO。
 
         创建的 VAO 绑定 mesh 的 VBO/EBO 并配置顶点属性布局。
@@ -141,8 +140,8 @@ class OpenGLResourceManager:
         shader_id = material.shader_id
         shader = ResourceManager.GetShader(shader_id)
 
-        cls.register_mesh(mesh, mesh_id)
-        cls.register_shader(shader, shader_id)
+        self.register_mesh(mesh, mesh_id)
+        self.register_shader(shader, shader_id)
 
         # ★ 纹理保护: tex_id=0 或无效时跳过
         tex_id = 0
@@ -150,12 +149,12 @@ class OpenGLResourceManager:
             tex_id = material.texture_id_list[0]
         if tex_id > 0 and str(tex_id) in ResourceManager.loaded_texture:
             texture = ResourceManager.GetTexture(tex_id)
-            cls.register_texture(texture, tex_id)
+            self.register_texture(texture, tex_id)
         else:
             tex_id = 0
 
-        program = cls.registered_shaders[shader_id].program
-        mesh_data = cls.registered_meshes[mesh_id]
+        program = self.registered_shaders[shader_id].program
+        mesh_data = self.registered_meshes[mesh_id]
 
         # ── 创建 VAO，绑定 VBO/EBO 并设置顶点属性 ──
         vao = gl.glGenVertexArrays(1)
@@ -179,7 +178,7 @@ class OpenGLResourceManager:
         # 解绑 VAO (可选，但推荐以避免误修改)
         gl.glBindVertexArray(0)
 
-        cls.registered_entities[entity_id] = cls.entity_data_struct(
+        self.registered_entities[entity_id] = self.entity_data_struct(
             shader_id=shader_id,
             texture_id=tex_id,
             mesh_id=mesh_id,
@@ -187,8 +186,7 @@ class OpenGLResourceManager:
             vao=vao,
         )
 
-    @classmethod
-    def register_mesh(cls, mesh: Mesh, mesh_id: int) -> None:
+    def register_mesh(self, mesh: Mesh, mesh_id: int) -> None:
         """上传网格数据到 GPU — 创建 VBO (交错顶点) + EBO (索引)。
 
         交错顶点格式 (每顶点 8 个 float):
@@ -198,8 +196,8 @@ class OpenGLResourceManager:
             mesh    : CPU 端 Mesh 资源
             mesh_id : 网格资源 ID
         """
-        if mesh_id in cls.registered_meshes:
-            cls.registered_meshes[mesh_id].ref_count += 1
+        if mesh_id in self.registered_meshes:
+            self.registered_meshes[mesh_id].ref_count += 1
             return
 
         # ── 构建交错顶点数组 ──
@@ -222,7 +220,7 @@ class OpenGLResourceManager:
                         indices.tobytes(), gl.GL_STATIC_DRAW)
         gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, 0)
 
-        cls.registered_meshes[mesh_id] = cls.mesh_data_struct(
+        self.registered_meshes[mesh_id] = self.mesh_data_struct(
             vbo=vbo,
             ebo=ebo,
             elements_count=int(indices.size),
@@ -230,8 +228,7 @@ class OpenGLResourceManager:
             ref_count=1,
         )
 
-    @classmethod
-    def register_shader(cls, shader: Shader, shader_id: int) -> None:
+    def register_shader(self, shader: Shader, shader_id: int) -> None:
         """编译并链接着色器程序。
 
         Args:
@@ -241,8 +238,8 @@ class OpenGLResourceManager:
         Raises:
             RuntimeError: 编译/链接失败
         """
-        if shader_id in cls.registered_shaders:
-            cls.registered_shaders[shader_id].ref_count += 1
+        if shader_id in self.registered_shaders:
+            self.registered_shaders[shader_id].ref_count += 1
             return
 
         program = OpenGLUtils.compile_program(shader.vs_src, shader.fs_src)
@@ -264,15 +261,14 @@ class OpenGLResourceManager:
             except Exception:
                 continue
 
-        cls.registered_shaders[shader_id] = cls.shader_data_struct(
+        self.registered_shaders[shader_id] = self.shader_data_struct(
             program=program,
             uniforms_loc=uniforms_loc,
             uniforms_type=shader.uniforms_name_type.copy(),
             ref_count=1,
         )
 
-    @classmethod
-    def register_texture(cls, texture: Texture, texture_id: int) -> None:
+    def register_texture(self, texture: Texture, texture_id: int) -> None:
         """上传纹理数据到 GPU。
 
         支持:
@@ -287,8 +283,8 @@ class OpenGLResourceManager:
         Raises:
             ValueError: 不支持的通道数
         """
-        if texture_id in cls.registered_textures:
-            cls.registered_textures[texture_id].ref_count += 1
+        if texture_id in self.registered_textures:
+            self.registered_textures[texture_id].ref_count += 1
             return
 
         _CHANNEL_FORMAT = {
@@ -322,7 +318,7 @@ class OpenGLResourceManager:
 
         gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
 
-        cls.registered_textures[texture_id] = cls.texture_data_struct(
+        self.registered_textures[texture_id] = self.texture_data_struct(
             ref_count=1,
             gl_handle=gl_tex,
             texture_unit=-1,
@@ -332,117 +328,103 @@ class OpenGLResourceManager:
     # Uniform 辅助 — 薄封装，委托到 OpenGLUtils
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def get_uniform_location(cls, shader_id: int, name: str) -> int:
+    def get_uniform_location(self, shader_id: int, name: str) -> int:
         """获取 uniform location (带缓存，支持懒查询)。
 
-        委托到 OpenGLUtils.get_uniform_location，传入 cls.registered_shaders。
+        委托到 OpenGLUtils.get_uniform_location，传入 self.registered_shaders。
         """
-        return OpenGLUtils.get_uniform_location(cls.registered_shaders, shader_id, name)
+        return OpenGLUtils.get_uniform_location(self.registered_shaders, shader_id, name)
 
-    @classmethod
-    def set_uniform_mat4(cls, shader_id: int, name: str, matrix: np.ndarray) -> None:
+    def set_uniform_mat4(self, shader_id: int, name: str, matrix: np.ndarray) -> None:
         """Set a mat4 uniform — 委托到 OpenGLUtils。"""
-        OpenGLUtils.set_uniform_mat4(cls.registered_shaders, shader_id, name, matrix)
+        OpenGLUtils.set_uniform_mat4(self.registered_shaders, shader_id, name, matrix)
 
-    @classmethod
-    def set_uniform_float(cls, shader_id: int, name: str, value: float) -> None:
+    def set_uniform_float(self, shader_id: int, name: str, value: float) -> None:
         """设置 float uniform — 委托到 OpenGLUtils。"""
-        OpenGLUtils.set_uniform_float(cls.registered_shaders, shader_id, name, value)
+        OpenGLUtils.set_uniform_float(self.registered_shaders, shader_id, name, value)
 
-    @classmethod
-    def set_uniform_int(cls, shader_id: int, name: str, value: int) -> None:
+    def set_uniform_int(self, shader_id: int, name: str, value: int) -> None:
         """设置 int / sampler2D uniform — 委托到 OpenGLUtils。"""
-        OpenGLUtils.set_uniform_int(cls.registered_shaders, shader_id, name, value)
+        OpenGLUtils.set_uniform_int(self.registered_shaders, shader_id, name, value)
 
-    @classmethod
-    def set_uniform_value(cls, shader_id: int, name: str, value) -> None:
+    def set_uniform_value(self, shader_id: int, name: str, value) -> None:
         """根据 GLSL 类型自动选择 glUniform* 调用 — 委托到 OpenGLUtils。"""
-        OpenGLUtils.set_uniform_value(cls.registered_shaders, shader_id, name, value)
+        OpenGLUtils.set_uniform_value(self.registered_shaders, shader_id, name, value)
 
     # ════════════════════════════════════════════════════════════
     # 资源卸载
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def unregister_entity(cls, entity_id: int) -> None:
+    def unregister_entity(self, entity_id: int) -> None:
         """从 GPU 卸载实体。"""
-        if entity_id not in cls.registered_entities:
+        if entity_id not in self.registered_entities:
             return
-        entity = cls.registered_entities[entity_id]
+        entity = self.registered_entities[entity_id]
         if entity.vao:
             gl.glDeleteVertexArrays(1, [entity.vao])
-        cls._decref_mesh(entity.mesh_id)
-        cls._decref_shader(entity.shader_id)
-        cls._decref_texture(entity.texture_id)
-        del cls.registered_entities[entity_id]
+        self._decref_mesh(entity.mesh_id)
+        self._decref_shader(entity.shader_id)
+        self._decref_texture(entity.texture_id)
+        del self.registered_entities[entity_id]
 
-    @classmethod
-    def unregister_mesh(cls, mesh_id: int) -> None:
-        cls._decref_mesh(mesh_id)
+    def unregister_mesh(self, mesh_id: int) -> None:
+        self._decref_mesh(mesh_id)
 
-    @classmethod
-    def unregister_shader(cls, shader_id: int) -> None:
-        cls._decref_shader(shader_id)
+    def unregister_shader(self, shader_id: int) -> None:
+        self._decref_shader(shader_id)
 
-    @classmethod
-    def unregister_texture(cls, texture_id: int) -> None:
-        cls._decref_texture(texture_id)
+    def unregister_texture(self, texture_id: int) -> None:
+        self._decref_texture(texture_id)
 
     # ════════════════════════════════════════════════════════════
     # 引用计数辅助
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def _decref_mesh(cls, mesh_id: int) -> None:
-        if mesh_id not in cls.registered_meshes:
+    def _decref_mesh(self, mesh_id: int) -> None:
+        if mesh_id not in self.registered_meshes:
             return
-        data = cls.registered_meshes[mesh_id]
+        data = self.registered_meshes[mesh_id]
         data.ref_count -= 1
         if data.ref_count <= 0:
             if data.vbo:
                 gl.glDeleteBuffers(1, [data.vbo])
             if data.ebo:
                 gl.glDeleteBuffers(1, [data.ebo])
-            del cls.registered_meshes[mesh_id]
+            del self.registered_meshes[mesh_id]
 
-    @classmethod
-    def _decref_shader(cls, shader_id: int) -> None:
-        if shader_id not in cls.registered_shaders:
+    def _decref_shader(self, shader_id: int) -> None:
+        if shader_id not in self.registered_shaders:
             return
-        data = cls.registered_shaders[shader_id]
+        data = self.registered_shaders[shader_id]
         data.ref_count -= 1
         if data.ref_count <= 0:
             if data.program:
                 gl.glDeleteProgram(data.program)
-            del cls.registered_shaders[shader_id]
+            del self.registered_shaders[shader_id]
 
-    @classmethod
-    def _decref_texture(cls, texture_id: int) -> None:
-        if texture_id not in cls.registered_textures:
+    def _decref_texture(self, texture_id: int) -> None:
+        if texture_id not in self.registered_textures:
             return
-        data = cls.registered_textures[texture_id]
+        data = self.registered_textures[texture_id]
         data.ref_count -= 1
         if data.ref_count <= 0:
             if data.gl_handle:
                 gl.glDeleteTextures(1, [data.gl_handle])
-            del cls.registered_textures[texture_id]
+            del self.registered_textures[texture_id]
 
     # ════════════════════════════════════════════════════════════
     # 批量资源清理 (Shutdown 时调用)
     # ════════════════════════════════════════════════════════════
 
-    @classmethod
-    def _unregister_all_entities(cls) -> None:
+    def _unregister_all_entities(self) -> None:
         """卸载所有已注册实体的 GPU 资源 (VAO)，级联降引用 mesh/shader/texture。"""
-        for entity_id in list(cls.registered_entities.keys()):
-            cls.unregister_entity(entity_id)
+        for entity_id in list(self.registered_entities.keys()):
+            self.unregister_entity(entity_id)
 
-    @classmethod
-    def _unregister_all_overlays(cls) -> None:
+    def _unregister_all_overlays(self) -> None:
         """卸载所有 overlay 的 GPU 资源 (VAO/VBO/EBO/program/texture)。"""
-        for key in list(cls._overlay_gpu_resources.keys()):
-            cls.unregister_overlay_drawable(key)
+        for key in list(self._overlay_gpu_resources.keys()):
+            self.unregister_overlay_drawable(key)
 
     # ════════════════════════════════════════════════════════════
     # Editor Overlay 资源管理 (GPU 端实现)
@@ -477,23 +459,24 @@ class OpenGLResourceManager:
         pick_type: int = 0
         pick_id: int = 0
         model_is_ndc: bool = False  # True=model_matrix_cb 返回完整 MVP (如 TransformGizmo)
-    # GPU 端 overlay 注册表: key → overlay_gpu_data
-    _overlay_gpu_resources: dict[str, 'overlay_gpu_data'] = {}
+    # GPU 端 overlay 注册表: key → overlay_gpu_data (实例级, 见 __init__)
+    def __init__(self) -> None:
+        super().__init__()
+        self._overlay_gpu_resources: dict[str, 'overlay_gpu_data'] = {}
     _DRAW_MODE_MAP: dict[str, int] = {
         'lines': gl.GL_LINES,
         'triangles': gl.GL_TRIANGLES,
     }
 
-    @classmethod
     def register_overlay_drawable(
-        cls,
+        self,
         overlay: 'RenderResourceManger.overlay_drawable_struct'
     ) -> None:
         """注册编辑器叠加层可绘制对象 — 编译 shader, 上传 VBO/EBO/纹理, 创建 VAO。
         Args:
             overlay: 来自 Editor 层的纯数据载体 (无 GL 依赖)
         """
-        if overlay.key in cls._overlay_gpu_resources:
+        if overlay.key in self._overlay_gpu_resources:
             return
         # ── 编译着色器 ──
         program = OpenGLUtils.compile_program(overlay.vs_src, overlay.fs_src)
@@ -556,7 +539,7 @@ class OpenGLResourceManager:
                 gl.GL_UNSIGNED_BYTE,
                 pixels)
             gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
-        draw_mode_gl = cls._DRAW_MODE_MAP.get(overlay.draw_mode, gl.GL_LINES)
+        draw_mode_gl = self._DRAW_MODE_MAP.get(overlay.draw_mode, gl.GL_LINES)
         # ★ 顶点格式: 优先 overlay.layout, 回退从 vertex_attrs 构造
         ol_layout = overlay.layout
         if ol_layout is None and overlay.vertex_attrs is not None:
@@ -564,7 +547,7 @@ class OpenGLResourceManager:
                 attributes=tuple(overlay.vertex_attrs),
                 stride=overlay.vertex_stride,
             )
-        cls._overlay_gpu_resources[overlay.key] = cls.overlay_gpu_data(
+        self._overlay_gpu_resources[overlay.key] = self.overlay_gpu_data(
             vao=vao, vbo=vbo, ebo=ebo, program=program,
             texture=texture,
             elements_count=int(indices.size),
@@ -585,10 +568,9 @@ class OpenGLResourceManager:
             model_is_ndc=getattr(overlay, 'model_is_ndc', False),
         )
 
-    @classmethod
-    def unregister_overlay_drawable(cls, key: str) -> None:
+    def unregister_overlay_drawable(self, key: str) -> None:
         """取消注册并释放 overlay 的 GPU 资源 (含纹理)。"""
-        gpu = cls._overlay_gpu_resources.pop(key, None)
+        gpu = self._overlay_gpu_resources.pop(key, None)
         if gpu is None:
             return
         if gpu.texture:

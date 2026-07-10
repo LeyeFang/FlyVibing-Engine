@@ -8,7 +8,7 @@ OpenGLUtils — PyOpenGL 工具函数 (着色器编译 + Uniform 设置)。
 说明:
   - 所有方法均为 @staticmethod，不依赖任何类状态
   - uniform 方法接受 registered_shaders 作为显式参数
-  - OpenGLResourceManager 保留薄封装层，传递 cls.registered_shaders
+  - OpenGLResourceManager 保留薄封装层，传递 self.registered_shaders
 
 所有方法均为 @staticmethod，纯函数式设计。
 """

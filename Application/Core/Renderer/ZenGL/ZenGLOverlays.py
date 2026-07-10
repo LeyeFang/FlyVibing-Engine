@@ -9,11 +9,10 @@ _seen_overlay_keys: set = set()  # 避免重复打印同一 overlay 的 uniform 
 
 class ZenGLOverlays:
 
-    @classmethod
-    def _render_overlay_drawables(cls, view: np.ndarray, proj: np.ndarray, layer: int = -1) -> None:
-        vp_w, vp_h = cls.viewport_width, cls.viewport_height
+    def _render_overlay_drawables(self, view: np.ndarray, proj: np.ndarray, layer: int = -1) -> None:
+        vp_w, vp_h = self.viewport_width, self.viewport_height
 
-        overlays = list(cls._overlay_gpu_resources.items())
+        overlays = list(self._overlay_gpu_resources.items())
         if layer >= 0:
             overlays = [(k, g) for k, g in overlays if getattr(g, 'render_layer', 0) == layer]
         if _DEBUG_ZENGL_OVERLAY:
@@ -54,7 +53,7 @@ class ZenGLOverlays:
             #    overlay.uniforms = {'uColor': np.array(...), 'uFadeCenter': 'camera.fade_center', ...}
             #    渲染器基类 _resolve_overlay_uniforms 将动态源解析为当前帧值
             if gpu.uniforms:
-                resolved = cls._resolve_overlay_uniforms(gpu.uniforms)
+                resolved = self._resolve_overlay_uniforms(gpu.uniforms)
                 for uname, uval in resolved.items():
                     _try_set_uniform(gpu.pipeline, uname, uval, overlay_key=_key)
             # uniforms_setup 保留兼容 (旧 overlay 仍可用, 但失败无害)

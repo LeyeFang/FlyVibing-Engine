@@ -38,8 +38,6 @@ import glfw  # type: ignore[import-untyped]
 
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Renderer.ZenGL.ZenGLRenderer import ZenGLRenderer
-from Application.Core.Renderer.ZenGL.ZenGLCore import ZenGLCore
-from Application.Core.Renderer.CommandQueue import CommandQueue
 from Application.Core.Scene.GizmoQuery import CameraGizmoData, GizmoQuery
 from Application.Core.Scene.BasicComponents import Camera, ProjectionType
 from Application.Core.Math.Transform import calculate_entity_model
@@ -154,12 +152,7 @@ def main():
     h.init_engine()
 
     fbw, fbh = glfw.get_framebuffer_size(window)  # type: ignore[reportUnknownMemberType]
-    renderer = ZenGLRenderer
-    renderer.viewport_width = fbw
-    renderer.viewport_height = fbh
-    renderer.aspect_ratio = fbw / fbh if fbh else 1.0
-    ZenGLCore.init_core((fbw, fbh))
-    ZenGLRenderer._command_queue = CommandQueue()  # pyright: ignore[reportPrivateUsage]
+    renderer = ZenGLRenderer.Create()  # pyright: ignore[reportPrivateUsage]
     h.set_renderer(renderer)  # type: ignore[reportUnknownMemberType]
     h.patch_default_shader_440()
     print(f"[ZenGL] Renderer {renderer.viewport_width}x{renderer.viewport_height}")
@@ -198,7 +191,7 @@ def main():
     # ── 2D 摄像机: entity N, 正交俯视 GL XZ 平面 (编辑器 XY) ──
     #     GL 视线方向 (0,-1,0) — 摄像机在 GL +Y 高处看向下方
     cam_2d_eid = SceneManager.AddEntity()
-    SceneManager.SetEntityName(cam_2d_eid, "Camera2D")
+    SceneManager.SetEntityName(cam_2d_eid, "DefaultCamera2D")
     # 预旋转 position: 使得 world_pos = position @ R = (0, 10, 0) GL
     # R = Rx(π/2): 旋转后 local -Z → world (0,-1,0) 即俯视
     cam_2d_rx = math.pi / 2.0

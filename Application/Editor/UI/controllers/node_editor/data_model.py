@@ -82,10 +82,5 @@ class EntityRef:
 
     @property
     def is_valid(self) -> bool:
-        """实体是否仍然存在。"""
-        if self.eid < 0:
-            return False
-        try:
-                        return ctx.scene.EntityExists(self.eid)
-        except Exception:
-            return False
+        """实体 ID 是否有效（仅检查 ID 非负，不查询 ECS）。"""
+        return self.eid >= 0

@@ -342,15 +342,24 @@ _reg(NodeTypeDef(
 # Component 节点 — 通用组件 CRUD
 # ═══════════════════════════════════════════════════════════════
 
+# ── ComponentAdd / SetComponent 共用属性 Pin ──
+_COMPONENT_PROPERTY_PINS: list = [
+    # Transform
+    PinDef(_gen_id(), "Position", "data", "input", "vec3"),
+    PinDef(_gen_id(), "Rotation", "data", "input", "vec3"),
+    PinDef(_gen_id(), "Scale", "data", "input", "vec3"),
+    # MeshRenderer
+    PinDef(_gen_id(), "MeshID", "data", "input", "int"),
+    PinDef(_gen_id(), "MaterialID", "data", "input", "int"),
+    PinDef(_gen_id(), "Visible", "data", "input", "bool"),
+]
+
 _reg(NodeTypeDef(
     "ComponentAdd", "Add Component", "Component", COMPONENT_COLOR,
     [
         PinDef(_gen_id(), "exec_in", "exec", "input"),
         PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
-        # ── Transform 属性 Pin (由 _visible_pins 按组件类型过滤) ──
-        PinDef(_gen_id(), "Position", "data", "input", "vec3"),
-        PinDef(_gen_id(), "Rotation", "data", "input", "vec3"),
-        PinDef(_gen_id(), "Scale", "data", "input", "vec3"),
+        *_COMPONENT_PROPERTY_PINS,
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
     "Add component to entity",
@@ -364,6 +373,17 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
     "Remove component from entity",
+))
+
+_reg(NodeTypeDef(
+    "SetComponent", "Set Component", "Component", COMPONENT_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
+        *_COMPONENT_PROPERTY_PINS,
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+    ],
+    "Modify existing component",
 ))
 
 

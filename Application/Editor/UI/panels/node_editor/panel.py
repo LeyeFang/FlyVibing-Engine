@@ -433,8 +433,8 @@ class NodeEditorPanel(BasePanel):
             if inst.node_type == "EntitySpawn":
                 self._draw_entity_spawn_widgets(nid, inst)
 
-            # ComponentAdd / ComponentRemove UI 控件
-            if inst.node_type == "ComponentAdd":
+            # ComponentAdd / SetComponent / ComponentRemove UI 控件
+            if inst.node_type in ("ComponentAdd", "SetComponent"):
                 self._draw_component_add_widgets(nid, inst)
             if inst.node_type == "ComponentRemove":
                 self._draw_component_select_widgets(nid, inst)
@@ -789,13 +789,8 @@ class NodeEditorPanel(BasePanel):
     def _draw_component_property_rows(
         self, nid: int, inst, comp_name: str, props: list,
     ) -> None:
-        """在 Manual 模式下绘制每个属性的内联控件。
-
-        控件样式与 ScenePanel 保持一致：
-          Transform: drag_float3 (Position / Rotation / Scale)
-          Camera:    drag_float + checkbox + combo
-          MeshRenderer: combo + checkbox
-        """
+        """在 Manual 模式下绘制每个属性的内联控件。"""
+        imgui.push_item_width(105)
         for prop in props:
             key = f"{comp_name}.{prop.name}"
             default = list(prop.default) if isinstance(prop.default, tuple) else prop.default
@@ -830,6 +825,13 @@ class NodeEditorPanel(BasePanel):
                 if changed:
                     inst.props[key] = new_val
 
+            elif prop.widget == "input_int":
+                val = int(inst.props.get(key, default))
+                cfg = prop.widget_config
+                changed, new_val = imgui.input_int(prop.label, val)
+                if changed:
+                    inst.props[key] = new_val
+
             elif prop.widget == "combo":
                 options = prop.widget_config.get("options", [])
                 if options:
@@ -841,6 +843,7 @@ class NodeEditorPanel(BasePanel):
                     changed, new_opt_idx = imgui.combo(prop.label, opt_idx, options)
                     if changed:
                         inst.props[key] = options[new_opt_idx]
+        imgui.pop_item_width()
 
     # ── VecMath 节点专用控件 ───────────────────────────────
 
@@ -962,8 +965,8 @@ class NodeEditorPanel(BasePanel):
                         break
             return visible
 
-        # ── ComponentAdd: 按组件类型过滤属性 Pin ──
-        if inst.node_type == "ComponentAdd":
+        # ── ComponentAdd / SetComponent: 按组件类型过滤属性 Pin ──
+        if inst.node_type in ("ComponentAdd", "SetComponent"):
             comp_name = inst.props.get("component", "")
             mode = inst.props.get("mode", "manual")
             props = get_properties(comp_name) if comp_name else []

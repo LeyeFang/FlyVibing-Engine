@@ -36,6 +36,11 @@ class PropertyDescriptor:
     widget: str = "drag_float"
     widget_config: dict = field(default_factory=dict)
     pin_only: bool = False
+    attr_name: str = ""  # 实际组件属性名，空则使用 name
+
+    def __post_init__(self):
+        if not self.attr_name:
+            self.attr_name = self.name
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -60,8 +65,24 @@ _COMPONENT_PROPERTIES: dict[str, list[PropertyDescriptor]] = {
             widget_config={"speed": 0.05, "format": "%.2f"},
         ),
     ],
+    "MeshRenderer": [
+        PropertyDescriptor(
+            "MeshID", "Mesh ID", "int", 0,
+            widget="input_int",
+            attr_name="mesh_id",
+        ),
+        PropertyDescriptor(
+            "MaterialID", "Material ID", "int", 0,
+            widget="input_int",
+            attr_name="material_id",
+        ),
+        PropertyDescriptor(
+            "Visible", "Visible", "bool", True,
+            widget="checkbox",
+            attr_name="visible",
+        ),
+    ],
     # Camera —
-    # MeshRenderer —
 }
 
 

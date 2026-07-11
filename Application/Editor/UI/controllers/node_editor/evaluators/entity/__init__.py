@@ -106,4 +106,4 @@ register_evaluator("EntitySetRenderVisible", _eval_entity_set_render_visible)
 
 from . import lifecycle  # noqa: E402, F401 — EntitySpawn
 from . import camera     # noqa: E402, F401 — CameraSetMain
-from . import component  # noqa: E402, F401 — ComponentAdd, ComponentRemove
+from . import component  # noqa: E402, F401 — ComponentAdd, SetComponent, ComponentRemove

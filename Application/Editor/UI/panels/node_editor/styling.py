@@ -80,6 +80,7 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ]),
         ("Component", [
             ("Add Component", "ComponentAdd"),
+            ("Set Component", "SetComponent"),
             ("Remove Component", "ComponentRemove"),
         ]),
     ]),

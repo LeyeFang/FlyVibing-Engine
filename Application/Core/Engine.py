@@ -67,20 +67,27 @@ class FrameSync:
     master (Editor) 每帧结束后调用 master_tick()，
     slave  (PIE)    每帧开始前调用 slave_wait()。
     导出模式下不创建 FrameSync → 零开销。
+
+    enabled = False 可关闭同步锁，让 PIE 渲染线程自由竞速运行。
     """
 
     def __init__(self) -> None:
         self._lock = threading.Condition()
         self._counter: int = 0
+        self.enabled: bool = True       # ★ 运行时可切换: False = 无锁自由运行
 
     def master_tick(self) -> None:
         """master 完成一帧后调用 — 唤醒等待中的 slave。"""
+        if not self.enabled:
+            return
         with self._lock:
             self._counter += 1
             self._lock.notify_all()
 
     def slave_wait(self) -> None:
         """slave 开始新帧前调用 — 阻塞直到 master 完成当前帧。"""
+        if not self.enabled:
+            return
         with self._lock:
             current = self._counter
             while self._counter == current:

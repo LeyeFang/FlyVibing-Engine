@@ -104,6 +104,28 @@ class EntityRegistrationCommand(RenderCommand):
 
 
 @dataclass
+class EntityVisibilityCommand(RenderCommand):
+    """实体可见性控制 — 在渲染器内部 set 中 add/remove，不动 GPU 资源。
+
+    与 EntityRegistrationCommand 的区别:
+      - Registration: 创建/销毁 VAO/VBO/EBO (重量级，仅创建/删除实体时使用)
+      - Visibility:     仅从 _entity_visible set 中 add/remove (轻量，每帧可调)
+
+    使用方式:
+      renderer.enqueue(EntityVisibilityCommand(entity_id, visible=False))  # 隐藏
+      renderer.enqueue(EntityVisibilityCommand(entity_id, visible=True))   # 显示
+    """
+    entity_id: int
+    visible: bool
+
+    def execute(self, renderer: Any) -> None:
+        if self.visible:
+            renderer.show_entity(self.entity_id)
+        else:
+            renderer.hide_entity(self.entity_id)
+
+
+@dataclass
 class OverlayRegistrationCommand(RenderCommand):
     """Overlay 可绘制对象 GPU 资源注册。
 

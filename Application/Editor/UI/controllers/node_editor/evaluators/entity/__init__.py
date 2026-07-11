@@ -94,12 +94,8 @@ def _eval_entity_set_visibility(node_id: int, ctx: ExecutionContext, g: GraphEva
     if eid < 0 or not ctx.scene.EntityExists(eid):
         return
 
-    from Application.Core.Scene.BasicComponents import MeshRenderer
-    try:
-        mr = ctx.scene.GetComponent(eid, MeshRenderer)
-        mr.visible = visible
-    except Exception:
-        pass
+    # ★ 通过 SceneManager API → 内部发送 EntityVisibilityCommand 到渲染器
+    ctx.scene.SetEntityMeshRenderer(eid, visible=visible)
 
 register_evaluator("EntitySetVisibility", _eval_entity_set_visibility)
 

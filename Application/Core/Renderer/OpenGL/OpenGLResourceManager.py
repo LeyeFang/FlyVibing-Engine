@@ -46,6 +46,7 @@ class OpenGLResourceManager:
         self.registered_shaders: dict = {}
         self.registered_textures: dict = {}
         self._overlay_gpu_resources: dict = {}
+        self._entity_visible: set[int] = set()   # ★ 当前帧应渲染的实体 ID 集合
         self._DRAW_MODE_MAP: dict = {
             'lines': gl.GL_LINES,
             'triangles': gl.GL_TRIANGLES,
@@ -188,6 +189,15 @@ class OpenGLResourceManager:
             material_id=material_id,
             vao=vao,
         )
+
+        # ★ 根据 MeshRenderer.visible 设置初始可见性
+        try:
+            from Application.Core.Scene.BasicComponents import MeshRenderer
+            mr = self._renderer.engine.scene.GetComponent(entity_id, MeshRenderer)
+            if mr.visible:
+                self._entity_visible.add(entity_id)
+        except Exception:
+            self._entity_visible.add(entity_id)  # 找不到组件时默认可见
 
     def register_mesh(self, mesh: Mesh, mesh_id: int) -> None:
         """上传网格数据到 GPU — 创建 VBO (交错顶点) + EBO (索引)。
@@ -369,6 +379,16 @@ class OpenGLResourceManager:
         self._decref_shader(entity.shader_id)
         self._decref_texture(entity.texture_id)
         del self.registered_entities[entity_id]
+        self._entity_visible.discard(entity_id)  # ★ 同步清理可见性
+
+    def show_entity(self, entity_id: int) -> None:
+        """标记实体为可见 — 仅操作 visible set，不动 GPU 资源。"""
+        if entity_id in self.registered_entities:
+            self._entity_visible.add(entity_id)
+
+    def hide_entity(self, entity_id: int) -> None:
+        """标记实体为不可见 — 仅操作 visible set，不动 GPU 资源。"""
+        self._entity_visible.discard(entity_id)
 
     def unregister_mesh(self, mesh_id: int) -> None:
         self._decref_mesh(mesh_id)
@@ -423,6 +443,7 @@ class OpenGLResourceManager:
         """卸载所有已注册实体的 GPU 资源 (VAO)，级联降引用 mesh/shader/texture。"""
         for entity_id in list(self.registered_entities.keys()):
             self.unregister_entity(entity_id)
+        self._entity_visible.clear()
 
     def _unregister_all_overlays(self) -> None:
         """卸载所有 overlay 的 GPU 资源 (VAO/VBO/EBO/program/texture)。"""

@@ -25,7 +25,7 @@ import threading
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Scene.BasicComponents import *
 from Application.Core.Events.SceneEvent import *
-from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand
+from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand, EntityVisibilityCommand
 
 
 
@@ -451,16 +451,28 @@ class SceneManager:
         if entity_id is None:
             raise ValueError("Must specify entity ID")
         mesh_rend = esper.component_for_entity(entity_id, MeshRenderer)
+
+        # ── 判断变更类型 ──
+        resource_changed = (mesh_id is not None) or (material_id is not None)
+        visible_only = (visible is not None) and not resource_changed
+
         if visible is not None:
             mesh_rend.visible = visible
         if mesh_id is not None:
             mesh_rend.mesh_id = mesh_id
         if material_id is not None:
             mesh_rend.material_id = material_id
-        # ★ 通知渲染器重新注册 (刷新缓存的 mesh / material / texture 等)
+
+        # ── 通知渲染器 ──
         _renderer = getattr(st.app, 'renderer', None)
         if _renderer is not None:
-            _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
+            if visible_only:
+                # ★ 仅可见性变更 → 轻量 Command，不动 GPU 资源
+                _renderer.enqueue(EntityVisibilityCommand(entity_id, visible=visible))
+            else:
+                # ★ 资源变更 (mesh/material) → 重新注册 GPU 资源
+                _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
+
         ComponentModifiedEvent.Pack(entity_id, mesh_rend, engine=st.app)
 
     @classmethod

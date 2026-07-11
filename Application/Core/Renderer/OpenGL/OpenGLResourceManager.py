@@ -39,7 +39,8 @@ from Application.Core.Scene.SceneManager import SceneManager
 class OpenGLResourceManager:
     """PyOpenGL GPU 资源管理器 — Mesh/Shader/Texture/Entity 的注册与生命周期。"""
 
-    def __init__(self) -> None:
+    def __init__(self, renderer=None) -> None:
+        self._renderer = renderer
         self.registered_entities: dict = {}
         self.registered_meshes: dict = {}
         self.registered_shaders: dict = {}
@@ -135,8 +136,8 @@ class OpenGLResourceManager:
         Args:
             entity_id: 实体 ID
         """
-        mesh_id = SceneManager.GetEntityMesh(entity_id)
-        material_id = SceneManager.GetEntityMaterial(entity_id)
+        mesh_id = self._renderer.engine.scene.GetEntityMesh(entity_id)
+        material_id = self._renderer.engine.scene.GetEntityMaterial(entity_id)
         mesh = ResourceManager.GetMesh(mesh_id)
         material: Material = ResourceManager.GetMaterial(material_id)
         shader_id = material.shader_id

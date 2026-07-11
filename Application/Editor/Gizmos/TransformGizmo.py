@@ -483,7 +483,7 @@ class TransformGizmo:
             cls._renderer = renderer
         cls._visible = True
         try:
-            t = SceneManager.GetEntityTransform(entity_id)
+            t = EditorHost.scene.GetEntityTransform(entity_id)
             cls.set_target_position((t.position_x, t.position_y, t.position_z))
         except Exception:
             pass

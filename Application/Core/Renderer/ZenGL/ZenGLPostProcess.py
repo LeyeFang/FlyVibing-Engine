@@ -81,7 +81,7 @@ class ZenGLPostProcess(PostProcess):
 
         active_ids = self._highlight_config.selected_ids if self._highlight_config else set()
 
-        for eid in SceneManager.GetRenderableEntities():
+        for eid in self.engine.scene.GetRenderableEntities():
             entity = self.registered_entities.get(eid)
             if entity is None:
                 continue
@@ -93,7 +93,7 @@ class ZenGLPostProcess(PostProcess):
                 continue
 
             try:
-                model = SceneManager.GetEntityModelMatrix(eid)
+                model = self.engine.scene.GetEntityModelMatrix(eid)
                 p.uniforms['model'][:] = model.astype('float32').tobytes()
                 p.uniforms['view'][:] = view.astype('float32').tobytes()
                 p.uniforms['projection'][:] = proj.astype(

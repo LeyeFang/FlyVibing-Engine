@@ -30,16 +30,10 @@ class ZenGLRenderer(
     def unregister_outliner(self): self._outliner = None
 
     @classmethod
-    def Create(cls, window=None):
-        """工厂方法 — 创建 ZenGLRenderer 实例。
-
-        Args:
-            window: Engine 传入的 Window 实例。通过 window.GetSize() 获取初始尺寸。
-        Returns:
-            ZenGLRenderer 实例
-        """
+    def Create(cls, window=None, engine=None):
+        """工厂方法 — 创建 ZenGLRenderer 实例。"""
         from Application.Core.Renderer.CommandQueue import CommandQueue
-        instance = cls()
+        instance = cls(engine=engine)
         if window is not None:
             sz = window.GetSize()
         else:

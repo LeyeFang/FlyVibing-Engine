@@ -59,7 +59,7 @@ class SelectionController:
         TransformGizmo._visible = True
         try:
             from Application.Core.Math.Transform import calculate_entity_model
-            t = SceneManager.GetEntityTransform(entity_id)
+            t = EditorHost.scene.GetEntityTransform(entity_id)
             model = calculate_entity_model(
                 position=(t.position_x, t.position_y, t.position_z),
                 rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
@@ -92,4 +92,5 @@ class SelectionController:
 
 # ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──
 from Application.Editor.Services.ControllerRegistry import register, NAME_SELECTION
+from Application.Editor.EditorHost import EditorHost
 register(NAME_SELECTION, SelectionController)

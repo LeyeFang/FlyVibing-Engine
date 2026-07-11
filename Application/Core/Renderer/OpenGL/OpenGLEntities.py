@@ -40,7 +40,7 @@ class OpenGLEntities:
 
         has_outline = bool(r._outline_selected_ids)
 
-        for entity_id in SceneManager.GetRenderableEntities():
+        for entity_id in self._renderer.engine.scene.GetRenderableEntities():
             entity = r.registered_entities.get(entity_id)
             if entity is None:
                 continue
@@ -59,7 +59,7 @@ class OpenGLEntities:
 
             program = r.registered_shaders[entity.shader_id].program
             gl.glUseProgram(program)
-            model = SceneManager.GetEntityModelMatrix(entity_id)
+            model = self._renderer.engine.scene.GetEntityModelMatrix(entity_id)
             OpenGLUtils.set_uniform_mat4(
                 r.registered_shaders, entity.shader_id, 'model', model)
             OpenGLUtils.set_uniform_mat4(

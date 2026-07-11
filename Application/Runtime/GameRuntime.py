@@ -38,11 +38,11 @@ class GameRuntime(Engine):
         return RuntimeWindow
 
     @classmethod
-    def _create_renderer(cls) -> Renderer:
+    def _create_renderer(cls, engine=None) -> Renderer:
         """创建运行时渲染器 — 每次调用返回独立实例，与 Editor 完全隔离。"""
         cls.window.MakeContextCurrent()
         renderer_cls = cls._get_renderer_class(cls.renderer_type)
-        return renderer_cls.Create(window=cls.window)
+        return renderer_cls.Create(window=cls.window, engine=engine or cls)
 
     # ════════════════════════════════════════════════════════════
     # 生命周期

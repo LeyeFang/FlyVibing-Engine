@@ -76,6 +76,7 @@ class RuntimeNodeLayer(Layer):
 
         cls._evaluator = GraphEvaluator(cls._canvas, _TYPES)
         cls._context = ExecutionContext()
+        cls._context.scene = cls._engine.scene     # ★ 注入 SceneManager 实例
         cls._frame = 0
 
         # 触发 OnGameStart（引擎时间从 0 开始）

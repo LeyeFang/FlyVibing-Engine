@@ -530,7 +530,7 @@ class Engine:
         """渲染线程入口 — 创建渲染器 → 等待 run_ready → 进入渲染循环。"""
         SceneManager.set_thread_active(cls.__name__)  # 线程绑定
         try:
-            cls.renderer = cls._create_renderer()
+            cls.renderer = cls._create_renderer(engine=cls)
             cls._state()['renderer_ready'].set()
             cls._state()['run_ready'].wait()
             for layer in cls._state()['layer_stack']:

@@ -41,8 +41,9 @@ class Renderer(ABC):
         aspect_ratio    : 宽高比 (width / height)
     """
 
-    def __init__(self) -> None:
-        self.app = None
+    def __init__(self, engine=None) -> None:
+        self.engine = engine                        # Engine 引用 (EditorHost / GameRuntime)
+        self.app = engine                           # 向后兼容
         self.viewport_width: int = 0
         self.viewport_height: int = 0
         self.aspect_ratio: float = 1.0
@@ -82,19 +83,19 @@ class Renderer(ABC):
     _cam_ortho_size: float = 10.0           # 正交半高
 
     @classmethod
-    @abstractmethod
-    def Create(cls, window: 'Window' = None):
+    def Create(cls, window: 'Window' = None, engine=None):
         """初始化渲染器 — 在渲染线程调用。
 
         Args:
-            window: 所属的 Window 实例（Engine 传入）。
-                    渲染器通过 window.GetSize() 获取初始尺寸，
-                    通过 window.GetNativeHandle() 获取平台句柄（Vulkan Surface 等）。
-                    不再需要通过 GLFW 上下文或 EditorHost 回退获取窗口信息。
-
-        调用方 (Engine._create_renderer) 在调用前已确保 GL 上下文绑定到当前线程。
+            window: 所属的 Window 实例。
+            engine: Engine 引用 (EditorHost / GameRuntime)，用于访问 SceneManager。
         """
-        ...
+        inst = cls(engine=engine)
+        inst._command_queue = CommandQueue()
+        if window is not None:
+            inst.viewport_width, inst.viewport_height = window.GetSize()
+            inst.aspect_ratio = inst.viewport_width / max(inst.viewport_height, 1)
+        return inst
 
     # ════════════════════════════════════════════════════════════
     # 帧渲染 (两级架构: 基类消费命令 → 子类执行渲染)

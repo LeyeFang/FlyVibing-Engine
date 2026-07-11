@@ -248,32 +248,31 @@ class NodeEditorPanel(BasePanel):
 
         # ★ 显式切到 EditorHost 的 ECS 世界（避免主线程被 GameRuntime 绑定覆盖）
         try:
-            ed_st = SceneManager._state_for("EditorHost")
-            SceneManager._state()  # 切换到 EditorHost 世界
+            EditorHost.scene._switch_world()  # 切换到 EditorHost 世界
         except Exception as e:
             print(f"[NodeEditor] _ensure_default_scene: EditorHost not ready ({e})")
             return
 
         scene = EditorHost.get_active_scene()
         if scene is None:
-            scene = Scene("Default", game_type=SceneManager.GetGameType())
+            scene = Scene("Default", game_type=EditorHost.scene.GetGameType())
             EditorHost.set_active_scene(scene)
 
-        _sys_ids = {SceneManager.get_main_camera_id(), SceneManager.get_main_camera_2d_id()}
+        _sys_ids = {EditorHost.scene.get_main_camera_id(), EditorHost.scene.get_main_camera_2d_id()}
         scene.entities.clear()
         count = 0
-        for eid, xform in [(e, c) for e, c in SceneManager.GetAllEntitiesWithComponent(Transform)]:
+        for eid, xform in [(e, c) for e, c in EditorHost.scene.GetAllEntitiesWithComponent(Transform)]:
             if eid in _sys_ids:
                 continue
-            name = SceneManager.GetEntityName(eid) or f"Entity_{eid}"
+            name = EditorHost.scene.GetEntityName(eid) or f"Entity_{eid}"
             comps = {"Transform": copy.deepcopy(xform)}
             try:
-                cam = SceneManager.GetComponent(eid, Camera)
+                cam = EditorHost.scene.GetComponent(eid, Camera)
                 comps["Camera"] = copy.deepcopy(cam)
             except Exception:
                 pass
             try:
-                mr = SceneManager.GetComponent(eid, MeshRenderer)
+                mr = EditorHost.scene.GetComponent(eid, MeshRenderer)
                 comps["MeshRenderer"] = copy.deepcopy(mr)
             except Exception:
                 pass
@@ -317,7 +316,7 @@ class NodeEditorPanel(BasePanel):
         imgui.same_line()
 
         # ── Combo: 场景名 + GameType 后缀 ──
-        display_labels = [f"{n}  ({SceneManager.GetGameType().value.upper()})" for n in scene_names]
+        display_labels = [f"{n}  ({EditorHost.scene.GetGameType().value.upper()})" for n in scene_names]
         imgui.push_item_width(180)
         changed, new_idx = imgui.combo(
             f"##scene_selector_{id(self)}", idx, display_labels,
@@ -715,7 +714,7 @@ class NodeEditorPanel(BasePanel):
         """获取已注册的组件类型名列表（排除 Transform — 每个实体自带）。"""
         try:
             from Application.Core.Scene.SceneManager import SceneManager
-            reg = SceneManager.GetRegisteredComponents()
+            reg = EditorHost.scene.GetRegisteredComponents()
             return sorted([n for n in reg if n != "Transform"], key=lambda n: n.lower())
         except Exception:
             return ["Camera", "MeshRenderer"]

@@ -48,11 +48,11 @@ class DebugLayer(Layer):
         try:
             from Application.Core.Scene.SceneManager import SceneManager
             from Application.Core.Scene.BasicComponents import MeshRenderer
-            mr = SceneManager.GetComponent(cls.entity_id_2, MeshRenderer)
+            mr = EditorHost.scene.GetComponent(cls.entity_id_2, MeshRenderer)
             from Application.Resource.ResourceManager import ResourceManager
             mat = ResourceManager.GetMaterial(mr.material_id)
             if mat and 'time' in mat.uniforms_data:
-                SceneManager.SetMaterialParams(
+                EditorHost.scene.SetMaterialParams(
                     cls.entity_id_2, {'time': run_time})
         except Exception:
             pass

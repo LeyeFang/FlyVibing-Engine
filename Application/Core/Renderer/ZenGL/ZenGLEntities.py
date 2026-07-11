@@ -7,10 +7,10 @@ from Application.Resource.ResourceManager import ResourceManager
 
 class ZenGLEntities:
     def _RenderEntities(self, view: np.ndarray, proj: np.ndarray) -> None:
-        for eid in SceneManager.GetRenderableEntities():
+        for eid in self.engine.scene.GetRenderableEntities():
             e = self.registered_entities.get(eid)
             if not e or not e.pipeline: continue
-            model = SceneManager.GetEntityModelMatrix(eid)
+            model = self.engine.scene.GetEntityModelMatrix(eid)
             try:
                 e.pipeline.uniforms['model'][:] = model.astype('f4').tobytes()
                 e.pipeline.uniforms['view'][:] = view.astype('f4').tobytes()

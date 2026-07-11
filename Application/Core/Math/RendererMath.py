@@ -12,7 +12,7 @@ moved to Core.Math submodules and now accept plain numeric parameters
   )
   from Application.Core.Math import *  # re-exports everything
 
-For ECS convenience, use SceneManager.GetEntityModelMatrix(entity_id).
+For ECS convenience, use self.engine.scene.GetEntityModelMatrix(entity_id).
 
 Please update your imports to use the new locations.
 

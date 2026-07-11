@@ -108,12 +108,12 @@ class OpenGLPostProcess(PostProcess):
 
         active_ids = self._highlight_config.selected_ids if self._highlight_config else set()
 
-        for eid in SceneManager.GetRenderableEntities():
+        for eid in self._renderer.engine.scene.GetRenderableEntities():
             entity = r.registered_entities.get(eid)
             if entity is None:
                 continue
 
-            model = SceneManager.GetEntityModelMatrix(eid)
+            model = self._renderer.engine.scene.GetEntityModelMatrix(eid)
             model_f32 = np.ascontiguousarray(model.astype('float32'))
             if loc_model >= 0:
                 gl.glUniformMatrix4fv(loc_model, 1, gl.GL_FALSE, model_f32)

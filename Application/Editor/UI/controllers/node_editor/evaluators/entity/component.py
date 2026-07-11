@@ -6,7 +6,6 @@ Evaluators: Component 节点 — 通用组件 CRUD。
   ComponentSetProperty — 设置组件属性值
 """
 
-from Application.Core.Scene.SceneManager import SceneManager
 
 from ...evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
 from ..math import _read_data_input
@@ -26,7 +25,7 @@ def _eval_component_add(node_id: int, ctx: ExecutionContext,
     组件类型由节点属性下拉选择 (如 Camera / MeshRenderer)。
     """
     eid = _read_entity_ref(node_id, "Entity", ctx, g)
-    if eid < 0 or not SceneManager.EntityExists(eid):
+    if eid < 0 or not ctx.scene.EntityExists(eid):
         print("[ComponentAdd] Invalid entity — skipped")
         return
 
@@ -37,16 +36,15 @@ def _eval_component_add(node_id: int, ctx: ExecutionContext,
         print("[ComponentAdd] No component type selected")
         return
 
-    from Application.Core.Scene.SceneManager import SceneManager
-
+    
     # 检查是否已存在同类型组件
-    registered = SceneManager.GetRegisteredComponents()
+    registered = ctx.scene.GetRegisteredComponents()
     comp_cls = registered.get(comp_name)
-    if comp_cls is not None and SceneManager.HasComponent(eid, comp_cls):
+    if comp_cls is not None and ctx.scene.HasComponent(eid, comp_cls):
         print(f"[ComponentAdd] Entity #{eid} already has '{comp_name}' — skipped")
         return
 
-    ok = SceneManager.AddComponentToEntityByName(eid, comp_name)
+    ok = ctx.scene.AddComponentToEntityByName(eid, comp_name)
     if ok:
         print(f"[ComponentAdd] Added '{comp_name}' to entity #{eid}")
     else:
@@ -64,7 +62,7 @@ def _eval_component_remove(node_id: int, ctx: ExecutionContext,
                            g: GraphEvaluator) -> None:
     """按组件名称从实体移除组件。"""
     eid = _read_entity_ref(node_id, "Entity", ctx, g)
-    if eid < 0 or not SceneManager.EntityExists(eid):
+    if eid < 0 or not ctx.scene.EntityExists(eid):
         print("[ComponentRemove] Invalid entity — skipped")
         return
 
@@ -75,20 +73,19 @@ def _eval_component_remove(node_id: int, ctx: ExecutionContext,
         print("[ComponentRemove] No component type selected")
         return
 
-    from Application.Core.Scene.SceneManager import SceneManager
-    registered = SceneManager.GetRegisteredComponents()
+    registered = ctx.scene.GetRegisteredComponents()
     comp_cls = registered.get(comp_name)
 
     if comp_cls is None:
         print(f"[ComponentRemove] Unknown component '{comp_name}'")
         return
 
-    if not SceneManager.HasComponent(eid, comp_cls):
+    if not ctx.scene.HasComponent(eid, comp_cls):
         print(f"[ComponentRemove] Entity #{eid} has no '{comp_name}'")
         return
 
     try:
-        SceneManager.RemoveComponent(eid, comp_cls)
+        ctx.scene.RemoveComponent(eid, comp_cls)
         print(f"[ComponentRemove] Removed '{comp_name}' from entity #{eid}")
     except Exception as e:
         print(f"[ComponentRemove] Failed: {e}")
@@ -111,7 +108,7 @@ def _eval_component_set_property(node_id: int, ctx: ExecutionContext,
     Value pin:   新值 (variant)
     """
     eid = _read_entity_ref(node_id, "Entity", ctx, g)
-    if eid < 0 or not SceneManager.EntityExists(eid):
+    if eid < 0 or not ctx.scene.EntityExists(eid):
         return
 
     inst = g._canvas.nodes[node_id]
@@ -126,16 +123,15 @@ def _eval_component_set_property(node_id: int, ctx: ExecutionContext,
     if value is None:
         return  # pin 未连线且无默认值 → 不操作
 
-    from Application.Core.Scene.SceneManager import SceneManager
-    registered = SceneManager.GetRegisteredComponents()
+        registered = ctx.scene.GetRegisteredComponents()
     comp_cls = registered.get(comp_name)
 
-    if comp_cls is None or not SceneManager.HasComponent(eid, comp_cls):
+    if comp_cls is None or not ctx.scene.HasComponent(eid, comp_cls):
         print(f"[ComponentSetProperty] Entity #{eid}: no '{comp_name}'")
         return
 
     try:
-        comp = SceneManager.GetComponent(eid, comp_cls)
+        comp = ctx.scene.GetComponent(eid, comp_cls)
         if hasattr(comp, prop_name):
             setattr(comp, prop_name, value)
             print(f"[ComponentSetProperty] #{eid}.{comp_name}.{prop_name} = {value}")

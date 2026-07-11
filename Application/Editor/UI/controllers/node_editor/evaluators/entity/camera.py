@@ -1,7 +1,7 @@
 """
 Evaluators: Camera 节点 — 摄像机配置与控制。
 
-  CameraSetMain     — 设置主摄像机 (更新 SceneManager.scene_camera_id)
+  CameraSetMain     — 设置主摄像机 (更新 ctx.scene.scene_camera_id)
   CameraConfigure   — 配置摄像机参数 (投影类型 / FOV / 裁剪面)
   GetCameraInfo     — 读取摄像机运行时状态 (纯数据节点)
 """
@@ -12,7 +12,6 @@ from ...evaluator_engine import ExecutionContext, GraphEvaluator, register_evalu
 from ...data_model import EntityRef
 from ..math import _read_data_input
 
-from Application.Core.Scene.SceneManager import SceneManager
 from Application.Core.Scene.BasicComponents import Camera as CamComponent
 
 
@@ -57,13 +56,14 @@ def _eval_camera_set_main(node_id: int, ctx: ExecutionContext,
                           g: GraphEvaluator) -> None:
     """将指定 entity 设为当前场景的主渲染摄像机。"""
     eid = _read_entity_ref(node_id, "Entity", ctx, g)
-    if eid < 0 or not SceneManager.EntityExists(eid):
+    if eid < 0 or not ctx.scene.EntityExists(eid):
         print("[CameraSetMain] Invalid entity — skipped")
         return
 
-    st = SceneManager._state()
+    st = ctx.scene
+    st._switch_world()
     st.scene_camera_id = eid
-    st.scene_camera = SceneManager.GetComponent(eid, CamComponent)
+    st.scene_camera = ctx.scene.GetComponent(eid, CamComponent)
     print(f"[CameraSetMain] Entity #{eid} set as main camera")
 
 
@@ -82,14 +82,14 @@ def _eval_camera_configure(node_id: int, ctx: ExecutionContext,
     FOV / OrthoSize / NearPlane / FarPlane 由 data pin 读入。
     """
     eid = _read_entity_ref(node_id, "Entity", ctx, g)
-    if eid < 0 or not SceneManager.EntityExists(eid):
+    if eid < 0 or not ctx.scene.EntityExists(eid):
         print("[CameraConfigure] Invalid entity — skipped")
         return
 
     from Application.Core.Scene.BasicComponents import ProjectionType
 
     try:
-        cam = SceneManager.GetComponent(eid, CamComponent)
+        cam = ctx.scene.GetComponent(eid, CamComponent)
     except Exception:
         print(f"[CameraConfigure] Entity #{eid} has no Camera component")
         return
@@ -151,7 +151,7 @@ def _eval_get_camera_info(node_id: int, ctx: ExecutionContext,
                 if pid is not None:
                     ctx.set_pin(pid, value)
 
-    if eid < 0 or not SceneManager.EntityExists(eid):
+    if eid < 0 or not ctx.scene.EntityExists(eid):
         _write("IsValid", False)
         _write("Position", np.zeros(3, dtype=np.float32))
         _write("Forward", np.array([0.0, 0.0, -1.0], dtype=np.float32))
@@ -163,8 +163,8 @@ def _eval_get_camera_info(node_id: int, ctx: ExecutionContext,
     from Application.Core.Math.Transform import calculate_entity_model
 
     try:
-        cam = SceneManager.GetComponent(eid, CamComponent)
-        xform = SceneManager.GetComponent(eid, Transform)
+        cam = ctx.scene.GetComponent(eid, CamComponent)
+        xform = ctx.scene.GetComponent(eid, Transform)
     except Exception:
         _write("IsValid", False)
         return

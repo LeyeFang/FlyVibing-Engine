@@ -185,7 +185,7 @@ class EditorLayer(Layer):
         else:
             is_2d = ViewportController.is_2d()
             cls._preview_entity_id = (
-                SceneManager.get_main_camera_2d_id() if is_2d else SceneManager.get_main_camera_id()
+                EditorHost.scene.get_main_camera_2d_id() if is_2d else EditorHost.scene.get_main_camera_id()
             )
             print(f"[EditorLayer] Preview: ON (entity {cls._preview_entity_id})")
         cls._camera_gizmo_state_hash = -1  # 强制刷新 gizmo (隐藏预览自身)
@@ -303,7 +303,7 @@ class EditorLayer(Layer):
         from Application.Core.Scene.SceneManager import SceneManager
         from Application.Core.Math.Transform import calculate_entity_model
         try:
-            t = SceneManager.GetEntityTransform(selected)
+            t = EditorHost.scene.GetEntityTransform(selected)
             model = calculate_entity_model(
                 position=(t.position_x, t.position_y, t.position_z),
                 rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
@@ -354,11 +354,11 @@ class EditorLayer(Layer):
         if selected is not None:
             from Application.Core.Scene.SceneManager import SceneManager
             from Application.Core.Math.Transform import _build_R_T
-            t = SceneManager.GetEntityTransform(selected)
+            t = EditorHost.scene.GetEntityTransform(selected)
             R_T = _build_R_T(t.rotation_x, t.rotation_y, t.rotation_z)
             wp = np.array([float(new_pos[0]), float(new_pos[1]), float(new_pos[2])])
             pre_pos = wp @ R_T
-            SceneManager.SetEntityTransform(
+            EditorHost.scene.SetEntityTransform(
                 selected,
                 position_xyz=(float(pre_pos[0]), float(pre_pos[1]), float(pre_pos[2])))
             TransformGizmo.set_target_position(new_pos)
@@ -512,14 +512,14 @@ class EditorLayer(Layer):
             from Application.Core.Scene.BasicComponents import Camera
             from Application.Core.Scene.SceneManager import SceneManager
             try:
-                t = SceneManager.GetEntityTransform(cls._preview_entity_id)
+                t = EditorHost.scene.GetEntityTransform(cls._preview_entity_id)
                 model = calculate_entity_model(
                     position=(t.position_x, t.position_y, t.position_z),
                     rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
                     scale=(t.scale_x, t.scale_y, t.scale_z),
                 )
                 view = np.linalg.inv(model)
-                cam_comp = SceneManager.GetComponent(cls._preview_entity_id, Camera)
+                cam_comp = EditorHost.scene.GetComponent(cls._preview_entity_id, Camera)
                 if cam_comp.projection_type.value == 'orthographic':
                     aspect = cls.renderer.aspect_ratio
                     half_h = cam_comp.ortho_size

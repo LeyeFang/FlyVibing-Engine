@@ -11,7 +11,6 @@ from ...evaluator_engine import ExecutionContext, GraphEvaluator, register_evalu
 from ...data_model import EntityRef
 from ..math import _read_data_input
 
-from Application.Core.Scene.SceneManager import SceneManager
 
 
 # ── EntitySpawn ───────────────────────────────────────────────
@@ -45,11 +44,11 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
 
     # ── 2. 在 ECS World 中创建实体 ──
     instance_name = str(name_override) if name_override else template_name
-    eid = SceneManager.AddEntity(name=instance_name if instance_name else "")
+    eid = ctx.scene.AddEntity(name=instance_name if instance_name else "")
 
     # ── 3. 从模板拷贝组件到实例 ──
     if entity_def is not None:
-        _instantiate_components(eid, entity_def)
+        _instantiate_components(eid, entity_def, ctx)
     # 无模板定义 → Empty (Transform 已在 AddEntity 中创建)
 
     # ── 4. 覆盖 Position / Rotation (pin 值优先于模板默认值) ──
@@ -58,7 +57,7 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
     if pos is not None or rot is not None:
         try:
             from Application.Core.Scene.BasicComponents import Transform
-            xform = SceneManager.GetComponent(eid, Transform)
+            xform = ctx.scene.GetComponent(eid, Transform)
             if pos is not None:
                 xform.position_x, xform.position_y, xform.position_z = (
                     float(pos[0]), float(pos[1]), float(pos[2]))
@@ -103,7 +102,7 @@ def _get_active_scene():
         return None
 
 
-def _instantiate_components(eid: int, entity_def) -> None:
+def _instantiate_components(eid: int, entity_def, ctx: ExecutionContext) -> None:
     """将 EntityData 中的组件实例化到 ECS World 的实体上。
 
     对每个组件进行深拷贝后添加，确保实例与模板独立。
@@ -114,7 +113,7 @@ def _instantiate_components(eid: int, entity_def) -> None:
         # Transform 已在 AddEntity 中创建 → 用模板值覆盖
         if comp_type_name == "Transform":
             try:
-                xform = SceneManager.GetComponent(eid, Transform)
+                xform = ctx.scene.GetComponent(eid, Transform)
                 tmpl = comp_instance
                 xform.position_x = tmpl.position_x
                 xform.position_y = tmpl.position_y
@@ -131,7 +130,7 @@ def _instantiate_components(eid: int, entity_def) -> None:
             # 其他组件: 深拷贝后添加
             try:
                 copied = copy.deepcopy(comp_instance)
-                SceneManager.AddComponentToEntity(eid, copied)
+                ctx.scene.AddComponentToEntity(eid, copied)
             except Exception as e:
                 print(f"[EntitySpawn] Failed to add component "
                       f"'{comp_type_name}': {e}")

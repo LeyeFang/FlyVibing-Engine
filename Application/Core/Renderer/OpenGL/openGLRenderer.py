@@ -73,11 +73,11 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
     _scene_fbo_override: int = 0
     _outline_selected_ids: set = set()
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, engine=None) -> None:
+        super().__init__(engine=engine)
         # ★ 组合组件 (替代 MRO 继承)
         self._core = OpenGLCore()
-        self._resources = OpenGLResourceManager()
+        self._resources = OpenGLResourceManager(self)
         self._pick = OpenGLPickSystem(self)
         self._entity = OpenGLEntities(self)
         self._overlay = OpenGLOverlays(self)
@@ -112,15 +112,11 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
     def Create(
         cls,
         window: 'Window' = None,
+        engine=None,
     ) -> "OpenGLRenderer":
-        """初始化 OpenGL 渲染器。
-
-        Args:
-            window: Engine 传入的 Window 实例。通过 window.GetSize() 获取初始尺寸。
-                    调用方已在 Create 前调用 window.MakeContextCurrent()。
-        """
+        """初始化 OpenGL 渲染器。"""
         from Application.Core.Renderer.CommandQueue import CommandQueue
-        instance = cls()
+        instance = cls(engine=engine)
         if window is not None:
             window_size = window.GetSize()
         else:

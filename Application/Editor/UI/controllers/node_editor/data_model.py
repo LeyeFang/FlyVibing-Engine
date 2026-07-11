@@ -86,7 +86,6 @@ class EntityRef:
         if self.eid < 0:
             return False
         try:
-            from Application.Core.Scene.SceneManager import SceneManager
-            return SceneManager.EntityExists(self.eid)
+                        return ctx.scene.EntityExists(self.eid)
         except Exception:
             return False

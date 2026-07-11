@@ -233,7 +233,7 @@ void main() {
             self._pick_cache = -1
             self._pick_overlay_key = None
             return
-        entities = SceneManager.GetRenderableEntities()
+        entities = self._renderer.engine.scene.GetRenderableEntities()
         if not entities:
             self._finalize_pick_read()
             return
@@ -256,7 +256,7 @@ void main() {
             gpu = self._renderer.registered_entities.get(entity_id)
             if gpu is None:
                 continue
-            model = SceneManager.GetEntityModelMatrix(entity_id)
+            model = self._renderer.engine.scene.GetEntityModelMatrix(entity_id)
             model_f32 = np.ascontiguousarray(model.astype('float32'))
             if loc_model >= 0:
                 gl.glUniformMatrix4fv(loc_model, 1, gl.GL_FALSE, model_f32)

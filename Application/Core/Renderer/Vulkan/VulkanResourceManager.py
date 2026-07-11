@@ -128,8 +128,8 @@ class VulkanResourceManager:
         Args:
             entity_id: 实体 ID (SceneManager 分配)
         """
-        mesh_id = SceneManager.GetEntityMesh(entity_id)
-        material_id = SceneManager.GetEntityMaterial(entity_id)
+        mesh_id = self.engine.scene.GetEntityMesh(entity_id)
+        material_id = self.engine.scene.GetEntityMaterial(entity_id)
         mesh = ResourceManager.GetMesh(mesh_id)
         material: Material = ResourceManager.GetMaterial(material_id)
         shader_id = material.shader_id

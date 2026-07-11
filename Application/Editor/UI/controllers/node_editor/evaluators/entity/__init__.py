@@ -13,14 +13,6 @@ from ...evaluator_engine import ExecutionContext, GraphEvaluator, register_evalu
 from ..math import _read_data_input
 
 
-# ── 辅助 ──────────────────────────────────────────────────────
-
-def _get_scene_manager():
-    """延迟导入，避免循环依赖。"""
-    from Application.Core.Scene.SceneManager import SceneManager
-    return SceneManager
-
-
 # ═══════════════════════════════════════════════════════════════
 # v1: 裸 int EntityID 节点 (保持向后兼容)
 # ═══════════════════════════════════════════════════════════════
@@ -29,11 +21,10 @@ def _get_scene_manager():
 
 def _eval_entity_destroy(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     """销毁实体 — 通过 SceneManager 完整清理 ECS + 追踪 + 渲染器。"""
-    from Application.Core.Scene.SceneManager import SceneManager
-
+    
     eid = _resolve_entity_id(node_id, "EntityID", ctx, g)
     if eid is not None and eid > 0:
-        ok = SceneManager.DeleteEntity(eid)
+        ok = ctx.scene.DeleteEntity(eid)
         if ok:
             print(f"[EntityDestroy] Entity #{eid} destroyed")
         else:
@@ -65,16 +56,15 @@ def _eval_entity_add_mesh(node_id: int, ctx: ExecutionContext, g: GraphEvaluator
     mat_val = _read_data_input(node_id, "MaterialID", ctx, g, -1)
     eid, mid, matid = int(eid_val), int(mesh_val), int(mat_val)
 
-    if eid < 0 or not sm.EntityExists(eid):
+    if eid < 0 or not ctx.scene.EntityExists(eid):
         print(f"[Node:EntityAddMesh] Invalid entity #{eid}")
         return
 
     from Application.Core.Scene.BasicComponents import MeshRenderer
-    sm = _get_scene_manager()
     comp = MeshRenderer()
     comp.mesh_id = mid if mid >= 0 else 0
     comp.material_id = matid if matid >= 0 else 0
-    sm.AddComponentToEntity(eid, comp)
+    ctx.scene.AddComponentToEntity(eid, comp)
     print(f"[Node:EntityAddMesh] Added MeshRenderer to entity #{eid}")
 
 register_evaluator("EntityAddMesh", _eval_entity_add_mesh)
@@ -85,12 +75,11 @@ register_evaluator("EntityAddMesh", _eval_entity_add_mesh)
 def _eval_entity_add_camera(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     eid_val = _read_data_input(node_id, "EntityID", ctx, g, -1)
     eid = int(eid_val)
-    if eid < 0 or not sm.EntityExists(eid):
+    if eid < 0 or not ctx.scene.EntityExists(eid):
         return
 
     from Application.Core.Scene.BasicComponents import Camera as CamComp
-    sm = _get_scene_manager()
-    sm.AddComponentToEntity(eid, CamComp(is_primary=False))
+    ctx.scene.AddComponentToEntity(eid, CamComp(is_primary=False))
 
 register_evaluator("EntityAddCamera", _eval_entity_add_camera)
 
@@ -102,12 +91,12 @@ def _eval_entity_set_visibility(node_id: int, ctx: ExecutionContext, g: GraphEva
     visible_val = _read_data_input(node_id, "Visible", ctx, g, 1)
     eid = int(eid_val)
     visible = bool(int(visible_val))
-    if eid < 0 or not sm.EntityExists(eid):
+    if eid < 0 or not ctx.scene.EntityExists(eid):
         return
 
     from Application.Core.Scene.BasicComponents import MeshRenderer
     try:
-        mr = sm.GetComponent(eid, MeshRenderer)
+        mr = ctx.scene.GetComponent(eid, MeshRenderer)
         mr.visible = visible
     except Exception:
         pass

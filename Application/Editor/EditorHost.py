@@ -86,7 +86,7 @@ class EditorHost(Engine):
         # 同步到 SceneManager
         try:
             from Application.Core.Scene.SceneManager import SceneManager
-            SceneManager.CreateScene(name)
+            cls.scene.scene[name] = name
         except Exception:
             pass
         return scene
@@ -113,14 +113,11 @@ class EditorHost(Engine):
         return EditorHost.editor_window
 
     @classmethod
-    def _create_renderer(cls) -> Renderer:
-        """创建编辑器渲染器 — 根据 cls.renderer_type 选择后端。
-
-        同时赋值 EditorHost.editor_renderer — 提供不依赖子类的稳定访问点。
-        """
+    def _create_renderer(cls, engine=None) -> Renderer:
+        """创建编辑器渲染器。"""
         cls.window.MakeContextCurrent()
         renderer_cls = cls._get_renderer_class(cls.renderer_type)
-        EditorHost.editor_renderer = renderer_cls.Create(window=cls.window)
+        EditorHost.editor_renderer = renderer_cls.Create(window=cls.window, engine=engine or cls)
         return EditorHost.editor_renderer
 
     # ════════════════════════════════════════════════════════════

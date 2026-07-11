@@ -22,8 +22,9 @@ class ExecutionContext:
     def __init__(self) -> None:
         self.delta_time: float = 0.0
         self.elapsed_time: float = 0.0
-        self._pin_values: dict[int, Any] = {}    # output_pin_id → value
-        self._variables: dict[str, Any] = {}      # VarSet/VarGet 的变量存储
+        self.scene = None              # SceneManager 实例 (RuntimeNodeLayer 注入)
+        self._pin_values: dict[int, Any] = {}
+        self._variables: dict[str, Any] = {}
 
     def set_pin(self, pin_id: int, value: Any) -> None:
         self._pin_values[pin_id] = value

@@ -37,14 +37,10 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
     """Vulkan 渲染器 — 低级图形 API 后端。"""
 
     @classmethod
-    def Create(cls, window=None) -> "vulkanRenderer":
-        """初始化 Vulkan 渲染器。
-
-        Args:
-            window: Engine 传入的 Window 实例。
-        """
+    def Create(cls, window=None, engine=None) -> "vulkanRenderer":
+        """初始化 Vulkan 渲染器。"""
         from Application.Core.Renderer.CommandQueue import CommandQueue
-        instance = cls()
+        instance = cls(engine=engine)
         if window is not None:
             window_size = window.GetSize()
             native_handle = window.GetNativeHandle()
@@ -79,7 +75,7 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
             return
 
         cmd = VulkanCore.cmd_buffer
-        renderable_entities = SceneManager.GetRenderableEntities()
+        renderable_entities = self.engine.scene.GetRenderableEntities()
         for entity_id in renderable_entities:
             if entity_id not in self.registered_entities:
                 continue
@@ -99,7 +95,7 @@ class vulkanRenderer(VulkanCore, VulkanResourceManager, Renderer, RenderResource
                     shader_data.pipeline_layout, 0, 1, [entity.descriptor_set], 0, None,
                 )
 
-            model = SceneManager.GetEntityModelMatrix(entity_id)
+            model = self.engine.scene.GetEntityModelMatrix(entity_id)
             mvp = (vp @ model).astype('float32')
             # push constant 必须传 CFFI float 数组，不能传 bytes
             vk.vkCmdPushConstants(

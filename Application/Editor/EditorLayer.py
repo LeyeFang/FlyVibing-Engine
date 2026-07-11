@@ -510,7 +510,7 @@ class EditorLayer(Layer):
             from Application.Core.Scene.SceneManager import SceneManager
             from Application.Core.Math.Transform import calculate_entity_model
             from Application.Core.Scene.BasicComponents import Camera
-            import esper
+            from Application.Core.Scene.SceneManager import SceneManager
             try:
                 t = SceneManager.GetEntityTransform(cls._preview_entity_id)
                 model = calculate_entity_model(
@@ -519,7 +519,7 @@ class EditorLayer(Layer):
                     scale=(t.scale_x, t.scale_y, t.scale_z),
                 )
                 view = np.linalg.inv(model)
-                cam_comp = esper.component_for_entity(cls._preview_entity_id, Camera)
+                cam_comp = SceneManager.GetComponent(cls._preview_entity_id, Camera)
                 if cam_comp.projection_type.value == 'orthographic':
                     aspect = cls.renderer.aspect_ratio
                     half_h = cam_comp.ortho_size

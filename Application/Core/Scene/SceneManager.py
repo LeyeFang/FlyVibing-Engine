@@ -364,6 +364,48 @@ class SceneManager:
                 entity_id_list.append(entity_id)
         return entity_id_list
 
+    # ============================================================
+    # 通用查询 (封装 esper, 禁止 Controller 层直接 import esper)
+    # ============================================================
+
+    @classmethod
+    def EntityExists(cls, entity_id: int) -> bool:
+        """实体是否存在于当前 ECS 世界。"""
+        cls._state()
+        return esper.entity_exists(entity_id)
+
+    @classmethod
+    def HasComponent(cls, entity_id: int, component_cls: type) -> bool:
+        """实体是否拥有指定类型的 Component。"""
+        cls._state()
+        return esper.has_component(entity_id, component_cls)
+
+    @classmethod
+    def GetComponent(cls, entity_id: int, component_cls: type):
+        """获取实体的指定 Component 实例。不存在时抛出 KeyError。"""
+        cls._state()
+        return esper.component_for_entity(entity_id, component_cls)
+
+    @classmethod
+    def GetAllEntitiesWithComponent(cls, component_cls: type) -> list[tuple[int, object]]:
+        """返回当前世界中所有拥有指定 Component 的 (entity_id, component) 列表。"""
+        cls._state()
+        return [(eid, comp) for eid, comp in esper.get_component(component_cls)]
+
+    @classmethod
+    def RemoveComponent(cls, entity_id: int, component_cls: type) -> bool:
+        """移除实体的指定 Component。返回是否成功。"""
+        cls._state()
+        try:
+            esper.remove_component(entity_id, component_cls)
+            return True
+        except KeyError:
+            return False
+
+    # ============================================================
+    # 实体 Transform 查询
+    # ============================================================
+
     @classmethod
     def GetEntityTransform(cls, entity_id) -> Transform:
         cls._state()

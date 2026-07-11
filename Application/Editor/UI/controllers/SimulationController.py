@@ -55,7 +55,7 @@ class SimulationController:
         先清空再重建，避免与 _ensure_default_scene 产生重复条目。
         跳过系统摄像机。
         """
-        import esper, copy
+        import copy
         from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
         from Application.Core.Scene.SceneManager import SceneManager
         from Application.Core.Scene.Scene import EntityData
@@ -67,18 +67,18 @@ class SimulationController:
 
         # ★ 清空并用 ECS 最新数据重建，消除与 _ensure_default_scene 的重复
         scene.entities.clear()
-        for eid, (xform,) in esper.get_components(Transform):
+        for eid, xform in [(e, c) for e, c in SceneManager.GetAllEntitiesWithComponent(Transform)]:
             if eid in _sys_ids:
                 continue
             name = SceneManager.GetEntityName(eid)
             comps = {"Transform": copy.deepcopy(xform)}
             try:
-                cam = esper.component_for_entity(eid, Camera)
+                cam = SceneManager.GetComponent(eid, Camera)
                 comps["Camera"] = copy.deepcopy(cam)
             except Exception:
                 pass
             try:
-                mr = esper.component_for_entity(eid, MeshRenderer)
+                mr = SceneManager.GetComponent(eid, MeshRenderer)
                 comps["MeshRenderer"] = copy.deepcopy(mr)
             except Exception:
                 pass

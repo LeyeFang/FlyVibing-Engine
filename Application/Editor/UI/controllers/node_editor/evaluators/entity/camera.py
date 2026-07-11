@@ -12,7 +12,8 @@ from ...evaluator_engine import ExecutionContext, GraphEvaluator, register_evalu
 from ...data_model import EntityRef
 from ..math import _read_data_input
 
-import esper
+from Application.Core.Scene.SceneManager import SceneManager
+from Application.Core.Scene.BasicComponents import Camera as CamComponent
 
 
 # ── 辅助: 从 EntityRef pin 读取 eid ──────────────────────────
@@ -56,16 +57,13 @@ def _eval_camera_set_main(node_id: int, ctx: ExecutionContext,
                           g: GraphEvaluator) -> None:
     """将指定 entity 设为当前场景的主渲染摄像机。"""
     eid = _read_entity_ref(node_id, "Entity", ctx, g)
-    if eid < 0 or not esper.entity_exists(eid):
+    if eid < 0 or not SceneManager.EntityExists(eid):
         print("[CameraSetMain] Invalid entity — skipped")
         return
 
-    from Application.Core.Scene.SceneManager import SceneManager
     st = SceneManager._state()
     st.scene_camera_id = eid
-    st.scene_camera = esper.component_for_entity(eid,
-        __import__('Application.Core.Scene.BasicComponents',
-                   fromlist=['Camera']).Camera)
+    st.scene_camera = SceneManager.GetComponent(eid, CamComponent)
     print(f"[CameraSetMain] Entity #{eid} set as main camera")
 
 
@@ -84,14 +82,14 @@ def _eval_camera_configure(node_id: int, ctx: ExecutionContext,
     FOV / OrthoSize / NearPlane / FarPlane 由 data pin 读入。
     """
     eid = _read_entity_ref(node_id, "Entity", ctx, g)
-    if eid < 0 or not esper.entity_exists(eid):
+    if eid < 0 or not SceneManager.EntityExists(eid):
         print("[CameraConfigure] Invalid entity — skipped")
         return
 
-    from Application.Core.Scene.BasicComponents import Camera, ProjectionType
+    from Application.Core.Scene.BasicComponents import ProjectionType
 
     try:
-        cam = esper.component_for_entity(eid, Camera)
+        cam = SceneManager.GetComponent(eid, CamComponent)
     except Exception:
         print(f"[CameraConfigure] Entity #{eid} has no Camera component")
         return
@@ -153,7 +151,7 @@ def _eval_get_camera_info(node_id: int, ctx: ExecutionContext,
                 if pid is not None:
                     ctx.set_pin(pid, value)
 
-    if eid < 0 or not esper.entity_exists(eid):
+    if eid < 0 or not SceneManager.EntityExists(eid):
         _write("IsValid", False)
         _write("Position", np.zeros(3, dtype=np.float32))
         _write("Forward", np.array([0.0, 0.0, -1.0], dtype=np.float32))
@@ -161,12 +159,12 @@ def _eval_get_camera_info(node_id: int, ctx: ExecutionContext,
         _write("OrthoSize", 0.0)
         return
 
-    from Application.Core.Scene.BasicComponents import Camera, Transform
+    from Application.Core.Scene.BasicComponents import Transform
     from Application.Core.Math.Transform import calculate_entity_model
 
     try:
-        cam = esper.component_for_entity(eid, Camera)
-        xform = esper.component_for_entity(eid, Transform)
+        cam = SceneManager.GetComponent(eid, CamComponent)
+        xform = SceneManager.GetComponent(eid, Transform)
     except Exception:
         _write("IsValid", False)
         return

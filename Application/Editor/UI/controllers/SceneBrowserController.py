@@ -92,8 +92,7 @@ class SceneBrowserController:
             except Exception:
                 pass
             try:
-                import esper
-                summary.has_camera = esper.has_component(entity_id, Camera)
+                summary.has_camera = SceneManager.HasComponent(entity_id, Camera)
             except Exception:
                 pass
             return summary
@@ -165,8 +164,7 @@ class SceneBrowserController:
     def get_camera_info(cls, entity_id: int) -> Optional[dict]:
         """获取实体的 Camera 组件信息（用于检视面板）。"""
         try:
-            import esper
-            cam = esper.component_for_entity(entity_id, Camera)
+            cam = SceneManager.GetComponent(entity_id, Camera)
             return {
                 'projection': cam.projection_type.value
                     if hasattr(cam.projection_type, 'value') else str(cam.projection_type),
@@ -184,35 +182,30 @@ class SceneBrowserController:
 
     @classmethod
     def set_camera_fov(cls, entity_id: int, fov: float) -> None:
-        import esper
-        cam = esper.component_for_entity(entity_id, Camera)
+        cam = SceneManager.GetComponent(entity_id, Camera)
         cam.fov = max(1.0, min(179.0, fov))
 
     @classmethod
     def set_camera_ortho_size(cls, entity_id: int, size: float) -> None:
-        import esper
-        cam = esper.component_for_entity(entity_id, Camera)
+        cam = SceneManager.GetComponent(entity_id, Camera)
         cam.ortho_size = max(0.01, size)
 
     @classmethod
     def set_camera_clip(cls, entity_id: int, near: float, far: float) -> None:
-        import esper
-        cam = esper.component_for_entity(entity_id, Camera)
+        cam = SceneManager.GetComponent(entity_id, Camera)
         cam.near_plane = max(0.001, near)
         cam.far_plane = max(cam.near_plane + 0.01, far)
 
     @classmethod
     def set_camera_projection(cls, entity_id: int, is_perspective: bool) -> None:
-        import esper
         from Application.Core.Scene.BasicComponents import ProjectionType
-        cam = esper.component_for_entity(entity_id, Camera)
+        cam = SceneManager.GetComponent(entity_id, Camera)
         cam.projection_type = (
             ProjectionType.PERSPECTIVE if is_perspective else ProjectionType.ORTHOGRAPHIC)
 
     @classmethod
     def set_camera_aspect_ratio(cls, entity_id: int, ratio: float) -> None:
-        import esper
-        cam = esper.component_for_entity(entity_id, Camera)
+        cam = SceneManager.GetComponent(entity_id, Camera)
         cam.aspect_ratio = max(0.1, min(10.0, ratio))
 
     @classmethod
@@ -232,7 +225,6 @@ class SceneBrowserController:
             return
         st.game_type = gt
         # 切换默认摄像机
-        import esper
         from Application.Core.Scene.BasicComponents import Camera
         is_default = (st.scene_camera_id == st.main_camera_id
                       or st.scene_camera_id == st.main_camera_2d_id)
@@ -243,7 +235,7 @@ class SceneBrowserController:
                 st.scene_camera_id = st.main_camera_id
             if st.scene_camera_id is not None:
                 try:
-                    st.scene_camera = esper.component_for_entity(st.scene_camera_id, Camera)
+                    st.scene_camera = SceneManager.GetComponent(st.scene_camera_id, Camera)
                 except Exception:
                     st.scene_camera = None
 
@@ -351,8 +343,7 @@ class SceneBrowserController:
         result = []
         for name, comp_cls in comps.items():
             try:
-                import esper
-                if esper.has_component(entity_id, comp_cls):
+                if SceneManager.HasComponent(entity_id, comp_cls):
                     result.append(name)
             except Exception:
                 pass

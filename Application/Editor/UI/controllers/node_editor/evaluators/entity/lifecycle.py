@@ -5,7 +5,6 @@ Evaluators: 实体生命周期 v2 — EntitySpawn (类型安全 EntityRef)。
 """
 
 import copy
-import esper
 import numpy as np
 
 from ...evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
@@ -59,7 +58,7 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
     if pos is not None or rot is not None:
         try:
             from Application.Core.Scene.BasicComponents import Transform
-            xform = esper.component_for_entity(eid, Transform)
+            xform = SceneManager.GetComponent(eid, Transform)
             if pos is not None:
                 xform.position_x, xform.position_y, xform.position_z = (
                     float(pos[0]), float(pos[1]), float(pos[2]))
@@ -115,7 +114,7 @@ def _instantiate_components(eid: int, entity_def) -> None:
         # Transform 已在 AddEntity 中创建 → 用模板值覆盖
         if comp_type_name == "Transform":
             try:
-                xform = esper.component_for_entity(eid, Transform)
+                xform = SceneManager.GetComponent(eid, Transform)
                 tmpl = comp_instance
                 xform.position_x = tmpl.position_x
                 xform.position_y = tmpl.position_y

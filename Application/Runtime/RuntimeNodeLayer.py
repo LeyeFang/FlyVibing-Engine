@@ -131,19 +131,19 @@ class RuntimeNodeLayer(Layer):
         if renderer is None:
             return
 
-        import esper
+        from Application.Core.Scene.SceneManager import SceneManager
         from pyrr import matrix44
         from Application.Core.Scene.BasicComponents import Camera, Transform, ProjectionType
         from Application.Core.Math.Transform import calculate_entity_model
 
         st = SceneManager._state()
         cam_id = st.scene_camera_id
-        if cam_id is None or not esper.entity_exists(cam_id):
+        if cam_id is None or not SceneManager.EntityExists(cam_id):
             return
 
         try:
-            cam = esper.component_for_entity(cam_id, Camera)
-            xform = esper.component_for_entity(cam_id, Transform)
+            cam = SceneManager.GetComponent(cam_id, Camera)
+            xform = SceneManager.GetComponent(cam_id, Transform)
         except Exception:
             return
 

@@ -244,12 +244,12 @@ class NodeEditorPanel(BasePanel):
         from Application.Core.Scene.Scene import Scene
         from Application.Core.Scene.SceneManager import SceneManager
         from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
-        import esper, copy
+        import copy
 
         # ★ 显式切到 EditorHost 的 ECS 世界（避免主线程被 GameRuntime 绑定覆盖）
         try:
             ed_st = SceneManager._state_for("EditorHost")
-            esper.switch_world(ed_st.world_name)
+            SceneManager._state()  # 切换到 EditorHost 世界
         except Exception as e:
             print(f"[NodeEditor] _ensure_default_scene: EditorHost not ready ({e})")
             return
@@ -262,18 +262,18 @@ class NodeEditorPanel(BasePanel):
         _sys_ids = {SceneManager.get_main_camera_id(), SceneManager.get_main_camera_2d_id()}
         scene.entities.clear()
         count = 0
-        for eid, (xform,) in esper.get_components(Transform):
+        for eid, xform in [(e, c) for e, c in SceneManager.GetAllEntitiesWithComponent(Transform)]:
             if eid in _sys_ids:
                 continue
             name = SceneManager.GetEntityName(eid) or f"Entity_{eid}"
             comps = {"Transform": copy.deepcopy(xform)}
             try:
-                cam = esper.component_for_entity(eid, Camera)
+                cam = SceneManager.GetComponent(eid, Camera)
                 comps["Camera"] = copy.deepcopy(cam)
             except Exception:
                 pass
             try:
-                mr = esper.component_for_entity(eid, MeshRenderer)
+                mr = SceneManager.GetComponent(eid, MeshRenderer)
                 comps["MeshRenderer"] = copy.deepcopy(mr)
             except Exception:
                 pass

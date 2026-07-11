@@ -46,9 +46,9 @@ class DebugLayer(Layer):
         run_time = GetRunTime()
         # 仅在 entity 的 material 支持 'time' 参数时才设置
         try:
-            import esper
+            from Application.Core.Scene.SceneManager import SceneManager
             from Application.Core.Scene.BasicComponents import MeshRenderer
-            mr = esper.component_for_entity(cls.entity_id_2, MeshRenderer)
+            mr = SceneManager.GetComponent(cls.entity_id_2, MeshRenderer)
             from Application.Resource.ResourceManager import ResourceManager
             mat = ResourceManager.GetMaterial(mr.material_id)
             if mat and 'time' in mat.uniforms_data:

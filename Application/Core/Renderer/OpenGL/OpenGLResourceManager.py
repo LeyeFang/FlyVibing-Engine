@@ -46,7 +46,7 @@ class OpenGLResourceManager:
         self.registered_shaders: dict = {}
         self.registered_textures: dict = {}
         self._overlay_gpu_resources: dict = {}
-        self._entity_visible: set[int] = set()   # ★ 当前帧应渲染的实体 ID 集合
+        self._visible_entities: set[int] = set()   # ★ 当前帧应渲染的实体 ID 集合
         self._DRAW_MODE_MAP: dict = {
             'lines': gl.GL_LINES,
             'triangles': gl.GL_TRIANGLES,
@@ -72,6 +72,7 @@ class OpenGLResourceManager:
         mesh_id: int
         material_id: int
         vao: int = 0
+        render_visible: bool = True   # ★ MeshRenderer.visible — 仅影响主渲染, 不影响 Pick
 
     @dataclass
     class mesh_data_struct:
@@ -190,14 +191,16 @@ class OpenGLResourceManager:
             vao=vao,
         )
 
-        # ★ 根据 MeshRenderer.visible 设置初始可见性
+        # ★ 读取 MeshRenderer.visible 设置 render_visible
         try:
             from Application.Core.Scene.BasicComponents import MeshRenderer
             mr = self._renderer.engine.scene.GetComponent(entity_id, MeshRenderer)
-            if mr.visible:
-                self._entity_visible.add(entity_id)
+            self.registered_entities[entity_id].render_visible = mr.visible
         except Exception:
-            self._entity_visible.add(entity_id)  # 找不到组件时默认可见
+            pass
+
+        # ★ 始终加入可见集合 (editor visible 由后续 EntityVisibilityCommand 单独控制)
+        self._visible_entities.add(entity_id)
 
     def register_mesh(self, mesh: Mesh, mesh_id: int) -> None:
         """上传网格数据到 GPU — 创建 VBO (交错顶点) + EBO (索引)。
@@ -379,16 +382,22 @@ class OpenGLResourceManager:
         self._decref_shader(entity.shader_id)
         self._decref_texture(entity.texture_id)
         del self.registered_entities[entity_id]
-        self._entity_visible.discard(entity_id)  # ★ 同步清理可见性
+        self._visible_entities.discard(entity_id)  # ★ 同步清理可见性
 
     def show_entity(self, entity_id: int) -> None:
         """标记实体为可见 — 仅操作 visible set，不动 GPU 资源。"""
         if entity_id in self.registered_entities:
-            self._entity_visible.add(entity_id)
+            self._visible_entities.add(entity_id)
 
     def hide_entity(self, entity_id: int) -> None:
         """标记实体为不可见 — 仅操作 visible set，不动 GPU 资源。"""
-        self._entity_visible.discard(entity_id)
+        self._visible_entities.discard(entity_id)
+
+    def set_entity_render_visible(self, entity_id: int, visible: bool) -> None:
+        """设置实体的渲染可见性 (MeshRenderer.visible) — 不影响 pick pass。"""
+        entity = self.registered_entities.get(entity_id)
+        if entity is not None:
+            entity.render_visible = visible
 
     def unregister_mesh(self, mesh_id: int) -> None:
         self._decref_mesh(mesh_id)
@@ -443,7 +452,7 @@ class OpenGLResourceManager:
         """卸载所有已注册实体的 GPU 资源 (VAO)，级联降引用 mesh/shader/texture。"""
         for entity_id in list(self.registered_entities.keys()):
             self.unregister_entity(entity_id)
-        self._entity_visible.clear()
+        self._visible_entities.clear()
 
     def _unregister_all_overlays(self) -> None:
         """卸载所有 overlay 的 GPU 资源 (VAO/VBO/EBO/program/texture)。"""

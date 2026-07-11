@@ -3,7 +3,7 @@ Evaluators: Entity 节点 — 实体生命周期 + 类型安全引用 (EntityRef
 
 原有节点 (v1, 裸 int EntityID):
   EntityDestroy, EntitySetTransform, EntityGetTransform,
-  EntityAddMesh, EntityAddCamera, EntityFindByName, EntitySetVisibility
+  EntityAddMesh, EntityAddCamera, EntityFindByName, EntitySetRenderVisible
 
 新节点 (v2, EntityRef):
   EntitySpawn — 按模板创建实体，返回类型安全的 EntityRef
@@ -84,9 +84,9 @@ def _eval_entity_add_camera(node_id: int, ctx: ExecutionContext, g: GraphEvaluat
 register_evaluator("EntityAddCamera", _eval_entity_add_camera)
 
 
-# ── EntitySetVisibility ───────────────────────────────────────
+# ── EntitySetRenderVisible ───────────────────────────────────
 
-def _eval_entity_set_visibility(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
+def _eval_entity_set_render_visible(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     eid_val = _read_data_input(node_id, "EntityID", ctx, g, -1)
     visible_val = _read_data_input(node_id, "Visible", ctx, g, 1)
     eid = int(eid_val)
@@ -95,9 +95,9 @@ def _eval_entity_set_visibility(node_id: int, ctx: ExecutionContext, g: GraphEva
         return
 
     # ★ 通过 SceneManager API → 内部发送 EntityVisibilityCommand 到渲染器
-    ctx.scene.SetEntityMeshRenderer(eid, visible=visible)
+    ctx.scene.SetEntityRenderVisible(eid, visible=visible)
 
-register_evaluator("EntitySetVisibility", _eval_entity_set_visibility)
+register_evaluator("EntitySetRenderVisible", _eval_entity_set_render_visible)
 
 
 # ═══════════════════════════════════════════════════════════════

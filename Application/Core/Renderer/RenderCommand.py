@@ -105,15 +105,11 @@ class EntityRegistrationCommand(RenderCommand):
 
 @dataclass
 class EntityVisibilityCommand(RenderCommand):
-    """实体可见性控制 — 在渲染器内部 set 中 add/remove，不动 GPU 资源。
+    """实体可见性控制 (编辑器眼图标) — 控制 _visible_entities set。
 
-    与 EntityRegistrationCommand 的区别:
-      - Registration: 创建/销毁 VAO/VBO/EBO (重量级，仅创建/删除实体时使用)
-      - Visibility:     仅从 _entity_visible set 中 add/remove (轻量，每帧可调)
-
-    使用方式:
-      renderer.enqueue(EntityVisibilityCommand(entity_id, visible=False))  # 隐藏
-      renderer.enqueue(EntityVisibilityCommand(entity_id, visible=True))   # 显示
+    与 EntityRenderVisibleCommand 的区别:
+      - EntityVisibilityCommand:      编辑器眼图标 → 控制渲染 + Pick + Gizmo
+      - EntityRenderVisibleCommand:   MeshRenderer.visible → 仅控制主渲染, 不影响 Pick
     """
     entity_id: int
     visible: bool
@@ -123,6 +119,19 @@ class EntityVisibilityCommand(RenderCommand):
             renderer.show_entity(self.entity_id)
         else:
             renderer.hide_entity(self.entity_id)
+
+
+@dataclass
+class EntityRenderVisibleCommand(RenderCommand):
+    """实体渲染可见性 (MeshRenderer.visible) — 仅更新 GPU 实体数据的 render_visible 字段。
+
+    不影响 _visible_entities set，因此不影响 Pick pass 和 Gizmo/Outline。
+    """
+    entity_id: int
+    visible: bool
+
+    def execute(self, renderer: Any) -> None:
+        renderer.set_entity_render_visible(self.entity_id, self.visible)
 
 
 @dataclass

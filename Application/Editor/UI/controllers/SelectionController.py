@@ -57,6 +57,7 @@ class SelectionController:
         SceneBrowserController.select(entity_id)
         OutlinerID.set_selected_entities({entity_id})
         TransformGizmo._visible = True
+        TransformGizmo._target_entity_id = entity_id   # ★ 记录附着实体，用于 Editor Visible 检查
         try:
             from Application.Core.Math.Transform import calculate_entity_model
             t = EditorHost.scene.GetEntityTransform(entity_id)
@@ -76,6 +77,7 @@ class SelectionController:
         SceneBrowserController.clear_selection()
         OutlinerID.clear()
         TransformGizmo._visible = False
+        TransformGizmo._target_entity_id = None
 
     # ── 查询 ────────────────────────────────────────────────
 

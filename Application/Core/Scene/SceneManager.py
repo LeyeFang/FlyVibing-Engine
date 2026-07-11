@@ -25,7 +25,7 @@ import threading
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Scene.BasicComponents import *
 from Application.Core.Events.SceneEvent import *
-from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand, EntityVisibilityCommand
+from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand, EntityVisibilityCommand, EntityRenderVisibleCommand
 
 
 
@@ -43,6 +43,7 @@ class SceneManager:
     _thread_active: dict[int, str] = {}             # thread_id → engine_name
     _thread_lock = threading.Lock()
     _component_registry: dict[str, type] = {}       # 全局共享
+    _world_counter: dict[str, int] = {}             # engine_name → 世界序号 (非 Editor 每次 Init 递增)
 
     def __init__(self, engine_name: str, app=None) -> None:
         from Application.Core.Scene.Scene import GameType
@@ -56,6 +57,7 @@ class SceneManager:
         self.main_camera_2d_id: int | None = None
         self._entity_names: dict[int, str] = {}
         self._entity_parent: dict[int, int] = {}
+        self._editor_visible: set[int] = set()    # ★ 编辑器中可见的实体 ID (默认全可见, 空 set = 全部可见)
         self.world_name: str = f"scene_{engine_name}"
         self.game_type = GameType.GAME_3D
 
@@ -111,7 +113,9 @@ class SceneManager:
     def Init(cls, app) -> None:
         """初始化场景 — 创建 SceneManager 实例并注册。
 
-        幂等：同一 Engine 多次调用不重复初始化。
+        EditorHost: 幂等，始终复用同一世界 (scene_EditorHost)。
+        GameRuntime: 每次 Init 创建新世界 (scene_GameRuntime_1, _2, ...)，
+                     旧世界自动废弃，无需手动清理。
         """
         engine_name = getattr(app, '__name__', type(app).__name__)
         if not cls._active_name:
@@ -120,16 +124,31 @@ class SceneManager:
         if engine_name in cls._registry:
             inst = cls._registry[engine_name]
             inst.app = app
-            return
-
-        inst = SceneManager(engine_name, app)
-        cls._registry[engine_name] = inst
+            # ── EditorHost 幂等: 复用已有世界 ──
+            if engine_name == "EditorHost":
+                return
+            # ── 非 Editor: 递增序号，创建全新世界 ──
+            cls._world_counter[engine_name] = cls._world_counter.get(engine_name, 0) + 1
+            inst.world_name = f"scene_{engine_name}_{cls._world_counter[engine_name]}"
+            inst._reset_state()
+        else:
+            inst = SceneManager(engine_name, app)
+            cls._registry[engine_name] = inst
 
         # ── 切换到本 Engine 的 ECS 世界（esper 自动创建）──
         esper.switch_world(inst.world_name)
+        cls._create_default_cameras(inst)
 
+        # ── 首次 Init 时自动注册内置 Component ──
+        if not cls._component_registry:
+            cls.RegisterComponent("Camera", Camera)
+            cls.RegisterComponent("MeshRenderer", MeshRenderer)
+            cls.RegisterComponent("Transform", Transform)
+
+    @classmethod
+    def _create_default_cameras(cls, inst: 'SceneManager') -> None:
+        """在 inst 的当前 esper 世界中创建默认摄像机。"""
         # ── 3D 透视摄像机 ──
-        # 编辑坐标 (0, -10, 0) → GL (0, 0, 10)
         inst.main_camera_id = esper.create_entity(
             Transform(position_x=0.0, position_y=0.0, position_z=10.0),
             Camera(True),
@@ -138,6 +157,7 @@ class SceneManager:
         inst.scene_camera = esper.component_for_entity(inst.scene_camera_id, Camera)
         inst.entities[f'{inst.main_camera_id}'] = 1
         inst._entity_names[inst.main_camera_id] = "DefaultCamera3D"
+        inst._editor_visible.add(inst.main_camera_id)
 
         # ── 2D 正交俯视摄像机 ──
         inst.main_camera_2d_id = esper.create_entity(
@@ -154,12 +174,17 @@ class SceneManager:
         cam_2d.far_plane = 100.0
         inst.entities[f'{inst.main_camera_2d_id}'] = 1
         inst._entity_names[inst.main_camera_2d_id] = "DefaultCamera2D"
+        inst._editor_visible.add(inst.main_camera_2d_id)
 
-        # ── 首次 Init 时自动注册内置 Component ──
-        if not cls._component_registry:
-            cls.RegisterComponent("Camera", Camera)
-            cls.RegisterComponent("MeshRenderer", MeshRenderer)
-            cls.RegisterComponent("Transform", Transform)
+    def _reset_state(self) -> None:
+        """重置实例的追踪数据（为新世界做准备）。"""
+        self.scene = {"default": "default"}
+        self.entities.clear()
+        self._entity_names.clear()
+        self._entity_parent.clear()
+        self._editor_visible.clear()
+        self.scene_camera = None
+        self.scene_camera_id = None
 
     @classmethod
     def CreateScene(cls, new_scene_name: str) -> None:
@@ -223,6 +248,48 @@ class SceneManager:
         all_ids = list(st.entities.keys())
         return [int(eid) for eid in all_ids if int(eid) not in st._entity_parent]
 
+    @classmethod
+    def SetEditorVisible(cls, entity_id: int, visible: bool) -> None:
+        """设置实体在编辑器视口中的可见性 (眼图标)。不影响 PIE 渲染。
+
+        与 SetEntityRenderVisible 的区别:
+          - SetEditorVisible:      控制 _visible_entities → 影响渲染 + Pick + Gizmo
+          - SetEntityRenderVisible: 控制 render_visible → 仅影响主渲染
+        """
+        st = cls._state()
+        if visible:
+            st._editor_visible.add(entity_id)
+        else:
+            st._editor_visible.discard(entity_id)
+
+        # ★ 纯 editor toggle — 直接推到 _visible_entities
+        _renderer = getattr(st.app, 'renderer', None)
+        if _renderer is not None:
+            _renderer.enqueue(EntityVisibilityCommand(entity_id, visible=visible))
+
+    @classmethod
+    def IsEditorVisible(cls, entity_id: int) -> bool:
+        """查询实体在编辑器视口中是否可见。"""
+        return entity_id in cls._state()._editor_visible
+    @classmethod
+    def SetEntityRenderVisible(cls, entity_id: int, visible: bool) -> None:
+        """设置实体的渲染可见性 (MeshRenderer.visible)。
+
+        与 SetEditorVisible 的区别:
+          - SetEditorVisible:     仅编辑器视口生效 (眼图标), 不影响 PIE
+          - SetEntityRenderVisible: 编辑器 + PIE 都生效, 决定是否提 DrawCall
+        """
+        cls.SetEntityMeshRenderer(entity_id, visible=visible)
+
+    @classmethod
+    def IsEntityRenderVisible(cls, entity_id: int) -> bool:
+        """查询实体的渲染可见性 (MeshRenderer.visible)。"""
+        cls._state()
+        try:
+            mr = esper.component_for_entity(entity_id, MeshRenderer)
+            return mr.visible
+        except KeyError:
+            return False
     # ============================================================
     # 实体管理 / Entity Management
     # ============================================================
@@ -232,6 +299,7 @@ class SceneManager:
         st = cls._state()
         entity_id = esper.create_entity(Transform())
         st.entities[f'{entity_id}'] = 1
+        st._editor_visible.add(entity_id)    # ★ 新实体默认编辑器可见
         if name:
             st._entity_names[entity_id] = name
         return entity_id
@@ -259,6 +327,7 @@ class SceneManager:
         # ── 清理追踪数据 ──
         st.entities.pop(f'{entity_id}', None)
         st._entity_names.pop(entity_id, None)
+        st._editor_visible.discard(entity_id)   # ★ 清理编辑器可见性
 
         # ── 通知渲染器注销 GPU 资源 ──
         _renderer = getattr(st.app, 'renderer', None)
@@ -337,6 +406,11 @@ class SceneManager:
             _renderer = getattr(st.app, 'renderer', None)
             if _renderer is not None:
                 _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
+                # ★ 注册后同步两种可见性
+                _renderer.enqueue(EntityRenderVisibleCommand(
+                    entity_id, visible=component_instance.visible))
+                _renderer.enqueue(EntityVisibilityCommand(
+                    entity_id, visible=(entity_id in st._editor_visible)))
 
     # ============================================================
     # 查询接口 / Query Interface
@@ -467,8 +541,8 @@ class SceneManager:
         _renderer = getattr(st.app, 'renderer', None)
         if _renderer is not None:
             if visible_only:
-                # ★ 仅可见性变更 → 轻量 Command，不动 GPU 资源
-                _renderer.enqueue(EntityVisibilityCommand(entity_id, visible=visible))
+                # ★ MeshRenderer.visible → EntityRenderVisibleCommand (不影响 pick)
+                _renderer.enqueue(EntityRenderVisibleCommand(entity_id, visible=visible))
             else:
                 # ★ 资源变更 (mesh/material) → 重新注册 GPU 资源
                 _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))

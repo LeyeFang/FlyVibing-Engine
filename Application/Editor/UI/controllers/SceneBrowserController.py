@@ -19,12 +19,13 @@ _ROTATION_MAX_DEG: float = 360.0    # Rotation 单轴最大值 (角度制, 超�
 class EntitySummary:
     entity_id: int
     name: str = ""
-    position: tuple[float, float, float] = (0, 0, 0)       # 编辑器坐标 (世界单位)
-    rotation: tuple[float, float, float] = (0, 0, 0)       # 欧拉角 (角度制/degrees)
-    scale: tuple[float, float, float] = (1, 1, 1)          # 缩放因子
+    position: tuple[float, float, float] = (0, 0, 0)
+    rotation: tuple[float, float, float] = (0, 0, 0)
+    scale: tuple[float, float, float] = (1, 1, 1)
     mesh_id: Optional[int] = None
     material_id: Optional[int] = None
     has_camera: bool = False
+    render_visible: bool = True           # ★ MeshRenderer.visible (渲染可见性)
 
 
 class SceneBrowserController:
@@ -94,6 +95,10 @@ class SceneBrowserController:
                 pass
             try:
                 summary.has_camera = EditorHost.scene.HasComponent(entity_id, Camera)
+            except Exception:
+                pass
+            try:
+                summary.render_visible = EditorHost.scene.IsEntityRenderVisible(entity_id)
             except Exception:
                 pass
             return summary
@@ -300,6 +305,25 @@ class SceneBrowserController:
             if info['entity_id'] == entity_id:
                 return info
         return None
+
+    # ── 编辑器可见性 ──────────────────────────────────────────
+
+    @classmethod
+    def is_editor_visible(cls, entity_id: int) -> bool:
+        """查询实体在编辑器视口中是否可见（眼图标状态）。"""
+        return EditorHost.scene.IsEditorVisible(entity_id)
+
+    @classmethod
+    def set_editor_visible(cls, entity_id: int, visible: bool) -> None:
+        """设置实体在编辑器视口中的可见性。"""
+        EditorHost.scene.SetEditorVisible(entity_id, visible)
+
+    # ── 渲染可见性 ──────────────────────────────────────────
+
+    @classmethod
+    def set_entity_render_visible(cls, entity_id: int, visible: bool) -> None:
+        """设置实体的渲染可见性 (MeshRenderer.visible)。"""
+        EditorHost.scene.SetEntityRenderVisible(entity_id, visible)
 
     # ── Entity CRUD ───────────────────────────────────────────
 

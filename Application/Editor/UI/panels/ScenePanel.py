@@ -326,8 +326,20 @@ class ScenePanel(BasePanel):
             return
         name = info.get('name', '') or f"Entity #{entity_id}"
 
+        # ── 眼图标: 在 entity label 左侧 ──
+        eye_visible = self._browser_ctrl.is_editor_visible(entity_id)
+        eye_icon = fa.ICON_FA_EYE if eye_visible else fa.ICON_FA_EYE_SLASH
+        if not eye_visible:
+            imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.35, 0.35, 0.35, 1.00))
+        if imgui.small_button(f"{eye_icon}##eye_{entity_id}"):
+            self._browser_ctrl.set_editor_visible(entity_id, not eye_visible)
+        if not eye_visible:
+            imgui.pop_style_color(1)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(f"Toggle editor visibility of '{name}'")
+        imgui.same_line()
+
         # ── 构建标签: 图标标记 ──
-        #     每个 entity 默认显示立方体图标; Camera 额外显示摄像机图标
         flags_parts = [f"{fa.ICON_FA_CUBE} "]
         if info.get('has_camera'):
             flags_parts.append(f"{fa.ICON_FA_CAMERA} ")
@@ -351,6 +363,10 @@ class ScenePanel(BasePanel):
                 node_flags |= imgui.TreeNodeFlags_.selected
             opened = imgui.tree_node_ex(label, node_flags)
 
+        # ── 点击选中 ──
+        if imgui.is_item_clicked():
+            self._selection_ctrl.select(entity_id)
+
         # ── 拖拽源: 可以将此实体拖到其他实体上 ──
         if imgui.begin_drag_drop_source():
             imgui.set_drag_drop_payload_py_id("ENTITY", entity_id)
@@ -365,10 +381,6 @@ class ScenePanel(BasePanel):
             if payload is not None and payload.data_id != entity_id:
                 self._browser_ctrl.set_entity_parent(payload.data_id, entity_id)
             imgui.end_drag_drop_target()
-
-        # ── 点击选中 ──
-        if imgui.is_item_clicked():
-            self._selection_ctrl.select(entity_id)
 
         if opened and has_children:
             for child_id in children:
@@ -521,7 +533,13 @@ class ScenePanel(BasePanel):
         self._draw_add_component(entity_id)
 
     def _draw_mesh_renderer_editor(self, entity_id: int, summary) -> None:
-        """绘制 MeshRenderer 编辑区域 — Mesh / Material 并列子节点。"""
+        """绘制 MeshRenderer 编辑区域 — Visible / Mesh / Material。"""
+        # ── Visible 勾选框 ──
+        changed, vis = imgui.checkbox("Visible", summary.render_visible)
+        if changed:
+            self._browser_ctrl.set_entity_render_visible(entity_id, vis)
+            summary.render_visible = vis
+
         mesh_options = self._resource_ctrl.get_mesh_options()
 
         # ── Mesh 子节点 ──

@@ -221,6 +221,15 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
     def unregister_entity(self, entity_id: int) -> None:
         self._resources.unregister_entity(entity_id)
 
+    def show_entity(self, entity_id: int) -> None:
+        self._resources.show_entity(entity_id)
+
+    def hide_entity(self, entity_id: int) -> None:
+        self._resources.hide_entity(entity_id)
+
+    def set_entity_render_visible(self, entity_id: int, visible: bool) -> None:
+        self._resources.set_entity_render_visible(entity_id, visible)
+
     def register_mesh(self, mesh, mesh_id: int) -> None:
         self._resources.register_mesh(mesh, mesh_id)
 

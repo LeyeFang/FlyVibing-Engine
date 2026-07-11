@@ -40,11 +40,13 @@ class OpenGLEntities:
 
         has_outline = bool(r._outline_selected_ids)
 
-        # ★ 从渲染器内部 visible set 遍历，不再查询 SceneManager
-        for entity_id in list(r._resources._entity_visible):
+        # ★ 从渲染器内部 visible set 遍历，跳过 render_visible=False 的实体
+        for entity_id in list(r._resources._visible_entities):
             entity = r.registered_entities.get(entity_id)
             if entity is None:
-                r._resources._entity_visible.discard(entity_id)  # 清理脏数据
+                r._resources._visible_entities.discard(entity_id)
+                continue
+            if not entity.render_visible:       # ★ MeshRenderer.visible=False → 不画
                 continue
 
             if entity.shader_id not in r.registered_shaders:

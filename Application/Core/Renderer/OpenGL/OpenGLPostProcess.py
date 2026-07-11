@@ -104,11 +104,10 @@ class OpenGLPostProcess(PostProcess):
         if loc_tex >= 0:
             gl.glUniform1i(loc_tex, 0)
 
-        from Application.Core.Scene.SceneManager import SceneManager
-
         active_ids = self._highlight_config.selected_ids if self._highlight_config else set()
 
-        for eid in self._renderer.engine.scene.GetRenderableEntities():
+        # ★ 使用 _visible_entities (Editor Eye 控制) — 眼睛关闭的实体既不渲染也不画轮廓
+        for eid in list(self._renderer._resources._visible_entities):
             entity = r.registered_entities.get(eid)
             if entity is None:
                 continue

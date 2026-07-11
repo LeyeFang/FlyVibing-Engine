@@ -149,8 +149,9 @@ class TransformGizmo:
 
     # ── 内部状态 ──────────────────────────────────────────
     _target_pos: np.ndarray = np.array([0.0, 0.0, 0.0], dtype=np.float32)
-    _active_drag_key: str | None = None  # 当前被拖拽的 overlay key
-    _visible: bool = False               # 无选中实体时隐藏
+    _target_entity_id: int | None = None   # ★ 当前附着实体 ID
+    _active_drag_key: str | None = None    # 当前被拖拽的 overlay key
+    _visible: bool = False                 # 无选中实体时隐藏
     _VERBOSE: bool = False               # 拖拽细节日志（调试时改为 True）
 
     # ════════════════════════════════════════════════════════════
@@ -198,6 +199,12 @@ class TransformGizmo:
         """
         if not cls._visible:
             return np.zeros((4, 4), dtype=np.float32)  # 不渲染: 零矩阵
+
+        # ★ 实体被眼睛隐藏 → gizmo 也不显示
+        if cls._target_entity_id is not None:
+            from Application.Core.Scene.SceneManager import SceneManager
+            if not SceneManager.IsEditorVisible(cls._target_entity_id):
+                return np.zeros((4, 4), dtype=np.float32)
         from Application.Editor.EditorCamera import EditorCamera
 
         cam = EditorCamera.get_instance()

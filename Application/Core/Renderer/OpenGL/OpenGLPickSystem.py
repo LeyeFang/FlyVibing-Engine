@@ -233,7 +233,7 @@ void main() {
             self._pick_cache = -1
             self._pick_overlay_key = None
             return
-        entities = self._renderer.engine.scene.GetRenderableEntities()
+        entities = list(self._renderer._resources._visible_entities)
         if not entities:
             self._finalize_pick_read()
             return

@@ -304,14 +304,14 @@ _reg(NodeTypeDef(
 ))
 
 _reg(NodeTypeDef(
-    "EntitySetVisibility", "Set Visibility", "Entity", ENTITY_COLOR,
+    "EntitySetRenderVisible", "Set Render Visible", "Entity", ENTITY_COLOR,
     [
         PinDef(_gen_id(), "exec_in", "exec", "input"),
         PinDef(_gen_id(), "EntityID", "data", "input", "int"),
         PinDef(_gen_id(), "Visible", "data", "input", "bool"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Show or hide entity",
+    "Show or hide entity (MeshRenderer.visible)",
 ))
 
 

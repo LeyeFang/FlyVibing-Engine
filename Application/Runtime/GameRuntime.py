@@ -84,23 +84,14 @@ class GameRuntime(Engine):
 
     @classmethod
     def _sync_scene_from_editor(cls) -> None:
-        """从 Editor 的 SceneManager 同步场景状态到 Runtime。
-
-        当前同步:
-          - game_type: 确保 Runtime 使用与 Editor 一致的游戏类型
-                       (GAME_3D → DefaultCamera3D, GAME_2D → DefaultCamera2D)
-
-        未来扩展:
-          - Scene.entities (EntitySpawn 模板)
-          - 主摄像机自定义配置
-        """
-        from Application.Core.Scene.SceneManager import SceneManager
+        """从 Editor 的 SceneManager 同步 game_type 到 Runtime。"""
+        from Application.Editor.EditorHost import EditorHost
         try:
-            ed_st = SceneManager._state_for("EditorHost")
-            SceneManager.SetGameType(ed_st.game_type)
-            print(f"[GameRuntime] Synced game_type from editor: {ed_st.game_type.value}")
+            editor_scene = EditorHost.scene
+            if editor_scene is not None:
+                cls.scene.game_type = editor_scene.game_type
+                print(f"[GameRuntime] Synced game_type from editor: {editor_scene.game_type.value}")
         except Exception:
-            # EditorHost 未初始化 (导出模式) — 使用默认 GAME_3D
             pass
 
     @classmethod

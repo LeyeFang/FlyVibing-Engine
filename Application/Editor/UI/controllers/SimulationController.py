@@ -49,36 +49,34 @@ class SimulationController:
     # ── ECS → Scene 同步 ────────────────────────────────────
 
     @staticmethod
-    def _sync_ecs_to_scene(scene) -> None:
-        """将当前 ECS 世界中的实体全量同步到 Scene.entities 注册表。
-
-        先清空再重建，避免与 _ensure_default_scene 产生重复条目。
-        跳过系统摄像机。
-        """
+    def _sync_ecs_to_scene(scene, scene_mgr=None) -> None:
+        """将 ECS 世界中的实体同步到 Scene.entities 注册表。"""
         import copy
         from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
-        from Application.Core.Scene.SceneManager import SceneManager
         from Application.Core.Scene.Scene import EntityData
 
+        if scene_mgr is None:
+            from Application.Core.Scene.SceneManager import SceneManager
+            scene_mgr = SceneManager
+
         _sys_ids = {
-            SceneManager.get_main_camera_id(),
-            SceneManager.get_main_camera_2d_id(),
+            scene_mgr.get_main_camera_id(),
+            scene_mgr.get_main_camera_2d_id(),
         }
 
-        # ★ 清空并用 ECS 最新数据重建，消除与 _ensure_default_scene 的重复
         scene.entities.clear()
-        for eid, xform in [(e, c) for e, c in SceneManager.GetAllEntitiesWithComponent(Transform)]:
+        for eid, xform in [(e, c) for e, c in scene_mgr.GetAllEntitiesWithComponent(Transform)]:
             if eid in _sys_ids:
                 continue
-            name = SceneManager.GetEntityName(eid)
+            name = scene_mgr.GetEntityName(eid)
             comps = {"Transform": copy.deepcopy(xform)}
             try:
-                cam = SceneManager.GetComponent(eid, Camera)
+                cam = scene_mgr.GetComponent(eid, Camera)
                 comps["Camera"] = copy.deepcopy(cam)
             except Exception:
                 pass
             try:
-                mr = SceneManager.GetComponent(eid, MeshRenderer)
+                mr = scene_mgr.GetComponent(eid, MeshRenderer)
                 comps["MeshRenderer"] = copy.deepcopy(mr)
             except Exception:
                 pass
@@ -132,7 +130,7 @@ class SimulationController:
         editor_scene = EditorHost.get_active_scene()
         if editor_scene is not None:
             # ★ 先将 ECS 中的实体同步到 Scene.entities 注册表
-            cls._sync_ecs_to_scene(editor_scene)
+            cls._sync_ecs_to_scene(editor_scene, EditorHost.scene)
             runtime_scene = copy.deepcopy(editor_scene)
             RuntimeNodeLayer.set_scene(runtime_scene)
             print(f"[Simulation] Scene injected: {runtime_scene.name} "
@@ -188,8 +186,9 @@ class SimulationController:
         from Application.Runtime.GameRuntime import GameRuntime
         GameRuntime.stop()
         # ★ PIE 停止后切回 EditorHost 的 ECS 世界
+        EditorHost.scene._switch_world()
         from Application.Core.Scene.SceneManager import SceneManager
-        SceneManager.set_thread_active("EditorHost")
+        SceneManager.set_thread_active("EditorHost")  # 过渡期：线程绑定
         cls._state = SimulationState.STOPPED
         EngineLifecycleEvent.Pack(
             stage="simulation", message="Runtime stopped", engine=EditorHost

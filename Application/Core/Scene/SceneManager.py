@@ -2,9 +2,9 @@
 SceneManager — 场景数据管理器（每 Engine 独立状态 + 独立 ECS 世界）。
 
 架构:
-  - _registry: dict[engine_name, SceneState] — 每个 Engine 子类拥有独立的场景数据
+  - _registry: dict[engine_name, SceneManager] — 每个 Engine 持有自己的 SceneManager 实例
   - _active_name: str — 当前活跃的 Engine 名称 (Init 时设置)
-  - 每个 _SceneState 拥有独立的 esper 世界 (通过 switch_world 隔离)
+  - 每个 SceneManager 实例拥有独立的 esper 世界 (通过 switch_world 隔离)
 
 esper 世界命名规则:
   - "default"      — esper 默认世界 (保留不用)
@@ -28,24 +28,27 @@ from Application.Core.Events.SceneEvent import *
 from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand
 
 
-# ═══════════════════════════════════════════════════════════════
-# Per-Engine 场景状态
-# ═══════════════════════════════════════════════════════════════
 
-class _SceneState:
-    """单个 Engine 的场景数据容器。"""
-    __slots__ = (
-        'app', 'scene', 'entities',
-        'scene_camera', 'scene_camera_id',
-        'main_camera_id', 'main_camera_2d_id',
-        '_entity_names', '_entity_parent',
-        'world_name', 'game_type',
-    )
+class SceneManager:
+    """场景管理器 — 每 Engine 一个实例，持有独立的 esper 世界。
 
-    def __init__(self):
+    实例化: SceneManager("EditorHost", app) — 每个 Engine 创建自己的实例。
+    线程安全: set_thread_active() 绑定线程到 engine (过渡期)。
+    向后兼容: 保留 classmethod facade，委托到当前线程对应的实例。
+    """
+
+    # ── 类级注册表 ─────────────────────────────────────────
+    _registry: dict[str, 'SceneManager'] = {}        # engine_name → SceneManager 实例
+    _active_name: str = ""                          # 全局默认
+    _thread_active: dict[int, str] = {}             # thread_id → engine_name
+    _thread_lock = threading.Lock()
+    _component_registry: dict[str, type] = {}       # 全局共享
+
+    def __init__(self, engine_name: str, app=None) -> None:
         from Application.Core.Scene.Scene import GameType
-        self.app = None
-        self.scene: dict = {}
+        self.engine_name = engine_name
+        self.app = app
+        self.scene: dict = {"default": "default"}
         self.entities: dict = {}
         self.scene_camera: Camera | None = None
         self.scene_camera_id: int | None = None
@@ -53,23 +56,15 @@ class _SceneState:
         self.main_camera_2d_id: int | None = None
         self._entity_names: dict[int, str] = {}
         self._entity_parent: dict[int, int] = {}
-        self.world_name: str = ""
+        self.world_name: str = f"scene_{engine_name}"
         self.game_type = GameType.GAME_3D
 
+    # 向后兼容别名: _SceneState 已被吸收，返回 SceneManager 自身
+    _SceneState = None  # type: ignore
 
-class SceneManager:
-    """场景管理器 — 每 Engine 独立的场景数据 + ECS 世界。
-
-    线程安全: 每个线程通过 set_thread_active() 绑定到特定 Engine。
-    同一 Engine 的多个线程共享同一个场景数据（但 ECS 世界切换是线程安全的关键）。
-    """
-
-    # ── 类级注册表 ─────────────────────────────────────────
-    _registry: dict[str, _SceneState] = {}
-    _active_name: str = ""                          # 全局默认 (线程本地未设置时的回落)
-    _thread_active: dict[int, str] = {}             # thread_id → engine_name
-    _thread_lock = threading.Lock()
-    _component_registry: dict[str, type] = {}       # 组件注册表: name → Component class
+    def _switch_world(self) -> None:
+        """切换到本实例的 esper 世界。"""
+        esper.switch_world(self.world_name)
 
     @classmethod
     def set_thread_active(cls, engine_name: str) -> None:
@@ -91,21 +86,21 @@ class SceneManager:
             return cls._thread_active.get(tid, cls._active_name)
 
     @classmethod
-    def _state(cls) -> _SceneState:
-        """返回当前线程对应 Engine 的场景状态，并切换到对应的 esper 世界。"""
+    def _state(cls) -> 'SceneManager':
+        """返回当前线程对应的 SceneManager 实例，并切换 esper 世界。"""
         name = cls._get_active_name()
         if name not in cls._registry:
             raise RuntimeError(
-                f"SceneManager: no scene for engine '{name}'. "
+                f"SceneManager: no instance for engine '{name}'. "
                 f"Call SceneManager.Init(engine) first."
             )
-        st = cls._registry[name]
-        esper.switch_world(st.world_name)
-        return st
+        inst = cls._registry[name]
+        esper.switch_world(inst.world_name)
+        return inst
 
     @classmethod
-    def _state_for(cls, engine_name: str) -> _SceneState:
-        """返回指定 Engine 的场景状态（用于跨 Engine 操作）。"""
+    def _state_for(cls, engine_name: str) -> 'SceneManager':
+        """返回指定 Engine 的 SceneManager 实例（跨 Engine 操作，不切换世界）。"""
         return cls._registry[engine_name]
 
     # ============================================================
@@ -114,59 +109,51 @@ class SceneManager:
 
     @classmethod
     def Init(cls, app) -> None:
-        """初始化场景 — 为当前 Engine 创建独立的场景状态 + ECS 世界。
+        """初始化场景 — 创建 SceneManager 实例并注册。
 
         幂等：同一 Engine 多次调用不重复初始化。
-        app 可以是 Engine 子类 (如 EditorHost) 或实例 (如 MockApp)。
-
-        注意: Init() 不自动绑定线程 —— 调用方需通过 set_thread_active()
-        将当前线程绑定到对应 Engine，确保多线程环境下 ECS 世界不串扰。
         """
         engine_name = getattr(app, '__name__', type(app).__name__)
-        # 设置全局默认 (仅在没有线程本地时回落使用)
         if not cls._active_name:
             cls._active_name = engine_name
 
         if engine_name in cls._registry:
-            cls._state().app = app
+            inst = cls._registry[engine_name]
+            inst.app = app
             return
 
-        st = _SceneState()
-        st.app = app
-        st.scene["default"] = "default"
-        st.world_name = f"scene_{engine_name}"
-        cls._registry[engine_name] = st
+        inst = SceneManager(engine_name, app)
+        cls._registry[engine_name] = inst
 
         # ── 切换到本 Engine 的 ECS 世界（esper 自动创建）──
-        esper.switch_world(st.world_name)
+        esper.switch_world(inst.world_name)
 
         # ── 3D 透视摄像机 ──
         # 编辑坐标 (0, -10, 0) → GL (0, 0, 10)
-        # Camera.local_forward = (0, 0, -1) → 天然看向原点 (0, 0, 0)
-        st.main_camera_id = esper.create_entity(
+        inst.main_camera_id = esper.create_entity(
             Transform(position_x=0.0, position_y=0.0, position_z=10.0),
             Camera(True),
         )
-        st.scene_camera_id = st.main_camera_id
-        st.scene_camera = esper.component_for_entity(st.scene_camera_id, Camera)
-        st.entities[f'{st.main_camera_id}'] = 1
-        st._entity_names[st.main_camera_id] = "DefaultCamera3D"
+        inst.scene_camera_id = inst.main_camera_id
+        inst.scene_camera = esper.component_for_entity(inst.scene_camera_id, Camera)
+        inst.entities[f'{inst.main_camera_id}'] = 1
+        inst._entity_names[inst.main_camera_id] = "DefaultCamera3D"
 
         # ── 2D 正交俯视摄像机 ──
-        st.main_camera_2d_id = esper.create_entity(
+        inst.main_camera_2d_id = esper.create_entity(
             Transform(
                 position_x=0.0, position_y=0.0, position_z=10.0,
                 rotation_x=math.pi / 2.0,
             ),
             Camera(is_primary=False),
         )
-        cam_2d = esper.component_for_entity(st.main_camera_2d_id, Camera)
+        cam_2d = esper.component_for_entity(inst.main_camera_2d_id, Camera)
         cam_2d.projection_type = ProjectionType.ORTHOGRAPHIC
         cam_2d.ortho_size = 10.0
         cam_2d.near_plane = 0.1
         cam_2d.far_plane = 100.0
-        st.entities[f'{st.main_camera_2d_id}'] = 1
-        st._entity_names[st.main_camera_2d_id] = "DefaultCamera2D"
+        inst.entities[f'{inst.main_camera_2d_id}'] = 1
+        inst._entity_names[inst.main_camera_2d_id] = "DefaultCamera2D"
 
         # ── 首次 Init 时自动注册内置 Component ──
         if not cls._component_registry:

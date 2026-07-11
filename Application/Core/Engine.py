@@ -140,6 +140,7 @@ class Engine:
         return cls._registry[name]
 
     # ── 类变量默认值（通过 cls.x = val 写入子类 __dict__，天然隔离） ──
+    scene: 'SceneManager' = None                       # SceneManager 实例 (init 时赋值)
     window: Window = None
     renderer: Renderer = None
     window_type: WindowType = None
@@ -277,7 +278,8 @@ class Engine:
         # 3. 初始化子系统
         ResourceManager.Init(cls)
         SceneManager.Init(cls)
-        # 将当前线程绑定到本 Engine 的场景（多线程安全）
+        cls.scene = SceneManager._state_for(cls.__name__)  # ★ Engine 直接持有实例
+        # 将当前线程绑定到本 Engine 的场景（多线程安全 — 过渡期）
         SceneManager.set_thread_active(cls.__name__)
         # 4. 创建窗口（子类决定窗口类型）
         cls.window = cls._create_window()

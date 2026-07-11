@@ -316,11 +316,11 @@ _reg(NodeTypeDef(
 
 
 # ═══════════════════════════════════════════════════════════════
-# Camera 节点 (Camera) — 摄像机配置与控制
+# Game 节点 (Game) — 游戏级操作 (摄像机 / 生命周期)
 # ═══════════════════════════════════════════════════════════════
 
 _reg(NodeTypeDef(
-    "CameraSetMain", "Set Main Camera", "Camera", CAMERA_COLOR,
+    "CameraSetMain", "Set Main Camera", "Game", CAMERA_COLOR,
     [
         PinDef(_gen_id(), "exec_in", "exec", "input"),
         PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
@@ -330,34 +330,7 @@ _reg(NodeTypeDef(
 ))
 
 _reg(NodeTypeDef(
-    "CameraConfigure", "Configure Camera", "Camera", CAMERA_COLOR,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
-        PinDef(_gen_id(), "FOV", "data", "input", "float"),
-        PinDef(_gen_id(), "OrthoSize", "data", "input", "float"),
-        PinDef(_gen_id(), "NearPlane", "data", "input", "float"),
-        PinDef(_gen_id(), "FarPlane", "data", "input", "float"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-    ],
-    "Perspective / Orthographic",
-))
-
-_reg(NodeTypeDef(
-    "GetCameraInfo", "Get Camera Info", "Camera", CAMERA_COLOR,
-    [
-        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
-        PinDef(_gen_id(), "Position", "data", "output", "vec3"),
-        PinDef(_gen_id(), "Forward", "data", "output", "vec3"),
-        PinDef(_gen_id(), "FOV", "data", "output", "float"),
-        PinDef(_gen_id(), "OrthoSize", "data", "output", "float"),
-        PinDef(_gen_id(), "IsValid", "data", "output", "bool"),
-    ],
-    "Read camera state",
-))
-
-_reg(NodeTypeDef(
-    "ExitGame", "Exit Game", "Camera", _ERROR_RED,
+    "ExitGame", "Exit Game", "Game", CAMERA_COLOR,
     [
         PinDef(_gen_id(), "exec_in", "exec", "input"),
     ],
@@ -374,9 +347,13 @@ _reg(NodeTypeDef(
     [
         PinDef(_gen_id(), "exec_in", "exec", "input"),
         PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
+        # ── Transform 属性 Pin (由 _visible_pins 按组件类型过滤) ──
+        PinDef(_gen_id(), "Position", "data", "input", "vec3"),
+        PinDef(_gen_id(), "Rotation", "data", "input", "vec3"),
+        PinDef(_gen_id(), "Scale", "data", "input", "vec3"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
-    "Camera / MeshRenderer / ...",
+    "Add component to entity",
 ))
 
 _reg(NodeTypeDef(
@@ -387,17 +364,6 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
     "Remove component from entity",
-))
-
-_reg(NodeTypeDef(
-    "ComponentSetProperty", "Set Property", "Component", COMPONENT_COLOR,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
-        PinDef(_gen_id(), "Value", "data", "input", "variant"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-    ],
-    "Set component property",
 ))
 
 

@@ -70,21 +70,17 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ("Branch", "Branch"),
     ]),
     ("Scene", [
-        ("Camera", [
-            ("Set Main Camera", "CameraSetMain"),
-            ("Configure Camera", "CameraConfigure"),
-            ("Get Camera Info", "GetCameraInfo"),
-            ("Add Camera Component", "EntityAddCamera"),
-            ("Exit Game", "ExitGame"),
-        ]),
         ("Entity", [
             ("Spawn Entity", "EntitySpawn"),
             ("Destroy Entity", "EntityDestroy"),
         ]),
+        ("Game", [
+            ("Set Main Camera", "CameraSetMain"),
+            ("Exit Game", "ExitGame"),
+        ]),
         ("Component", [
             ("Add Component", "ComponentAdd"),
             ("Remove Component", "ComponentRemove"),
-            ("Set Property", "ComponentSetProperty"),
         ]),
     ]),
     ("Debug", [

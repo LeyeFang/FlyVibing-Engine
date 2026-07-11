@@ -27,6 +27,10 @@ from Application.Editor.UI.controllers.node_editor import (
     _TYPES,
     _gen_id,
 )
+from Application.Editor.UI.controllers.node_editor.component_registry import (
+    get_properties,
+    get_registered_component_names,
+)
 from .styling import (
     _col,
     _apply_ne_style,
@@ -37,14 +41,25 @@ from .styling import (
 
 
 # ═══════════════════════════════════════════════════════════════
-# 辅助: combo 弹窗位置修正 (节点编辑器坐标系下 ImGui 自动定位偏移)
+# 辅助: combo 弹窗 (BeginCombo/EndCombo 手动实现, 绕过 node editor 定位 bug)
 # ═══════════════════════════════════════════════════════════════
 
 def _ne_combo(label: str, idx: int, items: list[str]) -> tuple[bool, int]:
-    """imgui.combo() 包装 — 修正 node editor 内弹窗位置。"""
-    pos = imgui.get_cursor_screen_pos()
-    imgui.set_next_window_pos(imgui.ImVec2(pos.x, pos.y + imgui.get_text_line_height_with_spacing()))
-    return imgui.combo(label, idx, items)
+    """node editor 内 combo — 用 BeginCombo/EndCombo 避免 popup 定位偏移。"""
+    preview = items[idx] if 0 <= idx < len(items) else ""
+    changed = False
+    new_idx = idx
+    if imgui.begin_combo(label, preview):
+        for i, item in enumerate(items):
+            selected = (i == idx)
+            clicked, _ = imgui.selectable(item, selected)
+            if clicked:
+                changed = True
+                new_idx = i
+            if selected:
+                imgui.set_item_default_focus()
+        imgui.end_combo()
+    return changed, new_idx
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -239,40 +254,55 @@ class NodeEditorPanel(BasePanel):
 
     @staticmethod
     def _ensure_default_scene() -> None:
-        """确保 EditorHost 的活跃 Scene 始终与 ECS 世界同步。"""
+        """确保 EditorHost 的活跃 Scene 始终与 ECS 世界同步。
+
+        使用 st.entities 字典（与 ScenePanel 的 GetRootEntities 同源），
+        避免 esper.get_component() 的世界切换时序问题。
+        """
         from Application.Editor.EditorHost import EditorHost
         from Application.Core.Scene.Scene import Scene
         from Application.Core.Scene.SceneManager import SceneManager
         from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
         import copy
 
-        # ★ 显式切到 EditorHost 的 ECS 世界（避免主线程被 GameRuntime 绑定覆盖）
         try:
-            EditorHost.scene._switch_world()  # 切换到 EditorHost 世界
+            st = SceneManager._state_for("EditorHost")
+            st._switch_world()
         except Exception as e:
-            print(f"[NodeEditor] _ensure_default_scene: EditorHost not ready ({e})")
+            print(f"[NodeEditor] _ensure_default_scene: world switch failed ({e})")
             return
 
         scene = EditorHost.get_active_scene()
         if scene is None:
-            scene = Scene("Default", game_type=EditorHost.scene.GetGameType())
+            try:
+                gt = st.GetGameType()
+            except Exception:
+                gt = None
+            scene = Scene("Default", game_type=gt)
             EditorHost.set_active_scene(scene)
 
-        _sys_ids = {EditorHost.scene.get_main_camera_id(), EditorHost.scene.get_main_camera_2d_id()}
+        _sys_ids = {st.get_main_camera_id(), st.get_main_camera_2d_id()}
         scene.entities.clear()
-        count = 0
-        for eid, xform in [(e, c) for e, c in EditorHost.scene.GetAllEntitiesWithComponent(Transform)]:
+
+        # ★ 改用 st.entities 字典迭代（与 ScenePanel 同源），不再依赖 esper.get_component
+        for eid_str in list(st.entities.keys()):
+            eid = int(eid_str)
             if eid in _sys_ids:
                 continue
-            name = EditorHost.scene.GetEntityName(eid) or f"Entity_{eid}"
+            # 只同步有 Transform 的实体
+            try:
+                xform = st.GetComponent(eid, Transform)
+            except Exception:
+                continue
+            name = st.GetEntityName(eid) or f"Entity_{eid}"
             comps = {"Transform": copy.deepcopy(xform)}
             try:
-                cam = EditorHost.scene.GetComponent(eid, Camera)
+                cam = st.GetComponent(eid, Camera)
                 comps["Camera"] = copy.deepcopy(cam)
             except Exception:
                 pass
             try:
-                mr = EditorHost.scene.GetComponent(eid, MeshRenderer)
+                mr = st.GetComponent(eid, MeshRenderer)
                 comps["MeshRenderer"] = copy.deepcopy(mr)
             except Exception:
                 pass
@@ -403,15 +433,11 @@ class NodeEditorPanel(BasePanel):
             if inst.node_type == "EntitySpawn":
                 self._draw_entity_spawn_widgets(nid, inst)
 
-            # CameraConfigure 节点 UI 控件
-            if inst.node_type == "CameraConfigure":
-                self._draw_camera_configure_widgets(nid, inst)
-
-            # ComponentAdd / ComponentRemove / ComponentSetProperty UI 控件
-            if inst.node_type in ("ComponentAdd", "ComponentRemove"):
+            # ComponentAdd / ComponentRemove UI 控件
+            if inst.node_type == "ComponentAdd":
+                self._draw_component_add_widgets(nid, inst)
+            if inst.node_type == "ComponentRemove":
                 self._draw_component_select_widgets(nid, inst)
-            if inst.node_type == "ComponentSetProperty":
-                self._draw_component_set_property_widgets(nid, inst)
 
             # VecMath 节点 UI 控件
             if inst.node_type == "VecMath":
@@ -674,53 +700,22 @@ class NodeEditorPanel(BasePanel):
 
     @staticmethod
     def _get_scene_template_names() -> list[str]:
-        """从 EditorHost 获取当前 Scene 的实体模板名列表。
-
-        Scene 由 _ensure_default_scene() 饥渴创建，此处不再含 fallback。
-        """
+        """从 EditorHost 获取当前 Scene 的实体模板名列表。"""
         from Application.Editor.EditorHost import EditorHost
         scene = EditorHost.get_active_scene()
         if scene is None:
             return []
         return scene.get_entity_names()
 
-    # ── CameraConfigure 节点专用控件 ────────────────────────
-
-    def _draw_camera_configure_widgets(self, nid: int, inst) -> None:
-        """在 CameraConfigure 节点体内绘制投影类型下拉框。"""
-        imgui.dummy(imgui.ImVec2(0, 2))
-        imgui.push_item_width(130)
-
-        proj = inst.props.get("projection", "perspective")
-        labels = ["Perspective", "Orthographic"]
-        try:
-            idx = 0 if proj == "perspective" else 1
-        except (ValueError, IndexError):
-            idx = 0
-        changed, new_idx = _ne_combo(
-            f"##cam_proj_{nid}", idx, labels,
-        )
-        if changed:
-            inst.props["projection"] = "perspective" if new_idx == 0 else "orthographic"
-
-        imgui.same_line()
-        imgui.text_disabled("Projection")
-        imgui.pop_item_width()
-
     # ── Component 节点通用控件 ─────────────────────────────
 
     @staticmethod
     def _get_component_type_names() -> list[str]:
-        """获取已注册的组件类型名列表（排除 Transform — 每个实体自带）。"""
-        try:
-            from Application.Core.Scene.SceneManager import SceneManager
-            reg = EditorHost.scene.GetRegisteredComponents()
-            return sorted([n for n in reg if n != "Transform"], key=lambda n: n.lower())
-        except Exception:
-            return ["Camera", "MeshRenderer"]
+        """获取已注册的组件类型名列表。"""
+        return get_registered_component_names()
 
     def _draw_component_select_widgets(self, nid: int, inst) -> None:
-        """ComponentAdd / ComponentRemove: 组件类型下拉选择。"""
+        """ComponentRemove: 组件类型下拉选择。"""
         imgui.dummy(imgui.ImVec2(0, 2))
         imgui.push_item_width(130)
 
@@ -741,36 +736,111 @@ class NodeEditorPanel(BasePanel):
         imgui.text_disabled("Type")
         imgui.pop_item_width()
 
-    def _draw_component_set_property_widgets(self, nid: int, inst) -> None:
-        """ComponentSetProperty: 组件类型下拉 + 属性名输入框。"""
+    # ── ComponentAdd 专用控件 ──────────────────────────────
+
+    def _draw_component_add_widgets(self, nid: int, inst) -> None:
+        """ComponentAdd: 组件类型下拉 + Manual/Pin 切换 + 属性行。
+
+        Manual 模式: 每个属性显示 ScenePanel 风格的内联控件（drag_float3 等）
+        Pin 模式:   属性以 data input pin 形式暴露，可连线
+        """
         imgui.dummy(imgui.ImVec2(0, 2))
 
-        # ── 组件类型 ──
-        imgui.push_item_width(130)
+        # ── 第 1 行: 组件类型下拉 ──
         comp_name = inst.props.get("component", "")
         labels = self._get_component_type_names()
         if not labels:
             labels = ["(none)"]
+
+        # ★ 自动选中第一个有效类型（新节点 comp_name 为空时）
+        if not comp_name and labels and labels[0] != "(none)":
+            inst.props["component"] = labels[0]
+            comp_name = labels[0]
+
         try:
             idx = labels.index(comp_name) if comp_name in labels else 0
         except ValueError:
             idx = 0
-        changed, new_idx = _ne_combo(f"##csp_comp_{nid}", idx, labels)
+
+        imgui.push_item_width(110)
+        changed, new_idx = _ne_combo(f"##comp_type_{nid}", idx, labels)
         if changed:
             inst.props["component"] = labels[new_idx]
-        imgui.same_line()
-        imgui.text_disabled("Comp")
+            comp_name = labels[new_idx]
         imgui.pop_item_width()
+        imgui.same_line()
+        imgui.text_disabled("Type")
 
-        # ── 属性名 ──
-        imgui.push_item_width(130)
-        prop = inst.props.get("property", "")
-        changed, new_prop = imgui.input_text(f"##csp_prop_{nid}", prop, 64)
-        if changed:
-            inst.props["property"] = new_prop
-        imgui.same_line()
-        imgui.text_disabled("Prop")
-        imgui.pop_item_width()
+        # ── 第 2 行: Manual / Pin 切换 ──
+        props = get_properties(comp_name) if comp_name else []
+        if props:
+            mode = inst.props.get("mode", "manual")
+            imgui.spacing()
+            if imgui.radio_button(f"Manual##ca_mode_man_{nid}", mode == "manual"):
+                inst.props["mode"] = "manual"
+            imgui.same_line()
+            if imgui.radio_button(f"Pin##ca_mode_pin_{nid}", mode == "pin"):
+                inst.props["mode"] = "pin"
+
+            # ── 第 3 行+: 属性行 ──
+            if mode == "manual":
+                self._draw_component_property_rows(nid, inst, comp_name, props)
+
+    def _draw_component_property_rows(
+        self, nid: int, inst, comp_name: str, props: list,
+    ) -> None:
+        """在 Manual 模式下绘制每个属性的内联控件。
+
+        控件样式与 ScenePanel 保持一致：
+          Transform: drag_float3 (Position / Rotation / Scale)
+          Camera:    drag_float + checkbox + combo
+          MeshRenderer: combo + checkbox
+        """
+        for prop in props:
+            key = f"{comp_name}.{prop.name}"
+            default = list(prop.default) if isinstance(prop.default, tuple) else prop.default
+
+            if prop.widget == "drag_float3":
+                val = list(inst.props.get(key, default))
+                cfg = prop.widget_config
+                changed, new_val = imgui.drag_float3(
+                    prop.label, val,
+                    v_speed=cfg.get("speed", 0.1),
+                    format=cfg.get("format", "%.2f"),
+                )
+                if changed:
+                    inst.props[key] = tuple(new_val)
+
+            elif prop.widget == "drag_float":
+                val = float(inst.props.get(key, default))
+                cfg = prop.widget_config
+                changed, new_val = imgui.drag_float(
+                    prop.label, val,
+                    v_speed=cfg.get("speed", 0.5),
+                    v_min=cfg.get("min", None) or 0.0,
+                    v_max=cfg.get("max", None) or 0.0,
+                    format=cfg.get("format", "%.2f"),
+                )
+                if changed:
+                    inst.props[key] = new_val
+
+            elif prop.widget == "checkbox":
+                val = bool(inst.props.get(key, default))
+                changed, new_val = imgui.checkbox(prop.label, val)
+                if changed:
+                    inst.props[key] = new_val
+
+            elif prop.widget == "combo":
+                options = prop.widget_config.get("options", [])
+                if options:
+                    val = inst.props.get(key, default)
+                    try:
+                        opt_idx = options.index(val) if val in options else 0
+                    except ValueError:
+                        opt_idx = 0
+                    changed, new_opt_idx = imgui.combo(prop.label, opt_idx, options)
+                    if changed:
+                        inst.props[key] = options[new_opt_idx]
 
     # ── VecMath 节点专用控件 ───────────────────────────────
 
@@ -816,13 +886,6 @@ class NodeEditorPanel(BasePanel):
             op = inst.props.get("operation", "add")
             if op in ("normalize", "length"):
                 return [p for p in nd.pins if p.name != "B"]
-        # ── CameraConfigure: 按投影类型过滤 FOV / OrthoSize pin ──
-        if inst.node_type == "CameraConfigure":
-            proj = inst.props.get("projection", "perspective")
-            if proj == "perspective":
-                return [p for p in nd.pins if p.name != "OrthoSize"]
-            else:
-                return [p for p in nd.pins if p.name != "FOV"]
         # ── ScalarMath: 自增输入 pin（有连线才显示） ──
         if inst.node_type == "ScalarMath":
             if canvas is not None:
@@ -897,6 +960,21 @@ class NodeEditorPanel(BasePanel):
                     if p.name == "out_0":
                         visible.append(p)
                         break
+            return visible
+
+        # ── ComponentAdd: 按组件类型过滤属性 Pin ──
+        if inst.node_type == "ComponentAdd":
+            comp_name = inst.props.get("component", "")
+            mode = inst.props.get("mode", "manual")
+            props = get_properties(comp_name) if comp_name else []
+            prop_names = {p.name for p in props}
+            visible = []
+            for p in nd.pins:
+                if p.name in ("exec_in", "exec_out", "Entity"):
+                    visible.append(p)
+                elif p.name in prop_names:
+                    if mode == "pin":
+                        visible.append(p)
             return visible
 
         return list(nd.pins)

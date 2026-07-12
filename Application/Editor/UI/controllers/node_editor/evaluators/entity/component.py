@@ -102,6 +102,7 @@ def _apply_component_properties(
             return
 
     # ── 通用: 逐个 setattr ──
+    modified = False
     for prop in props:
         val = _read_component_prop(
             node_id, prop.name, ctx, g, inst, comp_name, prop.default)
@@ -113,6 +114,7 @@ def _apply_component_properties(
         if hasattr(comp, attr):
             try:
                 setattr(comp, attr, val)
+                modified = True
             except Exception as e:
                 print(f"[{inst.node_type}] Failed to set {comp_name}.{attr}: {e}")
 
@@ -120,27 +122,22 @@ def _apply_component_properties(
     if comp_name == "MeshRenderer" and eid >= 0:
         from Application.Core.Scene.BasicComponents import MeshRenderer
         if isinstance(comp, MeshRenderer):
-            ctx.scene.SetEntityRenderVisible(eid, visible=comp.visible)
+            if modified:
+                ctx.scene.SetEntityRenderVisible(eid, visible=comp.visible)
 
 
 def _resolve_component(
     eid: int, comp_name: str, ctx, create_if_missing: bool,
 ) -> tuple[object | None, str]:
-    """解析组件：获取或创建组件实例。返回 (comp_instance, error_msg)。
+    """解析非 Transform 组件：获取或创建组件实例。返回 (comp, error_msg)。
 
     create_if_missing=True  → ComponentAdd: 不存在则创建
     create_if_missing=False → SetComponent: 不存在则报错
-    """
-    from Application.Core.Scene.BasicComponents import Transform
 
+    注: Transform 不走此函数 — 每个实体自带，直接走 SetEntityTransformEditor。
+    """
     registered = ctx.scene.GetRegisteredComponents()
     comp_cls = registered.get(comp_name)
-
-    if comp_name == "Transform":
-        try:
-            return ctx.scene.GetComponent(eid, Transform), ""
-        except Exception:
-            return None, f"Entity #{eid} has no Transform"
 
     if comp_cls is None:
         return None, f"Unknown component '{comp_name}'"
@@ -173,12 +170,7 @@ def _eval_component_add(node_id: int, ctx: ExecutionContext,
         print("[ComponentAdd] No component type selected")
         return
 
-    comp, err = _resolve_component(eid, comp_name, ctx, create_if_missing=True)
-    if comp is None:
-        print(f"[ComponentAdd] {err}")
-        return
-
-    # ── Transform 特殊处理 (走 SceneManager, 支持 _SKIP 局部修改) ──
+    # ── Transform: 直接走 SetEntityTransformEditor (每个实体自带, 无需 resolve) ──
     if comp_name == "Transform":
         pos_val = _read_component_prop(
             node_id, "Position", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
@@ -186,17 +178,24 @@ def _eval_component_add(node_id: int, ctx: ExecutionContext,
             node_id, "Rotation", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
         scl_val = _read_component_prop(
             node_id, "Scale", ctx, g, inst, comp_name, (1.0, 1.0, 1.0))
+        try:
+            ctx.scene.SetEntityTransformEditor(
+                eid,
+                position_xyz=_to_vec3_tuple(pos_val) if pos_val is not _SKIP else None,
+                rotation_xyz=_to_vec3_tuple(rot_val) if rot_val is not _SKIP else None,
+                scale_xyz=_to_vec3_tuple(scl_val) if scl_val is not _SKIP else None,
+            )
+            print(f"[ComponentAdd] Transform "
+                  f"pos={'SKIP' if pos_val is _SKIP else _to_vec3_tuple(pos_val)} "
+                  f"rot={'SKIP' if rot_val is _SKIP else _to_vec3_tuple(rot_val)} "
+                  f"scl={'SKIP' if scl_val is _SKIP else _to_vec3_tuple(scl_val)}")
+        except Exception as e:
+            print(f"[ComponentAdd] Transform failed: {e}")
+        return
 
-        ctx.scene.SetEntityTransformEditor(
-            eid,
-            position_xyz=_to_vec3_tuple(pos_val) if pos_val is not _SKIP else None,
-            rotation_xyz=_to_vec3_tuple(rot_val) if rot_val is not _SKIP else None,
-            scale_xyz=_to_vec3_tuple(scl_val) if scl_val is not _SKIP else None,
-        )
-        print(f"[ComponentAdd] Transform "
-              f"pos={'SKIP' if pos_val is _SKIP else _to_vec3_tuple(pos_val)} "
-              f"rot={'SKIP' if rot_val is _SKIP else _to_vec3_tuple(rot_val)} "
-              f"scl={'SKIP' if scl_val is _SKIP else _to_vec3_tuple(scl_val)}")
+    comp, err = _resolve_component(eid, comp_name, ctx, create_if_missing=True)
+    if comp is None:
+        print(f"[ComponentAdd] {err}")
         return
 
     _apply_component_properties(node_id, ctx, g, inst, comp_name, comp, eid=eid)
@@ -222,12 +221,7 @@ def _eval_set_component(node_id: int, ctx: ExecutionContext,
         print("[SetComponent] No component type selected")
         return
 
-    comp, err = _resolve_component(eid, comp_name, ctx, create_if_missing=False)
-    if comp is None:
-        print(f"[SetComponent] {err}")
-        return
-
-    # ── Transform 特殊处理 (走 SceneManager, 支持 _SKIP 局部修改) ──
+    # ── Transform: 直接走 SetEntityTransformEditor (每个实体自带, 无需 resolve) ──
     if comp_name == "Transform":
         pos_val = _read_component_prop(
             node_id, "Position", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
@@ -235,21 +229,30 @@ def _eval_set_component(node_id: int, ctx: ExecutionContext,
             node_id, "Rotation", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
         scl_val = _read_component_prop(
             node_id, "Scale", ctx, g, inst, comp_name, (1.0, 1.0, 1.0))
+        try:
+            ctx.scene.SetEntityTransformEditor(
+                eid,
+                position_xyz=_to_vec3_tuple(pos_val) if pos_val is not _SKIP else None,
+                rotation_xyz=_to_vec3_tuple(rot_val) if rot_val is not _SKIP else None,
+                scale_xyz=_to_vec3_tuple(scl_val) if scl_val is not _SKIP else None,
+            )
+            print(f"[SetComponent] Transform "
+                  f"pos={'SKIP' if pos_val is _SKIP else _to_vec3_tuple(pos_val)} "
+                  f"rot={'SKIP' if rot_val is _SKIP else _to_vec3_tuple(rot_val)} "
+                  f"scl={'SKIP' if scl_val is _SKIP else _to_vec3_tuple(scl_val)}")
+        except Exception as e:
+            print(f"[SetComponent] Transform failed: {e}")
+        return
 
-        ctx.scene.SetEntityTransformEditor(
-            eid,
-            position_xyz=_to_vec3_tuple(pos_val) if pos_val is not _SKIP else None,
-            rotation_xyz=_to_vec3_tuple(rot_val) if rot_val is not _SKIP else None,
-            scale_xyz=_to_vec3_tuple(scl_val) if scl_val is not _SKIP else None,
-        )
-        print(f"[SetComponent] Transform "
-              f"pos={'SKIP' if pos_val is _SKIP else _to_vec3_tuple(pos_val)} "
-              f"rot={'SKIP' if rot_val is _SKIP else _to_vec3_tuple(rot_val)} "
-              f"scl={'SKIP' if scl_val is _SKIP else _to_vec3_tuple(scl_val)}")
+    comp, err = _resolve_component(eid, comp_name, ctx, create_if_missing=False)
+    if comp is None:
+        print(f"[SetComponent] {err}")
         return
 
     _apply_component_properties(node_id, ctx, g, inst, comp_name, comp, eid=eid)
     print(f"[SetComponent] '{comp_name}' properties set on entity #{eid}")
+
+register_evaluator("SetComponent", _eval_set_component)
 
 register_evaluator("SetComponent", _eval_set_component)
 

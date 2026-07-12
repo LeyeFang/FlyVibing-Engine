@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 
@@ -63,25 +64,32 @@ class GraphEvaluator:
         self._types = _TYPES           # 节点类型注册表
         self._node_state: dict[int, dict] = {}  # node_id → state dict
         self._eval_guard: set[int] = set()      # 数据节点懒求值环检测
+        self._trigger_lock = threading.Lock()   # ★ 线程锁: OnGameStart/OnFrameUpdate 并发保护
+        self._exec_visited: set[int] = set()
 
     # ── 入口 ───────────────────────────────────────────────
 
     def trigger(self, event_type: str, ctx: ExecutionContext) -> None:
-        """触发指定类型的事件节点，遍历其 exec 链。
+        """触发指定类型的事件节点，遍历其 exec 链。线程安全。"""
+        with self._trigger_lock:
+            self._eval_guard.clear()
+            ctx._pin_values.clear()
+            self._exec_visited.clear()
 
-        event_type: "OnGameStart" | "OnFrameUpdate" | "OnGameStop"
-        """
-        self._eval_guard.clear()  # 每帧重置环检测
-        ctx._pin_values.clear()   # 每帧清除 data pin 缓存，强制重新求值
-        for nid, inst in self._canvas.nodes.items():
-            nd = self._types.get(inst.node_type)
-            if nd and nd.category == "Event" and inst.node_type == event_type:
-                self._walk_exec(nid, ctx)
+            for nid, inst in self._canvas.nodes.items():
+                nd = self._types.get(inst.node_type)
+                if nd and nd.category == "Event" and inst.node_type == event_type:
+                    self._walk_exec(nid, ctx)
 
     # ── exec 链遍历 ────────────────────────────────────────
 
     def _walk_exec(self, node_id: int, ctx: ExecutionContext) -> None:
         """从给定节点出发，执行它，然后跟随 exec output pin 走向下游。"""
+        # ★ 防重复: 同一 trigger 内不重复执行同一节点
+        if node_id in self._exec_visited:
+            return
+        self._exec_visited.add(node_id)
+
         inst = self._canvas.nodes.get(node_id)
         if inst is None:
             return

@@ -129,18 +129,21 @@ def _eval_component_add(node_id: int, ctx: ExecutionContext,
     # ── Transform 特殊处理 (vec3 分解) ──
     if comp_name == "Transform":
         from Application.Core.Scene.BasicComponents import Transform
+        from Application.Core.Math.CoordinateSystem import editor_to_gl_position, editor_to_gl_scale
         if isinstance(comp, Transform):
-            pos = _to_vec3_tuple(_read_component_prop(
+            pos_editor = _to_vec3_tuple(_read_component_prop(
                 node_id, "Position", ctx, g, inst, comp_name, (0.0, 0.0, 0.0)))
             rot = _to_vec3_tuple(_read_component_prop(
                 node_id, "Rotation", ctx, g, inst, comp_name, (0.0, 0.0, 0.0)))
-            scl = _to_vec3_tuple(_read_component_prop(
+            scl_editor = _to_vec3_tuple(_read_component_prop(
                 node_id, "Scale", ctx, g, inst, comp_name, (1.0, 1.0, 1.0)))
-            comp.position_x, comp.position_y, comp.position_z = pos
+            # ★ 编辑器坐标系 → GL 坐标系 (CoordinateSystem 统一接口)
+            gl_x, gl_y, gl_z = editor_to_gl_position(*pos_editor)
+            gl_sx, gl_sy, gl_sz = editor_to_gl_scale(*scl_editor)
+            comp.position_x, comp.position_y, comp.position_z = gl_x, gl_y, gl_z
             comp.rotation_x, comp.rotation_y, comp.rotation_z = rot
-            comp.scale_x, comp.scale_y, comp.scale_z = scl
-            print(f"[ComponentAdd] Transform set on entity #{eid}: "
-                  f"pos={pos}, rot={rot}, scl={scl}")
+            comp.scale_x, comp.scale_y, comp.scale_z = gl_sx, gl_sy, gl_sz
+            print(f"[ComponentAdd] Transform editor pos={pos_editor} → GL pos=({gl_x:.2f},{gl_y:.2f},{gl_z:.2f})")
             return
 
     _apply_component_properties(node_id, ctx, g, inst, comp_name, comp)
@@ -174,18 +177,21 @@ def _eval_set_component(node_id: int, ctx: ExecutionContext,
     # ── Transform 特殊处理 ──
     if comp_name == "Transform":
         from Application.Core.Scene.BasicComponents import Transform
+        from Application.Core.Math.CoordinateSystem import editor_to_gl_position, editor_to_gl_scale
         if isinstance(comp, Transform):
-            pos = _to_vec3_tuple(_read_component_prop(
+            pos_editor = _to_vec3_tuple(_read_component_prop(
                 node_id, "Position", ctx, g, inst, comp_name, (0.0, 0.0, 0.0)))
             rot = _to_vec3_tuple(_read_component_prop(
                 node_id, "Rotation", ctx, g, inst, comp_name, (0.0, 0.0, 0.0)))
-            scl = _to_vec3_tuple(_read_component_prop(
+            scl_editor = _to_vec3_tuple(_read_component_prop(
                 node_id, "Scale", ctx, g, inst, comp_name, (1.0, 1.0, 1.0)))
-            comp.position_x, comp.position_y, comp.position_z = pos
+            # ★ 编辑器坐标系 → GL 坐标系 (CoordinateSystem 统一接口)
+            gl_x, gl_y, gl_z = editor_to_gl_position(*pos_editor)
+            gl_sx, gl_sy, gl_sz = editor_to_gl_scale(*scl_editor)
+            comp.position_x, comp.position_y, comp.position_z = gl_x, gl_y, gl_z
             comp.rotation_x, comp.rotation_y, comp.rotation_z = rot
-            comp.scale_x, comp.scale_y, comp.scale_z = scl
-            print(f"[SetComponent] Transform set on entity #{eid}: "
-                  f"pos={pos}, rot={rot}, scl={scl}")
+            comp.scale_x, comp.scale_y, comp.scale_z = gl_sx, gl_sy, gl_sz
+            print(f"[SetComponent] Transform editor pos={pos_editor} → GL pos=({gl_x:.2f},{gl_y:.2f},{gl_z:.2f})")
             return
 
     _apply_component_properties(node_id, ctx, g, inst, comp_name, comp)

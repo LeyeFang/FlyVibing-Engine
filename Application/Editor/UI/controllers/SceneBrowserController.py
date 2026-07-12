@@ -329,8 +329,11 @@ class SceneBrowserController:
 
     @classmethod
     def add_entity(cls, name: str = "") -> int:
-        """创建新实体（仅 Transform），返回 entity_id。"""
-        eid = EditorHost.scene.AddEntity(name=name or "Entity")
+        """创建新实体（仅 Transform），返回 entity_id。
+        
+        若未提供 name，自动生成 "Entity_{id}" 以避免同名。
+        """
+        eid = EditorHost.scene.AddEntity(name=name)
         if cls.selected_entity_id is not None:
             EditorHost.scene.SetEntityParent(eid, cls.selected_entity_id)
         return eid

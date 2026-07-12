@@ -37,9 +37,10 @@ Two types of matrices exist in this codebase:
   └──────────────────────────────┴──────────┴───────────────┘
 
 SUB-MODULES:
-  - Transform  : TRS entity model matrix from (position, rotation, scale) tuples
-  - Camera     : View / Projection / Orbit camera math (pure numeric params)
-  - ViewGizmo  : ViewGizmo cube NDC model matrix
+  - Transform       : TRS entity model matrix from (position, rotation, scale) tuples
+  - Camera          : View / Projection / Orbit camera math (pure numeric params)
+  - ViewGizmo       : ViewGizmo cube NDC model matrix
+  - CoordinateSystem: Editor ↔ GL coordinate axis conversion
 """
 
 from __future__ import annotations
@@ -57,6 +58,16 @@ from Application.Core.Math.Camera import (
     get_world_forward,
 )
 from Application.Core.Math.ViewGizmo import compute_cube_model
+from Application.Core.Math.CoordinateSystem import (
+    gl_to_editor_position,
+    editor_to_gl_position,
+    gl_to_editor_scale,
+    editor_to_gl_scale,
+    gl_to_editor_vec3,
+    editor_to_gl_vec3,
+    gl_to_editor_scale_vec3,
+    editor_to_gl_scale_vec3,
+)
 
 __all__ = [
     # Transform
@@ -72,4 +83,13 @@ __all__ = [
     "get_world_forward",
     # ViewGizmo
     "compute_cube_model",
+    # CoordinateSystem
+    "gl_to_editor_position",
+    "editor_to_gl_position",
+    "gl_to_editor_scale",
+    "editor_to_gl_scale",
+    "gl_to_editor_vec3",
+    "editor_to_gl_vec3",
+    "gl_to_editor_scale_vec3",
+    "editor_to_gl_scale_vec3",
 ]

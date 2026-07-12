@@ -300,8 +300,8 @@ class SceneManager:
         entity_id = esper.create_entity(Transform())
         st.entities[f'{entity_id}'] = 1
         st._editor_visible.add(entity_id)    # ★ 新实体默认编辑器可见
-        if name:
-            st._entity_names[entity_id] = name
+        # 自动生成唯一名称: 未提供 name 时使用 "Entity_{id}"
+        st._entity_names[entity_id] = name if name else f"Entity_{entity_id}"
         return entity_id
 
     @classmethod
@@ -607,25 +607,28 @@ class SceneManager:
 
     # ============================================================
     # 坐标系转换 / Coordinate Conversion
+    #   ★ 委托到 Application.Core.Math.CoordinateSystem (唯一权威来源)
     # ============================================================
 
     @staticmethod
     def gl_to_editor_position(gl_x: float, gl_y: float, gl_z: float) -> tuple[float, float, float]:
-        return (gl_x, -gl_z, gl_y)
+        from Application.Core.Math.CoordinateSystem import gl_to_editor_position as _fn
+        return _fn(gl_x, gl_y, gl_z)
 
     @staticmethod
     def editor_to_gl_position(editor_x: float, editor_y: float, editor_z: float) -> tuple[float, float, float]:
-        return (editor_x, editor_z, -editor_y)
+        from Application.Core.Math.CoordinateSystem import editor_to_gl_position as _fn
+        return _fn(editor_x, editor_y, editor_z)
 
     @staticmethod
     def gl_to_editor_scale(gl_sx: float, gl_sy: float, gl_sz: float) -> tuple[float, float, float]:
-        """GL 轴缩放 → 编辑器轴缩放: 交换 Y↔Z, 无需符号翻转 (scale 是大小量)。"""
-        return (gl_sx, gl_sz, gl_sy)
+        from Application.Core.Math.CoordinateSystem import gl_to_editor_scale as _fn
+        return _fn(gl_sx, gl_sy, gl_sz)
 
     @staticmethod
     def editor_to_gl_scale(editor_sx: float, editor_sy: float, editor_sz: float) -> tuple[float, float, float]:
-        """编辑器轴缩放 → GL 轴缩放: 交换 Y↔Z。"""
-        return (editor_sx, editor_sz, editor_sy)
+        from Application.Core.Math.CoordinateSystem import editor_to_gl_scale as _fn
+        return _fn(editor_sx, editor_sy, editor_sz)
 
     @classmethod
     def GetEntityTransformEditor(cls, entity_id: int) -> dict:

@@ -49,7 +49,6 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
     # ── 3. 从模板拷贝组件到实例 ──
     if entity_def is not None:
         _instantiate_components(eid, entity_def, ctx)
-    # 无模板定义 → Empty (Transform 已在 AddEntity 中创建)
 
     # ── 4. 覆盖 Position / Rotation (pin 值优先于模板默认值) ──
     pos = _read_vec3_input(node_id, "Position", ctx, g)

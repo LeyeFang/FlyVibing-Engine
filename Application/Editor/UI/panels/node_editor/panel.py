@@ -433,9 +433,11 @@ class NodeEditorPanel(BasePanel):
             if inst.node_type == "EntitySpawn":
                 self._draw_entity_spawn_widgets(nid, inst)
 
-            # ComponentAdd / SetComponent / ComponentRemove UI 控件
+            # ComponentAdd / SetComponent / GetComponent / ComponentRemove UI 控件
             if inst.node_type in ("ComponentAdd", "SetComponent"):
                 self._draw_component_add_widgets(nid, inst)
+            if inst.node_type == "GetComponent":
+                self._draw_component_get_widgets(nid, inst)
             if inst.node_type == "ComponentRemove":
                 self._draw_component_select_widgets(nid, inst)
 
@@ -736,6 +738,34 @@ class NodeEditorPanel(BasePanel):
         imgui.text_disabled("Type")
         imgui.pop_item_width()
 
+    # ── GetComponent 专用控件 ──────────────────────────────
+
+    def _draw_component_get_widgets(self, nid: int, inst) -> None:
+        """GetComponent: 组件类型下拉（仅输出 pin，无 Manual/Pin 切换）。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+
+        comp_name = inst.props.get("component", "")
+        labels = self._get_component_type_names()
+        if not labels:
+            labels = ["(none)"]
+
+        if not comp_name and labels and labels[0] != "(none)":
+            inst.props["component"] = labels[0]
+            comp_name = labels[0]
+
+        try:
+            idx = labels.index(comp_name) if comp_name in labels else 0
+        except ValueError:
+            idx = 0
+
+        imgui.push_item_width(110)
+        changed, new_idx = _ne_combo(f"##comp_type_{nid}", idx, labels)
+        if changed:
+            inst.props["component"] = labels[new_idx]
+        imgui.pop_item_width()
+        imgui.same_line()
+        imgui.text_disabled("Type")
+
     # ── ComponentAdd 专用控件 ──────────────────────────────
 
     def _draw_component_add_widgets(self, nid: int, inst) -> None:
@@ -789,11 +819,22 @@ class NodeEditorPanel(BasePanel):
     def _draw_component_property_rows(
         self, nid: int, inst, comp_name: str, props: list,
     ) -> None:
-        """在 Manual 模式下绘制每个属性的内联控件。"""
+        """在 Manual 模式下绘制每个属性的内联控件 + [√] 启用勾选框。"""
         imgui.push_item_width(105)
         for prop in props:
             key = f"{comp_name}.{prop.name}"
+            enabled_key = f"{key}.enabled"
+            enabled = inst.props.get(enabled_key, True)
             default = list(prop.default) if isinstance(prop.default, tuple) else prop.default
+
+            # ── [√] 启用勾选框 ──
+            changed_en, enabled = imgui.checkbox(f"##en_{nid}_{prop.name}", enabled)
+            if changed_en:
+                inst.props[enabled_key] = enabled
+            imgui.same_line()
+
+            if not enabled:
+                imgui.begin_disabled(True)
 
             if prop.widget == "drag_float3":
                 val = list(inst.props.get(key, default))
@@ -843,6 +884,9 @@ class NodeEditorPanel(BasePanel):
                     changed, new_opt_idx = imgui.combo(prop.label, opt_idx, options)
                     if changed:
                         inst.props[key] = options[new_opt_idx]
+
+            if not enabled:
+                imgui.end_disabled()
         imgui.pop_item_width()
 
     # ── VecMath 节点专用控件 ───────────────────────────────
@@ -965,10 +1009,9 @@ class NodeEditorPanel(BasePanel):
                         break
             return visible
 
-        # ── ComponentAdd / SetComponent: 按组件类型过滤属性 Pin ──
-        if inst.node_type in ("ComponentAdd", "SetComponent"):
+        # ── ComponentAdd / SetComponent / GetComponent: 按组件类型过滤属性 Pin ──
+        if inst.node_type in ("ComponentAdd", "SetComponent", "GetComponent"):
             comp_name = inst.props.get("component", "")
-            mode = inst.props.get("mode", "manual")
             props = get_properties(comp_name) if comp_name else []
             prop_names = {p.name for p in props}
             visible = []
@@ -976,8 +1019,12 @@ class NodeEditorPanel(BasePanel):
                 if p.name in ("exec_in", "exec_out", "Entity"):
                     visible.append(p)
                 elif p.name in prop_names:
-                    if mode == "pin":
-                        visible.append(p)
+                    if inst.node_type == "GetComponent":
+                        visible.append(p)  # GetComponent: 输出 pin 始终可见
+                    else:
+                        mode = inst.props.get("mode", "manual")
+                        if mode == "pin":
+                            visible.append(p)
             return visible
 
         return list(nd.pins)

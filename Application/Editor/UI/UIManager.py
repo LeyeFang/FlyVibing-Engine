@@ -152,16 +152,6 @@ class UIManager:
 
             # ── File 菜单 ──
             if imgui.begin_menu("File", True):
-                # Import 子菜单
-                if imgui.begin_menu("Import", True):
-                    if imgui.menu_item("Mesh...", "", False, True)[0]:
-                        FileDialog.open_mesh(ImportService.load_mesh)
-                    if imgui.menu_item("Texture...", "", False, True)[0]:
-                        FileDialog.open_texture(ImportService.load_texture)
-                    if imgui.menu_item("Shader...", "", False, True)[0]:
-                        FileDialog.open_shader(ImportService.load_shader)
-                    imgui.end_menu()
-                imgui.separator()
                 if imgui.menu_item("New Scene", "Ctrl+N", False, False)[0]:
                     pass
                 if imgui.menu_item("Open Scene...", "Ctrl+O", False, False)[0]:

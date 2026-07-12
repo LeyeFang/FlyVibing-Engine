@@ -1,0 +1,129 @@
+{
+  "version": "0.1.0",
+  "scene": {
+    "name": "Default",
+    "game_type": "3d",
+    "entities": {
+      "1": {
+        "name": "DefaultCamera3D",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 10.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 10.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "Camera": {
+            "projection_type": "perspective",
+            "fov": 45.0,
+            "aspect_ratio": 1.7777777777777777,
+            "ortho_size": 5.0,
+            "near_plane": 0.1,
+            "far_plane": 1000.0,
+            "local_forward": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "up_vector": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "is_primary": true
+          }
+        }
+      },
+      "2": {
+        "name": "DefaultCamera2D",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 10.0,
+            "rotation_x": 1.5707963267948966,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 10.0,
+            "local_rot_x": 1.5707963267948966,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "Camera": {
+            "projection_type": "orthographic",
+            "fov": 45.0,
+            "aspect_ratio": 1.7777777777777777,
+            "ortho_size": 10.0,
+            "near_plane": 0.1,
+            "far_plane": 100.0,
+            "local_forward": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "up_vector": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "is_primary": false
+          }
+        }
+      },
+      "3": {
+        "name": "DefaultCube",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "MeshRenderer": {
+            "mesh_id": 2,
+            "material_id": 1,
+            "visible": true
+          }
+        }
+      }
+    },
+    "main_camera_entity_id": 1,
+    "next_eid": 4
+  }
+}

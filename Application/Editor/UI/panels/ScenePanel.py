@@ -68,6 +68,53 @@ class ScenePanel(BasePanel):
             SceneBrowserController.load_material_from_file(entity_id, file_path)
 
     # ============================================================
+    # Scene I/O 回调
+    # ============================================================
+
+    def _on_save_scene(self) -> None:
+        """打开保存场景对话框 → 选择路径 → 执行保存。"""
+        from Application.Editor.EditorHost import EditorHost
+        scene = EditorHost.get_active_scene()
+        default_name = f"{scene.name}.scene" if scene else "Untitled.scene"
+        FileDialog.save_scene(
+            callback=lambda p: self._do_save_scene(p),
+            default_name=default_name,
+        )
+
+    @staticmethod
+    def _do_save_scene(path: str) -> None:
+        """执行场景保存到 .scene 文件。"""
+        if not path:
+            return
+        from Application.Editor.EditorHost import EditorHost
+        ok = EditorHost.save_active_scene_to_file(path)
+        if ok:
+            print(f"[ScenePanel] Scene saved to: {path}")
+        else:
+            print(f"[ScenePanel] ERROR: Failed to save scene to: {path}")
+
+    def _on_load_scene(self) -> None:
+        """打开加载场景对话框 → 选择文件 → 执行加载。"""
+        FileDialog.open_scene(
+            callback=lambda p: self._do_load_scene(p),
+        )
+
+    @staticmethod
+    def _do_load_scene(path: str) -> None:
+        """执行从 .scene 文件加载场景。"""
+        if not path:
+            return
+        from Application.Editor.EditorHost import EditorHost
+        scene = EditorHost.load_scene_from_file(path)
+        if scene is not None:
+            print(f"[ScenePanel] Scene loaded from: {path}")
+            print(f"  Name: {scene.name}")
+            print(f"  Entities: {len(scene.entities)}")
+            print(f"  Node Graph: {'present' if scene.node_graph else 'none'}")
+        else:
+            print(f"[ScenePanel] ERROR: Failed to load scene from: {path}")
+
+    # ============================================================
     # 主绘制入口
     # ============================================================
 
@@ -109,13 +156,14 @@ class ScenePanel(BasePanel):
     def _draw_header(
         self
     ) -> None:
-        """场景下拉选择器 — Scene: [▼列表] [+]新建。"""
+        """场景下拉选择器 — Scene: [▼列表] [+] [💾保存] [📂加载]。"""
         scene_names = self._browser_ctrl.get_scene_names()
         current_name = self._browser_ctrl.get_active_scene_name()
 
         imgui.text("Scene:")
         imgui.same_line()
-        imgui.set_next_item_width(imgui.get_content_region_avail().x - 74)
+        # 为 [+] [💾] [📂] 三个按钮预留宽度
+        imgui.set_next_item_width(imgui.get_content_region_avail().x - 120)
         if imgui.begin_combo("##scene_select", current_name):
             for sname in scene_names:
                 is_sel = (sname == current_name)
@@ -128,6 +176,14 @@ class ScenePanel(BasePanel):
         imgui.same_line()
         if imgui.small_button(f"{fa.ICON_FA_PLUS}##new_scene_btn"):
             imgui.open_popup("new_scene_popup")
+
+        imgui.same_line()
+        if imgui.small_button(f"{fa.ICON_FA_FLOPPY_DISK}##save_scene_btn"):
+            self._on_save_scene()
+
+        imgui.same_line()
+        if imgui.small_button(f"{fa.ICON_FA_FOLDER_OPEN}##load_scene_btn"):
+            self._on_load_scene()
 
         if imgui.begin_popup("new_scene_popup"):
             imgui.text_colored(
@@ -286,8 +342,10 @@ class ScenePanel(BasePanel):
         for entity_id in root_ids:
             self._draw_entity_node(entity_id, selected)
 
-        # ── 树底部空白: 拖放到此处解除父子关系 ──
+        # ── 树底部空白: 拖放到此处解除父子关系 / 点击空白取消选中 ──
         imgui.dummy(imgui.ImVec2(imgui.get_content_region_avail().x, 20))
+        if imgui.is_item_clicked():
+            self._selection_ctrl.clear()
         if imgui.begin_drag_drop_target():
             payload = imgui.accept_drag_drop_payload_py_id("ENTITY")
             if payload is not None:

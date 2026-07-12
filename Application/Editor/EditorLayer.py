@@ -12,7 +12,7 @@ from Application.Core.Events.Event import Event
 from Application.Core.Events.InputEvent import *
 from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
 from Application.Core.Events.WindowEvent import WindowResizeEvent
-from Application.Core.Renderer.RenderCommand import SetViewProjectionCommand
+from Application.Core.Renderer.RenderCommand import SetViewProjectionCommand, EntityRegistrationCommand
 from Application.Core.Events.Enum.InputEnum import (
     MouseButtonCode, 
     MouseActionCode,
@@ -65,7 +65,7 @@ class EditorLayer(Layer):
     def OnAttach(cls):
         """编辑器层初始化 — 创建 ImGui 上下文、注册 3D 渲染资源和 UI 面板。"""
         imgui.create_context()
-        cls._config_dir = os.path.join(os.path.dirname(__file__), "config")
+        cls._config_dir = os.path.join(os.path.dirname(__file__), "Config")
         os.makedirs(cls._config_dir, exist_ok=True)
         io = imgui.get_io()
         io.config_flags |= imgui.ConfigFlags_.docking_enable
@@ -82,6 +82,8 @@ class EditorLayer(Layer):
         # ── 渲染器: 注册 Grid/ViewGizmo/Outliner overlay + 推送初始相机矩阵 ──
         cls.renderer = EditorHost.get_editor_renderer()
         cam = EditorCamera.get_instance()
+        # ── 注册启动前创建的 MeshRenderer 实体（如 DefaultCube）──
+        cls._register_existing_mesh_entities()
         # 相机矩阵由逻辑线程计算后通过 SetViewProjectionCommand 推送
         cls._sync_camera_to_renderer()
         Grid.register_to(cls.renderer)
@@ -279,6 +281,31 @@ class EditorLayer(Layer):
         for key in list(cls._camera_gizmo_keys):
             cls.renderer.enqueue(OverlayUnregistrationCommand(key))
         cls._camera_gizmo_keys.clear()
+
+    @classmethod
+    def _register_existing_mesh_entities(cls) -> None:
+        """将渲染器创建前已存在的 MeshRenderer 实体注册到 GPU。
+
+        解决启动时默认实体（如 DefaultCube）在渲染器就绪前创建，
+        EntityRegistrationCommand 未能入队的问题。
+        """
+        if cls.renderer is None:
+            return
+        import esper
+        from Application.Core.Scene.SceneManager import SceneManager
+        from Application.Core.Scene.BasicComponents import MeshRenderer
+        try:
+            st = SceneManager._state()
+            for entity_id_str in st.entities:
+                eid = int(entity_id_str)
+                try:
+                    if esper.has_component(eid, MeshRenderer):
+                        cls.renderer.enqueue(
+                            EntityRegistrationCommand(eid, register=True))
+                except KeyError:
+                    pass
+        except Exception:
+            pass
 
     # ════════════════════════════════════════════════════════════
     # Gizmo 拖拽 + 拾取辅助

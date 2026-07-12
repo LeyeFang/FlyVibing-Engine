@@ -64,18 +64,25 @@ MAT_FILTERS: list[str] = [
     "*",
 ]
 
+SCENE_FILTERS: list[str] = [
+    "Scene Files",
+    "*.scene",
+    "All Files",
+    "*",
+]
+
 
 # ════════════════════════════════════════════════════════════════
 # 目录记忆 — 轻量 JSON 持久化
 # ════════════════════════════════════════════════════════════════
 
 def _cache_path() -> str:
-    """返回缓存文件路径 (项目根目录下的 .editor_cache.json)。"""
+    """返回缓存文件路径 (Application/Editor/Config/.editor_cache.json)。"""
     # FileDialog.py 位于 Application/Editor/UI/
-    # 项目根目录 = 向上 4 级
+    # Config 目录 = 向上 1 级 + Config/
     this_dir = os.path.dirname(os.path.abspath(__file__))
-    root = os.path.normpath(os.path.join(this_dir, "..", "..", ".."))
-    return os.path.join(root, ".editor_cache.json")
+    config_dir = os.path.normpath(os.path.join(this_dir, "..", "Config"))
+    return os.path.join(config_dir, ".editor_cache.json")
 
 
 class _DialogMemory:
@@ -262,6 +269,38 @@ class FileDialog:
         )
         cls._callback = callback
         cls._active_type = "mat_save"
+
+    @classmethod
+    def open_scene(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+    ) -> None:
+        """打开"加载场景"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("scene_open")
+        cls._active_dialog = pfd.open_file(
+            "Open Scene", d, SCENE_FILTERS, pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "scene_open"
+
+    @classmethod
+    def save_scene(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+        default_name: str = "Untitled.scene",
+    ) -> None:
+        """打开"保存场景"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("scene_save")
+        cls._active_dialog = pfd.save_file(
+            "Save Scene",
+            os.path.join(d, default_name),
+            SCENE_FILTERS,
+            pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "scene_save"
 
     # ============================================================
     # 每帧轮询 (在 UIManager.draw_all 末尾调用)

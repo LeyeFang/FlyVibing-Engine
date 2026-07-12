@@ -236,6 +236,93 @@ class Scene:
         return result
 
     # ════════════════════════════════════════════════════════════
+    # 文件 I/O
+    # ════════════════════════════════════════════════════════════
+
+    # .scene 文件格式版本，用于向前兼容
+    SCENE_FILE_VERSION: str = "0.1.0"
+
+    def save_to_file(self, path: str) -> None:
+        """保存场景到 .scene 文件 (JSON)。
+
+        写入格式:
+          {
+            "version": "0.1.0",
+            "scene": { ... to_dict() 输出 ... }
+          }
+
+        Args:
+            path: 文件路径（绝对路径，或相对于 VFS 项目根的路径）
+        """
+        import json, os
+        from enum import Enum
+
+        class _SceneEncoder(json.JSONEncoder):
+            """处理 Enum / tuple 等非标准 JSON 类型。"""
+            def default(self, obj):
+                if isinstance(obj, Enum):
+                    return obj.value
+                return super().default(obj)
+
+        data = {
+            "version": self.SCENE_FILE_VERSION,
+            "scene": self.to_dict(),
+        }
+
+        try:
+            from Application.Core.FileSystem import VFS
+            text = json.dumps(data, indent=2, ensure_ascii=False, cls=_SceneEncoder)
+            VFS.write_text(path, text)
+        except Exception:
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, indent=2, ensure_ascii=False, cls=_SceneEncoder)
+
+    @classmethod
+    def load_from_file(
+        cls,
+        path: str,
+        component_factories: Optional[dict[str, type]] = None,
+    ) -> 'Scene':
+        """从 .scene 文件加载场景。
+
+        Args:
+            path: 文件路径（绝对路径，或相对于 VFS 项目根的路径）
+            component_factories: {类型名: 组件类} 用于重建组件实例
+
+        Returns:
+            Scene 实例
+
+        Raises:
+            FileNotFoundError: 文件不存在
+            ValueError: 文件格式不正确
+        """
+        import json
+
+        # 优先通过 VFS 读取，fallback 直接读磁盘
+        try:
+            from Application.Core.FileSystem import VFS
+            data = VFS.read_json(path)
+        except Exception:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+
+        # ── 提取 scene 数据 ──
+        if isinstance(data, dict) and "scene" in data:
+            # 新格式: {"version": "...", "scene": {...}}
+            scene_data = data["scene"]
+        elif isinstance(data, dict) and "entities" in data:
+            # 兼容旧格式: 直接是 scene dict（无外层包装）
+            scene_data = data
+        else:
+            raise ValueError(
+                f"'{path}' 不是有效的 .scene 文件 — "
+                f"期望 {'version', 'scene'} 或 {'entities'} 键，实际键: {list(data.keys()) if isinstance(data, dict) else type(data).__name__}"
+            )
+
+        return cls.from_dict(scene_data, component_factories=component_factories)
+
+    # ════════════════════════════════════════════════════════════
     # 拷贝 & 序列化
     # ════════════════════════════════════════════════════════════
 
@@ -253,17 +340,30 @@ class Scene:
         自定义类型 (如 NodeCanvas) 需要实现自己的 to_dict()。
         """
         import dataclasses
+        from enum import Enum
+
+        def _json_safe(obj):
+            """递归转换: Enum → value, tuple → list, 确保 json.dump 可用。"""
+            if isinstance(obj, Enum):
+                return obj.value
+            if isinstance(obj, tuple):
+                return list(obj)
+            if isinstance(obj, dict):
+                return {k: _json_safe(v) for k, v in obj.items()}
+            if isinstance(obj, (list, set)):
+                return [_json_safe(v) for v in obj]
+            return obj
 
         entities_dict: dict[str, dict] = {}
         for eid, ed in self.entities.items():
             comps: dict[str, dict] = {}
             for type_name, comp in ed.components.items():
-                if hasattr(comp, '__dataclass_fields__'):
-                    comps[type_name] = dataclasses.asdict(comp)
-                else:
-                    # 非 dataclass 组件 — 尝试 to_dict 否则跳过
-                    if hasattr(comp, 'to_dict'):
-                        comps[type_name] = comp.to_dict()
+                if isinstance(comp, dict):
+                    comps[type_name] = _json_safe(comp)
+                elif hasattr(comp, '__dataclass_fields__'):
+                    comps[type_name] = _json_safe(dataclasses.asdict(comp))
+                elif hasattr(comp, 'to_dict'):
+                    comps[type_name] = _json_safe(comp.to_dict())
             entities_dict[str(eid)] = {
                 "name": ed.name,
                 "components": comps,
@@ -325,6 +425,10 @@ class Scene:
                 name=ed_data.get("name", "Entity"),
                 components=comps,
             )
+
+        # ── 恢复节点图（保留为 dict，由 EditorHost 负责还原到 NodeEditorPanel）──
+        if "node_graph" in data:
+            scene.node_graph = data["node_graph"]
 
         return scene
 

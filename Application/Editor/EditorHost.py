@@ -64,16 +64,11 @@ class EditorHost(Engine):
 
     @classmethod
     def list_scenes(cls) -> list[str]:
-        """返回所有已创建场景的名称列表。"""
-        # 合并 EditorHost._scenes 和 SceneManager 中的场景名
-        names = set(cls._scenes.keys())
-        try:
-            from Application.Core.Scene.SceneManager import SceneManager
-            st = SceneManager._state_for(cls.__name__)
-            names.update(st.scene.keys())
-        except Exception:
-            pass
-        return sorted(names)
+        """返回所有已创建场景的名称列表。
+
+        EditorHost._scenes 是场景名的唯一权威来源。
+        """
+        return sorted(cls._scenes.keys())
 
     @classmethod
     def create_scene(cls, name: str) -> object:
@@ -98,6 +93,121 @@ class EditorHost(Engine):
             cls._active_scene = cls._scenes[name]
             return True
         return False
+
+    @classmethod
+    def _register_mesh_entities_after_load(cls) -> None:
+        """场景加载后: 将新创建的 MeshRenderer 实体注册到渲染器 GPU。"""
+        import esper
+        from Application.Core.Scene.SceneManager import SceneManager
+        from Application.Core.Scene.BasicComponents import MeshRenderer
+        from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand
+        renderer = getattr(cls, 'editor_renderer', None) or cls.renderer
+        if renderer is None:
+            return
+        try:
+            st = SceneManager._state()
+            for entity_id_str in st.entities:
+                eid = int(entity_id_str)
+                try:
+                    if esper.has_component(eid, MeshRenderer):
+                        renderer.enqueue(
+                            EntityRegistrationCommand(eid, register=True))
+                except KeyError:
+                    pass
+        except Exception:
+            pass
+
+    @classmethod
+    def _sync_node_graph_to_scene(cls) -> None:
+        """保存前: 将 NodeEditorPanel 的画布同步到 Scene.node_graph。"""
+        scene = cls._active_scene
+        if scene is None:
+            return
+        try:
+            from Application.Editor.UI.UIManager import UIManager
+            panel = UIManager.find("Node Editor")
+            if panel is not None and panel._canvas is not None:
+                scene.node_graph = panel._canvas
+        except Exception:
+            pass
+
+    @classmethod
+    def _sync_node_graph_from_scene(cls) -> None:
+        """加载后: 将 Scene.node_graph 恢复到 NodeEditorPanel 画布。"""
+        scene = cls._active_scene
+        if scene is None or scene.node_graph is None:
+            return
+        try:
+            from Application.Editor.UI.controllers.node_editor.canvas import NodeCanvas
+            from Application.Editor.UI.UIManager import UIManager
+            panel = UIManager.find("Node Editor")
+            if panel is None:
+                return
+            if isinstance(scene.node_graph, dict):
+                # 从 JSON dict 恢复
+                panel._canvas = NodeCanvas.from_dict(scene.node_graph)
+            else:
+                # 已是 NodeCanvas 实例（深拷贝后）
+                panel._canvas = scene.node_graph
+            panel._canvas_initialized = True
+        except Exception:
+            pass
+
+    @classmethod
+    def save_active_scene_to_file(cls, path: str) -> bool:
+        """将当前活跃场景保存到 .scene 文件。
+
+        自动从 esper 世界同步实体数据到 Scene 容器后再序列化。
+
+        Args:
+            path: 目标文件路径
+
+        Returns:
+            保存成功返回 True
+        """
+        scene = cls._active_scene
+        if scene is None:
+            return False
+        try:
+            # ★ 保存前: esper → Scene + node graph → Scene
+            from Application.Core.Scene.SceneManager import SceneManager
+            print(f"[EditorHost] SyncToScene: scene has {len(scene.entities)} entities before sync")
+            SceneManager.SyncToScene(scene)
+            cls._sync_node_graph_to_scene()
+            print(f"[EditorHost] SyncToScene: scene has {len(scene.entities)} entities after sync")
+            scene.save_to_file(path)
+            return True
+        except Exception:
+            return False
+
+    @classmethod
+    def load_scene_from_file(cls, path: str) -> object | None:
+        """从 .scene 文件加载场景并设为活跃。
+
+        自动将实体数据恢复到 esper 世界。
+
+        Args:
+            path: .scene 文件路径
+
+        Returns:
+            加载的 Scene 对象，失败返回 None
+        """
+        from Application.Core.Scene.Scene import Scene
+        from Application.Core.Scene.SceneManager import SceneManager
+        try:
+            # 不加 component_factories — 组件以 dict 保留，
+            # 由 SyncFromScene 统一负责 dict → 实例重建
+            scene = Scene.load_from_file(path)
+            cls._scenes[scene.name] = scene
+            cls._active_scene = scene
+            # ★ 加载后: Scene → esper + node graph → panel
+            SceneManager.SyncFromScene(scene, clear_existing=True)
+            cls._sync_node_graph_from_scene()
+            # ★ 同步后: 注册 MeshRenderer 实体到 GPU
+            cls._register_mesh_entities_after_load()
+            return scene
+        except Exception:
+            return False
 
     # ════════════════════════════════════════════════════════════
     # 工厂方法（Engine 要求子类覆写）
@@ -128,6 +238,9 @@ class EditorHost(Engine):
     def init(cls, window_type='GLFW', renderer_type='ZenGL') -> 'EditorHost':
         """初始化编辑器 — 同时建立帧同步（Editor 是 master）。"""
         super().init(window_type=window_type, renderer_type=renderer_type)
+        # ── 确保默认 Scene 存在 ──
+        if cls._active_scene is None:
+            cls.create_scene("Default")
         # ── 帧同步: Editor 是 master, PIE 是 slave ──
         cls._frame_sync = FrameSync()
         cls._is_frame_sync_master = True

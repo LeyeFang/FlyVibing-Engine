@@ -118,7 +118,7 @@ class NodeEditorPanel(BasePanel):
 
     _CONFIG_FILE: str = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-        "config", "NodeEditor.json",
+        "Config", "NodeEditor.json",
     )
 
     _canvas: NodeCanvas | None = None

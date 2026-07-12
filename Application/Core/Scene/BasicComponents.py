@@ -39,46 +39,31 @@ class Transform:
     local_scl_y: float = 1
     local_scl_z: float = 1
 
-    def __init__(
-        self,
-        position_x=0, position_y=0, position_z=0,
-        rotation_x=0, rotation_y=0, rotation_z=0,
-        scale_x=1, scale_y=1, scale_z=1,
-    ):
-        self.position_x = position_x
-        self.position_y = position_y
-        self.position_z = position_z
-        self.rotation_x = rotation_x
-        self.rotation_y = rotation_y
-        self.rotation_z = rotation_z
-        self.scale_x = scale_x
-        self.scale_y = scale_y
-        self.scale_z = scale_z
-        # local 初始等于 world（根实体）
-        self.local_pos_x = position_x
-        self.local_pos_y = position_y
-        self.local_pos_z = position_z
-        self.local_rot_x = rotation_x
-        self.local_rot_y = rotation_y
-        self.local_rot_z = rotation_z
-        self.local_scl_x = scale_x
-        self.local_scl_y = scale_y
-        self.local_scl_z = scale_z
+    def __post_init__(self) -> None:
+        """dataclass 生成 __init__ 后自动调用 — 同步 local = world（根实体默认）。"""
+        if self.local_pos_x == 0 and self.local_pos_y == 0 and self.local_pos_z == 0:
+            self.local_pos_x = self.position_x
+            self.local_pos_y = self.position_y
+            self.local_pos_z = self.position_z
+            self.local_rot_x = self.rotation_x
+            self.local_rot_y = self.rotation_y
+            self.local_rot_z = self.rotation_z
+            self.local_scl_x = self.scale_x
+            self.local_scl_y = self.scale_y
+            self.local_scl_z = self.scale_z
 
 
 
 @component
 class MeshRenderer:
-    mesh_id: int
-    material_id: int
+    mesh_id: int = 1
+    material_id: int = 0
     visible: bool = True
 
-    def __init__(
-        self,
-        mesh_id: int = 1
-    ) -> None:
-        self.mesh_id = mesh_id
-        self.material_id = ResourceManager.NewMaterial()
+    def __post_init__(self) -> None:
+        """dataclass 生成 __init__ 后自动调用 — 创建默认 Material。"""
+        if self.material_id == 0:
+            self.material_id = ResourceManager.NewMaterial()
 
 
 class ProjectionType(Enum):
@@ -104,9 +89,3 @@ class Camera:
     up_vector: tuple = (0.0, 1.0, 0.0)
     # 可选：是否为主摄像机（若场景中有多个摄像机，用于标识默认）
     is_primary: bool = False
-
-    def __init__(
-        self,
-        is_primary=False
-    ) -> None:
-        self.is_primary = is_primary

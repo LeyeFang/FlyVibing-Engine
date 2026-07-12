@@ -49,7 +49,7 @@ class SceneManager:
         from Application.Core.Scene.Scene import GameType
         self.engine_name = engine_name
         self.app = app
-        self.scene: dict = {"default": "default"}
+        self.scene: dict = {}      # 场景名注册表（EditorHost 是权威来源）
         self.entities: dict = {}
         self.scene_camera: Camera | None = None
         self.scene_camera_id: int | None = None
@@ -138,6 +138,7 @@ class SceneManager:
         # ── 切换到本 Engine 的 ECS 世界（esper 自动创建）──
         esper.switch_world(inst.world_name)
         cls._create_default_cameras(inst)
+        cls._create_default_cube(inst)
 
         # ── 首次 Init 时自动注册内置 Component ──
         if not cls._component_registry:
@@ -151,7 +152,7 @@ class SceneManager:
         # ── 3D 透视摄像机 ──
         inst.main_camera_id = esper.create_entity(
             Transform(position_x=0.0, position_y=0.0, position_z=10.0),
-            Camera(True),
+            Camera(is_primary=True),
         )
         inst.scene_camera_id = inst.main_camera_id
         inst.scene_camera = esper.component_for_entity(inst.scene_camera_id, Camera)
@@ -175,6 +176,21 @@ class SceneManager:
         inst.entities[f'{inst.main_camera_2d_id}'] = 1
         inst._entity_names[inst.main_camera_2d_id] = "DefaultCamera2D"
         inst._editor_visible.add(inst.main_camera_2d_id)
+
+    @classmethod
+    def _create_default_cube(cls, inst: 'SceneManager') -> None:
+        """在 inst 的当前 esper 世界中创建一个默认 Cube 实体（调试用）。"""
+        from Application.Resource.ResourceManager import ResourceManager
+        cube_mesh_id = ResourceManager.GetDefaultMesh('Cube')
+
+        cube_id = esper.create_entity(
+            Transform(),
+            MeshRenderer(mesh_id=cube_mesh_id),
+        )
+        inst.entities[f'{cube_id}'] = 1
+        inst._entity_names[cube_id] = "DefaultCube"
+        inst._editor_visible.add(cube_id)
+        # 注: GPU 注册延迟到 EditorLayer.OnAttach（渲染器就绪后）
 
     def _reset_state(self) -> None:
         """重置实例的追踪数据（为新世界做准备）。"""
@@ -368,6 +384,182 @@ class SceneManager:
         cls.AddComponentToEntity(entity_id, instance)
         return True
 
+    # ============================================================
+    # Scene ↔ ECS 同步
+    # ============================================================
+
+    @classmethod
+    def SyncToScene(cls, scene: object) -> None:
+        """将当前 esper 世界中的实体同步到 Scene 数据容器。
+
+        读取所有实体及其组件，填充 scene.entities。
+        应在保存 .scene 文件前调用。
+
+        Args:
+            scene: Core.Scene.Scene 实例（将被原地修改）
+        """
+        import dataclasses
+        st = cls._state()
+
+        # ── 安全兜底: 确保组件注册表已初始化 ──
+        if not cls._component_registry:
+            cls.RegisterComponent("Camera", Camera)
+            cls.RegisterComponent("MeshRenderer", MeshRenderer)
+            cls.RegisterComponent("Transform", Transform)
+
+        scene.entities.clear()
+        max_eid = 0
+
+        for entity_id_str in list(st.entities.keys()):
+            eid = int(entity_id_str)
+            max_eid = max(max_eid, eid)
+
+            # ── 实体名称 ──
+            name = st._entity_names.get(eid, f"Entity_{eid}")
+
+            # ── 直接从 esper 获取实体所有组件 (不依赖 registry 发现) ──
+            comps: dict[str, object] = {}
+            try:
+                all_comps = esper.components_for_entity(eid)
+            except KeyError:
+                all_comps = ()
+
+            for comp_instance in all_comps:
+                comp_type = type(comp_instance).__name__
+                if hasattr(comp_instance, '__dataclass_fields__'):
+                    comps[comp_type] = dataclasses.asdict(comp_instance)
+                elif hasattr(comp_instance, 'to_dict'):
+                    comps[comp_type] = comp_instance.to_dict()
+
+            if comps:
+                from Application.Core.Scene.Scene import EntityData
+                scene.entities[eid] = EntityData(name=name, components=comps)
+            else:
+                print(f"[SyncToScene] WARNING: entity {eid} ('{name}') has NO serializable components")
+
+        scene._next_eid = max_eid + 1 if max_eid > 0 else 1
+        scene.main_camera_entity_id = st.main_camera_id
+        print(f"[SyncToScene] Synced {len(scene.entities)} entities to Scene '{scene.name}'")
+
+    @classmethod
+    def SyncFromScene(cls, scene: object, clear_existing: bool = True) -> None:
+        """从 Scene 数据容器恢复实体到 esper 世界。
+
+        Args:
+            scene: Core.Scene.Scene 实例
+            clear_existing: 是否先清空现有实体（默认 True）
+        """
+        import dataclasses
+        st = cls._state()
+
+        # ── 安全兜底: 确保组件注册表已初始化 ──
+        if not cls._component_registry:
+            cls.RegisterComponent("Camera", Camera)
+            cls.RegisterComponent("MeshRenderer", MeshRenderer)
+            cls.RegisterComponent("Transform", Transform)
+
+        # ── 清空现有实体 ──
+        if clear_existing:
+            # 1. 逐个删除以触发渲染器注销
+            for entity_id_str in list(st.entities.keys()):
+                eid = int(entity_id_str)
+                cls.DeleteEntity(eid)
+            # 2. 重置 esper 的实体 ID 计数器（否则 ID 只增不减）
+            esper.clear_database()
+            # 3. 清空 SceneManager 的追踪数据
+            st.entities.clear()
+            st._entity_names.clear()
+            st._entity_parent.clear()
+            st._editor_visible.clear()
+            st.main_camera_id = None
+            st.scene_camera = None
+            st.scene_camera_id = None
+            st.main_camera_2d_id = None
+
+        # ── 重建实体 ──
+        id_map: dict[int, int] = {}  # 旧 ID → 新 esper ID
+
+        for old_eid, ed in scene.entities.items():
+            # 收集组件实例
+            comp_instances = []
+            for comp_name, comp_dict in ed.components.items():
+                comp_cls = cls._component_registry.get(comp_name)
+                if comp_cls is None:
+                    continue
+                # ── 已是组件实例 → 直接使用 ──
+                if isinstance(comp_dict, comp_cls):
+                    comp_instances.append(comp_dict)
+                    continue
+                # ── 是 dict → 用工厂重建 ──
+                if isinstance(comp_dict, dict) and hasattr(comp_cls, '__dataclass_fields__'):
+                    try:
+                        comp_instances.append(comp_cls(**comp_dict))
+                    except TypeError:
+                        pass
+
+            if comp_instances:
+                new_eid = esper.create_entity(*comp_instances)
+            else:
+                new_eid = esper.create_entity(Transform())
+
+            id_map[old_eid] = new_eid
+            st.entities[f'{new_eid}'] = 1
+            st._entity_names[new_eid] = ed.name
+            st._editor_visible.add(new_eid)
+
+            # ── 仅 MeshRenderer 实体注册到渲染器 ──
+            has_mesh = any(
+                isinstance(ci, MeshRenderer) for ci in comp_instances
+            )
+            if has_mesh:
+                _renderer = getattr(st.app, 'renderer', None)
+                if _renderer is not None:
+                    _renderer.enqueue(
+                        EntityRegistrationCommand(new_eid, register=True))
+
+        # ── ID 重映射: 用新 esper ID 重建 scene.entities ──
+        from Application.Core.Scene.Scene import EntityData
+        remapped: dict[int, object] = {}
+        for old_eid, new_eid in id_map.items():
+            ed = scene.entities[old_eid]
+            remapped[new_eid] = EntityData(name=ed.name, components=dict(ed.components))
+        scene.entities.clear()
+        scene.entities.update(remapped)
+        scene._next_eid = max(id_map.values()) + 1 if id_map else 1
+
+        # ── 更新主摄像机 ID ──
+        if scene.main_camera_entity_id is not None:
+            scene.main_camera_entity_id = id_map.get(
+                scene.main_camera_entity_id, scene.main_camera_entity_id)
+
+        # ── 恢复主摄像机（ID 不再变化，直接用）──
+        if scene.main_camera_entity_id is not None:
+            try:
+                st.main_camera_id = scene.main_camera_entity_id
+                st.scene_camera = esper.component_for_entity(
+                    scene.main_camera_entity_id, Camera)
+                st.scene_camera_id = scene.main_camera_entity_id
+            except KeyError:
+                st.main_camera_id = None
+                st.scene_camera = None
+                st.scene_camera_id = None
+
+        # ── 兜底: 若加载后无摄像机，创建默认摄像机 ──
+        has_camera = False
+        for entity_id_str in st.entities:
+            try:
+                if esper.has_component(int(entity_id_str), Camera):
+                    has_camera = True
+                    break
+            except KeyError:
+                pass
+        if not has_camera:
+            cls._create_default_cameras(st)
+
+        # ── 恢复 game_type ──
+        st.game_type = scene.game_type
+        print(f"[SyncFromScene] Restored {len(st.entities)} entities from Scene '{scene.name}'")
+
     @classmethod
     def SetEntityName(cls, entity_id: int, name: str) -> None:
         st = cls._state()
@@ -470,7 +662,11 @@ class SceneManager:
     @classmethod
     def GetEntityTransform(cls, entity_id) -> Transform:
         cls._state()
-        return esper.component_for_entity(entity_id, Transform)
+        try:
+            return esper.component_for_entity(entity_id, Transform)
+        except KeyError:
+            # 实体已被删除但渲染器尚未同步 — 返回默认 Transform
+            return Transform()
 
     @classmethod
     def GetEntityModelMatrix(cls, entity_id: int) -> 'np.ndarray':

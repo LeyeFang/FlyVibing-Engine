@@ -256,7 +256,12 @@ void main() {
             gpu = self._renderer.registered_entities.get(entity_id)
             if gpu is None:
                 continue
-            model = self._renderer.engine.scene.GetEntityModelMatrix(entity_id)
+            try:
+                model = self._renderer.engine.scene.GetEntityModelMatrix(entity_id)
+            except KeyError:
+                # 实体已被删除但 visible set 尚未清理 — 跳过并清理
+                self._renderer._resources._visible_entities.discard(entity_id)
+                continue
             model_f32 = np.ascontiguousarray(model.astype('float32'))
             if loc_model >= 0:
                 gl.glUniformMatrix4fv(loc_model, 1, gl.GL_FALSE, model_f32)

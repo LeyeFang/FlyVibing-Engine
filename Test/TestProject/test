@@ -1,0 +1,198 @@
+{
+  "version": "0.1.0",
+  "scene": {
+    "name": "Default",
+    "game_type": "3d",
+    "entities": {
+      "1": {
+        "name": "DefaultCamera3D",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 10.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 10.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "Camera": {
+            "projection_type": "perspective",
+            "fov": 45.0,
+            "aspect_ratio": 1.7777777777777777,
+            "ortho_size": 5.0,
+            "near_plane": 0.1,
+            "far_plane": 1000.0,
+            "local_forward": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "up_vector": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "is_primary": true
+          }
+        }
+      },
+      "2": {
+        "name": "DefaultCamera2D",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 10.0,
+            "rotation_x": 1.5707963267948966,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 10.0,
+            "local_rot_x": 1.5707963267948966,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "Camera": {
+            "projection_type": "orthographic",
+            "fov": 45.0,
+            "aspect_ratio": 1.7777777777777777,
+            "ortho_size": 10.0,
+            "near_plane": 0.1,
+            "far_plane": 100.0,
+            "local_forward": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "up_vector": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "is_primary": false
+          }
+        }
+      },
+      "3": {
+        "name": "DefaultCube",
+        "components": {
+          "Transform": {
+            "position_x": 1.8951759338378906,
+            "position_y": 0.0,
+            "position_z": 0.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "MeshRenderer": {
+            "mesh_id": 2,
+            "material_id": 1,
+            "visible": true
+          }
+        }
+      }
+    },
+    "main_camera_entity_id": 1,
+    "next_eid": 4,
+    "node_graph": {
+      "version": "0.1.0",
+      "nodes": {
+        "142": {
+          "id": 142,
+          "node_type": "OnGameStart",
+          "pos": [
+            80,
+            80
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 143
+          }
+        },
+        "144": {
+          "id": 144,
+          "node_type": "OnFrameUpdate",
+          "pos": [
+            80,
+            280
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 145,
+            "delta": 146
+          }
+        },
+        "147": {
+          "id": 147,
+          "node_type": "OnGameStop",
+          "pos": [
+            80,
+            480
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 148
+          }
+        },
+        "149": {
+          "id": 149,
+          "node_type": "EntitySpawn",
+          "pos": [
+            240.0,
+            79.0
+          ],
+          "props": {
+            "template": "DefaultCube"
+          },
+          "pin_ids": {
+            "exec_in": 150,
+            "Name": 151,
+            "Position": 152,
+            "Rotation": 153,
+            "exec_out": 154,
+            "Entity": 155
+          }
+        }
+      },
+      "links": {
+        "156": {
+          "id": 156,
+          "from_pin": 143,
+          "to_pin": 150
+        }
+      },
+      "next_id": 157
+    }
+  }
+}

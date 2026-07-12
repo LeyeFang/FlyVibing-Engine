@@ -188,31 +188,23 @@ class SceneBrowserController:
 
     @classmethod
     def set_camera_fov(cls, entity_id: int, fov: float) -> None:
-        cam = EditorHost.scene.GetComponent(entity_id, Camera)
-        cam.fov = max(1.0, min(179.0, fov))
+        EditorHost.scene.SetCameraProperties(entity_id, fov=fov)
 
     @classmethod
     def set_camera_ortho_size(cls, entity_id: int, size: float) -> None:
-        cam = EditorHost.scene.GetComponent(entity_id, Camera)
-        cam.ortho_size = max(0.01, size)
+        EditorHost.scene.SetCameraProperties(entity_id, ortho_size=size)
 
     @classmethod
     def set_camera_clip(cls, entity_id: int, near: float, far: float) -> None:
-        cam = EditorHost.scene.GetComponent(entity_id, Camera)
-        cam.near_plane = max(0.001, near)
-        cam.far_plane = max(cam.near_plane + 0.01, far)
+        EditorHost.scene.SetCameraProperties(entity_id, near_plane=near, far_plane=far)
 
     @classmethod
     def set_camera_projection(cls, entity_id: int, is_perspective: bool) -> None:
-        from Application.Core.Scene.BasicComponents import ProjectionType
-        cam = EditorHost.scene.GetComponent(entity_id, Camera)
-        cam.projection_type = (
-            ProjectionType.PERSPECTIVE if is_perspective else ProjectionType.ORTHOGRAPHIC)
+        EditorHost.scene.SetCameraProperties(entity_id, is_perspective=is_perspective)
 
     @classmethod
     def set_camera_aspect_ratio(cls, entity_id: int, ratio: float) -> None:
-        cam = EditorHost.scene.GetComponent(entity_id, Camera)
-        cam.aspect_ratio = max(0.1, min(10.0, ratio))
+        EditorHost.scene.SetCameraProperties(entity_id, aspect_ratio=ratio)
 
     @classmethod
     def get_game_type(cls) -> str:

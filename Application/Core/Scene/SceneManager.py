@@ -606,6 +606,46 @@ class SceneManager:
             raise ValueError(f"Entity '{entity_id}' do not have mesh renderer")
 
     # ============================================================
+    # Camera 属性编辑
+    # ============================================================
+
+    @classmethod
+    def SetCameraProperties(
+        cls, entity_id: int, *,
+        fov: float | None = None,
+        ortho_size: float | None = None,
+        near_plane: float | None = None,
+        far_plane: float | None = None,
+        aspect_ratio: float | None = None,
+        is_perspective: bool | None = None,
+        is_primary: bool | None = None,
+    ) -> None:
+        """设置 Camera 组件属性，统一处理夹持 + ComponentModifiedEvent。"""
+        st = cls._state()
+        try:
+            cam = esper.component_for_entity(entity_id, Camera)
+        except KeyError:
+            raise ValueError(f"Entity '{entity_id}' does not have Camera component")
+
+        if fov is not None:
+            cam.fov = max(1.0, min(179.0, float(fov)))
+        if ortho_size is not None:
+            cam.ortho_size = max(0.01, float(ortho_size))
+        if near_plane is not None:
+            cam.near_plane = max(0.001, float(near_plane))
+        if far_plane is not None:
+            cam.far_plane = max(cam.near_plane + 0.01, float(far_plane))
+        if aspect_ratio is not None:
+            cam.aspect_ratio = max(0.1, min(10.0, float(aspect_ratio)))
+        if is_perspective is not None:
+            cam.projection_type = (
+                ProjectionType.PERSPECTIVE if is_perspective else ProjectionType.ORTHOGRAPHIC)
+        if is_primary is not None:
+            cam.is_primary = bool(is_primary)
+
+        ComponentModifiedEvent.Pack(entity_id, cam, engine=st.app)
+
+    # ============================================================
     # 坐标系转换 / Coordinate Conversion
     #   ★ 委托到 Application.Core.Math.CoordinateSystem (唯一权威来源)
     # ============================================================

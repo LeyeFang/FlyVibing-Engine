@@ -54,17 +54,11 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
     pos = _read_vec3_input(node_id, "Position", ctx, g)
     rot = _read_vec3_input(node_id, "Rotation", ctx, g)
     if pos is not None or rot is not None:
-        try:
-            from Application.Core.Scene.BasicComponents import Transform
-            xform = ctx.scene.GetComponent(eid, Transform)
-            if pos is not None:
-                xform.position_x, xform.position_y, xform.position_z = (
-                    float(pos[0]), float(pos[1]), float(pos[2]))
-            if rot is not None:
-                xform.rotation_x, xform.rotation_y, xform.rotation_z = (
-                    float(rot[0]), float(rot[1]), float(rot[2]))
-        except Exception:
-            pass
+        ctx.scene.SetEntityTransformEditor(
+            eid,
+            position_xyz=tuple(float(p) for p in pos) if pos is not None else None,
+            rotation_xyz=tuple(float(r) for r in rot) if rot is not None else None,
+        )
 
     # ── 5. 输出 EntityRef ──
     nd = g._types[inst.node_type]
@@ -109,20 +103,20 @@ def _instantiate_components(eid: int, entity_def, ctx: ExecutionContext) -> None
     from Application.Core.Scene.BasicComponents import Transform
 
     for comp_type_name, comp_instance in entity_def.components.items():
-        # Transform 已在 AddEntity 中创建 → 用模板值覆盖
+        # Transform 已在 AddEntity 中创建 → 用模板值覆盖 (模板存 GL 坐标)
         if comp_type_name == "Transform":
             try:
-                xform = ctx.scene.GetComponent(eid, Transform)
                 tmpl = comp_instance
-                xform.position_x = tmpl.position_x
-                xform.position_y = tmpl.position_y
-                xform.position_z = tmpl.position_z
-                xform.rotation_x = tmpl.rotation_x
-                xform.rotation_y = tmpl.rotation_y
-                xform.rotation_z = tmpl.rotation_z
-                xform.scale_x = getattr(tmpl, 'scale_x', 1.0)
-                xform.scale_y = getattr(tmpl, 'scale_y', 1.0)
-                xform.scale_z = getattr(tmpl, 'scale_z', 1.0)
+                ctx.scene.SetEntityTransform(
+                    eid,
+                    position_xyz=(tmpl.position_x, tmpl.position_y, tmpl.position_z),
+                    rotation_xyz=(tmpl.rotation_x, tmpl.rotation_y, tmpl.rotation_z),
+                    scale_xyz=(
+                        getattr(tmpl, 'scale_x', 1.0),
+                        getattr(tmpl, 'scale_y', 1.0),
+                        getattr(tmpl, 'scale_z', 1.0),
+                    ),
+                )
             except Exception:
                 pass
         else:

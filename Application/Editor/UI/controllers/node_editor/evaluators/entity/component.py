@@ -70,13 +70,38 @@ def _to_vec3_tuple(val) -> tuple[float, float, float]:
 
 def _apply_component_properties(
     node_id: int, ctx: ExecutionContext, g: GraphEvaluator,
-    inst, comp_name: str, comp,
+    inst, comp_name: str, comp, eid: int = -1,
 ) -> None:
-    """从 Registry 读取属性定义并逐个 setattr 到组件实例。_SKIP 的属性不修改。"""
+    """从 Registry 读取属性定义并应用到组件实例。_SKIP 的属性不修改。
+
+    路由策略:
+      Transform   → 已在 call site 特殊处理 (SetEntityTransformEditor)
+      Camera      → SetCameraProperties (统一夹持 + 事件)
+      MeshRenderer → setattr + SetEntityRenderVisible (渲染器同步)
+      其他        → setattr
+    """
     from ...component_registry import get_properties
     props = get_properties(comp_name)
     if not props:
         return
+
+    # ── Camera: 收集所有属性后一次调用 SetCameraProperties ──
+    if comp_name == "Camera" and eid >= 0:
+        from Application.Core.Scene.BasicComponents import Camera as CamComp
+        if isinstance(comp, CamComp):
+            cam_kwargs = {}
+            for prop in props:
+                val = _read_component_prop(
+                    node_id, prop.name, ctx, g, inst, comp_name, prop.default)
+                if val is _SKIP or val is None:
+                    continue
+                # PropertyDescriptor.attr_name → Camera attribute name
+                cam_kwargs[prop.attr_name or prop.name] = val
+            if cam_kwargs:
+                ctx.scene.SetCameraProperties(eid, **cam_kwargs)
+            return
+
+    # ── 通用: 逐个 setattr ──
     for prop in props:
         val = _read_component_prop(
             node_id, prop.name, ctx, g, inst, comp_name, prop.default)
@@ -90,6 +115,12 @@ def _apply_component_properties(
                 setattr(comp, attr, val)
             except Exception as e:
                 print(f"[{inst.node_type}] Failed to set {comp_name}.{attr}: {e}")
+
+    # ★ MeshRenderer: 修改后同步 visible 到渲染器
+    if comp_name == "MeshRenderer" and eid >= 0:
+        from Application.Core.Scene.BasicComponents import MeshRenderer
+        if isinstance(comp, MeshRenderer):
+            ctx.scene.SetEntityRenderVisible(eid, visible=comp.visible)
 
 
 def _resolve_component(
@@ -147,36 +178,28 @@ def _eval_component_add(node_id: int, ctx: ExecutionContext,
         print(f"[ComponentAdd] {err}")
         return
 
-    # ── Transform 特殊处理 (vec3 分解, 支持 _SKIP 局部修改) ──
+    # ── Transform 特殊处理 (走 SceneManager, 支持 _SKIP 局部修改) ──
     if comp_name == "Transform":
-        from Application.Core.Scene.BasicComponents import Transform
-        from Application.Core.Math.CoordinateSystem import editor_to_gl_position, editor_to_gl_scale
-        if isinstance(comp, Transform):
-            pos_val = _read_component_prop(
-                node_id, "Position", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
-            rot_val = _read_component_prop(
-                node_id, "Rotation", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
-            scl_val = _read_component_prop(
-                node_id, "Scale", ctx, g, inst, comp_name, (1.0, 1.0, 1.0))
+        pos_val = _read_component_prop(
+            node_id, "Position", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
+        rot_val = _read_component_prop(
+            node_id, "Rotation", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
+        scl_val = _read_component_prop(
+            node_id, "Scale", ctx, g, inst, comp_name, (1.0, 1.0, 1.0))
 
-            if pos_val is not _SKIP:
-                pos_editor = _to_vec3_tuple(pos_val)
-                gl_x, gl_y, gl_z = editor_to_gl_position(*pos_editor)
-                comp.position_x, comp.position_y, comp.position_z = gl_x, gl_y, gl_z
-            if rot_val is not _SKIP:
-                rot = _to_vec3_tuple(rot_val)
-                comp.rotation_x, comp.rotation_y, comp.rotation_z = rot
-            if scl_val is not _SKIP:
-                scl_editor = _to_vec3_tuple(scl_val)
-                gl_sx, gl_sy, gl_sz = editor_to_gl_scale(*scl_editor)
-                comp.scale_x, comp.scale_y, comp.scale_z = gl_sx, gl_sy, gl_sz
+        ctx.scene.SetEntityTransformEditor(
+            eid,
+            position_xyz=_to_vec3_tuple(pos_val) if pos_val is not _SKIP else None,
+            rotation_xyz=_to_vec3_tuple(rot_val) if rot_val is not _SKIP else None,
+            scale_xyz=_to_vec3_tuple(scl_val) if scl_val is not _SKIP else None,
+        )
+        print(f"[ComponentAdd] Transform "
+              f"pos={'SKIP' if pos_val is _SKIP else _to_vec3_tuple(pos_val)} "
+              f"rot={'SKIP' if rot_val is _SKIP else _to_vec3_tuple(rot_val)} "
+              f"scl={'SKIP' if scl_val is _SKIP else _to_vec3_tuple(scl_val)}")
+        return
 
-            print(f"[ComponentAdd] Transform pos={'SKIP' if pos_val is _SKIP else _to_vec3_tuple(pos_val)} "
-                  f"rot={'SKIP' if rot_val is _SKIP else _to_vec3_tuple(rot_val)} "
-                  f"scl={'SKIP' if scl_val is _SKIP else _to_vec3_tuple(scl_val)}")
-            return
-
-    _apply_component_properties(node_id, ctx, g, inst, comp_name, comp)
+    _apply_component_properties(node_id, ctx, g, inst, comp_name, comp, eid=eid)
     print(f"[ComponentAdd] '{comp_name}' properties set on entity #{eid}")
 
 register_evaluator("ComponentAdd", _eval_component_add)
@@ -204,36 +227,28 @@ def _eval_set_component(node_id: int, ctx: ExecutionContext,
         print(f"[SetComponent] {err}")
         return
 
-    # ── Transform 特殊处理 (支持 _SKIP 局部修改) ──
+    # ── Transform 特殊处理 (走 SceneManager, 支持 _SKIP 局部修改) ──
     if comp_name == "Transform":
-        from Application.Core.Scene.BasicComponents import Transform
-        from Application.Core.Math.CoordinateSystem import editor_to_gl_position, editor_to_gl_scale
-        if isinstance(comp, Transform):
-            pos_val = _read_component_prop(
-                node_id, "Position", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
-            rot_val = _read_component_prop(
-                node_id, "Rotation", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
-            scl_val = _read_component_prop(
-                node_id, "Scale", ctx, g, inst, comp_name, (1.0, 1.0, 1.0))
+        pos_val = _read_component_prop(
+            node_id, "Position", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
+        rot_val = _read_component_prop(
+            node_id, "Rotation", ctx, g, inst, comp_name, (0.0, 0.0, 0.0))
+        scl_val = _read_component_prop(
+            node_id, "Scale", ctx, g, inst, comp_name, (1.0, 1.0, 1.0))
 
-            if pos_val is not _SKIP:
-                pos_editor = _to_vec3_tuple(pos_val)
-                gl_x, gl_y, gl_z = editor_to_gl_position(*pos_editor)
-                comp.position_x, comp.position_y, comp.position_z = gl_x, gl_y, gl_z
-            if rot_val is not _SKIP:
-                rot = _to_vec3_tuple(rot_val)
-                comp.rotation_x, comp.rotation_y, comp.rotation_z = rot
-            if scl_val is not _SKIP:
-                scl_editor = _to_vec3_tuple(scl_val)
-                gl_sx, gl_sy, gl_sz = editor_to_gl_scale(*scl_editor)
-                comp.scale_x, comp.scale_y, comp.scale_z = gl_sx, gl_sy, gl_sz
+        ctx.scene.SetEntityTransformEditor(
+            eid,
+            position_xyz=_to_vec3_tuple(pos_val) if pos_val is not _SKIP else None,
+            rotation_xyz=_to_vec3_tuple(rot_val) if rot_val is not _SKIP else None,
+            scale_xyz=_to_vec3_tuple(scl_val) if scl_val is not _SKIP else None,
+        )
+        print(f"[SetComponent] Transform "
+              f"pos={'SKIP' if pos_val is _SKIP else _to_vec3_tuple(pos_val)} "
+              f"rot={'SKIP' if rot_val is _SKIP else _to_vec3_tuple(rot_val)} "
+              f"scl={'SKIP' if scl_val is _SKIP else _to_vec3_tuple(scl_val)}")
+        return
 
-            print(f"[SetComponent] pos={'SKIP' if pos_val is _SKIP else _to_vec3_tuple(pos_val)} "
-                  f"rot={'SKIP' if rot_val is _SKIP else _to_vec3_tuple(rot_val)} "
-                  f"scl={'SKIP' if scl_val is _SKIP else _to_vec3_tuple(scl_val)}")
-            return
-
-    _apply_component_properties(node_id, ctx, g, inst, comp_name, comp)
+    _apply_component_properties(node_id, ctx, g, inst, comp_name, comp, eid=eid)
     print(f"[SetComponent] '{comp_name}' properties set on entity #{eid}")
 
 register_evaluator("SetComponent", _eval_set_component)

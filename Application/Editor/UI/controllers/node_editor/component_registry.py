@@ -96,5 +96,13 @@ def get_properties(component_name: str) -> list[PropertyDescriptor]:
 
 
 def get_registered_component_names() -> list[str]:
-    """获取所有已注册属性表的组件名（用于下拉菜单）。"""
-    return sorted(_COMPONENT_PROPERTIES.keys(), key=lambda n: n.lower())
+    """获取所有已注册属性表的组件名（用于下拉菜单）。Transform 置顶。"""
+    _ORDER = ["Transform", "MeshRenderer", "Camera"]
+    names = []
+    for c in _ORDER:
+        if c in _COMPONENT_PROPERTIES:
+            names.append(c)
+    for c in sorted(_COMPONENT_PROPERTIES.keys()):
+        if c not in names:
+            names.append(c)
+    return names

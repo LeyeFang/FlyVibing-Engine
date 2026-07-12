@@ -86,6 +86,9 @@ class ScenePanel(BasePanel):
         """执行场景保存到 .scene 文件。"""
         if not path:
             return
+        # ★ 确保有 .scene 后缀
+        if not path.endswith(".scene"):
+            path += ".scene"
         from Application.Editor.EditorHost import EditorHost
         ok = EditorHost.save_active_scene_to_file(path)
         if ok:

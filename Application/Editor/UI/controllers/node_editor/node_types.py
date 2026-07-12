@@ -341,24 +341,24 @@ _reg(NodeTypeDef(
 
 # ── ComponentAdd / SetComponent 共用属性 Pin (input) ──
 _COMPONENT_PROPERTY_PINS: list = [
-    # MeshRenderer (放在前面 — 更常用)
-    PinDef(_gen_id(), "MeshID", "data", "input", "int"),
-    PinDef(_gen_id(), "MaterialID", "data", "input", "int"),
-    PinDef(_gen_id(), "Visible", "data", "input", "bool"),
-    # Transform
+    # Transform (默认)
     PinDef(_gen_id(), "Position", "data", "input", "vec3"),
     PinDef(_gen_id(), "Rotation", "data", "input", "vec3"),
     PinDef(_gen_id(), "Scale", "data", "input", "vec3"),
+    # MeshRenderer
+    PinDef(_gen_id(), "MeshID", "data", "input", "int"),
+    PinDef(_gen_id(), "MaterialID", "data", "input", "int"),
+    PinDef(_gen_id(), "Visible", "data", "input", "bool"),
 ]
 
 # ── GetComponent 属性 Pin (output) ──
 _COMPONENT_PROPERTY_OUT_PINS: list = [
-    PinDef(_gen_id(), "MeshID", "data", "output", "int"),
-    PinDef(_gen_id(), "MaterialID", "data", "output", "int"),
-    PinDef(_gen_id(), "Visible", "data", "output", "bool"),
     PinDef(_gen_id(), "Position", "data", "output", "vec3"),
     PinDef(_gen_id(), "Rotation", "data", "output", "vec3"),
     PinDef(_gen_id(), "Scale", "data", "output", "vec3"),
+    PinDef(_gen_id(), "MeshID", "data", "output", "int"),
+    PinDef(_gen_id(), "MaterialID", "data", "output", "int"),
+    PinDef(_gen_id(), "Visible", "data", "output", "bool"),
 ]
 
 _reg(NodeTypeDef(

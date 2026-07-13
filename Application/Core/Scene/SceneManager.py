@@ -292,6 +292,11 @@ class SceneManager:
     def GetEntityName(cls, entity_id: int) -> str:
         return cls._state().entity_mgr.get_name(entity_id)
 
+    @classmethod
+    def GetEntityByName(cls, name: str) -> int:
+        """按名称查找实体 ID。未找到返回 -1。"""
+        return cls._state().entity_mgr.get_id_by_name(name)
+
     # ============================================================
     # 组件注册表 → ComponentRegistry
     # ============================================================

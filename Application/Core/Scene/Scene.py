@@ -57,10 +57,7 @@ class EntityData:
 
     name: str = "Entity"
     components: dict[str, object] = field(default_factory=dict)
-    # 未来扩展:
-    #   parent_id: Optional[int] = None    # 父实体 (层级)
-    #   tag: str = ""                      # 标签
-    #   active: bool = True                # 激活状态
+    parent_id: Optional[int] = None  # 父实体 scene-local ID (层级), None = 根实体
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -364,10 +361,13 @@ class Scene:
                     comps[type_name] = _json_safe(dataclasses.asdict(comp))
                 elif hasattr(comp, 'to_dict'):
                     comps[type_name] = _json_safe(comp.to_dict())
-            entities_dict[str(eid)] = {
+            entry: dict = {
                 "name": ed.name,
                 "components": comps,
             }
+            if ed.parent_id is not None:
+                entry["parent_id"] = ed.parent_id
+            entities_dict[str(eid)] = entry
 
         result: dict = {
             "name": self.name,
@@ -424,6 +424,7 @@ class Scene:
             scene.entities[eid] = EntityData(
                 name=ed_data.get("name", "Entity"),
                 components=comps,
+                parent_id=ed_data.get("parent_id"),
             )
 
         # ── 恢复节点图（保留为 dict，由 EditorHost 负责还原到 NodeEditorPanel）──

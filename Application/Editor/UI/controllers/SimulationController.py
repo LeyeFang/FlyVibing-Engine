@@ -69,6 +69,7 @@ class SimulationController:
             if eid in _sys_ids:
                 continue
             name = scene_mgr.GetEntityName(eid)
+            parent_id = scene_mgr.GetEntityParent(eid)  # ★ 保存层级关系到 Scene 模板
             comps = {"Transform": copy.deepcopy(xform)}
             try:
                 cam = scene_mgr.GetComponent(eid, Camera)
@@ -80,7 +81,7 @@ class SimulationController:
                 comps["MeshRenderer"] = copy.deepcopy(mr)
             except Exception:
                 pass
-            scene.entities[eid] = EntityData(name=name, components=comps)
+            scene.entities[eid] = EntityData(name=name, components=comps, parent_id=parent_id)
 
     # ── 状态变更 ────────────────────────────────────────────
 

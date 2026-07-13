@@ -140,6 +140,13 @@ class EntityManager:
     def get_name(self, entity_id: int) -> str:
         return self._mgr._entity_names.get(entity_id, "")
 
+    def get_id_by_name(self, name: str) -> int:
+        """按名称查找实体 ID。未找到返回 -1。"""
+        for eid, ename in self._mgr._entity_names.items():
+            if ename == name:
+                return eid
+        return -1
+
     # ════════════════════════════════════════════════════════════
     # 基础查询
     # ════════════════════════════════════════════════════════════

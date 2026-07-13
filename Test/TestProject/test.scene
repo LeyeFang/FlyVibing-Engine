@@ -96,18 +96,18 @@
         "name": "DefaultCube",
         "components": {
           "Transform": {
-            "position_x": 1.8951759338378906,
-            "position_y": 0.0,
-            "position_z": 0.0,
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
             "rotation_x": 0,
             "rotation_y": 0,
             "rotation_z": 0,
             "scale_x": 1,
             "scale_y": 1,
             "scale_z": 1,
-            "local_pos_x": 1.8951759338378906,
-            "local_pos_y": 0.0,
-            "local_pos_z": 0.0,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
             "local_rot_x": 0,
             "local_rot_y": 0,
             "local_rot_z": 0,
@@ -121,15 +121,46 @@
             "visible": true
           }
         }
+      },
+      "4": {
+        "name": "Entity_4",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": -1.5,
+            "position_z": 0.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0.0,
+            "local_pos_y": -1.5,
+            "local_pos_z": -0.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 1,
+            "visible": true
+          }
+        },
+        "parent_id": 3
       }
     },
     "main_camera_entity_id": 1,
-    "next_eid": 4,
+    "next_eid": 5,
     "node_graph": {
       "version": "0.1.0",
       "nodes": {
-        "142": {
-          "id": 142,
+        "151": {
+          "id": 151,
           "node_type": "OnGameStart",
           "pos": [
             80,
@@ -137,11 +168,11 @@
           ],
           "props": {},
           "pin_ids": {
-            "exec": 143
+            "exec": 152
           }
         },
-        "144": {
-          "id": 144,
+        "153": {
+          "id": 153,
           "node_type": "OnFrameUpdate",
           "pos": [
             80,
@@ -149,12 +180,12 @@
           ],
           "props": {},
           "pin_ids": {
-            "exec": 145,
-            "delta": 146
+            "exec": 154,
+            "delta": 155
           }
         },
-        "147": {
-          "id": 147,
+        "156": {
+          "id": 156,
           "node_type": "OnGameStop",
           "pos": [
             80,
@@ -162,37 +193,34 @@
           ],
           "props": {},
           "pin_ids": {
-            "exec": 148
+            "exec": 157
           }
         },
-        "149": {
-          "id": 149,
+        "158": {
+          "id": 158,
           "node_type": "EntitySpawn",
           "pos": [
-            240.0,
-            79.0
+            299.0,
+            30.0
           ],
           "props": {
             "template": "DefaultCube"
           },
           "pin_ids": {
-            "exec_in": 150,
-            "Name": 151,
-            "Position": 152,
-            "Rotation": 153,
-            "exec_out": 154,
-            "Entity": 155
+            "exec_in": 159,
+            "exec_out": 160,
+            "Entity": 161
           }
         }
       },
       "links": {
-        "156": {
-          "id": 156,
-          "from_pin": 143,
-          "to_pin": 150
+        "162": {
+          "id": 162,
+          "from_pin": 152,
+          "to_pin": 159
         }
       },
-      "next_id": 157
+      "next_id": 163
     }
   }
 }

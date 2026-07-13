@@ -75,6 +75,7 @@ MENU_SECTIONS: list[tuple[str, list]] = [
     ("Scene", [
         ("Entity", [
             ("Spawn Entity", "EntitySpawn"),
+            ("Get Entity", "EntityGet"),
             ("Destroy Entity", "EntityDestroy"),
         ]),
         ("Game", [

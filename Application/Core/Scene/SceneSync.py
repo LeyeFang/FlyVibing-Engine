@@ -51,6 +51,7 @@ class SceneSync:
             max_eid = max(max_eid, eid)
 
             name = st._entity_names.get(eid, f"Entity_{eid}")
+            parent_id = st._entity_parent.get(eid)  # ★ 保存层级关系到 Scene
 
             # 直接从 esper 获取实体所有组件 (不依赖 registry 发现)
             comps: dict[str, object] = {}
@@ -68,7 +69,7 @@ class SceneSync:
 
             if comps:
                 from Application.Core.Scene.Scene import EntityData
-                scene.entities[eid] = EntityData(name=name, components=comps)
+                scene.entities[eid] = EntityData(name=name, components=comps, parent_id=parent_id)
 
         scene._next_eid = max_eid + 1 if max_eid > 0 else 1
         scene.main_camera_entity_id = st.main_camera_id
@@ -104,6 +105,7 @@ class SceneSync:
 
         # ── 重建实体 ──
         id_map: dict[int, int] = {}
+        _pending_parents: dict[int, int] = {}  # new_eid → old_parent_id
 
         for old_eid, ed in scene.entities.items():
             comp_instances = []
@@ -137,6 +139,9 @@ class SceneSync:
             st.entities[f'{new_eid}'] = 1
             st._entity_names[new_eid] = ed.name
             st._editor_visible.add(new_eid)
+            # ★ 暂存 parent_id (用 old_eid), ID 重映射后再恢复
+            if ed.parent_id is not None:
+                _pending_parents[new_eid] = ed.parent_id
 
             # 仅 MeshRenderer 实体注册到渲染器
             has_mesh = any(isinstance(ci, MeshRenderer) for ci in comp_instances)
@@ -154,6 +159,12 @@ class SceneSync:
         scene.entities.clear()
         scene.entities.update(remapped)
         scene._next_eid = max(id_map.values()) + 1 if id_map else 1
+
+        # ── 恢复父子关系 (ID 重映射后: old_parent_id → new_parent_id) ──
+        for child_eid, old_parent_id in _pending_parents.items():
+            new_parent_id = id_map.get(old_parent_id)
+            if new_parent_id is not None:
+                st._entity_parent[child_eid] = new_parent_id
 
         if scene.main_camera_entity_id is not None:
             scene.main_camera_entity_id = id_map.get(

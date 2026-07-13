@@ -290,6 +290,18 @@ _reg(NodeTypeDef(
     "Remove entity instance",
 ))
 
+# ── 按名称查找已生成 entity ──
+_reg(NodeTypeDef(
+    "EntityGet", "Get Entity", "Entity", ENTITY_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+        PinDef(_gen_id(), "Name", "data", "input", "string"),
+        PinDef(_gen_id(), "Entity", "data", "output", "entity_ref"),
+    ],
+    "Find entity by name",
+))
+
 _reg(NodeTypeDef(
     "EntityAddMesh", "Add Mesh Component", "Entity", ENTITY_COLOR,
     [

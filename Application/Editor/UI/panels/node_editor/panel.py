@@ -441,6 +441,10 @@ class NodeEditorPanel(BasePanel):
             if inst.node_type == "EntitySpawn":
                 self._draw_entity_spawn_widgets(nid, inst)
 
+            # EntityGet 节点 UI 控件
+            if inst.node_type == "EntityGet":
+                self._draw_entity_get_widgets(nid, inst)
+
             # ComponentAdd / SetComponent / GetComponent / ComponentRemove UI 控件
             if inst.node_type in ("ComponentAdd", "SetComponent"):
                 self._draw_component_add_widgets(nid, inst)
@@ -791,6 +795,46 @@ class NodeEditorPanel(BasePanel):
             return []
         return scene.get_entity_names()
 
+    # ── EntityGet 节点专用控件 ─────────────────────────────
+
+    def _draw_entity_get_widgets(self, nid: int, inst) -> None:
+        """在 EntityGet 节点体内绘制实体名下拉框。
+
+        下拉列表来自 Scene.entities 模板名（与 EntitySpawn 共享同一数据源）。
+        """
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(120)
+
+        current = inst.props.get("entity_name", "")
+        labels = self._get_scene_template_names()
+        if not labels:
+            labels = []
+
+        # 构建选项: 已有名称 + "Custom..."
+        items = labels + ["+ Custom..."] if labels else ["+ Custom..."]
+        try:
+            idx = labels.index(current) if current in labels else len(items) - 1
+        except ValueError:
+            idx = len(items) - 1
+
+        changed, new_idx = _ne_combo(f"##getent_{nid}", idx, items)
+        if changed:
+            if new_idx < len(labels):
+                inst.props["entity_name"] = labels[new_idx]
+            # "Custom..." 选中时保持 current
+
+        # 自定义输入
+        if idx >= len(labels) or not labels:
+            changed, txt = imgui.input_text(
+                f"##getent_txt_{nid}", current,
+            )
+            if changed:
+                inst.props["entity_name"] = txt
+
+        imgui.same_line()
+        imgui.text_disabled("Name")
+        imgui.pop_item_width()
+
     # ── Component 节点通用控件 ─────────────────────────────
 
     @staticmethod
@@ -1009,6 +1053,9 @@ class NodeEditorPanel(BasePanel):
                     and not (p.name == "Value" and mode == "manual")]
         # ── VarGet: 隐藏 Name pin ──
         if inst.node_type == "VarGet":
+            return [p for p in nd.pins if p.name != "Name"]
+        # ── EntityGet: 隐藏 Name pin (由下拉框处理) ──
+        if inst.node_type == "EntityGet":
             return [p for p in nd.pins if p.name != "Name"]
         # ── VecMath: 一元操作隐藏 B pin ──
         if inst.node_type == "VecMath":

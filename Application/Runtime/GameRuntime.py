@@ -84,13 +84,17 @@ class GameRuntime(Engine):
 
     @classmethod
     def _sync_scene_from_editor(cls) -> None:
-        """从 Editor 的 SceneManager 同步 game_type 到 Runtime。"""
+        """从 Editor 的 SceneManager 同步 game_type + 摄像机到 Runtime。"""
         from Application.Editor.EditorHost import EditorHost
         try:
             editor_scene = EditorHost.scene
             if editor_scene is not None:
                 cls.scene.game_type = editor_scene.game_type
-                print(f"[GameRuntime] Synced game_type from editor: {editor_scene.game_type.value}")
+                # ★ 根据 game_type 切换活跃摄像机
+                cls.scene.cam_mgr._apply(cls.scene)
+                print(f"[GameRuntime] Synced game_type from editor: "
+                      f"{editor_scene.game_type.value}, "
+                      f"camera_id={cls.scene.scene_camera_id}")
         except Exception:
             pass
 

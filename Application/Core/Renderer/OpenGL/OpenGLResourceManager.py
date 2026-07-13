@@ -497,10 +497,7 @@ class OpenGLResourceManager:
         self,
         overlay: 'RenderResourceManger.overlay_drawable_struct'
     ) -> None:
-        """注册编辑器叠加层可绘制对象 — 编译 shader, 上传 VBO/EBO/纹理, 创建 VAO。
-        Args:
-            overlay: 来自 Editor 层的纯数据载体 (无 GL 依赖)
-        """
+        """注册编辑器叠加层可绘制对象 — 编译 shader, 上传 VBO/EBO/纹理, 创建 VAO。"""
         if overlay.key in self._overlay_gpu_resources:
             return
         # ── 编译着色器 ──

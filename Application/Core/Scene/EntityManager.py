@@ -18,7 +18,7 @@ import esper
 
 from Application.Core.Scene.BasicComponents import Transform, MeshRenderer, Camera
 from Application.Core.Renderer.RenderCommand import (
-    EntityRegistrationCommand, EntityVisibilityCommand,
+    EntityRegistrationCommand, EntityVisibilityCommand, EntityRenderVisibleCommand,
 )
 from Application.Core.Events.SceneEvent import NewComponentEvent
 
@@ -32,21 +32,47 @@ class EntityManager:
     def __init__(self, scene_mgr: SceneManager) -> None:
         self._mgr = scene_mgr
 
+    def _esper_op(self, operation, op_name="?"):
+        """在 esper 锁保护下执行操作（世界切换 + 操作原子化 + 事后还原）。"""
+        from Application.Core.Scene.SceneManager import SceneManager as _SM
+        with _SM._esper_lock:
+            old_world = esper.current_world
+            esper.switch_world(self._mgr.world_name)
+            try:
+                return operation()
+            finally:
+                esper.switch_world(old_world)
+
     # ════════════════════════════════════════════════════════════
     # 实体创建 / 删除
     # ════════════════════════════════════════════════════════════
 
-    def add(self, name: str = "") -> int:
-        """创建新实体（仅 Transform），返回 entity_id。"""
+    def add(self, name: str = "", *components) -> int:
+        """创建新实体（可选初始组件），返回 entity_id。线程安全。"""
         st = self._mgr
-        entity_id = esper.create_entity(Transform())
+        # ★ 原子操作: 锁定 esper 全局状态 → 切换世界 → 创建实体
+        def _create():
+            if components:
+                return esper.create_entity(*components)
+            else:
+                return esper.create_entity(Transform())
+        entity_id = self._esper_op(_create, f"add({name})")
+        # 以下操作不依赖 esper（仅使用 SceneManager 追踪数据）
         st.entities[f'{entity_id}'] = 1
         st._editor_visible.add(entity_id)
         st._entity_names[entity_id] = name if name else f"Entity_{entity_id}"
+        # 注册 MeshRenderer 到渲染器
+        for comp in components:
+            if isinstance(comp, MeshRenderer):
+                _renderer = getattr(st.app, 'renderer', None)
+                if _renderer is not None:
+                    _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
+                    _renderer.enqueue(EntityRenderVisibleCommand(entity_id, visible=comp.visible))
+                    _renderer.enqueue(EntityVisibilityCommand(entity_id, visible=True))
         return entity_id
 
     def delete(self, entity_id: int) -> bool:
-        """删除实体及其所有子实体。返回是否成功删除。"""
+        """删除实体及其所有子实体。返回是否成功删除。线程安全。"""
         st = self._mgr
         if f'{entity_id}' not in st.entities:
             return False
@@ -69,9 +95,9 @@ class EntityManager:
         if _renderer is not None:
             _renderer.enqueue(EntityRegistrationCommand(entity_id, register=False))
 
-        # 从 ECS 世界删除
+        # 从 ECS 世界删除（线程安全）
         try:
-            esper.delete_entity(entity_id)
+            self._esper_op(lambda: esper.delete_entity(entity_id))
         except KeyError:
             pass
 
@@ -168,20 +194,22 @@ class EntityManager:
         return result
 
     def get_component(self, entity_id: int, component_type: type):
-        """获取实体的指定组件，不存在则返回 None。"""
-        try:
-            return esper.component_for_entity(entity_id, component_type)
-        except KeyError:
-            return None
+        """获取实体的指定组件，不存在则抛出 KeyError。线程安全。"""
+        return self._esper_op(lambda: esper.component_for_entity(entity_id, component_type))
 
     def add_component(self, entity_id: int, component_instance) -> None:
-        """给实体添加组件实例。"""
+        """给实体添加组件实例。线程安全。"""
         st = self._mgr
-        esper.add_component(entity_id, component_instance)
+        self._esper_op(lambda: esper.add_component(entity_id, component_instance))
         NewComponentEvent.Pack(entity_id, component_instance, engine=st.app)
+        # 注册 MeshRenderer 到渲染器
         if isinstance(component_instance, MeshRenderer):
             _renderer = getattr(st.app, 'renderer', None)
             if _renderer is not None:
                 _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
+                _renderer.enqueue(EntityRenderVisibleCommand(
+                    entity_id, visible=component_instance.visible))
+                _renderer.enqueue(EntityVisibilityCommand(
+                    entity_id, visible=(entity_id in st._editor_visible)))
                 _renderer.enqueue(
                     EntityVisibilityCommand(entity_id, visible=(entity_id in st._editor_visible)))

@@ -12,14 +12,13 @@ MATRIX CONVENTION — MUST READ
 
 Two types of matrices exist in this codebase:
 
-  TYPE A: pyrr Matrix44
-    - Uses ROW-VECTOR convention internally:  v' = v * M
-    - When converted to numpy C-contiguous, the byte stream becomes
-      column-vector order (transposed)
+  TYPE A: Pure numpy row-vector matrices
+    - Uses ROW-VECTOR convention:  v' = v * M
+    - Translation in last row (row index 3)
     - OpenGL upload: MUST USE glUniformMatrix4fv(..., GL_FALSE, ...)
-    - Source: pyrr.matrix44.create_*, EditorCamera, OrbitCamera
+    - Source: Math.Transform, Math.Camera, EditorCamera, OrbitCamera
 
-  TYPE B: numpy ndarray (standard math convention)
+  TYPE B: numpy ndarray (column-vector convention)
     - Uses COLUMN-VECTOR convention:  v' = M @ v
     - Standard C-order memory layout: row by row
     - OpenGL upload: MUST USE glUniformMatrix4fv(..., GL_TRUE, ...)
@@ -28,10 +27,10 @@ Two types of matrices exist in this codebase:
   ┌──────────────────────────────┬──────────┬───────────────┐
   │ Source                       │ Type     │ GL upload flag │
   ├──────────────────────────────┼──────────┼───────────────┤
-  │ Math.Transform (pyrr-backed) │ pyrr  A  │ GL_FALSE      │
-  │ Math.Camera   (pyrr-backed)  │ pyrr  A  │ GL_FALSE      │
-  │ EditorCamera (pyrr)          │ pyrr  A  │ GL_FALSE      │
-  │ OrbitCamera  (pyrr)          │ pyrr  A  │ GL_FALSE      │
+  │ Math.Transform (pure numpy)  │ numpy A  │ GL_FALSE      │
+  │ Math.Camera   (pure numpy)   │ numpy A  │ GL_FALSE      │
+  │ EditorCamera  (pure numpy)   │ numpy A  │ GL_FALSE      │
+  │ OrbitCamera   (pure numpy)   │ numpy A  │ GL_FALSE      │
   │ ViewGizmo compute_cube_model │ numpy B  │ GL_TRUE       │
   │ ViewGizmo compute_ortho_proj │ numpy B  │ GL_TRUE       │
   └──────────────────────────────┴──────────┴───────────────┘

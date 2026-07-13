@@ -92,6 +92,9 @@ class EditorLayer(Layer):
         TransformGizmo.register_to(cls.renderer)
         # ── 摄像机 entity gizmo (frustum / 2D boundary) ──
         cls._refresh_camera_gizmos()
+        # ── 注册选中变化回调 → 自动 invalidate camera gizmo ──
+        from Application.Editor.UI.controllers.SelectionController import SelectionController
+        SelectionController.register_selection_callback(cls.invalidate_camera_gizmos)
 
     @classmethod
     def OnDetach(cls):
@@ -119,7 +122,7 @@ class EditorLayer(Layer):
         # ── SceneCameraUpdateEvent: 始终处理 (ViewportController / DebugLayer 触发) ──
         if isinstance(event, SceneCameraUpdateEvent):
             cls._sync_camera_to_renderer()
-            cls._camera_gizmo_state_hash = -1  # 模式切换 → 强制刷新 gizmo
+            cls.invalidate_camera_gizmos()  # 模式切换 → 强制刷新 gizmo
             return
         # ── 窗口 resize 始终处理，不受面板鼠标拦截影响 ──
         if isinstance(event, WindowResizeEvent):
@@ -190,11 +193,16 @@ class EditorLayer(Layer):
                 EditorHost.scene.get_main_camera_2d_id() if is_2d else EditorHost.scene.get_main_camera_id()
             )
             print(f"[EditorLayer] Preview: ON (entity {cls._preview_entity_id})")
-        cls._camera_gizmo_state_hash = -1  # 强制刷新 gizmo (隐藏预览自身)
+        cls.invalidate_camera_gizmos()  # 强制刷新 gizmo (隐藏预览自身)
         cls._sync_camera_to_renderer()
 
     @classmethod
-    def _refresh_camera_gizmos(cls) -> None:
+    def invalidate_camera_gizmos(cls) -> None:
+        """标记 camera gizmo 需要重建。所有改变摄像机可见性/选中/模式的路径统一调用此方法。"""
+        cls._camera_gizmo_state_hash = -1
+
+    @classmethod
+    def _refresh_camera_gizmos(cls, force: bool = False) -> None:
         """遍历 ECS 中所有 Camera entity，注册/更新对应的 gizmo overlay。
 
         仅在 entity 增删、position/rotation 变化或选中状态变化时重建 GPU 资源。
@@ -217,9 +225,16 @@ class EditorLayer(Layer):
         try:
             cam_list = GizmoQuery.get_camera_gizmos(selected_ids=selected_ids)
         except Exception:
+            import traceback
+            traceback.print_exc()
             return
 
-        # ── 状态哈希: entity_id + world_pos + rotation + camera params + type + selected ──
+        # ── 状态哈希 ──
+        if not cam_list:
+            if cls._camera_gizmo_state_hash != -2:  # 避免刷屏
+                print("[EditorLayer] _refresh_camera_gizmos: no camera entities found in ECS")
+                cls._camera_gizmo_state_hash = -2
+            return
         state_parts: list[tuple] = []
         for cd in cam_list:
             model = calculate_entity_model(
@@ -230,12 +245,13 @@ class EditorLayer(Layer):
             rot = tuple(round(r, 4) for r in cd.rotation)
             state_parts.append((cd.entity_id, world_pos, rot,
                                 cd.is_perspective, cd.is_selected,
+                                cd.is_editor_visible,
                                 round(cd.aspect_ratio, 4),
                                 round(cd.fov, 2),
                                 round(cd.ortho_size, 2)))
         new_hash = hash(frozenset(state_parts))
 
-        if new_hash == cls._camera_gizmo_state_hash:
+        if not force and new_hash == cls._camera_gizmo_state_hash:
             return
         cls._camera_gizmo_state_hash = new_hash
 
@@ -247,6 +263,9 @@ class EditorLayer(Layer):
         for cam_data in cam_list:
             # 预览模式: 隐藏预览自身的 gizmo
             if preview_eid is not None and cam_data.entity_id == preview_eid:
+                continue
+            # 眼图标关闭: 隐藏该摄像机的 gizmo
+            if not cam_data.is_editor_visible:
                 continue
             # 模式过滤: 2D 模式只显示正交摄像机, 3D 模式只显示透视摄像机
             if is_2d and cam_data.is_perspective:
@@ -396,7 +415,7 @@ class EditorLayer(Layer):
         # ── gizmo 拖拽结束 ──
         if TransformGizmo.is_dragging():
             TransformGizmo.end_drag()
-            cls._camera_gizmo_state_hash = -1  # 强制下次刷新
+            cls.invalidate_camera_gizmos()
             cls._refresh_camera_gizmos()
             return
 
@@ -538,6 +557,7 @@ class EditorLayer(Layer):
             from Application.Core.Math.Transform import calculate_entity_model
             from Application.Core.Scene.BasicComponents import Camera
             from Application.Core.Scene.SceneManager import SceneManager
+            from Application.Core.Math.Camera import orthogonal_projection, perspective_projection
             try:
                 t = EditorHost.scene.GetEntityTransform(cls._preview_entity_id)
                 model = calculate_entity_model(
@@ -551,17 +571,15 @@ class EditorLayer(Layer):
                     aspect = cls.renderer.aspect_ratio
                     half_h = cam_comp.ortho_size
                     half_w = half_h * aspect
-                    from pyrr import matrix44
-                    proj = matrix44.create_orthogonal_projection(
+                    proj = orthogonal_projection(
                         -half_w, half_w, -half_h, half_h,
                         cam_comp.near_plane, cam_comp.far_plane,
-                    ).astype(np.float32)
+                    )
                 else:
-                    from pyrr import matrix44
-                    proj = matrix44.create_perspective_projection(
+                    proj = perspective_projection(
                         cam_comp.fov, cls.renderer.aspect_ratio,
                         cam_comp.near_plane, cam_comp.far_plane,
-                    ).astype(np.float32)
+                    )
                 cls.renderer.enqueue(SetViewProjectionCommand(
                     view=view, proj=proj,
                     orbit_target=np.array([0.0, 0.0, 0.0], dtype=np.float32),

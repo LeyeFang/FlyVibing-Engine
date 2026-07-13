@@ -9,7 +9,7 @@ All camera types (EditorCamera / SceneCamera / future CinematicCamera)
 implement this interface to be usable by the renderer.
 
 MATRIX CONVENTION:
-  Camera matrices are pyrr-style (row-vector convention internally).
+  Camera matrices use row-vector convention (pure numpy).
   For OpenGL upload: use glUniformMatrix4fv(..., GL_FALSE, ...).
   See Application/Core/Math/__init__.py for complete documentation.
 """

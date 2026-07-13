@@ -210,6 +210,8 @@ class SceneBrowserController:
     def get_game_type(cls) -> str:
         """返回 GameType 字符串 ('3d' / '2d' / 'overlay')。"""
         scene = EditorHost.scene
+        if scene is None:
+            return "3d"
         gt = scene.game_type
         return gt.value if hasattr(gt, 'value') else str(gt)
 
@@ -219,7 +221,7 @@ class SceneBrowserController:
         from Application.Core.Scene.Scene import GameType
         gt = GameType(game_type_str)
         scene = EditorHost.scene
-        if scene.game_type == gt:
+        if scene is None:
             return
         scene.game_type = gt
         # 切换默认摄像机
@@ -309,6 +311,12 @@ class SceneBrowserController:
     def set_editor_visible(cls, entity_id: int, visible: bool) -> None:
         """设置实体在编辑器视口中的可见性。"""
         EditorHost.scene.SetEditorVisible(entity_id, visible)
+        # ★ 通知 gizmo 刷新（眼图标会影响 camera gizmo 的 is_editor_visible）
+        try:
+            from Application.Editor.EditorLayer import EditorLayer
+            EditorLayer.invalidate_camera_gizmos()
+        except Exception:
+            pass
 
     # ── 渲染可见性 ──────────────────────────────────────────
 

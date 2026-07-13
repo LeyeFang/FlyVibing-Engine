@@ -15,7 +15,7 @@ SelectionController — 编辑器实体选中状态的唯一入口（Single Sour
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Callable
 
 from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
 from Application.Editor.Gizmos.OutlinerID import OutlinerID
@@ -30,34 +30,38 @@ class SelectionController:
     OutlinerID.set_selected_entities()，以保证数据层和渲染层始终一致。
     """
 
+    # ── 回调: 选中变化时通知（EditorLayer 注册 invalidate_camera_gizmos）──
+    _on_selection_changed: list[callable] = []
+
+    @classmethod
+    def register_selection_callback(cls, cb: callable) -> None:
+        """注册选中变化回调。"""
+        if cb not in cls._on_selection_changed:
+            cls._on_selection_changed.append(cb)
+
+    @classmethod
+    def _notify_selection_changed(cls) -> None:
+        for cb in cls._on_selection_changed:
+            try:
+                cb()
+            except Exception:
+                pass
+
     # ── 选中操作 ────────────────────────────────────────────
 
     @classmethod
     def select(cls, entity_id: int) -> None:
-        """选中指定实体 — 仅轮廓高亮，不显示 Gizmo。
-
-        适用于普通鼠标点击选中。
-
-        Args:
-            entity_id: 实体 ID
-        """
         SceneBrowserController.select(entity_id)
         OutlinerID.set_selected_entities({entity_id})
         TransformGizmo._visible = False
+        cls._notify_selection_changed()
 
     @classmethod
     def select_with_gizmo(cls, entity_id: int) -> None:
-        """选中指定实体 — 轮廓高亮 + 显示移动 Gizmo。
-
-        适用于 G+点击 选中实体并进入平移操作模式。
-
-        Args:
-            entity_id: 实体 ID
-        """
         SceneBrowserController.select(entity_id)
         OutlinerID.set_selected_entities({entity_id})
         TransformGizmo._visible = True
-        TransformGizmo._target_entity_id = entity_id   # ★ 记录附着实体，用于 Editor Visible 检查
+        TransformGizmo._target_entity_id = entity_id
         try:
             from Application.Core.Math.Transform import calculate_entity_model
             t = EditorHost.scene.GetEntityTransform(entity_id)
@@ -78,6 +82,7 @@ class SelectionController:
         OutlinerID.clear()
         TransformGizmo._visible = False
         TransformGizmo._target_entity_id = None
+        cls._notify_selection_changed()
 
     # ── 查询 ────────────────────────────────────────────────
 

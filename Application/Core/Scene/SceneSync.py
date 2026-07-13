@@ -10,6 +10,7 @@ SceneSync — Scene ↔ ECS 双向同步。
 """
 
 from __future__ import annotations
+from enum import Enum
 from typing import TYPE_CHECKING
 
 import esper
@@ -68,12 +69,9 @@ class SceneSync:
             if comps:
                 from Application.Core.Scene.Scene import EntityData
                 scene.entities[eid] = EntityData(name=name, components=comps)
-            else:
-                print(f"[SyncToScene] WARNING: entity {eid} ('{name}') has NO serializable components")
 
         scene._next_eid = max_eid + 1 if max_eid > 0 else 1
         scene.main_camera_entity_id = st.main_camera_id
-        print(f"[SyncToScene] Synced {len(scene.entities)} entities to Scene '{scene.name}'")
 
     # ════════════════════════════════════════════════════════════
     # Scene → esper (加载)
@@ -117,10 +115,18 @@ class SceneSync:
                     comp_instances.append(comp_dict)
                     continue
                 if isinstance(comp_dict, dict) and hasattr(comp_cls, '__dataclass_fields__'):
-                    try:
-                        comp_instances.append(comp_cls(**comp_dict))
-                    except TypeError:
-                        pass
+                    # ★ 将 JSON 中的字符串值转换为对应的 Enum 类型
+                    from dataclasses import fields
+                    converted = dict(comp_dict)
+                    for fld in fields(comp_cls):
+                        if fld.name in converted and isinstance(converted[fld.name], str):
+                            fld_type = fld.type
+                            if isinstance(fld_type, type) and issubclass(fld_type, Enum):
+                                try:
+                                    converted[fld.name] = fld_type(converted[fld.name])
+                                except (ValueError, KeyError):
+                                    pass  # 保持原始值（回退兼容）
+                    comp_instances.append(comp_cls(**converted))
 
             if comp_instances:
                 new_eid = esper.create_entity(*comp_instances)
@@ -164,7 +170,21 @@ class SceneSync:
                 st.main_camera_id = None
                 st.scene_camera = None
                 st.scene_camera_id = None
-
+        # ── 恢复 2D 摄像机：查找第一个 orthographic Camera ──
+        st.main_camera_2d_id = None
+        for entity_id_str in st.entities:
+            eid = int(entity_id_str)
+            try:
+                if esper.has_component(eid, Camera):
+                    cam = esper.component_for_entity(eid, Camera)
+                    if getattr(cam, 'projection_type', None) is not None:
+                        from Application.Core.Scene.BasicComponents import ProjectionType
+                        if cam.projection_type == ProjectionType.ORTHOGRAPHIC or \
+                           str(cam.projection_type) == 'orthographic':
+                            st.main_camera_2d_id = eid
+                            break
+            except KeyError:
+                pass
         # ── 兜底: 若无摄像机，创建默认 ──
         has_camera = False
         for entity_id_str in st.entities:
@@ -178,4 +198,3 @@ class SceneSync:
             self._mgr._create_default_cameras(st)
 
         st.game_type = scene.game_type
-        print(f"[SyncFromScene] Restored {len(st.entities)} entities from Scene '{scene.name}'")

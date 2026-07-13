@@ -57,6 +57,7 @@ class CameraGizmoData:
 
     # ── 编辑器状态 ──
     is_selected: bool
+    is_editor_visible: bool = True  # 眼图标控制
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -70,18 +71,20 @@ class GizmoQuery:
     def get_camera_gizmos(
         selected_ids: Optional[set[int]] = None,
     ) -> list[CameraGizmoData]:
-        """遍历 ECS World 中所有含 Camera + Transform 的 entity。
-
-        Args:
-            selected_ids: 当前选中的 entity ID 集合 (编辑器状态)
-
-        Returns:
-            CameraGizmoData 列表，按 entity_id 排序
-        """
+        """遍历 ECS World 中所有含 Camera + Transform 的 entity。"""
         if selected_ids is None:
             selected_ids = set()
 
         results: list[CameraGizmoData] = []
+
+        # ── 读取编辑器可见性 ──
+        editor_visible: set[int] = set()
+        try:
+            from Application.Core.Scene.SceneManager import SceneManager
+            st = SceneManager._state()
+            editor_visible = st._editor_visible
+        except Exception:
+            pass
 
         for ent, (cam, xform) in esper.get_components(Camera, Transform):
             results.append(CameraGizmoData(
@@ -100,6 +103,7 @@ class GizmoQuery:
                 up_vector=cam.up_vector,
                 is_primary=cam.is_primary,
                 is_selected=(ent in selected_ids),
+                is_editor_visible=(ent in editor_visible),
             ))
 
         results.sort(key=lambda d: d.entity_id)

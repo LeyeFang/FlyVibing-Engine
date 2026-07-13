@@ -13,6 +13,7 @@ from Application.Core.Events.InputEvent import (
     MouseMoveEvent, MouseGragEvent, MouseButtonEvent,
 )
 from Application.Core.Events.SceneEvent import SceneCameraUpdateEvent
+from Application.Core.Events.StatsEvent import PerformanceStatsEvent
 
 
 # ── 静默事件: 这些事件频率太高，不打印 ──
@@ -20,6 +21,7 @@ _SILENT_EVENTS = (
     MouseMoveEvent,
     MouseGragEvent,
     SceneCameraUpdateEvent,
+    PerformanceStatsEvent,
 )
 
 

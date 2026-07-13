@@ -23,9 +23,15 @@ from .camera import _read_entity_ref
 _SKIP = object()  # sentinel: 跳过该属性 (未连线 / 未勾选)
 
 
-def _read_component_prop(node_id: int, pin_name: str,
-                         ctx: ExecutionContext, g: GraphEvaluator,
-                         inst, comp_name: str, default) -> Any:
+def _read_component_prop(
+        node_id: int,
+        pin_name: str,
+        ctx: ExecutionContext,
+        g: GraphEvaluator,
+        inst,
+        comp_name: str,
+        default
+    ):
     """读取组件属性值。返回 _SKIP 表示不修改该属性。
 
     Pin 模式: 未连线 → _SKIP (保留实体当前值)

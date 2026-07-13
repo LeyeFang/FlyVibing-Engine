@@ -49,6 +49,7 @@ class SceneManager:
     _active_name: str = ""                          # 全局默认
     _thread_active: dict[int, str] = {}             # thread_id → engine_name
     _thread_lock = threading.Lock()
+    _esper_lock = threading.RLock()                 # ★ 保护 esper 全局状态的多线程访问
     _component_registry: dict[str, type] = {}       # 全局共享
     _world_counter: dict[str, int] = {}             # engine_name → 世界序号 (非 Editor 每次 Init 递增)
 
@@ -80,8 +81,9 @@ class SceneManager:
     _SceneState = None  # type: ignore
 
     def _switch_world(self) -> None:
-        """切换到本实例的 esper 世界。"""
-        esper.switch_world(self.world_name)
+        """切换到本实例的 esper 世界。线程安全。"""
+        with SceneManager._esper_lock:
+            esper.switch_world(self.world_name)
 
     @classmethod
     def set_thread_active(cls, engine_name: str) -> None:
@@ -104,16 +106,29 @@ class SceneManager:
 
     @classmethod
     def _state(cls) -> 'SceneManager':
-        """返回当前线程对应的 SceneManager 实例，并切换 esper 世界。"""
-        name = cls._get_active_name()
-        if name not in cls._registry:
-            raise RuntimeError(
-                f"SceneManager: no instance for engine '{name}'. "
-                f"Call SceneManager.Init(engine) first."
-            )
-        inst = cls._registry[name]
-        esper.switch_world(inst.world_name)
-        return inst
+        """返回当前线程对应的 SceneManager 实例，并切换 esper 世界（线程安全）。
+
+        ★ 使用 _esper_lock 防止与 _esper_op 的竞态:
+          若不加锁，Editor 线程可在 Logic 线程的 _esper_op 持有锁期间
+          通过 _state() → switch_world() 改变模块级全局 _entities，
+          导致实体被创建到错误的世界。
+        """
+        with cls._esper_lock:
+            name = cls._get_active_name()
+            if name not in cls._registry:
+                raise RuntimeError(
+                    f"SceneManager: no instance for engine '{name}'. "
+                    f"Call SceneManager.Init(engine) first."
+                )
+            inst = cls._registry[name]
+            esper.switch_world(inst.world_name)
+            return inst
+
+    @classmethod
+    def _with_esper_lock(cls, operation):
+        """在 esper 锁保护下执行操作（返回操作结果）。"""
+        with cls._esper_lock:
+            return operation()
 
     @classmethod
     def _state_for(cls, engine_name: str) -> 'SceneManager':
@@ -258,8 +273,8 @@ class SceneManager:
     # ============================================================
 
     @classmethod
-    def AddEntity(cls, name: str = "") -> int:
-        return cls._state().entity_mgr.add(name)
+    def AddEntity(cls, name: str = "", *components) -> int:
+        return cls._state().entity_mgr.add(name, *components)
 
     @classmethod
     def DeleteEntity(cls, entity_id: int) -> bool:

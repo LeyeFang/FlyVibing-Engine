@@ -155,59 +155,41 @@ class EditorHost(Engine):
 
     @classmethod
     def save_active_scene_to_file(cls, path: str) -> bool:
-        """将当前活跃场景保存到 .scene 文件。
-
-        自动从 esper 世界同步实体数据到 Scene 容器后再序列化。
-
-        Args:
-            path: 目标文件路径
-
-        Returns:
-            保存成功返回 True
-        """
+        """将当前活跃场景保存到 .scene 文件。"""
         scene = cls._active_scene
         if scene is None:
             return False
-        try:
-            # ★ 保存前: esper → Scene + node graph → Scene
-            from Application.Core.Scene.SceneManager import SceneManager
-            print(f"[EditorHost] SyncToScene: scene has {len(scene.entities)} entities before sync")
-            SceneManager.SyncToScene(scene)
-            cls._sync_node_graph_to_scene()
-            print(f"[EditorHost] SyncToScene: scene has {len(scene.entities)} entities after sync")
-            scene.save_to_file(path)
-            return True
-        except Exception:
-            return False
+        # ★ 保存前: esper → Scene + node graph → Scene
+        from Application.Core.Scene.SceneManager import SceneManager
+        SceneManager.SyncToScene(scene)
+        cls._sync_node_graph_to_scene()
+        scene.save_to_file(path)
+        return True
 
     @classmethod
     def load_scene_from_file(cls, path: str) -> object | None:
-        """从 .scene 文件加载场景并设为活跃。
-
-        自动将实体数据恢复到 esper 世界。
-
-        Args:
-            path: .scene 文件路径
-
-        Returns:
-            加载的 Scene 对象，失败返回 None
-        """
+        """从 .scene 文件加载场景并设为活跃。"""
         from Application.Core.Scene.Scene import Scene
         from Application.Core.Scene.SceneManager import SceneManager
+        scene = Scene.load_from_file(path)
+        cls._scenes[scene.name] = scene
+        cls._active_scene = scene
+        # ★ 加载后: Scene → esper + node graph → panel
+        SceneManager.SyncFromScene(scene, clear_existing=True)
+        cls._sync_node_graph_from_scene()
+        # ★ 立即刷新 camera gizmo（force=True 跳过 hash 检查，原子完成 unregister+register）
         try:
-            # 不加 component_factories — 组件以 dict 保留，
-            # 由 SyncFromScene 统一负责 dict → 实例重建
-            scene = Scene.load_from_file(path)
-            cls._scenes[scene.name] = scene
-            cls._active_scene = scene
-            # ★ 加载后: Scene → esper + node graph → panel
-            SceneManager.SyncFromScene(scene, clear_existing=True)
-            cls._sync_node_graph_from_scene()
-            # ★ 同步后: 注册 MeshRenderer 实体到 GPU
-            cls._register_mesh_entities_after_load()
-            return scene
-        except Exception:
-            return False
+            from Application.Editor.EditorLayer import EditorLayer
+            EditorLayer._refresh_camera_gizmos(force=True)
+            print(f"[EditorHost] Scene loaded: {len(cls._active_scene.entities)} entities, "
+                  f"camera gizmos refreshed")
+        except Exception as e:
+            import traceback
+            print(f"[EditorHost] WARNING: camera gizmo refresh failed: {e}")
+            traceback.print_exc()
+        # ★ 注册 MeshRenderer 实体到 GPU
+        cls._register_mesh_entities_after_load()
+        return scene
 
     # ════════════════════════════════════════════════════════════
     # 工厂方法（Engine 要求子类覆写）

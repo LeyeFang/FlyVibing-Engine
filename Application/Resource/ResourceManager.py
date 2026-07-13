@@ -71,6 +71,7 @@ class ResourceManager:
         cls.__load_default_mesh()
         cls.__load_default_shader()
         cls.__load_default_texture()
+        cls.__load_default_material()
 
 
     # ==============================================================
@@ -570,3 +571,23 @@ class ResourceManager:
             'name': 'Checkerboard',
             'data': Texture.CreateCheckerboard(),
         }
+
+    @classmethod
+    def __load_default_material(cls) -> None:
+        """创建默认材质（Basic shader + Default 纹理），所有新建实体共享。"""
+        cls.material_count += 1
+        current_id = cls.material_count
+        shader: Shader = cls.loaded_shader[f'{1}']['data']
+        material = Material(1, shader.uniforms_name_type)
+        material.name = "Default"
+        material.texture_id_list = [cls.GetDefaultTexture('Default')]
+        material._is_saved = True
+        cls.loaded_material[f"{current_id}"] = material
+
+    @classmethod
+    def GetDefaultMaterial(cls) -> int:
+        """返回默认材质 ID（所有新建 MeshRenderer 共享）。"""
+        for mid, mat in cls.loaded_material.items():
+            if getattr(mat, 'name', '') == "Default":
+                return int(mid)
+        return cls.NewMaterial()  # fallback

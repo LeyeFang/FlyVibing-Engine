@@ -114,19 +114,19 @@ class OpenGLUtils:
             registered_shaders: 着色器注册表
             shader_id: Shader resource ID
             name: Uniform name
-            matrix: 4x4 matrix (pyrr Matrix44 or numpy ndarray)
+            matrix: 4x4 matrix (numpy ndarray)
 
         CONVENTION (see Core/Math/__init__.py for full documentation):
-          - pyrr Matrix44: row-vector convention internally. When flattened to
-            numpy C-contiguous bytes, the byte stream becomes column-vector order.
-            Upload with GL_FALSE.  ←  This is what set_uniform_mat4 assumes.
-          - numpy ndarray (standard math): column-vector convention, C-order
-            memory is row-major. Upload with GL_TRUE.  ←  NOT handled here;
+          - Row-vector matrices (Math.Transform, Math.Camera, camera classes):
+            Translation in last row. Upload with GL_FALSE.
+            ←  This is what set_uniform_mat4 assumes.
+          - Column-vector matrices (standard math convention):
+            Upload with GL_TRUE. ←  NOT handled here;
             use glUniformMatrix4fv(..., GL_TRUE, ...) directly for these.
 
-        All engine camera matrices and entity model matrices originate from
-        pyrr (create_look_at, Matrix44.from_eulers, etc.), so GL_FALSE is
-        the universal convention for set_uniform_mat4.
+        All engine camera matrices and entity model matrices use row-vector
+        convention (pure numpy), so GL_FALSE is the universal convention
+        for set_uniform_mat4.
         """
         loc = OpenGLUtils.get_uniform_location(registered_shaders, shader_id, name)
         if loc < 0:

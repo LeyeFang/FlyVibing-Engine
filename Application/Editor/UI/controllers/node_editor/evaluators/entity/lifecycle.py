@@ -42,25 +42,16 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
         if result is not None:
             _, entity_def = result
 
-    # ── 2. 在 ECS World 中创建实体 ──
+    # ── 2. 在 ECS World 中一步创建实体（含所有模板组件，原子操作）──
     instance_name = str(name_override) if name_override else template_name
-    eid = ctx.scene.AddEntity(name=instance_name if instance_name else "")
-
-    # ── 3. 从模板拷贝组件到实例 ──
+    final_name = instance_name if instance_name else ""
     if entity_def is not None:
-        _instantiate_components(eid, entity_def, ctx)
+        template_comps = list(entity_def.components.values())
+        eid = ctx.scene.AddEntity(final_name, *template_comps)
+    else:
+        eid = ctx.scene.AddEntity(final_name)
 
-    # ── 4. 覆盖 Position / Rotation (pin 值优先于模板默认值) ──
-    pos = _read_vec3_input(node_id, "Position", ctx, g)
-    rot = _read_vec3_input(node_id, "Rotation", ctx, g)
-    if pos is not None or rot is not None:
-        ctx.scene.SetEntityTransformEditor(
-            eid,
-            position_xyz=tuple(float(p) for p in pos) if pos is not None else None,
-            rotation_xyz=tuple(float(r) for r in rot) if rot is not None else None,
-        )
-
-    # ── 5. 输出 EntityRef ──
+    # ── 3. 覆盖 Position / Rotation (pin 值优先于模板默认值 ── 已移除 pin)
     nd = g._types[inst.node_type]
     for pin in nd.pins:
         if pin.name == "Entity" and pin.direction == "output":
@@ -105,28 +96,21 @@ def _instantiate_components(eid: int, entity_def, ctx: ExecutionContext) -> None
     for comp_type_name, comp_instance in entity_def.components.items():
         # Transform 已在 AddEntity 中创建 → 用模板值覆盖 (模板存 GL 坐标)
         if comp_type_name == "Transform":
-            try:
-                tmpl = comp_instance
-                ctx.scene.SetEntityTransform(
-                    eid,
-                    position_xyz=(tmpl.position_x, tmpl.position_y, tmpl.position_z),
-                    rotation_xyz=(tmpl.rotation_x, tmpl.rotation_y, tmpl.rotation_z),
-                    scale_xyz=(
-                        getattr(tmpl, 'scale_x', 1.0),
-                        getattr(tmpl, 'scale_y', 1.0),
-                        getattr(tmpl, 'scale_z', 1.0),
-                    ),
-                )
-            except Exception:
-                pass
+            tmpl = comp_instance
+            ctx.scene.SetEntityTransform(
+                eid,
+                position_xyz=(tmpl.position_x, tmpl.position_y, tmpl.position_z),
+                rotation_xyz=(tmpl.rotation_x, tmpl.rotation_y, tmpl.rotation_z),
+                scale_xyz=(
+                    getattr(tmpl, 'scale_x', 1.0),
+                    getattr(tmpl, 'scale_y', 1.0),
+                    getattr(tmpl, 'scale_z', 1.0),
+                ),
+            )
         else:
             # 其他组件: 深拷贝后添加
-            try:
-                copied = copy.deepcopy(comp_instance)
-                ctx.scene.AddComponentToEntity(eid, copied)
-            except Exception as e:
-                print(f"[EntitySpawn] Failed to add component "
-                      f"'{comp_type_name}': {e}")
+            copied = copy.deepcopy(comp_instance)
+            ctx.scene.AddComponentToEntity(eid, copied)
 
 
 def _read_vec3_input(node_id: int, pin_name: str, ctx: ExecutionContext,

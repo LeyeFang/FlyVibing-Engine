@@ -28,10 +28,10 @@ from __future__ import annotations
 
 import math
 import numpy as np
-from pyrr import matrix44
 
 from Application.Core.Camera.OrbitCamera import OrbitCamera
 from Application.Core.Events.Enum.InputEnum import MouseButtonCode
+from Application.Core.Math.Camera import orthogonal_projection
 
 
 class EditorCamera(OrbitCamera):
@@ -201,12 +201,12 @@ class EditorCamera(OrbitCamera):
             4x4 float32 projection matrix (pyrr-style, row-vector convention).
         """
         if self._orthographic:
-            half_h = self._ortho_size * aspect_ratio
-            half_v = self._ortho_size
-            return matrix44.create_orthogonal_projection(
-                -half_h, half_h, -half_v, half_v,
+            half_w = self._ortho_size * aspect_ratio
+            half_h = self._ortho_size
+            return orthogonal_projection(
+                -half_w, half_w, -half_h, half_h,
                 self.near_plane, self.far_plane,
-            ).astype(np.float32)
+            )
         return super().get_projection_matrix(aspect_ratio)
 
     # ════════════════════════════════════════════════════════════

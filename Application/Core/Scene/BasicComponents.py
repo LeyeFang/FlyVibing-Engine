@@ -61,9 +61,9 @@ class MeshRenderer:
     visible: bool = True
 
     def __post_init__(self) -> None:
-        """dataclass 生成 __init__ 后自动调用 — 创建默认 Material。"""
+        """dataclass 生成 __init__ 后自动调用 — 绑定默认 Material。"""
         if self.material_id == 0:
-            self.material_id = ResourceManager.NewMaterial()
+            self.material_id = ResourceManager.GetDefaultMaterial()
 
 
 class ProjectionType(Enum):

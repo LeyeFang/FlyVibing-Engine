@@ -36,22 +36,34 @@ class TransformAccessor:
     def __init__(self, scene_mgr: SceneManager) -> None:
         self._mgr = scene_mgr
 
+    def _esper_op(self, operation, op_name="?"):
+        """在 esper 锁保护下执行操作（世界切换 + 操作原子化 + 事后还原）。"""
+        from Application.Core.Scene.SceneManager import SceneManager as _SM
+        with _SM._esper_lock:
+            old_world = esper.current_world
+            esper.switch_world(self._mgr.world_name)
+            try:
+                return operation()
+            finally:
+                esper.switch_world(old_world)
+
     # ════════════════════════════════════════════════════════════
     # Transform 读写
     # ════════════════════════════════════════════════════════════
 
     def get_transform(self, entity_id: int) -> Transform:
+        """获取实体 Transform。线程安全。"""
         try:
-            return esper.component_for_entity(entity_id, Transform)
+            return self._esper_op(lambda: esper.component_for_entity(entity_id, Transform), f"get_transform({entity_id})")
         except KeyError:
             return Transform()
 
     def set_transform(self, entity_id: int, *,
                       position_xyz=None, rotation_xyz=None, scale_xyz=None) -> None:
-        """设置实体 Transform（GL 坐标系）。"""
+        """设置实体 Transform（GL 坐标系）。线程安全。"""
         st = self._mgr
         try:
-            t = esper.component_for_entity(entity_id, Transform)
+            t = self._esper_op(lambda: esper.component_for_entity(entity_id, Transform), f"set_transform({entity_id})")
         except KeyError:
             return
         changed = False
@@ -93,19 +105,21 @@ class TransformAccessor:
     # ════════════════════════════════════════════════════════════
 
     def get_mesh(self, entity_id: int) -> int:
-        mr = esper.component_for_entity(entity_id, MeshRenderer)
+        """获取实体的 mesh_id。线程安全。"""
+        mr = self._esper_op(lambda: esper.component_for_entity(entity_id, MeshRenderer), f"get_mesh({entity_id})")
         return mr.mesh_id
 
     def get_material(self, entity_id: int) -> int:
-        mr = esper.component_for_entity(entity_id, MeshRenderer)
+        """获取实体的 material_id。线程安全。"""
+        mr = self._esper_op(lambda: esper.component_for_entity(entity_id, MeshRenderer), f"get_material({entity_id})")
         return mr.material_id
 
     def set_mesh_renderer(self, entity_id: int, *, mesh_id=None, material_id=None,
                           visible=None) -> None:
-        """修改实体 MeshRenderer 属性。"""
+        """修改实体 MeshRenderer 属性。线程安全。"""
         st = self._mgr
         try:
-            mr = esper.component_for_entity(entity_id, MeshRenderer)
+            mr = self._esper_op(lambda: esper.component_for_entity(entity_id, MeshRenderer), f"set_mesh_renderer({entity_id})")
         except KeyError:
             return
         if mesh_id is not None:
@@ -123,10 +137,10 @@ class TransformAccessor:
     # ════════════════════════════════════════════════════════════
 
     def set_camera_properties(self, entity_id: int, **kwargs) -> None:
-        """设置 Camera 组件属性（含 clamp）。"""
+        """设置 Camera 组件属性（含 clamp）。线程安全。"""
         st = self._mgr
         try:
-            cam = esper.component_for_entity(entity_id, Camera)
+            cam = self._esper_op(lambda: esper.component_for_entity(entity_id, Camera), f"set_camera_properties({entity_id})")
         except KeyError:
             return
         changed = False
@@ -145,10 +159,10 @@ class TransformAccessor:
             ComponentModifiedEvent.Pack(entity_id, cam, engine=st.app)
 
     def set_material_params(self, entity_id: int, params: dict) -> None:
-        """设置实体材质的 uniform 参数。"""
+        """设置实体材质的 uniform 参数。线程安全。"""
         st = self._mgr
         try:
-            mr = esper.component_for_entity(entity_id, MeshRenderer)
+            mr = self._esper_op(lambda: esper.component_for_entity(entity_id, MeshRenderer))
         except KeyError:
             return
         from Application.Resource.ResourceManager import ResourceManager
@@ -166,8 +180,9 @@ class TransformAccessor:
         self.set_mesh_renderer(entity_id, visible=visible)
 
     def is_render_visible(self, entity_id: int) -> bool:
+        """查询实体渲染可见性。线程安全。"""
         try:
-            mr = esper.component_for_entity(entity_id, MeshRenderer)
+            mr = self._esper_op(lambda: esper.component_for_entity(entity_id, MeshRenderer))
             return mr.visible
         except KeyError:
             return False

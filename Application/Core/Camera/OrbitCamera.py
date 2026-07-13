@@ -34,9 +34,9 @@ from __future__ import annotations
 
 import math
 import numpy as np
-from pyrr import matrix44, Vector3
 
 from Application.Core.Camera.CameraBase import CameraBase
+from Application.Core.Math.Camera import look_at, perspective_projection
 
 
 class OrbitCamera(CameraBase):
@@ -208,13 +208,13 @@ class OrbitCamera(CameraBase):
         Returns:
             4x4 float32 view matrix (pyrr-style, row-vector convention).
         """
-        pos = Vector3(self.position.tolist())
-        target = Vector3(self.orbit_target.tolist())
+        pos = self.position
+        target = self.orbit_target
         if abs(self.pitch) > math.pi * 0.49:
-            up = Vector3([-math.sin(self.yaw), 0.0, math.cos(self.yaw)])
+            up = np.array([-math.sin(self.yaw), 0.0, math.cos(self.yaw)], dtype=np.float32)
         else:
-            up = Vector3([0.0, 1.0, 0.0])
-        return matrix44.create_look_at(pos, target, up).astype(np.float32)
+            up = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+        return look_at(pos, target, up)
 
     def get_projection_matrix(self, aspect_ratio: float) -> np.ndarray:
         """Generate perspective projection matrix.
@@ -227,9 +227,9 @@ class OrbitCamera(CameraBase):
         Returns:
             4x4 float32 projection matrix (pyrr-style, row-vector convention).
         """
-        return matrix44.create_perspective_projection(
+        return perspective_projection(
             self.fov, aspect_ratio, self.near_plane, self.far_plane
-        ).astype(np.float32)
+        )
 
     # ════════════════════════════════════════════════════════════
     # 内部: 方向向量 + 向量旋转

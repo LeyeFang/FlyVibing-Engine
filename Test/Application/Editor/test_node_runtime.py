@@ -43,6 +43,7 @@ from Application.Core.Events.Event import BindPackCallback
 from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Scene.SceneManager import SceneManager
 
+from Application.Editor.EditorHost import EditorHost
 from Application.Editor.UI.UIManager import UIManager
 from Application.Editor.UI.panels import NodeEditorPanel
 from Application.Editor.UI.controllers.NodeEditorController import (
@@ -174,6 +175,11 @@ def main():
     ResourceManager.Init(mock_app)
     SceneManager.Init(mock_app)
     SceneManager.set_thread_active("MockApp")
+
+    # ★ 为 EditorHost 初始化 SceneManager（ScenePanel 依赖 EditorHost.scene）
+    SceneManager.Init(EditorHost)
+    EditorHost.scene = SceneManager._state_for("EditorHost")
+    SceneManager.set_thread_active("EditorHost")
 
     # ── 3. ImGui ──
     imgui.create_context()

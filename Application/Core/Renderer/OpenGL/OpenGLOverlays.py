@@ -68,7 +68,7 @@ class OpenGLOverlays:
                             np.ascontiguousarray(op.astype('float32')))
             else:
                 # Scene rendering: use engine view/proj matrices
-                # view/proj come from pyrr (Type A) -> GL_FALSE
+                # view/proj use row-vector convention (Type A) -> GL_FALSE
                 loc_view = gl.glGetUniformLocation(gpu.program, 'uView')
                 loc_proj = gl.glGetUniformLocation(gpu.program, 'uProj')
                 if loc_view >= 0:

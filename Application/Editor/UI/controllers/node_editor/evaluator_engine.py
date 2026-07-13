@@ -100,10 +100,7 @@ class GraphEvaluator:
         # ── 求值当前节点 ──
         fn = _EVALUATORS.get(inst.node_type)
         if fn:
-            try:
-                fn(node_id, ctx, self)
-            except Exception as e:
-                print(f"[GraphEvaluator] ERROR in node #{node_id} ({inst.node_type}): {e}")
+            fn(node_id, ctx, self)
 
         # ── 检查 blocked 状态（如 Delay 未到期） ──
         if self.get_state(node_id, "_blocked", False):

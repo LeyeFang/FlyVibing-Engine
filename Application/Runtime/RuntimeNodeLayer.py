@@ -41,6 +41,7 @@ class RuntimeNodeLayer(Layer):
     _scene = None           # Scene 对象 (EntitySpawn 模板来源)
     _evaluator: GraphEvaluator | None = None
     _context: ExecutionContext | None = None
+    _pending_start: bool = False  # 延迟 OnGameStart 到逻辑线程
 
     @classmethod
     def set_canvas(cls, canvas) -> None:
@@ -79,11 +80,11 @@ class RuntimeNodeLayer(Layer):
         cls._context.scene = cls._engine.scene     # ★ 注入 SceneManager 实例
         cls._frame = 0
 
-        # 触发 OnGameStart（引擎时间从 0 开始）
+        # ── 延迟 OnGameStart 到逻辑线程的第一次 OnUpdate ──
+        # (避免渲染线程操作 esper 与世界切换冲突)
         cls._context.elapsed_time = 0.0
         cls._context.delta_time = 0.0
-        cls._evaluator.trigger("OnGameStart", cls._context)
-        print("[RuntimeNodeLayer] Graph execution started")
+        cls._pending_start = True
 
         # ★ 首帧推送摄像机矩阵 — 确保渲染器第一帧就有合法的 view/proj
         cls._sync_camera_to_renderer()
@@ -95,6 +96,7 @@ class RuntimeNodeLayer(Layer):
             print("[RuntimeNodeLayer] Graph execution stopped")
         cls._evaluator = None
         cls._context = None
+        cls._pending_start = False
         LayerLifecycleEvent.Pack(
             layer_name=cls.__name__, stage="detach", engine=cls._engine
         )
@@ -102,6 +104,15 @@ class RuntimeNodeLayer(Layer):
     @classmethod
     def OnUpdate(cls):
         if cls._evaluator is None or cls._context is None:
+            return
+
+        # ── 延迟的 OnGameStart: 在逻辑线程首次 OnUpdate 执行 ──
+        if cls._pending_start:
+            cls._pending_start = False
+            cls._evaluator.trigger("OnGameStart", cls._context)
+            print("[RuntimeNodeLayer] Graph execution started")
+            # 首帧后立即同步摄像机
+            cls._sync_camera_to_renderer()
             return
 
         cls._frame += 1
@@ -121,8 +132,8 @@ class RuntimeNodeLayer(Layer):
         计算 view/proj 矩阵并通过 SetViewProjectionCommand 推送给渲染器。
 
         支持透视和正交两种投影类型：
-          - perspective → pyrr perspective projection (fov + aspect_ratio)
-          - orthographic → pyrr orthogonal projection (ortho_size + aspect_ratio)
+          - perspective → pure numpy perspective projection (fov + aspect_ratio)
+          - orthographic → pure numpy orthogonal projection (ortho_size + aspect_ratio)
 
         若 scene_camera_id 无效（实体不存在 / 缺少组件），跳过推送。
         """
@@ -132,7 +143,7 @@ class RuntimeNodeLayer(Layer):
         if renderer is None:
             return
 
-        from pyrr import matrix44
+        from Application.Core.Math.Camera import perspective_projection, orthogonal_projection
         from Application.Core.Scene.BasicComponents import Camera, Transform, ProjectionType
         from Application.Core.Math.Transform import calculate_entity_model
 
@@ -162,17 +173,17 @@ class RuntimeNodeLayer(Layer):
         if cam.projection_type == ProjectionType.ORTHOGRAPHIC:
             half_h = cam.ortho_size
             half_w = half_h * aspect
-            proj = matrix44.create_orthogonal_projection(
+            proj = orthogonal_projection(
                 -half_w, half_w, -half_h, half_h,
                 cam.near_plane, cam.far_plane,
-            ).astype(np.float32)
+            )
             is_ortho = True
             ortho_sz = cam.ortho_size
         else:
-            proj = matrix44.create_perspective_projection(
+            proj = perspective_projection(
                 cam.fov, aspect,
                 cam.near_plane, cam.far_plane,
-            ).astype(np.float32)
+            )
             is_ortho = False
             ortho_sz = 10.0
 

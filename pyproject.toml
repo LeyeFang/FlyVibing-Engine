@@ -14,6 +14,7 @@ dependencies = [
     "PyOpenGL_accelerate",
     "pysdl2==0.9.17",
     "pysdl2-dll==2.32.0",
+    "pyserial>=3.5",
     "scipy>=1.12.0",
     "trimesh==4.12.1",
     "vulkan==1.3.275.1",

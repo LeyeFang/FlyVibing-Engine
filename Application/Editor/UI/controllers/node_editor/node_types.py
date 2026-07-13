@@ -41,6 +41,7 @@ DEBUG_COLOR      = (0.600, 0.600, 0.600)
 SCENE_COLOR      = (0.878, 0.416, 0.153)  # 场景级操作 (同 Blender Orange)
 CAMERA_COLOR     = (0.314, 0.650, 0.920)  # 摄像机操作
 COMPONENT_COLOR  = (0.314, 0.710, 0.710)  # 组件操作
+IO_COLOR         = (0.878, 0.620, 0.314)  # IO / 串口 / 外部设备
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -170,7 +171,18 @@ _reg(NodeTypeDef(
     "A / B",
 ))
 
-# ── 统一 Random 节点 ──
+# ── Random: 全局 Set Seed ──
+_reg(NodeTypeDef(
+    "RandomSetSeed", "Set Seed", "Math", MATH_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+        PinDef(_gen_id(), "Seed", "data", "input", "int"),
+    ],
+    "Set global random seed",
+))
+
+# ── 统一 Random 节点 (服从全局 Set Seed) ──
 _reg(NodeTypeDef(
     "Random", "Random", "Math", MATH_COLOR,
     [
@@ -180,7 +192,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "StdDev", "data", "input", "float"),
         PinDef(_gen_id(), "Result", "data", "output", "float"),
     ],
-    "Uniform or Gaussian",
+    "Uniform / Gaussian / Discrete",
 ))
 
 # ── 旧版 Random 节点 (保留兼容，不再出现在菜单) ──
@@ -498,4 +510,20 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_out", "exec", "output"),
     ],
     "Print message",
+))
+
+# ═══════════════════════════════════════════════════════════════
+# IO 节点 — 串口 / 外部设备通信
+# ═══════════════════════════════════════════════════════════════
+
+_reg(NodeTypeDef(
+    "SerialSend", "Serial Send", "IO", IO_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+        PinDef(_gen_id(), "Port", "data", "input", "string"),
+        PinDef(_gen_id(), "BaudRate", "data", "input", "int"),
+        PinDef(_gen_id(), "Value", "data", "input", "variant"),
+    ],
+    "Send signal via serial port",
 ))

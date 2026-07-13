@@ -63,7 +63,9 @@ def _read_component_prop(
     return inst.props.get(key, default)
 
 
-def _to_vec3_tuple(val) -> tuple[float, float, float]:
+def _to_vec3_tuple(
+        val
+    ) -> tuple[float, float, float]:
     """将各种 vec3 表示转换为 (x, y, z) 元组。"""
     if val is None:
         return (0.0, 0.0, 0.0)
@@ -75,8 +77,13 @@ def _to_vec3_tuple(val) -> tuple[float, float, float]:
 
 
 def _apply_component_properties(
-    node_id: int, ctx: ExecutionContext, g: GraphEvaluator,
-    inst, comp_name: str, comp, eid: int = -1,
+    node_id: int,
+    ctx: ExecutionContext,
+    g: GraphEvaluator,
+    inst,
+    comp_name: str,
+    comp,
+    eid: int = -1,
 ) -> None:
     """从 Registry 读取属性定义并应用到组件实例。_SKIP 的属性不修改。
 
@@ -123,7 +130,6 @@ def _apply_component_properties(
                 modified = True
             except Exception as e:
                 print(f"[{inst.node_type}] Failed to set {comp_name}.{attr}: {e}")
-
     # ★ MeshRenderer: 修改后同步 visible 到渲染器
     if comp_name == "MeshRenderer" and eid >= 0:
         from Application.Core.Scene.BasicComponents import MeshRenderer
@@ -133,7 +139,10 @@ def _apply_component_properties(
 
 
 def _resolve_component(
-    eid: int, comp_name: str, ctx, create_if_missing: bool,
+    eid: int,
+    comp_name: str,
+    ctx,
+    create_if_missing: bool,
 ) -> tuple[object | None, str]:
     """解析非 Transform 组件：获取或创建组件实例。返回 (comp, error_msg)。
 
@@ -144,10 +153,8 @@ def _resolve_component(
     """
     registered = ctx.scene.GetRegisteredComponents()
     comp_cls = registered.get(comp_name)
-
     if comp_cls is None:
         return None, f"Unknown component '{comp_name}'"
-
     if ctx.scene.HasComponent(eid, comp_cls):
         return ctx.scene.GetComponent(eid, comp_cls), ""
     elif create_if_missing:

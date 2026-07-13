@@ -405,6 +405,14 @@ class NodeEditorPanel(BasePanel):
             if inst.node_type == "Random":
                 self._draw_random_widgets(nid, inst)
 
+            # RandomSetSeed 节点 UI 控件
+            if inst.node_type == "RandomSetSeed":
+                self._draw_random_set_seed_widgets(nid, inst)
+
+            # SerialSend 节点 UI 控件
+            if inst.node_type == "SerialSend":
+                self._draw_serial_send_widgets(nid, inst)
+
             # ScalarMath 节点 UI 控件
             if inst.node_type == "ScalarMath":
                 self._draw_scalar_math_widgets(nid, inst)
@@ -451,19 +459,26 @@ class NodeEditorPanel(BasePanel):
     # ── Random 节点专用控件 ────────────────────────────────
 
     def _draw_random_widgets(self, nid: int, inst) -> None:
-        """在 Random 节点体内绘制分布选择、模式切换、种子和参数输入框。"""
+        """在 Random 节点体内绘制分布选择、模式切换和参数输入框。
+
+        种子由全局 RandomSetSeed 节点管理，此处不再提供单独 Seed 输入。
+        """
         imgui.dummy(imgui.ImVec2(0, 2))
         imgui.push_item_width(105)
 
-        # ── 分布下拉 ──
+        # ── 分布下拉 (Uniform / Gaussian / Discrete) ──
         dist = inst.props.get("distribution", "uniform")
-        dist_labels = ["Uniform", "Gaussian"]
-        dist_idx = 0 if dist == "uniform" else 1
+        dist_labels = ["Uniform", "Gaussian", "Discrete"]
+        dist_keys = ["uniform", "gaussian", "discrete"]
+        try:
+            dist_idx = dist_keys.index(dist)
+        except ValueError:
+            dist_idx = 0
         changed, new_idx = _ne_combo(
             f"##rand_dist_{nid}", dist_idx, dist_labels,
         )
         if changed:
-            inst.props["distribution"] = "uniform" if new_idx == 0 else "gaussian"
+            inst.props["distribution"] = dist_keys[new_idx]
 
         # ── 模式切换 ──
         mode = inst.props.get("mode", "manual")
@@ -472,12 +487,6 @@ class NodeEditorPanel(BasePanel):
         imgui.same_line()
         if imgui.radio_button(f"Pin##rand_mode_pin_{nid}", mode == "pin"):
             inst.props["mode"] = "pin"
-
-        # ── 种子 ──
-        seed = inst.props.get("seed", 0)
-        changed, new_seed = imgui.input_int(f"Seed##rand_seed_{nid}", seed)
-        if changed:
-            inst.props["seed"] = new_seed
 
         # ── Manual 模式参数输入 ──
         if mode == "manual":
@@ -490,7 +499,7 @@ class NodeEditorPanel(BasePanel):
                 changed, nv = imgui.input_float(f"Max##rand_max_{nid}", v)
                 if changed:
                     inst.props["max"] = nv
-            else:
+            elif dist == "gaussian":
                 v = inst.props.get("mean", 0.0)
                 changed, nv = imgui.input_float(f"Mean##rand_mean_{nid}", v)
                 if changed:
@@ -499,6 +508,79 @@ class NodeEditorPanel(BasePanel):
                 changed, nv = imgui.input_float(f"StdDev##rand_std_{nid}", v)
                 if changed:
                     inst.props["stddev"] = nv
+            else:  # discrete
+                v = int(inst.props.get("min", 0))
+                changed, nv = imgui.input_int(f"Min##rand_min_{nid}", v)
+                if changed:
+                    inst.props["min"] = nv
+                v = int(inst.props.get("max", 10))
+                changed, nv = imgui.input_int(f"Max##rand_max_{nid}", v)
+                if changed:
+                    inst.props["max"] = nv
+
+        imgui.pop_item_width()
+
+    # ── RandomSetSeed 节点专用控件 ──────────────────────────
+
+    def _draw_random_set_seed_widgets(self, nid: int, inst) -> None:
+        """在 RandomSetSeed 节点体内绘制 Manual/Pin 模式切换和种子输入框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(105)
+
+        # ── 模式切换 ──
+        mode = inst.props.get("mode", "manual")
+        if imgui.radio_button(f"Manual##rss_mode_man_{nid}", mode == "manual"):
+            inst.props["mode"] = "manual"
+        imgui.same_line()
+        if imgui.radio_button(f"Pin##rss_mode_pin_{nid}", mode == "pin"):
+            inst.props["mode"] = "pin"
+
+        # ── Manual 模式种子输入 ──
+        if mode == "manual":
+            seed = int(inst.props.get("seed", 0))
+            changed, new_seed = imgui.input_int(f"Seed##rss_seed_{nid}", seed)
+            if changed:
+                inst.props["seed"] = new_seed
+
+        imgui.pop_item_width()
+
+    # ── SerialSend 节点专用控件 ─────────────────────────────
+
+    def _draw_serial_send_widgets(self, nid: int, inst) -> None:
+        """在 SerialSend 节点体内绘制 Manual/Pin 模式切换和参数输入框。
+
+        Manual 模式: 端口 + 波特率 + 值 全部手动输入，隐藏对应 pin
+        Pin 模式:    端口 + 波特率 + 值 全部从上游连线读取
+        """
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(105)
+
+        # ── 模式切换 ──
+        mode = inst.props.get("mode", "manual")
+        if imgui.radio_button(f"Manual##ser_mode_man_{nid}", mode == "manual"):
+            inst.props["mode"] = "manual"
+        imgui.same_line()
+        if imgui.radio_button(f"Pin##ser_mode_pin_{nid}", mode == "pin"):
+            inst.props["mode"] = "pin"
+
+        if mode == "manual":
+            # ── 端口名 ──
+            port = inst.props.get("port", "COM1")
+            changed, new_port = imgui.input_text(f"Port##ser_port_{nid}", str(port))
+            if changed:
+                inst.props["port"] = new_port
+
+            # ── 波特率 ──
+            baud = int(inst.props.get("baud_rate", 9600))
+            changed, new_baud = imgui.input_int(f"Baud##ser_baud_{nid}", baud)
+            if changed:
+                inst.props["baud_rate"] = new_baud
+
+            # ── 要发送的值 ──
+            v = inst.props.get("value", 0.0)
+            changed, nv = imgui.input_float(f"Value##ser_val_{nid}", v, format="%.4f")
+            if changed:
+                inst.props["value"] = nv
 
         imgui.pop_item_width()
 
@@ -962,11 +1044,26 @@ class NodeEditorPanel(BasePanel):
                 if p.name == "Result":
                     visible.append(p)
                 elif mode == "pin":
-                    if dist == "uniform" and p.name in ("Min", "Max"):
+                    if dist in ("uniform", "discrete") and p.name in ("Min", "Max"):
                         visible.append(p)
                     elif dist == "gaussian" and p.name in ("Mean", "StdDev"):
                         visible.append(p)
             return visible
+
+        # ── RandomSetSeed: Manual 模式隐藏 Seed pin ──
+        if inst.node_type == "RandomSetSeed":
+            mode = inst.props.get("mode", "manual")
+            if mode == "manual":
+                return [p for p in nd.pins if p.name != "Seed"]
+            return list(nd.pins)
+
+        # ── SerialSend: Manual 模式隐藏 Port / BaudRate / Value pin ──
+        if inst.node_type == "SerialSend":
+            mode = inst.props.get("mode", "manual")
+            if mode == "manual":
+                return [p for p in nd.pins
+                        if p.name not in ("Port", "BaudRate", "Value")]
+            return list(nd.pins)
 
         # ── TimeTrigger: 动态 exec_out 引脚 ──
         if inst.node_type == "TimeTrigger":

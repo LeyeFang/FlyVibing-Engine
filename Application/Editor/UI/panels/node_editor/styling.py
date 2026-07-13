@@ -55,7 +55,10 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ("Calculate", [
             ("Scalar Math", "ScalarMath"),
             ("Compare", "Compare"),
-            ("Random", "Random"),
+            ("Random", [            # Random 子菜单
+                ("Set Seed", "RandomSetSeed"),
+                ("Random", "Random"),
+            ]),
             ("Vec Math", "VecMath"),
         ]),
     ]),
@@ -88,5 +91,8 @@ MENU_SECTIONS: list[tuple[str, list]] = [
     ("Debug", [
         ("Print", "Print"),
         ("Print String", "PrintString"),
+    ]),
+    ("IO", [
+        ("Serial Send", "SerialSend"),
     ]),
 ]

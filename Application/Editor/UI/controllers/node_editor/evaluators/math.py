@@ -76,6 +76,37 @@ register_evaluator("MathDivide", _eval_divide)
 
 # ── 随机 ─────────────────────────────────────────────────────
 
+# 全局随机种子（由 RandomSetSeed 节点设置）
+_global_rng: random.Random | None = None
+_global_rng_seed: int = 0
+
+
+def _get_global_rng() -> random.Random:
+    """获取全局 RNG 实例。若未通过 SetSeed 设置则使用默认模块级 random。"""
+    if _global_rng is not None:
+        return _global_rng
+    return random  # type: ignore[return-value]
+
+
+def _eval_random_set_seed(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
+    """RandomSetSeed — 设置全局随机种子（Manual / Pin 双模式）。"""
+    global _global_rng, _global_rng_seed
+    inst = g._canvas.nodes[node_id]
+    mode = inst.props.get("mode", "manual")
+
+    if mode == "manual":
+        seed = int(inst.props.get("seed", 0))
+    else:
+        seed = int(_read_data_input(node_id, "Seed", ctx, g, 0))
+
+    _global_rng_seed = seed
+    _global_rng = random.Random(seed) if seed != 0 else None
+    # 同时写入 context 变量，方便其他节点感知
+    ctx.set_var("_global_random_seed", seed)
+
+register_evaluator("RandomSetSeed", _eval_random_set_seed)
+
+
 def _eval_random_uniform(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     lo = _read_data_input(node_id, "Min", ctx, g, 0.0)
     hi = _read_data_input(node_id, "Max", ctx, g, 1.0)
@@ -115,24 +146,19 @@ def _eval_compare(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> Non
 register_evaluator("Compare", _eval_compare)
 
 
-# ── 统一 Random 节点 (Manual / Pin 双模式) ────────────────────
+# ── 统一 Random 节点 (Manual / Pin 双模式, 服从全局 Set Seed) ──
 
 def _eval_random(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
-    """Random — 支持 Uniform / Gaussian 分布，Manual / Pin 双输入模式。"""
+    """Random — 支持 Uniform / Gaussian / Discrete 分布，Manual / Pin 双输入模式。
+
+    种子服从全局 RandomSetSeed 节点（若未设置则使用默认随机）。
+    """
     inst = g._canvas.nodes[node_id]
     dist = inst.props.get("distribution", "uniform")
     mode = inst.props.get("mode", "manual")
-    seed = inst.props.get("seed", 0)
 
-    # 种子管理：seed=0 用全局随机，否则用独立 Random 实例（缓存在 evaluator state）
-    if seed != 0:
-        rng = g.get_state(node_id, "_rng")
-        if rng is None or g.get_state(node_id, "_rng_seed") != seed:
-            rng = random.Random(seed)
-            g.set_state(node_id, "_rng", rng)
-            g.set_state(node_id, "_rng_seed", seed)
-    else:
-        rng = random  # 全局模块级随机
+    # 使用全局 RNG（由 RandomSetSeed 设置）
+    rng = _get_global_rng()
 
     if dist == "uniform":
         if mode == "manual":
@@ -142,7 +168,7 @@ def _eval_random(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None
             lo = _read_data_input(node_id, "Min", ctx, g, 0.0)
             hi = _read_data_input(node_id, "Max", ctx, g, 1.0)
         result = rng.uniform(float(lo), float(hi))
-    else:  # gaussian
+    elif dist == "gaussian":
         if mode == "manual":
             mean = inst.props.get("mean", 0.0)
             std = inst.props.get("stddev", 1.0)
@@ -150,6 +176,16 @@ def _eval_random(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None
             mean = _read_data_input(node_id, "Mean", ctx, g, 0.0)
             std = _read_data_input(node_id, "StdDev", ctx, g, 1.0)
         result = rng.gauss(float(mean), float(std))
+    else:  # discrete — 范围内整数均匀多项分布
+        if mode == "manual":
+            lo = int(inst.props.get("min", 0))
+            hi = int(inst.props.get("max", 10))
+        else:
+            lo = int(_read_data_input(node_id, "Min", ctx, g, 0))
+            hi = int(_read_data_input(node_id, "Max", ctx, g, 10))
+        if lo > hi:
+            lo, hi = hi, lo
+        result = float(rng.randint(lo, hi))
 
     _write_data_output(node_id, "Result", result, ctx, g)
 

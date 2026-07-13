@@ -407,6 +407,30 @@ class ResourceManager:
         return current_material_id
 
     @classmethod
+    def CloneMaterial(cls, source_material_id: int, new_name: str = "") -> int:
+        """深拷贝一份材质，返回新材质 ID。用于实体独立改色。
+
+        Args:
+            source_material_id: 源材质 ID
+            new_name: 新材质名称（空则自动生成）
+
+        Returns:
+            新材质 ID
+        """
+        import copy
+        src = cls.GetMaterial(source_material_id)
+        new_mat = copy.deepcopy(src)
+        if new_name:
+            new_mat.name = new_name
+        else:
+            new_mat.name = f"{src.name}_copy"
+        new_mat._is_saved = False
+        cls.material_count += 1
+        new_id = cls.material_count
+        cls.loaded_material[f"{new_id}"] = new_mat
+        return new_id
+
+    @classmethod
     def SetMaterialColor(
         cls,
         material_id: int,

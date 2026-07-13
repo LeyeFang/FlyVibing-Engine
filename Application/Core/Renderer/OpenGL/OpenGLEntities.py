@@ -39,6 +39,7 @@ class OpenGLEntities:
             gl.glViewport(0, 0, r.viewport_width, r.viewport_height)
 
         has_outline = bool(r._outline_selected_ids)
+        last_program: int = 0  # ★ 缓存最后使用的 shader program，避免冗余切换
 
         # ★ 从渲染器内部 visible set 遍历，跳过 render_visible=False 的实体
         for entity_id in list(r._resources._visible_entities):
@@ -61,15 +62,20 @@ class OpenGLEntities:
                 else:
                     gl.glStencilMask(0x00)
 
+            # ★ 冗余消除: 只在 shader 变化时切换 program
             program = r.registered_shaders[entity.shader_id].program
-            gl.glUseProgram(program)
+            if program != last_program:
+                gl.glUseProgram(program)
+                last_program = program
+                # ★ 冗余消除: view / proj 全帧不变，仅在 shader 切换后设置一次
+                OpenGLUtils.set_uniform_mat4(
+                    r.registered_shaders, entity.shader_id, 'view', view)
+                OpenGLUtils.set_uniform_mat4(
+                    r.registered_shaders, entity.shader_id, 'projection', proj)
+
             model = self._renderer.engine.scene.GetEntityModelMatrix(entity_id)
             OpenGLUtils.set_uniform_mat4(
                 r.registered_shaders, entity.shader_id, 'model', model)
-            OpenGLUtils.set_uniform_mat4(
-                r.registered_shaders, entity.shader_id, 'view', view)
-            OpenGLUtils.set_uniform_mat4(
-                r.registered_shaders, entity.shader_id, 'projection', proj)
             if entity.texture_id and entity.texture_id > 0:
                 tex_data = r.registered_textures.get(entity.texture_id)
                 if tex_data and tex_data.gl_handle:

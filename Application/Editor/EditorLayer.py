@@ -178,6 +178,10 @@ class EditorLayer(Layer):
     用于检测 transform 变化而不仅仅是 entity 增删。"""
     _preview_entity_id: int | None = None
     """SPACE 预览模式: 非 None 时使用该 entity 的摄像机, None 时用 EditorCamera。"""
+    _camera_gizmo_frame_skip: int = 0
+    """帧跳过计数器: 每 _CAM_GIZMO_REFRESH_INTERVAL 帧才做一次完整检查。"""
+
+    _CAM_GIZMO_REFRESH_INTERVAL: int = 10  # 每 10 帧检查一次（约 6Hz @ 60fps）
 
     @classmethod
     def _toggle_preview_camera(cls) -> None:
@@ -200,18 +204,28 @@ class EditorLayer(Layer):
     def invalidate_camera_gizmos(cls) -> None:
         """标记 camera gizmo 需要重建。所有改变摄像机可见性/选中/模式的路径统一调用此方法。"""
         cls._camera_gizmo_state_hash = -1
+        cls._camera_gizmo_frame_skip = 0  # ★ 立即触发下一次检查
 
     @classmethod
     def _refresh_camera_gizmos(cls, force: bool = False) -> None:
         """遍历 ECS 中所有 Camera entity，注册/更新对应的 gizmo overlay。
 
-        仅在 entity 增删、position/rotation 变化或选中状态变化时重建 GPU 资源。
+        性能优化:
+          - 帧跳过: 每 _CAM_GIZMO_REFRESH_INTERVAL 帧才执行完整检查
+          - 直接 hash: 用 Transform 原始值计算 hash，避免每帧构建 numpy 矩阵
+          - 仅在 entity 增删、transform 变化或选中变化时重建 GPU 资源
         """
         if cls.renderer is None:
             return
 
+        # ★ 帧跳过: 非 force 且 hash 有效时，跳帧降低开销
+        if not force and cls._camera_gizmo_state_hash >= 0:
+            cls._camera_gizmo_frame_skip += 1
+            if cls._camera_gizmo_frame_skip < cls._CAM_GIZMO_REFRESH_INTERVAL:
+                return
+            cls._camera_gizmo_frame_skip = 0
+
         from Application.Core.Scene.GizmoQuery import GizmoQuery
-        from Application.Core.Math.Transform import calculate_entity_model
         from Application.Editor.UI.controllers.SelectionController import SelectionController
         from Application.Core.Renderer.RenderCommand import (
             OverlayRegistrationCommand, OverlayUnregistrationCommand)
@@ -229,21 +243,19 @@ class EditorLayer(Layer):
             traceback.print_exc()
             return
 
-        # ── 状态哈希 ──
+        # ── 状态哈希 (直接用 Transform 原始值, 避免 numpy 矩阵构建) ──
         if not cam_list:
-            if cls._camera_gizmo_state_hash != -2:  # 避免刷屏
-                print("[EditorLayer] _refresh_camera_gizmos: no camera entities found in ECS")
-                cls._camera_gizmo_state_hash = -2
+            if cls._camera_gizmo_state_hash != -2:
+                pass  # 静默，不打日志
+            cls._camera_gizmo_state_hash = -2
             return
         state_parts: list[tuple] = []
         for cd in cam_list:
-            model = calculate_entity_model(
-                position=cd.position, rotation=cd.rotation, scale=cd.scale)
-            world_pos = (round(float(model[3, 0]), 4),
-                         round(float(model[3, 1]), 4),
-                         round(float(model[3, 2]), 4))
+            # ★ 直接用 position/rotation/scale 原始值 hash，不构建 model matrix
+            pos = tuple(round(v, 4) for v in cd.position)
             rot = tuple(round(r, 4) for r in cd.rotation)
-            state_parts.append((cd.entity_id, world_pos, rot,
+            scl = tuple(round(s, 4) for s in cd.scale)
+            state_parts.append((cd.entity_id, pos, rot, scl,
                                 cd.is_perspective, cd.is_selected,
                                 cd.is_editor_visible,
                                 round(cd.aspect_ratio, 4),
@@ -252,10 +264,12 @@ class EditorLayer(Layer):
         new_hash = hash(frozenset(state_parts))
 
         if not force and new_hash == cls._camera_gizmo_state_hash:
+            cls._camera_gizmo_frame_skip = 0  # hash 匹配 → 重置跳过计数
             return
         cls._camera_gizmo_state_hash = new_hash
 
         # ── 有变化 → 注销旧 + 注册新 ──
+        from Application.Core.Math.Transform import calculate_entity_model
         from Application.Editor.UI.controllers.ViewportController import ViewportController
         is_2d = ViewportController.is_2d()
         preview_eid = cls._preview_entity_id

@@ -395,11 +395,38 @@ class SceneManager:
     def SetEntityMaterial(cls, entity_id: int, material_id: int) -> None:
         cls._state().xform_mgr.set_mesh_renderer(entity_id, material_id=material_id)
 
+    @staticmethod
+    def _ensure_unique_material(st: 'SceneManager', entity_id: int, mr) -> None:
+        """若当前 material 被多个 entity 共享，则先 clone 一份给本 entity。
+
+        确保修改 material 属性（颜色/纹理/shader）时不会影响其他 entity。
+        """
+        from Application.Resource.ResourceManager import ResourceManager
+        current_mid = mr.material_id
+        # 统计使用该 material 的 entity 数量
+        share_count = 0
+        for eid, other_mr in esper.get_component(MeshRenderer):
+            if other_mr.material_id == current_mid:
+                share_count += 1
+                if share_count > 1:
+                    break
+        if share_count <= 1:
+            return  # 独占，无需 clone
+
+        # 多个 entity 共享 → clone
+        new_mid = ResourceManager.CloneMaterial(current_mid)
+        mr.material_id = new_mid
+        # 重新注册 GPU 资源（新 material 需要新 uniform buffer 等）
+        _renderer = getattr(st.app, 'renderer', None)
+        if _renderer is not None:
+            _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
+
     @classmethod
     def SetEntityTexture(cls, entity_id: int, texture_id: int, slot: int = 0) -> None:
         st = cls._state()
         from Application.Resource.ResourceManager import ResourceManager
         mr = esper.component_for_entity(entity_id, MeshRenderer)
+        cls._ensure_unique_material(st, entity_id, mr)
         material = ResourceManager.GetMaterial(mr.material_id)
         while len(material.texture_id_list) <= slot:
             material.texture_id_list.append(0)
@@ -414,6 +441,7 @@ class SceneManager:
         st = cls._state()
         from Application.Resource.ResourceManager import ResourceManager
         mr = esper.component_for_entity(entity_id, MeshRenderer)
+        cls._ensure_unique_material(st, entity_id, mr)
         material = ResourceManager.GetMaterial(mr.material_id)
         uniforms_name_type = ResourceManager.GetShader(shader_id).uniforms_name_type
         material.set_new_shader(shader_id, uniforms_name_type)
@@ -424,6 +452,9 @@ class SceneManager:
 
     @classmethod
     def SetMaterialParams(cls, entity_id: int, params: dict) -> None:
+        st = cls._state()
+        mr = esper.component_for_entity(entity_id, MeshRenderer)
+        cls._ensure_unique_material(st, entity_id, mr)
         cls._state().xform_mgr.set_material_params(entity_id, params)
 
     @classmethod
@@ -482,18 +513,56 @@ class SceneManager:
         if entity_id is None:
             raise ValueError("Must specify entity ID")
         transform = esper.component_for_entity(entity_id, Transform)
+        parent_id = st._entity_parent.get(entity_id)
+
         if position_xyz is not None:
             gl_x, gl_y, gl_z = cls.editor_to_gl_position(*position_xyz)
             transform.local_pos_x, transform.local_pos_y, transform.local_pos_z = gl_x, gl_y, gl_z
-            transform.position_x, transform.position_y, transform.position_z = gl_x, gl_y, gl_z
+            # 有父实体时从 local + parent world 计算世界位置
+            if parent_id is not None and parent_id != entity_id:
+                world_pos = cls._local_to_world_position(
+                    st, (gl_x, gl_y, gl_z), parent_id,
+                )
+                transform.position_x, transform.position_y, transform.position_z = world_pos
+            else:
+                transform.position_x, transform.position_y, transform.position_z = gl_x, gl_y, gl_z
+
         if rotation_xyz is not None:
             transform.local_rot_x, transform.local_rot_y, transform.local_rot_z = rotation_xyz
+            # 子 entity 的 world rotation 也需要沿 parent chain 传播（暂时保持简单）
             transform.rotation_x, transform.rotation_y, transform.rotation_z = rotation_xyz
+
         if scale_xyz is not None:
             gl_sx, gl_sy, gl_sz = cls.editor_to_gl_scale(*scale_xyz)
             transform.local_scl_x, transform.local_scl_y, transform.local_scl_z = gl_sx, gl_sy, gl_sz
-            transform.scale_x, transform.scale_y, transform.scale_z = gl_sx, gl_sy, gl_sz
+            # 有父实体时: world_scale = parent_world_scale × child_local_scale (分量乘)
+            if parent_id is not None and parent_id != entity_id:
+                parent_t = esper.component_for_entity(parent_id, Transform)
+                transform.scale_x = parent_t.scale_x * gl_sx
+                transform.scale_y = parent_t.scale_y * gl_sy
+                transform.scale_z = parent_t.scale_z * gl_sz
+            else:
+                transform.scale_x, transform.scale_y, transform.scale_z = gl_sx, gl_sy, gl_sz
+
         ComponentModifiedEvent.Pack(entity_id, transform, engine=st.app)
+
+    @staticmethod
+    def _local_to_world_position(st, local_pos: tuple, parent_id: int) -> tuple:
+        """将子实体的 local 位置转换为 world 位置（沿 parent chain 传播）。"""
+        import numpy as np
+        from Application.Core.Math.Transform import calculate_entity_model
+
+        # ★ 从 parent 的 world Transform 直接构建模型矩阵（不递归以避免锁死锁）
+        #   parent 的 world position/rotation/scale 已经是正确的世界值
+        parent_t = esper.component_for_entity(parent_id, Transform)
+        parent_model = calculate_entity_model(
+            position=(parent_t.position_x, parent_t.position_y, parent_t.position_z),
+            rotation=(parent_t.rotation_x, parent_t.rotation_y, parent_t.rotation_z),
+            scale=(parent_t.scale_x, parent_t.scale_y, parent_t.scale_z),
+        )
+        local_vec = np.array([local_pos[0], local_pos[1], local_pos[2], 1.0], dtype=np.float64)
+        world_vec = local_vec @ parent_model  # row-vector
+        return (float(world_vec[0]), float(world_vec[1]), float(world_vec[2]))
 
     # ============================================================
     # 摄像机管理 → CameraManager

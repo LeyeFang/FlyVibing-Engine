@@ -7,14 +7,17 @@ from Application.Resource.ResourceManager import ResourceManager
 
 class ZenGLEntities:
     def _RenderEntities(self, view: np.ndarray, proj: np.ndarray) -> None:
+        # ★ 预序列化 view/proj（全帧不变，避免每个 entity 重复 numpy→bytes 转换）
+        view_bytes = view.astype('f4').tobytes()
+        proj_bytes = proj.astype('f4').tobytes()
         for eid in self.engine.scene.GetRenderableEntities():
             e = self.registered_entities.get(eid)
             if not e or not e.pipeline: continue
             model = self.engine.scene.GetEntityModelMatrix(eid)
             try:
                 e.pipeline.uniforms['model'][:] = model.astype('f4').tobytes()
-                e.pipeline.uniforms['view'][:] = view.astype('f4').tobytes()
-                e.pipeline.uniforms['projection'][:] = proj.astype('f4').tobytes()
+                e.pipeline.uniforms['view'][:] = view_bytes
+                e.pipeline.uniforms['projection'][:] = proj_bytes
             except Exception:
                 pass
             # ── 材质 uniform — 每帧从 Material 读取最新值上传 ──

@@ -24,6 +24,7 @@ from Application.Core.Renderer.RenderCommand import (
 )
 from Application.Core.Math.CoordinateSystem import (
     editor_to_gl_position, gl_to_editor_position,
+    editor_to_gl_scale, gl_to_editor_scale,
 )
 
 if TYPE_CHECKING:
@@ -60,45 +61,104 @@ class TransformAccessor:
 
     def set_transform(self, entity_id: int, *,
                       position_xyz=None, rotation_xyz=None, scale_xyz=None) -> None:
-        """设置实体 Transform（GL 坐标系）。线程安全。"""
+        """设置实体 Transform（GL 坐标系）。线程安全。
+
+        若 entity 有父实体，从 world 值反推 local 值以保持一致性。
+        """
         st = self._mgr
         try:
             t = self._esper_op(lambda: esper.component_for_entity(entity_id, Transform), f"set_transform({entity_id})")
         except KeyError:
             return
+        parent_id = st._entity_parent.get(entity_id)
         changed = False
+
         if position_xyz is not None:
             t.position_x, t.position_y, t.position_z = position_xyz
+            # 有父实体 → 从 world 反推 local
+            if parent_id is not None and parent_id != entity_id:
+                try:
+                    parent_t = esper.component_for_entity(parent_id, Transform)
+                    t.local_pos_x = position_xyz[0] - parent_t.position_x
+                    t.local_pos_y = position_xyz[1] - parent_t.position_y
+                    t.local_pos_z = position_xyz[2] - parent_t.position_z
+                except KeyError:
+                    pass
+            else:
+                t.local_pos_x, t.local_pos_y, t.local_pos_z = position_xyz
             changed = True
+
         if rotation_xyz is not None:
             t.rotation_x, t.rotation_y, t.rotation_z = rotation_xyz
+            t.local_rot_x, t.local_rot_y, t.local_rot_z = rotation_xyz
             changed = True
+
         if scale_xyz is not None:
             t.scale_x, t.scale_y, t.scale_z = scale_xyz
+            # 有父实体 → 从 world 反推 local (component-wise)
+            if parent_id is not None and parent_id != entity_id:
+                try:
+                    parent_t = esper.component_for_entity(parent_id, Transform)
+                    psx, psy, psz = parent_t.scale_x, parent_t.scale_y, parent_t.scale_z
+                    t.local_scl_x = scale_xyz[0] / psx if psx != 0 else scale_xyz[0]
+                    t.local_scl_y = scale_xyz[1] / psy if psy != 0 else scale_xyz[1]
+                    t.local_scl_z = scale_xyz[2] / psz if psz != 0 else scale_xyz[2]
+                except KeyError:
+                    pass
+            else:
+                t.local_scl_x, t.local_scl_y, t.local_scl_z = scale_xyz
             changed = True
+
         if changed:
             ComponentModifiedEvent.Pack(entity_id, t, engine=st.app)
 
     def set_transform_editor(self, entity_id: int, *,
                              position_xyz=None, rotation_xyz=None, scale_xyz=None) -> None:
-        """设置实体 Transform（编辑器坐标系 → 自动转换到 GL）。"""
+        """设置实体 Transform（编辑器坐标系 → 自动转换到 GL）。
+
+        Position: editor (right, forward, up) → GL (right, up, backward)
+        Rotation: 同 Position 映射（Y↔Z 交换 + Y 符号翻转）
+        Scale:    Y↔Z 交换（无符号翻转）
+        """
         gl_pos = None
         gl_rot = None
+        gl_scale = None
         if position_xyz is not None:
             gl_pos = editor_to_gl_position(*position_xyz)
         if rotation_xyz is not None:
             gl_rot = editor_to_gl_position(*rotation_xyz)
+        if scale_xyz is not None:
+            gl_scale = editor_to_gl_scale(*scale_xyz)
         self.set_transform(entity_id, position_xyz=gl_pos, rotation_xyz=gl_rot,
-                           scale_xyz=scale_xyz)
+                           scale_xyz=gl_scale)
 
     def get_model_matrix(self, entity_id: int) -> np.ndarray:
+        """计算实体的 4×4 model 矩阵（世界变换）。
+
+        有父实体时: world = local_matrix @ parent_world_matrix
+        无父实体时: world = world_matrix (position_xyz / rotation_xyz / scale_xyz)
+        """
         from Application.Core.Math.Transform import calculate_entity_model
         t = self.get_transform(entity_id)
-        return calculate_entity_model(
-            position=(t.position_x, t.position_y, t.position_z),
-            rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
-            scale=(t.scale_x, t.scale_y, t.scale_z),
-        )
+        parent_id = self._mgr._entity_parent.get(entity_id)
+
+        if parent_id is not None and parent_id != entity_id:
+            # ★ 有父实体 → 用 local 变换结合父世界矩阵
+            local_model = calculate_entity_model(
+                position=(t.local_pos_x, t.local_pos_y, t.local_pos_z),
+                rotation=(t.local_rot_x, t.local_rot_y, t.local_rot_z),
+                scale=(t.local_scl_x, t.local_scl_y, t.local_scl_z),
+            )
+            parent_model = self.get_model_matrix(parent_id)
+            # row-vector 约定: v' = v × local × parent = v × (local @ parent)
+            return local_model @ parent_model
+        else:
+            # 根实体 → 直接用世界坐标
+            return calculate_entity_model(
+                position=(t.position_x, t.position_y, t.position_z),
+                rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
+                scale=(t.scale_x, t.scale_y, t.scale_z),
+            )
 
     # ════════════════════════════════════════════════════════════
     # Mesh / Material 读写

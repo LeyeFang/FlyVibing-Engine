@@ -160,8 +160,7 @@ class EditorHost(Engine):
         if scene is None:
             return False
         # ★ 保存前: esper → Scene + node graph → Scene
-        from Application.Core.Scene.SceneManager import SceneManager
-        SceneManager.SyncToScene(scene)
+        cls.scene.SyncToScene(scene)
         cls._sync_node_graph_to_scene()
         scene.save_to_file(path)
         return True
@@ -170,12 +169,11 @@ class EditorHost(Engine):
     def load_scene_from_file(cls, path: str) -> object | None:
         """从 .scene 文件加载场景并设为活跃。"""
         from Application.Core.Scene.Scene import Scene
-        from Application.Core.Scene.SceneManager import SceneManager
         scene = Scene.load_from_file(path)
         cls._scenes[scene.name] = scene
         cls._active_scene = scene
         # ★ 加载后: Scene → esper + node graph → panel
-        SceneManager.SyncFromScene(scene, clear_existing=True)
+        cls.scene.SyncFromScene(scene, clear_existing=True)
         cls._sync_node_graph_from_scene()
         # ★ 同步视口模式到 ViewportController
         try:

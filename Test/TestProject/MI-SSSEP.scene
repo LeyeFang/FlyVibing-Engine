@@ -1,0 +1,295 @@
+{
+  "version": "0.1.0",
+  "scene": {
+    "name": "MI-SSSEP",
+    "game_type": "3d",
+    "entities": {
+      "1": {
+        "name": "DefaultCamera3D",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 10.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 10.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "Camera": {
+            "projection_type": "perspective",
+            "fov": 45.0,
+            "aspect_ratio": 1.7777777777777777,
+            "ortho_size": 5.0,
+            "near_plane": 0.1,
+            "far_plane": 1000.0,
+            "local_forward": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "up_vector": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "is_primary": true
+          }
+        }
+      },
+      "2": {
+        "name": "DefaultCamera2D",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 10.0,
+            "rotation_x": 1.5707963267948966,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 10.0,
+            "local_rot_x": 1.5707963267948966,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "Camera": {
+            "projection_type": "orthographic",
+            "fov": 45.0,
+            "aspect_ratio": 1.7777777777777777,
+            "ortho_size": 9.0,
+            "near_plane": 0.1,
+            "far_plane": 100.0,
+            "local_forward": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "up_vector": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "is_primary": false
+          }
+        }
+      },
+      "4": {
+        "name": "left",
+        "components": {
+          "Transform": {
+            "position_x": -8.0,
+            "position_y": 0.0,
+            "position_z": -0.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 1.0,
+            "local_pos_x": -8.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": -0.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 3.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 1.0
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 1,
+            "visible": true
+          }
+        }
+      },
+      "5": {
+        "name": "cue_left",
+        "components": {
+          "Transform": {
+            "position_x": -8.0,
+            "position_y": 0.0,
+            "position_z": 2.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 0.5,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 2.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.5
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 4,
+            "visible": true
+          }
+        },
+        "parent_id": 4
+      },
+      "6": {
+        "name": "right",
+        "components": {
+          "Transform": {
+            "position_x": 8.0,
+            "position_y": 0.0,
+            "position_z": -0.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 1.0,
+            "local_pos_x": 8.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": -0.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 3.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 1.0
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 1,
+            "visible": true
+          }
+        }
+      },
+      "7": {
+        "name": "cue_right",
+        "components": {
+          "Transform": {
+            "position_x": 8.0,
+            "position_y": 0.0,
+            "position_z": 2.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 0.5,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 2.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.5
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 7,
+            "visible": true
+          }
+        },
+        "parent_id": 6
+      },
+      "8": {
+        "name": "task_cue",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 3.5,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 11.0,
+            "scale_y": 1.0,
+            "scale_z": 0.5,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 3.5,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 11.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.5
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 5,
+            "visible": true
+          }
+        }
+      }
+    },
+    "main_camera_entity_id": 1,
+    "next_eid": 9,
+    "node_graph": {
+      "version": "0.1.0",
+      "nodes": {
+        "151": {
+          "id": 151,
+          "node_type": "OnGameStart",
+          "pos": [
+            80,
+            80
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 152
+          }
+        },
+        "153": {
+          "id": 153,
+          "node_type": "OnFrameUpdate",
+          "pos": [
+            80,
+            280
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 154,
+            "delta": 155
+          }
+        },
+        "156": {
+          "id": 156,
+          "node_type": "OnGameStop",
+          "pos": [
+            80,
+            480
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 157
+          }
+        }
+      },
+      "links": {},
+      "next_id": 158
+    }
+  }
+}

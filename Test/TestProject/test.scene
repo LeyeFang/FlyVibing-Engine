@@ -162,65 +162,122 @@
         "151": {
           "id": 151,
           "node_type": "OnGameStart",
-          "pos": [
-            80,
-            80
-          ],
+          "pos": [80, 80],
           "props": {},
-          "pin_ids": {
-            "exec": 152
-          }
+          "pin_ids": { "exec": 152 }
         },
         "153": {
           "id": 153,
           "node_type": "OnFrameUpdate",
-          "pos": [
-            80,
-            280
-          ],
+          "pos": [80, 280],
           "props": {},
-          "pin_ids": {
-            "exec": 154,
-            "delta": 155
-          }
+          "pin_ids": { "exec": 154, "delta": 155 }
         },
         "156": {
           "id": 156,
           "node_type": "OnGameStop",
-          "pos": [
-            80,
-            480
-          ],
+          "pos": [80, 480],
           "props": {},
+          "pin_ids": { "exec": 157 }
+        },
+        "163": {
+          "id": 163,
+          "node_type": "VarSet",
+          "pos": [400, 60],
+          "props": { "var_name": "next_time", "mode": "manual", "value": 1.0 },
+          "pin_ids": { "exec_in": 164, "Name": 165, "Value": 166, "exec_out": 167 }
+        },
+        "168": {
+          "id": 168,
+          "node_type": "VarGet",
+          "pos": [400, 200],
+          "props": { "var_name": "next_time" },
+          "pin_ids": { "exec_in": 169, "Name": 170, "exec_out": 171, "Value": 172 }
+        },
+        "173": {
+          "id": 173,
+          "node_type": "Constant",
+          "pos": [180, 360],
+          "props": { "value": 1.0 },
+          "pin_ids": { "Result": 174 }
+        },
+        "175": {
+          "id": 175,
+          "node_type": "MathAdd",
+          "pos": [400, 360],
+          "props": {},
+          "pin_ids": { "A": 176, "B": 177, "Result": 178 }
+        },
+        "179": {
+          "id": 179,
+          "node_type": "TimeTrigger",
+          "pos": [680, 100],
+          "props": { "mode": "pin" },
           "pin_ids": {
-            "exec": 157
+            "exec_in": 180, "Time": 181, "Elapsed": 182,
+            "out_0": 183, "out_1": 184, "out_2": 185, "out_3": 186,
+            "out_4": 187, "out_5": 188, "out_6": 189, "out_7": 190
           }
         },
-        "158": {
-          "id": 158,
-          "node_type": "EntitySpawn",
-          "pos": [
-            299.0,
-            30.0
-          ],
-          "props": {
-            "template": "DefaultCube"
-          },
-          "pin_ids": {
-            "exec_in": 159,
-            "exec_out": 160,
-            "Entity": 161
-          }
+        "191": {
+          "id": 191,
+          "node_type": "Compare",
+          "pos": [400, 520],
+          "props": { "operation": "lte" },
+          "pin_ids": { "A": 192, "B": 193, "Result": 194 }
+        },
+        "195": {
+          "id": 195,
+          "node_type": "Constant",
+          "pos": [180, 580],
+          "props": { "value": 10.0 },
+          "pin_ids": { "Result": 196 }
+        },
+        "197": {
+          "id": 197,
+          "node_type": "Branch",
+          "pos": [950, 80],
+          "props": {},
+          "pin_ids": { "exec_in": 198, "Condition": 199, "True": 200, "False": 201 }
+        },
+        "202": {
+          "id": 202,
+          "node_type": "SerialSend",
+          "pos": [1200, 80],
+          "props": { "mode": "manual", "port": "COM2", "baud_rate": 9600, "value": 1, "format": "bytes" },
+          "pin_ids": { "exec_in": 203, "exec_out": 204 }
+        },
+        "205": {
+          "id": 205,
+          "node_type": "VarSet",
+          "pos": [950, 280],
+          "props": { "var_name": "next_time", "mode": "pin" },
+          "pin_ids": { "exec_in": 206, "Name": 207, "Value": 208, "exec_out": 209 }
+        },
+        "223": {
+          "id": 223,
+          "node_type": "ExitGame",
+          "pos": [1200, 280],
+          "props": {},
+          "pin_ids": { "exec_in": 224 }
         }
       },
       "links": {
-        "162": {
-          "id": 162,
-          "from_pin": 152,
-          "to_pin": 159
-        }
+        "210": { "id": 210, "from_pin": 152, "to_pin": 164 },
+        "211": { "id": 211, "from_pin": 154, "to_pin": 180 },
+        "212": { "id": 212, "from_pin": 172, "to_pin": 181 },
+        "213": { "id": 213, "from_pin": 172, "to_pin": 176 },
+        "214": { "id": 214, "from_pin": 174, "to_pin": 177 },
+        "215": { "id": 215, "from_pin": 178, "to_pin": 208 },
+        "216": { "id": 216, "from_pin": 172, "to_pin": 192 },
+        "217": { "id": 217, "from_pin": 196, "to_pin": 193 },
+        "218": { "id": 218, "from_pin": 194, "to_pin": 199 },
+        "219": { "id": 219, "from_pin": 183, "to_pin": 198 },
+        "220": { "id": 220, "from_pin": 200, "to_pin": 203 },
+        "221": { "id": 221, "from_pin": 204, "to_pin": 206 },
+        "222": { "id": 222, "from_pin": 201, "to_pin": 224 }
       },
-      "next_id": 163
+      "next_id": 225
     }
   }
 }

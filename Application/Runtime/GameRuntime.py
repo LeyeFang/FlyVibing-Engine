@@ -64,6 +64,9 @@ class GameRuntime(Engine):
         if EditorHost._frame_sync is not None:
             cls._frame_sync = EditorHost._frame_sync  # 共享同一个 FrameSync
             cls._is_frame_sync_master = False
+        # ── 启动设备 I/O 线程 ──
+        from Application.Functions.SerialParallelDevice import start as spd_start
+        spd_start()
         EngineLifecycleEvent.Pack(stage="start", message="Started in PIE mode", engine=cls)
         return cls
 
@@ -75,6 +78,8 @@ class GameRuntime(Engine):
     ) -> None:
         """阻塞启动 (导出模式)。"""
         cls.init(window_type=window_type, renderer_type=renderer_type)
+        from Application.Functions.SerialParallelDevice import start as spd_start
+        spd_start()
         EngineLifecycleEvent.Pack(stage="start", message="Started in export mode", engine=cls)
         super().run()
 
@@ -101,6 +106,9 @@ class GameRuntime(Engine):
     @classmethod
     def stop(cls) -> None:
         """请求停止 Runtime 并清理状态，允许再次 start()。"""
+        # ── 停止设备 I/O 线程 ──
+        from Application.Functions.SerialParallelDevice import stop as spd_stop
+        spd_stop()
         # 必须在 run_state=False 之前派发事件 —
         # 否则渲染线程的 finally 块会先清空 layer_stack，DebugLayer 收不到事件。
         EngineLifecycleEvent.Pack(stage="stop", message="Stopped and cleaned up", engine=cls)

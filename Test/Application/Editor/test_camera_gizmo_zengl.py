@@ -164,7 +164,7 @@ def main():
     #     引擎约定 M = T @ R (先位移后旋转), world_pos = position @ R
     #     要到达 world_pos=(5,3,8) 且看向原点, 需解 position @ R = (5,3,8)
     #     → position = (5,3,8) @ R^T = (0, 0, √98) ≈ (0, 0, 9.899)
-    cam_eid = SceneManager.get_main_camera_id()
+    cam_eid = SceneManager._current().get_main_camera_id()
     dx, dy, dz = -5.0, -3.0, -8.0   # 摄像机 → 原点方向
     _len = math.sqrt(dx*dx + dy*dy + dz*dz)
     rx = math.atan2(-dy, -dz)        # pitch 绕 X
@@ -181,7 +181,7 @@ def main():
         [sy*cx,       -sx,          cy*cx],
     ])
     pre_pos = world_target @ R_T
-    SceneManager.SetEntityTransform(  # type: ignore[reportUnknownMemberType]
+    SceneManager._current().SetEntityTransform(  # type: ignore[reportUnknownMemberType]
         cam_eid,
         position_xyz=(float(pre_pos[0]), float(pre_pos[1]), float(pre_pos[2])),
         rotation_xyz=(rx, ry, rz),
@@ -190,13 +190,13 @@ def main():
 
     # ── 2D 摄像机: entity N, 正交俯视 GL XZ 平面 (编辑器 XY) ──
     #     GL 视线方向 (0,-1,0) — 摄像机在 GL +Y 高处看向下方
-    cam_2d_eid = SceneManager.AddEntity()
-    SceneManager.SetEntityName(cam_2d_eid, "DefaultCamera2D")
+    cam_2d_eid = SceneManager._current().AddEntity()
+    SceneManager._current().SetEntityName(cam_2d_eid, "DefaultCamera2D")
     # 预旋转 position: 使得 world_pos = position @ R = (0, 10, 0) GL
     # R = Rx(π/2): 旋转后 local -Z → world (0,-1,0) 即俯视
     cam_2d_rx = math.pi / 2.0
     cam_2d_pre = np.array([0.0, 0.0, 10.0])  # position @ R 后 → (0,10,0)
-    SceneManager.SetEntityTransform(
+    SceneManager._current().SetEntityTransform(
         cam_2d_eid,
         position_xyz=(float(cam_2d_pre[0]), float(cam_2d_pre[1]), float(cam_2d_pre[2])),
         rotation_xyz=(cam_2d_rx, 0.0, 0.0),
@@ -241,7 +241,7 @@ def main():
         """同步 TransformGizmo 位置到选中 entity。"""
         if selected_eid is not None:
             try:
-                t = SceneManager.GetEntityTransform(selected_eid)  # type: ignore[reportUnknownMemberType]
+                t = SceneManager._current().GetEntityTransform(selected_eid)  # type: ignore[reportUnknownMemberType]
                 TransformGizmo.set_target_position(
                     (t.position_x, t.position_y, t.position_z))
             except Exception:
@@ -313,7 +313,7 @@ def main():
                 gizmo_info = TransformGizmo.parse_pick_key(pick_value)
 
             if gizmo_info and selected_eid is not None:
-                t = SceneManager.GetEntityTransform(selected_eid)  # type: ignore[reportUnknownMemberType]
+                t = SceneManager._current().GetEntityTransform(selected_eid)  # type: ignore[reportUnknownMemberType]
                 entity_pos = np.array(
                     [t.position_x, t.position_y, t.position_z], dtype=np.float32)
                 aspect = vp_w / max(vp_h, 1)
@@ -367,7 +367,7 @@ def main():
 
             new_pos = TransformGizmo.update_drag(ray_o, ray_d)
             if new_pos is not None and selected_eid is not None:
-                SceneManager.SetEntityTransform(  # type: ignore[reportUnknownMemberType]
+                SceneManager._current().SetEntityTransform(  # type: ignore[reportUnknownMemberType]
                     selected_eid,
                     position_xyz=(float(new_pos[0]), float(new_pos[1]), float(new_pos[2])))
                 TransformGizmo.set_target_position(new_pos)
@@ -388,7 +388,7 @@ def main():
         if use_test_cam_view:
             # ── 根据当前 2D/3D 模式选择对应的 entity 摄像机 ──
             preview_eid = cam_2d_eid if is_2d_mode else cam_eid
-            t = SceneManager.GetEntityTransform(preview_eid)  # type: ignore[reportUnknownMemberType]
+            t = SceneManager._current().GetEntityTransform(preview_eid)  # type: ignore[reportUnknownMemberType]
             model = calculate_entity_model(
                 position=(t.position_x, t.position_y, t.position_z),
                 rotation=(t.rotation_x, t.rotation_y, t.rotation_z),

@@ -81,7 +81,7 @@ class GizmoQuery:
         editor_visible: set[int] = set()
         try:
             from Application.Core.Scene.SceneManager import SceneManager
-            st = SceneManager._state()
+            st = SceneManager._current()
             editor_visible = st._editor_visible
         except Exception:
             pass

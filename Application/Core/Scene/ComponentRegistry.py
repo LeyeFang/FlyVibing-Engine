@@ -43,11 +43,8 @@ class ComponentRegistry:
         comp_cls = self._mgr._component_registry.get(component_name)
         if comp_cls is None:
             return False
-        from Application.Core.Scene.SceneManager import SceneManager as _SM
-        with _SM._esper_lock:
-            esper.switch_world(self._mgr.world_name)
-            if esper.has_component(entity_id, comp_cls):
-                return False
+        if esper.has_component(entity_id, comp_cls):
+            return False
         instance = comp_cls()
         self._mgr.entity_mgr.add_component(entity_id, instance)
         return True

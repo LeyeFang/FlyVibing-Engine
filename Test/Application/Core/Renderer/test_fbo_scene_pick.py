@@ -9,7 +9,7 @@ Test: FBO Scene Pick — FBO Entity Picking via SceneManager + SelecteEntityEven
   4. 选中实体后, 用 SelecteEntityEvent.Pack() 打包事件, 并 print 出来
 
 渲染流程:
-  Pick Pass  : SceneManager.GetRenderableEntities() → 每实体分配 ECS entity_id
+  Pick Pass  : SceneManager._current().GetRenderableEntities() → 每实体分配 ECS entity_id
                → pick FBO → readPixels 获取点击的 entity_id
   Scene Pass : 绘制所有实体到 scene FBO (简单光照)
   Blit       : scene FBO → 屏幕
@@ -345,11 +345,11 @@ class SceneFBOPicker:
         从 SceneManager 同步实体列表 → 为每个新 mesh 创建 VAO。
         如果 mesh_id 变更, 会重建 VAO。
         """
-        renderable = SceneManager.GetRenderableEntities()
+        renderable = SceneManager._current().GetRenderableEntities()
         known = set(self._entity_gpu.keys())
 
         for eid in renderable:
-            mesh_id = SceneManager.GetEntityMesh(eid)
+            mesh_id = SceneManager._current().GetEntityMesh(eid)
             if eid in self._entity_gpu:
                 old = self._entity_gpu[eid]
                 if old['mesh_id'] != mesh_id:
@@ -387,7 +387,7 @@ class SceneFBOPicker:
         返回 entity_id, 未命中返回 -1。
         """
         self.sync_entities()
-        entities = SceneManager.GetRenderableEntities()
+        entities = SceneManager._current().GetRenderableEntities()
         if not entities:
             return -1
 
@@ -409,7 +409,7 @@ class SceneFBOPicker:
             gpu = self._entity_gpu.get(eid)
             if gpu is None:
                 continue
-            transform = SceneManager.GetEntityTransform(eid)
+            transform = SceneManager._current().GetEntityTransform(eid)
             model = calculate_entity_model(transform)
             glUniformMatrix4fv(
                 glGetUniformLocation(self._prog_pick, 'uM'), 1, GL_FALSE,
@@ -433,7 +433,7 @@ class SceneFBOPicker:
 
     def render_frame(self, view: np.ndarray, proj: np.ndarray):
         self.sync_entities()
-        entities = SceneManager.GetRenderableEntities()
+        entities = SceneManager._current().GetRenderableEntities()
 
         # ── Scene Pass → scene FBO ──
         glBindFramebuffer(GL_FRAMEBUFFER, self._sfbo)
@@ -464,7 +464,7 @@ class SceneFBOPicker:
             gpu = self._entity_gpu.get(eid)
             if gpu is None:
                 continue
-            transform = SceneManager.GetEntityTransform(eid)
+            transform = SceneManager._current().GetEntityTransform(eid)
             model = calculate_entity_model(transform)
             color = colors[i % len(colors)]
 
@@ -558,16 +558,16 @@ def main():
     positions = [(-1.5, 0, 0), (0.0, 0, 0), (1.5, 0, 0)]
 
     for pos in positions:
-        eid = SceneManager.AddEntity()
+        eid = SceneManager._current().AddEntity()
         entity_ids.append(eid)
         # 添加 MeshRenderer (默认绑定 mesh_id=1, 并自动创建 material)
         mesh_renderer = MeshRenderer(mesh_id=cube_mesh_id)
-        SceneManager.AddComponentToEntity(eid, mesh_renderer)
+        SceneManager._current().AddComponentToEntity(eid, mesh_renderer)
         # 设置位置
-        SceneManager.SetEntityTransform(eid, position_xyz=pos)
+        SceneManager._current().SetEntityTransform(eid, position_xyz=pos)
 
     print(f"[TEST] Created entities: {entity_ids}")
-    print(f"[TEST] Renderable entities: {SceneManager.GetRenderableEntities()}")
+    print(f"[TEST] Renderable entities: {SceneManager._current().GetRenderableEntities()}")
 
     # ── 初始化内联渲染器 ──
     picker = SceneFBOPicker()

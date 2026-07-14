@@ -1,20 +1,17 @@
-﻿"""
-SceneManager — 场景数据管理器（每 Engine 独立状态 + 独立 ECS 世界）。
+"""
+SceneManager — 场景数据管理器（单 esper 世界 + ID 分段隔离 Editor/Runtime）。
 
 架构:
-  - _registry: dict[engine_name, SceneManager] — 每个 Engine 持有自己的 SceneManager 实例
-  - _active_name: str — 当前活跃的 Engine 名称 (Init 时设置)
-  - 每个 SceneManager 实例拥有独立的 esper 世界 (通过 switch_world 隔离)
+  - 单 esper 世界，不切换，不加锁
+  - Editor 实体和 Runtime 实体共存于同一世界
+  - _runtime_entities: set[int] 追踪 PIE 动态实体，stop_pie() 精确清理
 
-esper 世界命名规则:
-  - "default"      — esper 默认世界 (保留不用)
-  - "scene_EditorHost"  — 编辑器场景
-  - "scene_GameRuntime" — 运行时场景
-  - "scene_MockApp"     — 测试场景
+esper 世界命名:
+  - "scene" — 唯一世界（替代旧的 scene_EditorHost / scene_GameRuntime 多世界方案）
 
 生命周期:
-  EditorHost.Init() → SceneManager.Init(EditorHost)     → 创建 scene_EditorHost 世界
-  GameRuntime.Init() → SceneManager.Init(GameRuntime)   → 创建 scene_GameRuntime 世界
+  EditorHost.Init() → SceneManager.Init(EditorHost)     → 创建默认实体 (cameras + cube)
+  GameRuntime.Init() → SceneManager.Init(GameRuntime)   → 仅注册实例，不创建默认实体
 """
 
 import esper
@@ -37,21 +34,14 @@ from Application.Core.Scene.EditorState import EditorState
 
 
 class SceneManager:
-    """场景管理器 — 每 Engine 一个实例，持有独立的 esper 世界。
+    """场景管理器 — 单实例，单 esper 世界。
 
-    实例化: SceneManager("EditorHost", app) — 每个 Engine 创建自己的实例。
-    线程安全: set_thread_active() 绑定线程到 engine (过渡期)。
-    向后兼容: 保留 classmethod facade，委托到当前线程对应的实例。
+    实例化: SceneManager("EditorHost", app) — 创建唯一实例。
     """
 
     # ── 类级注册表 ─────────────────────────────────────────
     _registry: dict[str, 'SceneManager'] = {}        # engine_name → SceneManager 实例
-    _active_name: str = ""                          # 全局默认
-    _thread_active: dict[int, str] = {}             # thread_id → engine_name
-    _thread_lock = threading.Lock()
-    _esper_lock = threading.RLock()                 # ★ 保护 esper 全局状态的多线程访问
-    _component_registry: dict[str, type] = {}       # 全局共享
-    _world_counter: dict[str, int] = {}             # engine_name → 世界序号 (非 Editor 每次 Init 递增)
+    _component_registry: dict[str, type] = {}         # 全局共享
 
     def __init__(self, engine_name: str, app=None) -> None:
         from Application.Core.Scene.Scene import GameType
@@ -65,8 +55,7 @@ class SceneManager:
         self.main_camera_2d_id: int | None = None
         self._entity_names: dict[int, str] = {}
         self._entity_parent: dict[int, int] = {}
-        self._editor_visible: set[int] = set()    # ★ 编辑器中可见的实体 ID (默认全可见, 空 set = 全部可见)
-        self.world_name: str = f"scene_{engine_name}"
+        self._editor_visible: set[int] = set()
         self.game_type = GameType.GAME_3D
 
         # ★ 组合子管理器
@@ -77,98 +66,31 @@ class SceneManager:
         self.cam_mgr = CameraManager(self)
         self.editor_mgr = EditorState(self)
 
-    # 向后兼容别名: _SceneState 已被吸收，返回 SceneManager 自身
-    _SceneState = None  # type: ignore
-
-    def _switch_world(self) -> None:
-        """切换到本实例的 esper 世界。线程安全。"""
-        with SceneManager._esper_lock:
-            esper.switch_world(self.world_name)
-
-    @classmethod
-    def set_thread_active(cls, engine_name: str) -> None:
-        """将当前线程绑定到指定 Engine 的场景。
-
-        应在以下位置调用:
-          - EditorHost 启动后 (主线程 → "EditorHost")
-          - Engine._render_loop() 入口 (渲染线程 → Engine 名称)
-          - Engine._logic_loop() 入口 (逻辑线程 → Engine 名称)
-        """
-        with cls._thread_lock:
-            cls._thread_active[threading.get_ident()] = engine_name
-
-    @classmethod
-    def _get_active_name(cls) -> str:
-        """获取当前线程的活跃 Engine 名称。线程本地优先，回落全局。"""
-        tid = threading.get_ident()
-        with cls._thread_lock:
-            return cls._thread_active.get(tid, cls._active_name)
-
-    @classmethod
-    def _state(cls) -> 'SceneManager':
-        """返回当前线程对应的 SceneManager 实例，并切换 esper 世界（线程安全）。
-
-        ★ 使用 _esper_lock 防止与 _esper_op 的竞态:
-          若不加锁，Editor 线程可在 Logic 线程的 _esper_op 持有锁期间
-          通过 _state() → switch_world() 改变模块级全局 _entities，
-          导致实体被创建到错误的世界。
-        """
-        with cls._esper_lock:
-            name = cls._get_active_name()
-            if name not in cls._registry:
-                raise RuntimeError(
-                    f"SceneManager: no instance for engine '{name}'. "
-                    f"Call SceneManager.Init(engine) first."
-                )
-            inst = cls._registry[name]
-            esper.switch_world(inst.world_name)
-            return inst
-
-    @classmethod
-    def _with_esper_lock(cls, operation):
-        """在 esper 锁保护下执行操作（返回操作结果）。"""
-        with cls._esper_lock:
-            return operation()
-
-    @classmethod
-    def _state_for(cls, engine_name: str) -> 'SceneManager':
-        """返回指定 Engine 的 SceneManager 实例（跨 Engine 操作，不切换世界）。"""
-        return cls._registry[engine_name]
-
     # ============================================================
     # 生命周期 / Lifecycle
     # ============================================================
 
     @classmethod
     def Init(cls, app) -> None:
-        """初始化场景 — 创建 SceneManager 实例并注册。
+        """初始化场景 — 为每个 Engine 创建独立的 SceneManager 实例。
 
-        EditorHost: 幂等，始终复用同一世界 (scene_EditorHost)。
-        GameRuntime: 每次 Init 创建新世界 (scene_GameRuntime_1, _2, ...)，
-                     旧世界自动废弃，无需手动清理。
+        所有实例共享同一个 esper 世界（单 world），但各自维护 entities / _entity_names 等元数据。
+        EditorHost: 首次 Init 创建默认实体 (cameras + cube)。
+        GameRuntime: 不复用 EditorHost 实例，创建自己的空实例。
         """
         engine_name = getattr(app, '__name__', type(app).__name__)
-        if not cls._active_name:
-            cls._active_name = engine_name
 
         if engine_name in cls._registry:
             inst = cls._registry[engine_name]
             inst.app = app
-            # ── EditorHost 幂等: 复用已有世界 ──
-            if engine_name == "EditorHost":
-                return
-            # ── 非 Editor: 递增序号，创建全新世界 ──
-            cls._world_counter[engine_name] = cls._world_counter.get(engine_name, 0) + 1
-            inst.world_name = f"scene_{engine_name}_{cls._world_counter[engine_name]}"
-            inst._reset_state()
         else:
             inst = SceneManager(engine_name, app)
             cls._registry[engine_name] = inst
 
-        # ── 切换到本 Engine 的 ECS 世界（esper 自动创建）──
-        esper.switch_world(inst.world_name)
-        inst.cam_mgr.create_defaults(inst)
-        cls._create_default_cube(inst)
+        # ── EditorHost 首次: 创建默认实体 ──
+        if engine_name == "EditorHost" and not inst.entities:
+            inst.cam_mgr.create_defaults(inst)
+            cls._create_default_cube(inst)
 
         # ── 首次 Init 时自动注册内置 Component ──
         if not cls._component_registry:
@@ -177,9 +99,14 @@ class SceneManager:
             cls.RegisterComponent("Transform", Transform)
 
     @classmethod
-    def _create_default_cameras(cls, inst: 'SceneManager') -> None:
-        """委托到 CameraManager。"""
-        inst.cam_mgr.create_defaults(inst)
+    def _current(cls) -> 'SceneManager':
+        """返回 EditorHost 的 SceneManager 实例（向后兼容 classmethod 调用）。"""
+        return cls._registry.get("EditorHost") or cls._registry.get("MockApp")
+
+    @classmethod
+    def _state_for(cls, engine_name: str) -> 'SceneManager':
+        """返回指定 Engine 的 SceneManager 实例。"""
+        return cls._registry[engine_name]
 
     @classmethod
     def _create_default_cube(cls, inst: 'SceneManager') -> None:
@@ -205,9 +132,8 @@ class SceneManager:
         self.scene_camera = None
         self.scene_camera_id = None
 
-    @classmethod
-    def CreateScene(cls, new_scene_name: str) -> None:
-        st = cls._state()
+    def CreateScene(self, new_scene_name: str) -> None:
+        st = self
         st.scene[new_scene_name] = new_scene_name
 
     # ============================================================
@@ -216,86 +142,72 @@ class SceneManager:
     # GameType → CameraManager
     # ============================================================
 
-    @classmethod
-    def SetGameType(cls, game_type) -> None:
-        cls._state().cam_mgr.set_game_type(game_type)
+    def SetGameType(self, game_type) -> None:
+        self.cam_mgr.set_game_type(game_type)
 
-    @classmethod
-    def GetGameType(cls):
-        return cls._state().cam_mgr.get_game_type()
+    def GetGameType(self):
+        return self.cam_mgr.get_game_type()
 
     # ============================================================
     # 父子关系 → EntityManager
     # ============================================================
 
-    @classmethod
-    def SetEntityParent(cls, child_id: int, parent_id: int) -> None:
-        cls._state().entity_mgr.set_parent(child_id, parent_id)
+    def SetEntityParent(self, child_id: int, parent_id: int) -> None:
+        self.entity_mgr.set_parent(child_id, parent_id)
 
-    @classmethod
-    def GetEntityParent(cls, entity_id: int) -> int | None:
-        return cls._state().entity_mgr.get_parent(entity_id)
+    def GetEntityParent(self, entity_id: int) -> int | None:
+        return self.entity_mgr.get_parent(entity_id)
 
-    @classmethod
-    def GetEntityChildren(cls, entity_id: int) -> list[int]:
-        return cls._state().entity_mgr.get_children(entity_id)
+    def GetEntityChildren(self, entity_id: int) -> list[int]:
+        return self.entity_mgr.get_children(entity_id)
 
-    @classmethod
-    def GetRootEntities(cls) -> list[int]:
-        return cls._state().entity_mgr.get_roots()
+    def GetRootEntities(self) -> list[int]:
+        return self.entity_mgr.get_roots()
 
     # ============================================================
     # 编辑器可见性 → EditorState
     # ============================================================
 
-    @classmethod
-    def SetEditorVisible(cls, entity_id: int, visible: bool) -> None:
-        cls._state().editor_mgr.set_visible(entity_id, visible)
+    def SetEditorVisible(self, entity_id: int, visible: bool) -> None:
+        self.editor_mgr.set_visible(entity_id, visible)
 
-    @classmethod
-    def IsEditorVisible(cls, entity_id: int) -> bool:
-        return cls._state().editor_mgr.is_visible(entity_id)
+    def IsEditorVisible(self, entity_id: int) -> bool:
+        return self.editor_mgr.is_visible(entity_id)
 
     # ============================================================
     # 渲染可见性 → TransformAccessor
     # ============================================================
 
-    @classmethod
-    def SetEntityRenderVisible(cls, entity_id: int, visible: bool) -> None:
-        cls._state().xform_mgr.set_render_visible(entity_id, visible)
+    def SetEntityRenderVisible(self, entity_id: int, visible: bool) -> None:
+        self.xform_mgr.set_render_visible(entity_id, visible)
 
-    @classmethod
-    def IsEntityRenderVisible(cls, entity_id: int) -> bool:
-        return cls._state().xform_mgr.is_render_visible(entity_id)
+    def IsEntityRenderVisible(self, entity_id: int) -> bool:
+        return self.xform_mgr.is_render_visible(entity_id)
 
     # ============================================================
-    # 实体管理 → EntityManager
+    # 实体管理 → EntityManager (实例方法 — 各自引擎独立)
     # ============================================================
 
-    @classmethod
-    def AddEntity(cls, name: str = "", *components) -> int:
-        return cls._state().entity_mgr.add(name, *components)
+    def AddEntity(self, name: str = "", *components) -> int:
+        """在本实例上创建实体。Editor 调则入 Editor，Runtime 调则入 Runtime。"""
+        return self.entity_mgr.add(name, *components)
 
-    @classmethod
-    def DeleteEntity(cls, entity_id: int) -> bool:
-        return cls._state().entity_mgr.delete(entity_id)
+    def DeleteEntity(self, entity_id: int) -> bool:
+        return self.entity_mgr.delete(entity_id)
 
     # ============================================================
     # 命名 → EntityManager
     # ============================================================
 
-    @classmethod
-    def SetEntityName(cls, entity_id: int, name: str) -> None:
-        cls._state().entity_mgr.set_name(entity_id, name)
+    def SetEntityName(self, entity_id: int, name: str) -> None:
+        self.entity_mgr.set_name(entity_id, name)
 
-    @classmethod
-    def GetEntityName(cls, entity_id: int) -> str:
-        return cls._state().entity_mgr.get_name(entity_id)
+    def GetEntityName(self, entity_id: int) -> str:
+        return self.entity_mgr.get_name(entity_id)
 
-    @classmethod
-    def GetEntityByName(cls, name: str) -> int:
+    def GetEntityByName(self, name: str) -> int:
         """按名称查找实体 ID。未找到返回 -1。"""
-        return cls._state().entity_mgr.get_id_by_name(name)
+        return self.entity_mgr.get_id_by_name(name)
 
     # ============================================================
     # 组件注册表 → ComponentRegistry
@@ -303,102 +215,90 @@ class SceneManager:
 
     @classmethod
     def RegisterComponent(cls, name: str, component_cls: type) -> None:
-        cls._state().comp_mgr.register(name, component_cls)
+        cls._current().comp_mgr.register(name, component_cls)
 
     @classmethod
     def GetRegisteredComponents(cls) -> dict[str, type]:
-        return cls._state().comp_mgr.get_all()
+        return cls._current().comp_mgr.get_all()
 
-    @classmethod
-    def AddComponentToEntityByName(cls, entity_id: int, component_name: str) -> bool:
-        return cls._state().comp_mgr.add_by_name(entity_id, component_name)
+    def AddComponentToEntityByName(self, entity_id: int, component_name: str) -> bool:
+        return self.comp_mgr.add_by_name(entity_id, component_name)
 
-    @classmethod
-    def AddComponentToEntity(cls, entity_id: int, component_instance) -> None:
-        cls._state().entity_mgr.add_component(entity_id, component_instance)
+    def AddComponentToEntity(self, entity_id: int, component_instance) -> None:
+        self.entity_mgr.add_component(entity_id, component_instance)
 
     # ============================================================
     # Scene ↔ ECS 同步 → SceneSync
     # ============================================================
 
-    @classmethod
-    def SyncToScene(cls, scene: object) -> None:
-        cls._state().sync_mgr.sync_to_scene(scene)
+    def SyncToScene(self, scene: object) -> None:
+        self.sync_mgr.sync_to_scene(scene)
 
-    @classmethod
-    def SyncFromScene(cls, scene: object, clear_existing: bool = True) -> None:
-        cls._state().sync_mgr.sync_from_scene(scene, clear_existing)
+    def SyncFromScene(self, scene: object, clear_existing: bool = True) -> None:
+        self.sync_mgr.sync_from_scene(scene, clear_existing)
 
     # ============================================================
     # 查询接口 → EntityManager
     # ============================================================
 
-    @classmethod
-    def GetAllEntityInfos(cls) -> list[dict]:
-        return cls._state().entity_mgr.get_all_infos()
+    def GetAllEntityInfos(self) -> list[dict]:
+        return self.entity_mgr.get_all_infos()
 
-    @classmethod
-    def GetAllEntitiesWithComponent(cls, component_type: type) -> list[tuple[int, object]]:
-        return cls._state().entity_mgr.get_all_with_component(component_type)
+    def GetAllEntitiesWithComponent(self, component_type: type) -> list[tuple[int, object]]:
+        return self.entity_mgr.get_all_with_component(component_type)
 
-    @classmethod
-    def EntityExists(cls, entity_id: int) -> bool:
-        return cls._state().entity_mgr.exists(entity_id)
+    def EntityExists(self, entity_id: int) -> bool:
+        return self.entity_mgr.exists(entity_id)
 
-    @classmethod
-    def HasComponent(cls, entity_id: int, component_cls: type) -> bool:
-        cls._state()
+    def HasComponent(self, entity_id: int, component_cls: type) -> bool:
+        self
         return esper.has_component(entity_id, component_cls)
 
-    @classmethod
-    def GetComponent(cls, entity_id: int, component_type: type):
-        return cls._state().entity_mgr.get_component(entity_id, component_type)
+    def GetComponent(self, entity_id: int, component_type: type):
+        return self.entity_mgr.get_component(entity_id, component_type)
 
-    @classmethod
-    def RemoveComponent(cls, entity_id: int, component_cls: type) -> bool:
-        cls._state()
+    def RemoveComponent(self, entity_id: int, component_cls: type) -> bool:
+        self
         try:
             esper.remove_component(entity_id, component_cls)
             return True
         except KeyError:
             return False
 
-    @classmethod
-    def GetRenderableEntities(cls) -> list:
-        cls._state()
-        return [eid for eid, rend in esper.get_component(MeshRenderer) if rend.visible]
+    def GetRenderableEntities(self) -> list:
+        """返回当前实例中可见的 MeshRenderer 实体。"""
+        result = []
+        for eid, rend in esper.get_component(MeshRenderer):
+            if not rend.visible:
+                continue
+            if str(eid) in st.entities:
+                result.append(eid)
+        return result
 
     # ============================================================
     # 变换 + Mesh/Material/Camera → TransformAccessor
     # ============================================================
 
-    @classmethod
-    def GetEntityTransform(cls, entity_id) -> Transform:
-        return cls._state().xform_mgr.get_transform(entity_id)
+    def GetEntityTransform(self, entity_id) -> Transform:
+        return self.xform_mgr.get_transform(entity_id)
 
-    @classmethod
-    def GetEntityModelMatrix(cls, entity_id: int) -> 'np.ndarray':
-        return cls._state().xform_mgr.get_model_matrix(entity_id)
+    def GetEntityModelMatrix(self, entity_id: int) -> 'np.ndarray':
+        return self.xform_mgr.get_model_matrix(entity_id)
 
-    @classmethod
-    def GetEntityMesh(cls, entity_id: int) -> int:
-        return cls._state().xform_mgr.get_mesh(entity_id)
+    def GetEntityMesh(self, entity_id: int) -> int:
+        return self.xform_mgr.get_mesh(entity_id)
 
-    @classmethod
-    def GetEntityMaterial(cls, entity_id: int) -> int:
-        return cls._state().xform_mgr.get_material(entity_id)
+    def GetEntityMaterial(self, entity_id: int) -> int:
+        return self.xform_mgr.get_material(entity_id)
 
-    @classmethod
-    def SetEntityTransform(cls, entity_id=None, *, position_xyz=None, rotation_xyz=None, scale_xyz=None) -> None:
-        cls._state().xform_mgr.set_transform(entity_id, position_xyz=position_xyz, rotation_xyz=rotation_xyz, scale_xyz=scale_xyz)
+    def SetEntityTransform(self, entity_id=None, *, position_xyz=None, rotation_xyz=None, scale_xyz=None) -> None:
+        self.xform_mgr.set_transform(entity_id, position_xyz=position_xyz, rotation_xyz=rotation_xyz, scale_xyz=scale_xyz)
 
-    @classmethod
-    def SetEntityMeshRenderer(cls, entity_id=None, *, mesh_id=None, material_id=None, visible=None) -> None:
-        cls._state().xform_mgr.set_mesh_renderer(entity_id, mesh_id=mesh_id, material_id=material_id, visible=visible)
+    def SetEntityMeshRenderer(self, entity_id=None, *, mesh_id=None, material_id=None, visible=None) -> None:
+        self.xform_mgr.set_mesh_renderer(entity_id, mesh_id=mesh_id, material_id=material_id, visible=visible)
 
-    @classmethod
-    def SetEntityMaterial(cls, entity_id: int, material_id: int) -> None:
-        cls._state().xform_mgr.set_mesh_renderer(entity_id, material_id=material_id)
+    def SetEntityMaterial(self, entity_id: int, material_id: int) -> None:
+        self.xform_mgr.set_mesh_renderer(entity_id, material_id=material_id)
 
     @staticmethod
     def _ensure_unique_material(st: 'SceneManager', entity_id: int, mr) -> None:
@@ -426,12 +326,11 @@ class SceneManager:
         if _renderer is not None:
             _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
 
-    @classmethod
-    def SetEntityTexture(cls, entity_id: int, texture_id: int, slot: int = 0) -> None:
-        st = cls._state()
+    def SetEntityTexture(self, entity_id: int, texture_id: int, slot: int = 0) -> None:
+        st = self
         from Application.Resource.ResourceManager import ResourceManager
         mr = esper.component_for_entity(entity_id, MeshRenderer)
-        cls._ensure_unique_material(st, entity_id, mr)
+        SceneManager._ensure_unique_material(st, entity_id, mr)
         material = ResourceManager.GetMaterial(mr.material_id)
         while len(material.texture_id_list) <= slot:
             material.texture_id_list.append(0)
@@ -441,12 +340,11 @@ class SceneManager:
         if _renderer is not None:
             _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
 
-    @classmethod
-    def SetEntityShader(cls, entity_id: int, shader_id: int) -> None:
-        st = cls._state()
+    def SetEntityShader(self, entity_id: int, shader_id: int) -> None:
+        st = self
         from Application.Resource.ResourceManager import ResourceManager
         mr = esper.component_for_entity(entity_id, MeshRenderer)
-        cls._ensure_unique_material(st, entity_id, mr)
+        SceneManager._ensure_unique_material(st, entity_id, mr)
         material = ResourceManager.GetMaterial(mr.material_id)
         uniforms_name_type = ResourceManager.GetShader(shader_id).uniforms_name_type
         material.set_new_shader(shader_id, uniforms_name_type)
@@ -455,16 +353,14 @@ class SceneManager:
             _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
         ComponentModifiedEvent.Pack(entity_id, mr, engine=st.app)
 
-    @classmethod
-    def SetMaterialParams(cls, entity_id: int, params: dict) -> None:
-        st = cls._state()
+    def SetMaterialParams(self, entity_id: int, params: dict) -> None:
+        st = self
         mr = esper.component_for_entity(entity_id, MeshRenderer)
-        cls._ensure_unique_material(st, entity_id, mr)
-        cls._state().xform_mgr.set_material_params(entity_id, params)
+        SceneManager._ensure_unique_material(st, entity_id, mr)
+        self.xform_mgr.set_material_params(entity_id, params)
 
-    @classmethod
-    def SetCameraProperties(cls, entity_id: int, **kwargs) -> None:
-        cls._state().xform_mgr.set_camera_properties(entity_id, **kwargs)
+    def SetCameraProperties(self, entity_id: int, **kwargs) -> None:
+        self.xform_mgr.set_camera_properties(entity_id, **kwargs)
 
     # ============================================================
     # 坐标系转换 → Core/Math/CoordinateSystem
@@ -490,42 +386,38 @@ class SceneManager:
         from Application.Core.Math.CoordinateSystem import editor_to_gl_scale as _fn
         return _fn(editor_sx, editor_sy, editor_sz)
 
-    @classmethod
-    def GetEntityTransformEditor(cls, entity_id: int) -> dict:
+    def GetEntityTransformEditor(self, entity_id: int) -> dict:
         t = esper.component_for_entity(entity_id, Transform)
         return {
-            'position': cls.gl_to_editor_position(t.position_x, t.position_y, t.position_z),
+            'position': SceneManager.gl_to_editor_position(t.position_x, t.position_y, t.position_z),
             'rotation': (t.rotation_x, t.rotation_y, t.rotation_z),
-            'scale': cls.gl_to_editor_scale(t.scale_x, t.scale_y, t.scale_z),
+            'scale': SceneManager.gl_to_editor_scale(t.scale_x, t.scale_y, t.scale_z),
         }
 
-    @classmethod
-    def SetEntityTransformEditor(cls, entity_id=None, *, position_xyz=None, rotation_xyz=None, scale_xyz=None) -> None:
-        cls._state().xform_mgr.set_transform_editor(entity_id, position_xyz=position_xyz, rotation_xyz=rotation_xyz, scale_xyz=scale_xyz)
+    def SetEntityTransformEditor(self, entity_id=None, *, position_xyz=None, rotation_xyz=None, scale_xyz=None) -> None:
+        self.xform_mgr.set_transform_editor(entity_id, position_xyz=position_xyz, rotation_xyz=rotation_xyz, scale_xyz=scale_xyz)
 
-    @classmethod
-    def GetEntityLocalTransformEditor(cls, entity_id: int) -> dict:
+    def GetEntityLocalTransformEditor(self, entity_id: int) -> dict:
         t = esper.component_for_entity(entity_id, Transform)
         return {
-            'position': cls.gl_to_editor_position(t.local_pos_x, t.local_pos_y, t.local_pos_z),
+            'position': SceneManager.gl_to_editor_position(t.local_pos_x, t.local_pos_y, t.local_pos_z),
             'rotation': (t.local_rot_x, t.local_rot_y, t.local_rot_z),
-            'scale': cls.gl_to_editor_scale(t.local_scl_x, t.local_scl_y, t.local_scl_z),
+            'scale': SceneManager.gl_to_editor_scale(t.local_scl_x, t.local_scl_y, t.local_scl_z),
         }
 
-    @classmethod
-    def SetEntityLocalTransformEditor(cls, entity_id=None, *, position_xyz=None, rotation_xyz=None, scale_xyz=None) -> None:
-        st = cls._state()
+    def SetEntityLocalTransformEditor(self, entity_id=None, *, position_xyz=None, rotation_xyz=None, scale_xyz=None) -> None:
+        st = self
         if entity_id is None:
             raise ValueError("Must specify entity ID")
         transform = esper.component_for_entity(entity_id, Transform)
         parent_id = st._entity_parent.get(entity_id)
 
         if position_xyz is not None:
-            gl_x, gl_y, gl_z = cls.editor_to_gl_position(*position_xyz)
+            gl_x, gl_y, gl_z = SceneManager.editor_to_gl_position(*position_xyz)
             transform.local_pos_x, transform.local_pos_y, transform.local_pos_z = gl_x, gl_y, gl_z
             # 有父实体时从 local + parent world 计算世界位置
             if parent_id is not None and parent_id != entity_id:
-                world_pos = cls._local_to_world_position(
+                world_pos = SceneManager._local_to_world_position(
                     st, (gl_x, gl_y, gl_z), parent_id,
                 )
                 transform.position_x, transform.position_y, transform.position_z = world_pos
@@ -538,7 +430,7 @@ class SceneManager:
             transform.rotation_x, transform.rotation_y, transform.rotation_z = rotation_xyz
 
         if scale_xyz is not None:
-            gl_sx, gl_sy, gl_sz = cls.editor_to_gl_scale(*scale_xyz)
+            gl_sx, gl_sy, gl_sz = SceneManager.editor_to_gl_scale(*scale_xyz)
             transform.local_scl_x, transform.local_scl_y, transform.local_scl_z = gl_sx, gl_sy, gl_sz
             # 有父实体时: world_scale = parent_world_scale × child_local_scale (分量乘)
             if parent_id is not None and parent_id != entity_id:
@@ -573,10 +465,8 @@ class SceneManager:
     # 摄像机管理 → CameraManager
     # ============================================================
 
-    @classmethod
-    def get_main_camera_id(cls) -> int | None:
-        return cls._state().cam_mgr.get_main_id()
+    def get_main_camera_id(self) -> int | None:
+        return self.cam_mgr.get_main_id()
 
-    @classmethod
-    def get_main_camera_2d_id(cls) -> int | None:
-        return cls._state().cam_mgr.get_main_2d_id()
+    def get_main_camera_2d_id(self) -> int | None:
+        return self.cam_mgr.get_main_2d_id()

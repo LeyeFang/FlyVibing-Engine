@@ -170,7 +170,7 @@ void main(){FragColor=vec4(TexCoord.x,0.62,0.31,1.0);}"""
 
     mid = ResourceManager.GetDefaultMesh('Cube')
     for pos in [(-2, 0, 0), (0, 0.5, 0), (2, -0.3, 0.5)]:
-        eid = SceneManager.AddEntity()
+        eid = SceneManager._current().AddEntity()
         SceneManager.AddComponentToEntity(eid, MeshRenderer(mesh_id=mid))
         SceneManager.SetEntityTransform(eid, position_xyz=pos)
         renderer.register_entity(eid)

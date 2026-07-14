@@ -37,25 +37,14 @@ class TransformAccessor:
     def __init__(self, scene_mgr: SceneManager) -> None:
         self._mgr = scene_mgr
 
-    def _esper_op(self, operation, op_name="?"):
-        """在 esper 锁保护下执行操作（世界切换 + 操作原子化 + 事后还原）。"""
-        from Application.Core.Scene.SceneManager import SceneManager as _SM
-        with _SM._esper_lock:
-            old_world = esper.current_world
-            esper.switch_world(self._mgr.world_name)
-            try:
-                return operation()
-            finally:
-                esper.switch_world(old_world)
-
     # ════════════════════════════════════════════════════════════
     # Transform 读写
     # ════════════════════════════════════════════════════════════
 
     def get_transform(self, entity_id: int) -> Transform:
-        """获取实体 Transform。线程安全。"""
+        """获取实体 Transform。"""
         try:
-            return self._esper_op(lambda: esper.component_for_entity(entity_id, Transform), f"get_transform({entity_id})")
+            return esper.component_for_entity(entity_id, Transform)
         except KeyError:
             return Transform()
 
@@ -67,7 +56,7 @@ class TransformAccessor:
         """
         st = self._mgr
         try:
-            t = self._esper_op(lambda: esper.component_for_entity(entity_id, Transform), f"set_transform({entity_id})")
+            t = esper.component_for_entity(entity_id, Transform)
         except KeyError:
             return
         parent_id = st._entity_parent.get(entity_id)
@@ -166,12 +155,12 @@ class TransformAccessor:
 
     def get_mesh(self, entity_id: int) -> int:
         """获取实体的 mesh_id。线程安全。"""
-        mr = self._esper_op(lambda: esper.component_for_entity(entity_id, MeshRenderer), f"get_mesh({entity_id})")
+        mr = esper.component_for_entity(entity_id, MeshRenderer)
         return mr.mesh_id
 
     def get_material(self, entity_id: int) -> int:
         """获取实体的 material_id。线程安全。"""
-        mr = self._esper_op(lambda: esper.component_for_entity(entity_id, MeshRenderer), f"get_material({entity_id})")
+        mr = esper.component_for_entity(entity_id, MeshRenderer)
         return mr.material_id
 
     def set_mesh_renderer(self, entity_id: int, *, mesh_id=None, material_id=None,
@@ -179,7 +168,7 @@ class TransformAccessor:
         """修改实体 MeshRenderer 属性。线程安全。"""
         st = self._mgr
         try:
-            mr = self._esper_op(lambda: esper.component_for_entity(entity_id, MeshRenderer), f"set_mesh_renderer({entity_id})")
+            mr = esper.component_for_entity(entity_id, MeshRenderer)
         except KeyError:
             return
         if mesh_id is not None:
@@ -200,7 +189,7 @@ class TransformAccessor:
         """设置 Camera 组件属性（含 clamp）。线程安全。"""
         st = self._mgr
         try:
-            cam = self._esper_op(lambda: esper.component_for_entity(entity_id, Camera), f"set_camera_properties({entity_id})")
+            cam = esper.component_for_entity(entity_id, Camera)
         except KeyError:
             return
         changed = False
@@ -219,10 +208,10 @@ class TransformAccessor:
             ComponentModifiedEvent.Pack(entity_id, cam, engine=st.app)
 
     def set_material_params(self, entity_id: int, params: dict) -> None:
-        """设置实体材质的 uniform 参数。线程安全。"""
+        """设置实体材质的 uniform 参数。"""
         st = self._mgr
         try:
-            mr = self._esper_op(lambda: esper.component_for_entity(entity_id, MeshRenderer))
+            mr = esper.component_for_entity(entity_id, MeshRenderer)
         except KeyError:
             return
         from Application.Resource.ResourceManager import ResourceManager
@@ -240,9 +229,9 @@ class TransformAccessor:
         self.set_mesh_renderer(entity_id, visible=visible)
 
     def is_render_visible(self, entity_id: int) -> bool:
-        """查询实体渲染可见性。线程安全。"""
+        """查询实体渲染可见性。"""
         try:
-            mr = self._esper_op(lambda: esper.component_for_entity(entity_id, MeshRenderer))
+            mr = esper.component_for_entity(entity_id, MeshRenderer)
             return mr.visible
         except KeyError:
             return False

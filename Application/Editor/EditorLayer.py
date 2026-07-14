@@ -328,7 +328,7 @@ class EditorLayer(Layer):
         from Application.Core.Scene.SceneManager import SceneManager
         from Application.Core.Scene.BasicComponents import MeshRenderer
         try:
-            st = SceneManager._state()
+            st = SceneManager._current()
             for entity_id_str in st.entities:
                 eid = int(entity_id_str)
                 try:

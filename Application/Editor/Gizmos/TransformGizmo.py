@@ -203,7 +203,7 @@ class TransformGizmo:
         # ★ 实体被眼睛隐藏 → gizmo 也不显示
         if cls._target_entity_id is not None:
             from Application.Core.Scene.SceneManager import SceneManager
-            if not SceneManager.IsEditorVisible(cls._target_entity_id):
+            if not EditorHost.scene.IsEditorVisible(cls._target_entity_id):
                 return np.zeros((4, 4), dtype=np.float32)
         from Application.Editor.EditorCamera import EditorCamera
 

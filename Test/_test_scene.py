@@ -55,7 +55,7 @@ def create_three_cubes(
     entity_ids = []
 
     for pos in positions:
-        eid = SceneManager.AddEntity()
+        eid = SceneManager._current().AddEntity()
         entity_ids.append(eid)
         SceneManager.AddComponentToEntity(eid, MeshRenderer(mesh_id=cube_mesh_id))
         SceneManager.SetEntityTransform(eid, position_xyz=pos)

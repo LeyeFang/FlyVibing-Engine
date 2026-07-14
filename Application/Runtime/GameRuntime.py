@@ -89,13 +89,21 @@ class GameRuntime(Engine):
 
     @classmethod
     def _sync_scene_from_editor(cls) -> None:
-        """从 Editor 的 SceneManager 同步 game_type + 摄像机到 Runtime。"""
+        """从 Editor 同步 game_type + 摄像机到 Runtime。"""
         from Application.Editor.EditorHost import EditorHost
         try:
             editor_scene = EditorHost.scene
             if editor_scene is not None:
                 cls.scene.game_type = editor_scene.game_type
-                # ★ 根据 game_type 切换活跃摄像机
+                # ★ 同步默认摄像机 ID（Editor Init 创建的，Runtime 复用）
+                cls.scene.main_camera_id = editor_scene.main_camera_id
+                cls.scene.main_camera_2d_id = editor_scene.main_camera_2d_id
+                # ★ 将摄像机实体注册到 Runtime 的 entities 追踪表
+                for cam_id in (editor_scene.main_camera_id, editor_scene.main_camera_2d_id):
+                    if cam_id is not None:
+                        cls.scene.entities[str(cam_id)] = 1
+                        cls.scene._entity_names[cam_id] = editor_scene._entity_names.get(cam_id, f"Camera_{cam_id}")
+                # ★ 根据 game_type 选择活跃摄像机
                 cls.scene.cam_mgr._apply(cls.scene)
                 print(f"[GameRuntime] Synced game_type from editor: "
                       f"{editor_scene.game_type.value}, "
@@ -109,6 +117,22 @@ class GameRuntime(Engine):
         # ── 停止设备 I/O 线程 ──
         from Application.Functions.SerialParallelDevice import stop as spd_stop
         spd_stop()
+        # ── 清理 Runtime 实体（跳过共享的 Editor 摄像机）──
+        import esper
+        if cls.scene is not None:
+            # ★ 不删除 Editor 拥有的实体（摄像机等）
+            from Application.Editor.EditorHost import EditorHost
+            editor_eids = set(EditorHost.scene.entities.keys()) if EditorHost.scene else set()
+            for eid_str in list(cls.scene.entities.keys()):
+                if eid_str in editor_eids:
+                    continue  # Editor 共用实体，不删
+                try:
+                    esper.delete_entity(int(eid_str))
+                except KeyError:
+                    pass
+            cls.scene.entities.clear()
+            cls.scene._entity_names.clear()
+            cls.scene._entity_parent.clear()
         # 必须在 run_state=False 之前派发事件 —
         # 否则渲染线程的 finally 块会先清空 layer_stack，DebugLayer 收不到事件。
         EngineLifecycleEvent.Pack(stage="stop", message="Stopped and cleaned up", engine=cls)

@@ -105,7 +105,7 @@ class EditorHost(Engine):
         if renderer is None:
             return
         try:
-            st = SceneManager._state()
+            st = SceneManager._current()
             for entity_id_str in st.entities:
                 eid = int(entity_id_str)
                 try:

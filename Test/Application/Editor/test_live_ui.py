@@ -75,7 +75,7 @@ def _create_test_entities(num: int = 3) -> list[int]:
 
     entity_ids = []
     for pos in positions:
-        eid = SceneManager.AddEntity()
+        eid = SceneManager._current().AddEntity()
         SceneManager.AddComponentToEntity(eid, MeshRenderer(mesh_id=cube_mesh_id))
         SceneManager.SetEntityTransform(eid, position_xyz=pos)
         entity_ids.append(eid)
@@ -135,7 +135,6 @@ def main():
 
     ResourceManager.Init(mock_app)
     SceneManager.Init(mock_app)
-    SceneManager.set_thread_active("MockApp")
 
     # 创建测试 Entity — ScenePanel 会显示它们
     entity_ids = _create_test_entities(3)

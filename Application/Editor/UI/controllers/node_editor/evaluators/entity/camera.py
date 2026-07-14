@@ -45,7 +45,6 @@ def _eval_camera_set_main(node_id: int, ctx: ExecutionContext,
         return
 
     st = ctx.scene
-    st._switch_world()
     st.scene_camera_id = eid
     st.scene_camera = ctx.scene.GetComponent(eid, CamComponent)
     print(f"[CameraSetMain] Entity #{eid} set as main camera")

@@ -92,7 +92,7 @@ in vec3 col;out vec4 fc;void main(){fc=vec4(col,1);}''',
 
     mid=ResourceManager.GetDefaultMesh('Cube')
     for pos in [(-2,0,0),(0,0.5,0),(2,-0.3,0.5)]:
-        eid=SceneManager.AddEntity()
+        eid=SceneManager._current().AddEntity()
         SceneManager.AddComponentToEntity(eid,MeshRenderer(mesh_id=mid))
         SceneManager.SetEntityTransform(eid,position_xyz=pos)
         renderer.register_entity(eid)

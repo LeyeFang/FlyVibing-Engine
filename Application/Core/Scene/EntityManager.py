@@ -32,31 +32,17 @@ class EntityManager:
     def __init__(self, scene_mgr: SceneManager) -> None:
         self._mgr = scene_mgr
 
-    def _esper_op(self, operation, op_name="?"):
-        """在 esper 锁保护下执行操作（世界切换 + 操作原子化 + 事后还原）。"""
-        from Application.Core.Scene.SceneManager import SceneManager as _SM
-        with _SM._esper_lock:
-            old_world = esper.current_world
-            esper.switch_world(self._mgr.world_name)
-            try:
-                return operation()
-            finally:
-                esper.switch_world(old_world)
-
     # ════════════════════════════════════════════════════════════
     # 实体创建 / 删除
     # ════════════════════════════════════════════════════════════
 
     def add(self, name: str = "", *components) -> int:
-        """创建新实体（可选初始组件），返回 entity_id。线程安全。"""
+        """创建新实体（可选初始组件），返回 entity_id。"""
         st = self._mgr
-        # ★ 原子操作: 锁定 esper 全局状态 → 切换世界 → 创建实体
-        def _create():
-            if components:
-                return esper.create_entity(*components)
-            else:
-                return esper.create_entity(Transform())
-        entity_id = self._esper_op(_create, f"add({name})")
+        if components:
+            entity_id = esper.create_entity(*components)
+        else:
+            entity_id = esper.create_entity(Transform())
         # 以下操作不依赖 esper（仅使用 SceneManager 追踪数据）
         st.entities[f'{entity_id}'] = 1
         st._editor_visible.add(entity_id)
@@ -95,9 +81,9 @@ class EntityManager:
         if _renderer is not None:
             _renderer.enqueue(EntityRegistrationCommand(entity_id, register=False))
 
-        # 从 ECS 世界删除（线程安全）
+        # 从 ECS 世界删除
         try:
-            self._esper_op(lambda: esper.delete_entity(entity_id))
+            esper.delete_entity(entity_id)
         except KeyError:
             pass
 
@@ -201,13 +187,13 @@ class EntityManager:
         return result
 
     def get_component(self, entity_id: int, component_type: type):
-        """获取实体的指定组件，不存在则抛出 KeyError。线程安全。"""
-        return self._esper_op(lambda: esper.component_for_entity(entity_id, component_type))
+        """获取实体的指定组件，不存在则抛出 KeyError。"""
+        return esper.component_for_entity(entity_id, component_type)
 
     def add_component(self, entity_id: int, component_instance) -> None:
-        """给实体添加组件实例。线程安全。"""
+        """给实体添加组件实例。"""
         st = self._mgr
-        self._esper_op(lambda: esper.add_component(entity_id, component_instance))
+        esper.add_component(entity_id, component_instance)
         NewComponentEvent.Pack(entity_id, component_instance, engine=st.app)
         # 注册 MeshRenderer 到渲染器
         if isinstance(component_instance, MeshRenderer):

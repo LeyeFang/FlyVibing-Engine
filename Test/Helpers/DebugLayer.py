@@ -24,7 +24,7 @@ class DebugLayer(Layer):
         tex_id = ResourceManager.GetDefaultTexture('Checkerboard')
         ssvep_shader_id = ResourceManager.GetDefaultShader("SSVEP")
         # Entity 1 Cube
-        cls.entity_id_1 = SceneManager.AddEntity()
+        cls.entity_id_1 = SceneManager._current().AddEntity()
         SceneManager.AddComponentToEntity(
             entity_id=cls.entity_id_1,
             component_instance=MeshRenderer(mesh_id=cube_mesh_id))
@@ -36,7 +36,7 @@ class DebugLayer(Layer):
             cls.entity_id_1,
             tex_id)       # ★ 绑定棋盘格纹理
         # Entity 2 SSVEP
-        cls.entity_id_2 = SceneManager.AddEntity()
+        cls.entity_id_2 = SceneManager._current().AddEntity()
         SceneManager.AddComponentToEntity(
             entity_id=cls.entity_id_2,
             component_instance=MeshRenderer(mesh_id=square_mesh_id))

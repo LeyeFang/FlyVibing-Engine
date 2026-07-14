@@ -82,7 +82,7 @@ def main():
         if selected:
             eid = next(iter(selected))
             try:
-                t = SceneManager.GetEntityTransform(eid)
+                t = SceneManager._current().GetEntityTransform(eid)
                 TransformGizmo.set_target_position(
                     (t.position_x, t.position_y, t.position_z))
                 return
@@ -143,14 +143,14 @@ def main():
             if gizmo_info and selected:
                 print(f"  [DBG-TEST] gizmo hit: kind={gizmo_info['kind']} name={gizmo_info['name']}")
                 eid = next(iter(selected))
-                t = SceneManager.GetEntityTransform(eid)
+                t = SceneManager._current().GetEntityTransform(eid)
                 entity_pos = np.array(
                     [t.position_x, t.position_y, t.position_z], dtype=np.float32)
                 print(f"  [DBG-TEST] entity_pos=({entity_pos[0]:.2f},{entity_pos[1]:.2f},{entity_pos[2]:.2f})")
                 print(f"  [DBG-TEST] cam_pos=({cam.position[0]:.2f},{cam.position[1]:.2f},{cam.position[2]:.2f})")
                 print(f"  [DBG-TEST] vp={vp_w}x{vp_h}")
                 eid = next(iter(selected))
-                t = SceneManager.GetEntityTransform(eid)
+                t = SceneManager._current().GetEntityTransform(eid)
                 entity_pos = np.array(
                     [t.position_x, t.position_y, t.position_z], dtype=np.float32)
 
@@ -228,7 +228,7 @@ def main():
                 print(f"  [DBG-TEST] on_drag: applying pos=({new_pos[0]:.2f},{new_pos[1]:.2f},{new_pos[2]:.2f})")
                 selected_id = next(iter(selected)) if selected else None
                 if selected_id is not None:
-                    SceneManager.SetEntityTransform(
+                    SceneManager._current().SetEntityTransform(
                         selected_id,
                         position_xyz=(float(new_pos[0]), float(new_pos[1]), float(new_pos[2])))
                     TransformGizmo.set_target_position(new_pos)

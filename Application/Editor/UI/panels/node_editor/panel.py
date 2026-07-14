@@ -267,9 +267,8 @@ class NodeEditorPanel(BasePanel):
 
         try:
             st = SceneManager._state_for("EditorHost")
-            st._switch_world()
         except Exception as e:
-            print(f"[NodeEditor] _ensure_default_scene: world switch failed ({e})")
+            print(f"[NodeEditor] _ensure_default_scene: SceneManager unavailable ({e})")
             return
 
         scene = EditorHost.get_active_scene()

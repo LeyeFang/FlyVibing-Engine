@@ -222,11 +222,13 @@ class ScenePanel(BasePanel):
         spacing = imgui.get_style().item_spacing.x
         btn_w = (av - spacing * 2) / 3.0
 
-        # ▶ Run — 绿色
+        # ▶ Run — 绿色（仅在停止状态可用）
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*SUCCESS_GREEN, 1.00))
+        imgui.begin_disabled(not self._sim_ctrl.is_stopped())
         if imgui.button(f"{fa.ICON_FA_PLAY}  Run", (btn_w, 0)):
             self._sim_ctrl.play()
+        imgui.end_disabled()
         imgui.pop_style_color(1)
 
         imgui.same_line()

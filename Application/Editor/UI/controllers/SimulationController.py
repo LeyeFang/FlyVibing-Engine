@@ -147,11 +147,7 @@ class SimulationController:
             window_type=EditorHost.window_type or WindowType.GLFW,
             renderer_type=EditorHost.renderer_type or RendererType.OpenGL
         )
-        # ★ PIE 启动完成后切回 EditorHost 的 ECS 世界 + 线程绑定
-        #    (Engine.init() 会将主线程绑定到 GameRuntime — 必须还原)
-        from Application.Core.Scene.SceneManager import SceneManager
-        EditorHost.scene._switch_world()
-        SceneManager.set_thread_active("EditorHost")
+        # ★ PIE 启动完成
         cls._state = SimulationState.RUNNING
         EngineLifecycleEvent.Pack(
             stage="simulation", message="Runtime started", engine=EditorHost
@@ -191,10 +187,6 @@ class SimulationController:
 
         from Application.Runtime.GameRuntime import GameRuntime
         GameRuntime.stop()
-        # ★ PIE 停止后切回 EditorHost 的 ECS 世界
-        EditorHost.scene._switch_world()
-        from Application.Core.Scene.SceneManager import SceneManager
-        SceneManager.set_thread_active("EditorHost")  # 过渡期：线程绑定
         cls._state = SimulationState.STOPPED
         EngineLifecycleEvent.Pack(
             stage="simulation", message="Runtime stopped", engine=EditorHost

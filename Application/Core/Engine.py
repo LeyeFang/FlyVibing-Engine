@@ -286,8 +286,6 @@ class Engine:
         ResourceManager.Init(cls)
         SceneManager.Init(cls)
         cls.scene = SceneManager._state_for(cls.__name__)  # ★ Engine 直接持有实例
-        # 将当前线程绑定到本 Engine 的场景（多线程安全 — 过渡期）
-        SceneManager.set_thread_active(cls.__name__)
         # 4. 创建窗口（子类决定窗口类型）
         cls.window = cls._create_window()
         cls.window._engine = cls  # 窗口知道谁拥有它，事件路由到正确的 Engine
@@ -387,7 +385,6 @@ class Engine:
         不调用任何 GLFW 函数。窗口事件和生命周期全部由主线程管理。
         本线程仅执行游戏逻辑更新。
         """
-        SceneManager.set_thread_active(cls.__name__)  # 线程绑定
         cls._state()['run_ready'].set()
         while cls.run_state:
             cls._tick_timing()
@@ -535,7 +532,6 @@ class Engine:
     @classmethod
     def _render_loop(cls) -> None:
         """渲染线程入口 — 创建渲染器 → 等待 run_ready → 进入渲染循环。"""
-        SceneManager.set_thread_active(cls.__name__)  # 线程绑定
         try:
             cls.renderer = cls._create_renderer(engine=cls)
             cls._state()['renderer_ready'].set()

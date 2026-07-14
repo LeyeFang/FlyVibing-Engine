@@ -174,12 +174,10 @@ def main():
     BindPackCallback(lambda e: None)
     ResourceManager.Init(mock_app)
     SceneManager.Init(mock_app)
-    SceneManager.set_thread_active("MockApp")
 
     # ★ 为 EditorHost 初始化 SceneManager（ScenePanel 依赖 EditorHost.scene）
     SceneManager.Init(EditorHost)
     EditorHost.scene = SceneManager._state_for("EditorHost")
-    SceneManager.set_thread_active("EditorHost")
 
     # ── 3. ImGui ──
     imgui.create_context()

@@ -41,19 +41,25 @@ class OpenGLEntities:
         has_outline = bool(r._outline_selected_ids)
         last_program: int = 0  # ★ 缓存最后使用的 shader program，避免冗余切换
 
-        # ★ 从渲染器内部 visible set 遍历，跳过 render_visible=False 的实体
-        for entity_id in list(r._resources._visible_entities):
+        # ── 收集可渲染实体 ──
+        visible_entities: list[tuple[int, object]] = []
+        for entity_id in r._resources._visible_entities:
             entity = r.registered_entities.get(entity_id)
             if entity is None:
                 r._resources._visible_entities.discard(entity_id)
                 continue
-            if not entity.render_visible:       # ★ MeshRenderer.visible=False → 不画
+            if not entity.render_visible:
                 continue
-
             if entity.shader_id not in r.registered_shaders:
                 continue
             if entity.mesh_id not in r.registered_meshes:
                 continue
+            visible_entities.append((entity_id, entity))
+
+        # ★ 按 shader_id → material_id 排序，最大化 GPU 状态复用
+        visible_entities.sort(key=lambda item: (item[1].shader_id, item[1].material_id))
+
+        for entity_id, entity in visible_entities:
 
             if has_outline:
                 if entity_id in r._outline_selected_ids:

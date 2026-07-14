@@ -47,6 +47,7 @@ from Application.Editor.EditorEvent import (
     OverlayRegisteredEvent,
     OverlayUnregisteredEvent,
 )
+from Application.Editor.EditorHost import EditorHost
 
 
 # ════════════════════════════════════════════════════════════════

@@ -780,8 +780,8 @@ class ScenePanel(BasePanel):
                 min(rgba[2]*1.2, 1.0), 1.0))
             imgui.push_style_color(imgui.Col_.button_active, imgui.ImVec4(*rgba))
             if imgui.button(f"##preset_{name}", (16, 16)):
-                ResourceManager.SetMaterialColor(
-                    info['material_id'], *rgba)
+                self._browser_ctrl.set_material_color(
+                    entity_id, *rgba)
             imgui.pop_style_color(3)
             # tooltip on hover
             if imgui.is_item_hovered():
@@ -797,7 +797,7 @@ class ScenePanel(BasePanel):
             flags=imgui.ColorEditFlags_.display_hsv | imgui.ColorEditFlags_.float,
         )
         if changed:
-            ResourceManager.SetMaterialColor(info['material_id'], *new_color)
+            self._browser_ctrl.set_material_color(entity_id, *new_color)
 
     def _draw_add_component(self, entity_id: int) -> None:
         """绘制 'Add Component' 下拉按钮 — 列出所有已注册但未添加的 Component。"""

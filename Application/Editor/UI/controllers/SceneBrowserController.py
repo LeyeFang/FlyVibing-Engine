@@ -426,9 +426,12 @@ class SceneBrowserController:
     def set_material_name(cls, entity_id: int, new_name: str) -> None:
         """设置 material 名称并标记为已修改。"""
         try:
-            mid = EditorHost.scene.GetEntityMaterial(entity_id)
+            from Application.Core.Scene.BasicComponents import MeshRenderer
+            import esper
+            mr = esper.component_for_entity(entity_id, MeshRenderer)
+            SceneManager._ensure_unique_material(EditorHost.scene, entity_id, mr)
             from Application.Resource.ResourceManager import ResourceManager
-            mat = ResourceManager.GetMaterial(mid)
+            mat = ResourceManager.GetMaterial(mr.material_id)
             if mat.name != new_name:
                 mat.name = new_name
                 mat.mark_modified()
@@ -439,13 +442,23 @@ class SceneBrowserController:
     def set_material_shader(cls, entity_id: int, shader_id: int) -> None:
         """切换 material 的 shader 并标记修改。"""
         try:
-            mid = EditorHost.scene.GetEntityMaterial(entity_id)
+            EditorHost.scene.SetEntityShader(entity_id, shader_id)
+        except Exception:
+            pass
+
+    @classmethod
+    def set_material_color(cls, entity_id: int, r: float, g: float, b: float, a: float = 1.0) -> None:
+        """设置 material 的 uColor（自动确保 material 独享，不影响其他 entity）。"""
+        try:
+            from Application.Core.Scene.BasicComponents import MeshRenderer
+            import esper
+            mr = esper.component_for_entity(entity_id, MeshRenderer)
+            # ★ 先确保 material 不与其他 entity 共享
+            SceneManager._ensure_unique_material(EditorHost.scene, entity_id, mr)
             from Application.Resource.ResourceManager import ResourceManager
-            mat = ResourceManager.GetMaterial(mid)
-            shader = ResourceManager.GetShader(shader_id)
-            mat.set_new_shader(shader_id, shader.uniforms_name_type)
+            ResourceManager.SetMaterialColor(mr.material_id, r, g, b, a)
+            mat = ResourceManager.GetMaterial(mr.material_id)
             mat.mark_modified()
-            EditorHost.scene.SetEntityMaterial(entity_id, mid)
         except Exception:
             pass
 

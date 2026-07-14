@@ -303,6 +303,9 @@ void main() {
         if not pickable:
             self._finalize_pick_read()
             return
+        # ★ 清 depth：与视觉渲染一致（screen-space overlay 始终在最前），
+        #   避免 entity depth 遮挡 gizmo 导致 pick 失败
+        gl.glClear(gl.GL_DEPTH_BUFFER_BIT)
         vp_mat = np.ascontiguousarray((proj @ view).astype('float32'))
         gl.glUseProgram(self._overlay_pick_prog)
         loc_model = gl.glGetUniformLocation(self._overlay_pick_prog, 'uModel')

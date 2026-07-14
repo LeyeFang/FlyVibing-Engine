@@ -348,6 +348,7 @@ class SceneManager:
         material = ResourceManager.GetMaterial(mr.material_id)
         uniforms_name_type = ResourceManager.GetShader(shader_id).uniforms_name_type
         material.set_new_shader(shader_id, uniforms_name_type)
+        material.mark_modified()
         _renderer = getattr(st.app, 'renderer', None)
         if _renderer is not None:
             _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
@@ -355,9 +356,13 @@ class SceneManager:
 
     def SetMaterialParams(self, entity_id: int, params: dict) -> None:
         st = self
+        from Application.Resource.ResourceManager import ResourceManager
         mr = esper.component_for_entity(entity_id, MeshRenderer)
         SceneManager._ensure_unique_material(st, entity_id, mr)
         self.xform_mgr.set_material_params(entity_id, params)
+        mat = ResourceManager.GetMaterial(mr.material_id)
+        if mat is not None:
+            mat.mark_modified()
 
     def SetCameraProperties(self, entity_id: int, **kwargs) -> None:
         self.xform_mgr.set_camera_properties(entity_id, **kwargs)

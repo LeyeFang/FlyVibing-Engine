@@ -25,6 +25,10 @@ class StubWindow(Window):
         return (1, 1)
 
     @classmethod
+    def SetTitle(cls, title: str) -> None:
+        pass  # stub: no window to title
+
+    @classmethod
     def SwapBuffer(cls):
         pass
 

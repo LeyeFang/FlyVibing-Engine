@@ -46,6 +46,12 @@ class glfwWindow(Window):
         return glfw.get_framebuffer_size(cls.glfw_window)
 
     @classmethod
+    def SetTitle(cls, title: str) -> None:
+        """设置窗口标题。"""
+        if cls.glfw_window is not None:
+            glfw.set_window_title(cls.glfw_window, title)
+
+    @classmethod
     def GetNativeHandle(cls):
         """返回 GLFW 原生窗口句柄 (GLFWwindow 指针)。"""
         return cls.glfw_window

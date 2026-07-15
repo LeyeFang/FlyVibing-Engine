@@ -95,6 +95,10 @@ class EditorLayer(Layer):
         # ── 注册选中变化回调 → 自动 invalidate camera gizmo ──
         from Application.Editor.UI.controllers.SelectionController import SelectionController
         SelectionController.register_selection_callback(cls.invalidate_camera_gizmos)
+        # ── 启动时自动创建新 Project（仅内存，未保存）──
+        from Application.Editor.ProjectManager import ProjectManager
+        if not ProjectManager.is_open():
+            ProjectManager.create_new("Untitled")
 
     @classmethod
     def OnDetach(cls):
@@ -455,11 +459,15 @@ class EditorLayer(Layer):
             else:
                 print(f"[EditorLayer] Click → Overlay '{pick_value}'  ({dt:.3f}ms)")
         else:
-            print(f"[EditorLayer] Click → nothing  ({dt:.3f}ms)")
             SelectionController.clear()
 
     @classmethod
     def OnUpdate(cls):
+        # ── 首次 OnUpdate: 主线程安全同步窗口标题 ──
+        if not getattr(cls, '_title_synced', False):
+            cls._title_synced = True
+            from Application.Editor.ProjectManager import ProjectManager
+            ProjectManager._update_window_title()
         # ── 消费延迟的 PIE 启动/停止请求 (主线程执行 GLFW 窗口操作) ──
         from Application.Editor.UI.controllers.SimulationController import SimulationController
         SimulationController._try_consume_start()

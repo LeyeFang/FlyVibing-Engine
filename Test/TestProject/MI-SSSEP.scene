@@ -93,7 +93,7 @@
         }
       },
       "4": {
-        "name": "left",
+        "name": "Left",
         "components": {
           "Transform": {
             "position_x": -8.0,
@@ -102,7 +102,7 @@
             "rotation_x": 0,
             "rotation_y": 0,
             "rotation_z": 0,
-            "scale_x": 3.0,
+            "scale_x": 2.0,
             "scale_y": 1.0,
             "scale_z": 1.0,
             "local_pos_x": -8.0,
@@ -111,7 +111,7 @@
             "local_rot_x": 0,
             "local_rot_y": 0,
             "local_rot_z": 0,
-            "local_scl_x": 3.0,
+            "local_scl_x": 2.0,
             "local_scl_y": 1.0,
             "local_scl_z": 1.0
           },
@@ -123,38 +123,7 @@
         }
       },
       "5": {
-        "name": "cue_left",
-        "components": {
-          "Transform": {
-            "position_x": -8.0,
-            "position_y": 0.0,
-            "position_z": 2.0,
-            "rotation_x": 0,
-            "rotation_y": 0,
-            "rotation_z": 0,
-            "scale_x": 3.0,
-            "scale_y": 1.0,
-            "scale_z": 0.5,
-            "local_pos_x": 0.0,
-            "local_pos_y": 0.0,
-            "local_pos_z": 2.0,
-            "local_rot_x": 0,
-            "local_rot_y": 0,
-            "local_rot_z": 0,
-            "local_scl_x": 1.0,
-            "local_scl_y": 1.0,
-            "local_scl_z": 0.5
-          },
-          "MeshRenderer": {
-            "mesh_id": 1,
-            "material_id": 4,
-            "visible": true
-          }
-        },
-        "parent_id": 4
-      },
-      "6": {
-        "name": "right",
+        "name": "Right",
         "components": {
           "Transform": {
             "position_x": 8.0,
@@ -163,7 +132,7 @@
             "rotation_x": 0,
             "rotation_y": 0,
             "rotation_z": 0,
-            "scale_x": 3.0,
+            "scale_x": 2.0,
             "scale_y": 1.0,
             "scale_z": 1.0,
             "local_pos_x": 8.0,
@@ -172,7 +141,7 @@
             "local_rot_x": 0,
             "local_rot_y": 0,
             "local_rot_z": 0,
-            "local_scl_x": 3.0,
+            "local_scl_x": 2.0,
             "local_scl_y": 1.0,
             "local_scl_z": 1.0
           },
@@ -183,19 +152,19 @@
           }
         }
       },
-      "7": {
-        "name": "cue_right",
+      "6": {
+        "name": "left_cue",
         "components": {
           "Transform": {
-            "position_x": 8.0,
+            "position_x": -8.0,
             "position_y": 0.0,
             "position_z": 2.0,
             "rotation_x": 0,
             "rotation_y": 0,
             "rotation_z": 0,
-            "scale_x": 3.0,
+            "scale_x": 1.0,
             "scale_y": 1.0,
-            "scale_z": 0.5,
+            "scale_z": 0.3499999940395355,
             "local_pos_x": 0.0,
             "local_pos_y": 0.0,
             "local_pos_z": 2.0,
@@ -204,42 +173,73 @@
             "local_rot_z": 0,
             "local_scl_x": 1.0,
             "local_scl_y": 1.0,
-            "local_scl_z": 0.5
+            "local_scl_z": 0.3499999940395355
           },
           "MeshRenderer": {
             "mesh_id": 1,
-            "material_id": 7,
+            "material_id": 2,
             "visible": true
           }
         },
-        "parent_id": 6
+        "parent_id": 4
+      },
+      "7": {
+        "name": "right_cue",
+        "components": {
+          "Transform": {
+            "position_x": 8.0,
+            "position_y": 0.0,
+            "position_z": 2.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 2.0,
+            "scale_y": 1.0,
+            "scale_z": 0.3499999940395355,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 2.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.3499999940395355
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 2,
+            "visible": true
+          }
+        },
+        "parent_id": 5
       },
       "8": {
-        "name": "task_cue",
+        "name": "Task_Cue",
         "components": {
           "Transform": {
             "position_x": 0.0,
             "position_y": 0.0,
-            "position_z": 3.5,
+            "position_z": 3.0,
             "rotation_x": 0,
             "rotation_y": 0,
             "rotation_z": 0,
-            "scale_x": 11.0,
+            "scale_x": 10.0,
             "scale_y": 1.0,
-            "scale_z": 0.5,
+            "scale_z": 0.3499999940395355,
             "local_pos_x": 0.0,
             "local_pos_y": 0.0,
-            "local_pos_z": 3.5,
+            "local_pos_z": 3.0,
             "local_rot_x": 0,
             "local_rot_y": 0,
             "local_rot_z": 0,
-            "local_scl_x": 11.0,
+            "local_scl_x": 10.0,
             "local_scl_y": 1.0,
-            "local_scl_z": 0.5
+            "local_scl_z": 0.3499999940395355
           },
           "MeshRenderer": {
             "mesh_id": 1,
-            "material_id": 5,
+            "material_id": 3,
             "visible": true
           }
         }

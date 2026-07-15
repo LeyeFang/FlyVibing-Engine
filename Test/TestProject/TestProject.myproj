@@ -1,0 +1,11 @@
+{
+  "version": "0.1.0",
+  "name": "TestProject",
+  "startup_scene": "MI-SSSEP.scene",
+  "resources": {
+    "materials": [],
+    "shaders": [],
+    "textures": [],
+    "meshes": []
+  }
+}

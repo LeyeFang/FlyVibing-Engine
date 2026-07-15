@@ -81,10 +81,11 @@ class ResourceBrowserController:
         if filter_type is None or filter_type == cls.TYPE_MATERIAL:
             for id_str, mat in ResourceManager.loaded_material.items():
                 mid = int(id_str)
+                mat_name = getattr(mat, 'name', '') or f"Material #{mid}"
                 shader_id = getattr(mat, 'shader_id', '?')
                 result.append({
                     'id': mid,
-                    'name': f"Material #{mid}",
+                    'name': mat_name,
                     'type': cls.TYPE_MATERIAL,
                     'path': f"Shader: {shader_id}",
                 })
@@ -141,9 +142,9 @@ class ResourceBrowserController:
         result = []
         for id_str, data in ResourceManager.loaded_material.items():
             mid = int(id_str)
-            # Material 是 dataclass 对象，不是 dict
+            mat_name = getattr(data, 'name', '') or f"Material #{mid}"
             shader_id = getattr(data, 'shader_id', '?')
-            label = f"Material #{mid} (Shader: {shader_id})"
+            label = f"{mat_name} (Shader: {shader_id})"
             result.append((mid, label))
         return result
 

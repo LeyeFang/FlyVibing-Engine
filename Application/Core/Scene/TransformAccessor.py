@@ -171,15 +171,24 @@ class TransformAccessor:
             mr = esper.component_for_entity(entity_id, MeshRenderer)
         except KeyError:
             return
+        needs_reregister = False
         if mesh_id is not None:
             mr.mesh_id = mesh_id
+            needs_reregister = True
         if material_id is not None:
             mr.material_id = material_id
+            needs_reregister = True
         if visible is not None:
             mr.visible = visible
+        if needs_reregister or visible is not None:
             _renderer = getattr(st.app, 'renderer', None)
             if _renderer is not None:
-                _renderer.enqueue(EntityRenderVisibleCommand(entity_id, visible=visible))
+                if needs_reregister:
+                    _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
+                else:
+                    _renderer.enqueue(EntityRenderVisibleCommand(entity_id, visible=visible))
+        if needs_reregister:
+            ComponentModifiedEvent.Pack(entity_id, mr, engine=st.app)
 
     # ════════════════════════════════════════════════════════════
     # Camera 属性

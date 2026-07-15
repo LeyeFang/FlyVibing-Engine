@@ -35,7 +35,7 @@ _TYPE_ICON = {
     "mesh":     fa.ICON_FA_CUBE,
     "shader":   fa.ICON_FA_FILE_CODE,
     "texture":  fa.ICON_FA_IMAGE,
-    "material": fa.ICON_FA_PALETTE,
+    "material": fa.ICON_FA_CIRCLE,
 }
 
 _TYPE_LABEL = {
@@ -71,13 +71,29 @@ class ResourcePanel(BasePanel):
 
     def __init__(self) -> None:
         super().__init__()
-        self.visible = False
+        self.visible = True
         self._resource_ctrl = get_ctrl(NAME_RESOURCE_BROWSER)
         # ── 面板状态 ──
         self._active_tab: int = 0       # 0=All, 1=Mesh, 2=Shader, 3=Texture, 4=Material
         self._search_filter: str = ""
         self._selected_id: int | None = None
         self._selected_type: str | None = None
+
+    @staticmethod
+    def _on_import_material(file_path: str) -> None:
+        """FileDialog 回调: 从 .mat 文件加载材质到 ResourceManager。"""
+        if not file_path:
+            return
+        try:
+            from Application.Resource.Material import Material
+            from Application.Resource.ResourceManager import ResourceManager
+            mat = Material.load_from_file(file_path)
+            new_mid = ResourceManager.material_count + 1
+            ResourceManager.material_count = new_mid
+            ResourceManager.loaded_material[str(new_mid)] = mat
+            print(f"[Resource] Imported Material '{mat.name}' → #{new_mid}")
+        except Exception as e:
+            print(f"[Resource] Failed to import material: {e}")
 
     # ============================================================
     # 主绘制入口
@@ -111,14 +127,18 @@ class ResourcePanel(BasePanel):
         if imgui.begin_popup("##import_popup"):
             imgui.text_disabled("Import Asset")
             imgui.separator()
-            if imgui.menu_item(f"{fa.ICON_FA_CUBE}  Mesh...")[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_CUBE}  Mesh...", "", False, True)[0]:
                 FileDialog.open_mesh(ImportService.load_mesh)
                 imgui.close_current_popup()
-            if imgui.menu_item(f"{fa.ICON_FA_FILE_CODE}  Shader...")[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_FILE_CODE}  Shader...", "", False, True)[0]:
                 FileDialog.open_shader(ImportService.load_shader)
                 imgui.close_current_popup()
-            if imgui.menu_item(f"{fa.ICON_FA_IMAGE}  Texture...")[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_IMAGE}  Texture...", "", False, True)[0]:
                 FileDialog.open_texture(ImportService.load_texture)
+                imgui.close_current_popup()
+            imgui.separator()
+            if imgui.menu_item(f"{fa.ICON_FA_CIRCLE}  Material...", "", False, True)[0]:
+                FileDialog.open_mat(callback=self._on_import_material)
                 imgui.close_current_popup()
             imgui.end_popup()
 
@@ -169,11 +189,11 @@ class ResourcePanel(BasePanel):
     def _draw_category_tabs(self) -> None:
         """绘制分类标签页: All | Meshes | Shaders | Textures | Materials"""
         tab_defs = [
-            (fa.ICON_FA_BORDER_ALL,  "All"),
+            ("",                       "All"),
             (fa.ICON_FA_CUBE,        "Meshes"),
             (fa.ICON_FA_FILE_CODE,   "Shaders"),
             (fa.ICON_FA_IMAGE,       "Textures"),
-            (fa.ICON_FA_PALETTE,     "Materials"),
+            (fa.ICON_FA_CIRCLE,      "Materials"),
         ]
         tab_count = len(tab_defs)
         av = imgui.get_content_region_avail().x
@@ -183,14 +203,15 @@ class ResourcePanel(BasePanel):
         for i, (icon, label) in enumerate(tab_defs):
             if i > 0:
                 imgui.same_line()
-            if self._active_tab == i:
+            was_active = (self._active_tab == i)
+            if was_active:
                 imgui.push_style_color(
                     imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.40))
-            if imgui.button(f"{icon}  {label}", (tab_w, 0)):
+            if imgui.button(f"{icon}{'  ' if icon else ''}{label}", (tab_w, 0)):
                 self._active_tab = i
                 self._selected_id = None
                 self._selected_type = None
-            if self._active_tab == i:
+            if was_active:
                 imgui.pop_style_color(1)
 
     # ============================================================
@@ -227,9 +248,9 @@ class ResourcePanel(BasePanel):
 
         # ── 右键空白区域 ──
         if imgui.begin_popup_context_window("##grid_ctx", 1):
-            if imgui.menu_item(f"{fa.ICON_FA_FOLDER_OPEN}  Import...")[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_FOLDER_OPEN}  Import...", "", False, True)[0]:
                 imgui.open_popup("##import_popup")
-            if imgui.menu_item(f"{fa.ICON_FA_PLUS}  New Material")[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_PLUS}  New Material", "", False, True)[0]:
                 mid = self._resource_ctrl.new_material()
                 self._selected_type = "material"
                 self._selected_id = mid
@@ -300,7 +321,7 @@ class ResourcePanel(BasePanel):
                 f"{icon}  {type_label}: {rname}",
             )
             imgui.separator()
-            if imgui.menu_item(f"{fa.ICON_FA_TRASH}  Delete")[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_TRASH}  Delete", "", False, True)[0]:
                 ok = self._resource_ctrl.delete_resource(rtype, rid)
                 if ok:
                     if is_selected:

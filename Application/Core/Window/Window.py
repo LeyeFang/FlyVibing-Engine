@@ -88,6 +88,12 @@ class Window(ABC):
 
     @classmethod
     @abstractmethod
+    def SetTitle(cls, title: str) -> None:
+        """设置窗口标题栏文字。"""
+        ...
+
+    @classmethod
+    @abstractmethod
     def GetNativeHandle(cls):
         """返回平台原生窗口句柄。
 

@@ -390,7 +390,11 @@ class ResourceManager:
         cls,
         material_id: int
     ) -> Material:
-        return cls.loaded_material[f"{material_id}"]
+        key = f"{material_id}"
+        if key not in cls.loaded_material:
+            print(f"[Resource] WARNING: Material #{material_id} not found, falling back to default")
+            return cls.loaded_material["1"]  # default material
+        return cls.loaded_material[key]
 
     @classmethod
     def NewMaterial(

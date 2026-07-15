@@ -23,6 +23,8 @@ mask_events = [
     ScrollerEvent,
     SceneCameraUpdateEvent,
     PerformanceStatsEvent,
+    KeyboardButtonEvent,
+    ComponentModifiedEvent,
 ]
 
 

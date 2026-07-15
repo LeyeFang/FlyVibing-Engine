@@ -58,7 +58,13 @@ class ScenePanel(BasePanel):
         """FileDialog 回调: 保存 material 到 .mat 文件。"""
         from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
         if file_path:
+            if not file_path.endswith(".mat"):
+                file_path += ".mat"
             SceneBrowserController.save_material_to_file(entity_id, file_path)
+            # ★ 自动注册到项目
+            from Application.Editor.ProjectManager import ProjectManager
+            if ProjectManager.is_open():
+                ProjectManager.register_material(file_path)
 
     @staticmethod
     def _on_mat_load(entity_id: int, file_path: str) -> None:
@@ -93,6 +99,10 @@ class ScenePanel(BasePanel):
         ok = EditorHost.save_active_scene_to_file(path)
         if ok:
             print(f"[ScenePanel] Scene saved to: {path}")
+            # ★ 自动设为项目启动场景
+            from Application.Editor.ProjectManager import ProjectManager
+            if ProjectManager.is_open():
+                ProjectManager.set_startup_scene(path)
         else:
             print(f"[ScenePanel] ERROR: Failed to save scene to: {path}")
 
@@ -632,13 +642,14 @@ class ScenePanel(BasePanel):
         """绘制 Material 子区域。
 
         层级:
-          Material Name: *MyMat   [Save] [Load]   ← 只读标签 + 按钮
-          Name:  [MyMat          ]                ← 可编辑
+          Material: [下拉选已有材质]  [💾]    ← 选择 + 保存图标
+          Name:  [MyMat          ]             ← 可编辑
           Shader / Textures / Uniforms
         """
         from Application.Resource.ResourceManager import ResourceManager
         shader_options = self._resource_ctrl.get_shader_options()
         tex_options = self._resource_ctrl.get_texture_options()
+        mat_options = self._resource_ctrl.get_material_options()
 
         current_mat_id = summary.material_id or 0
         info = self._browser_ctrl.get_entity_material_info(entity_id)
@@ -651,32 +662,41 @@ class ScenePanel(BasePanel):
         current_name = info.get('material_name', 'Untitled')
         file_path = info.get('file_path', '')
 
-        # ── Material Name 只读行 + Save / Load ──
-        imgui.text("Material Name:")
-        imgui.same_line()
-        imgui.text_colored(
-            imgui.ImVec4(*BLENDER_ORANGE, 1.00), display_name)
-        imgui.same_line()
+        # ── Material 下拉选择 + 保存图标 ──
+        mat_names = {mid: name for mid, name in mat_options}
+        current_mat_label = mat_names.get(current_mat_id, display_name)
+        if imgui.begin_combo("Material##mat_select", current_mat_label):
+            for mid, mname in mat_options:
+                selected = (mid == current_mat_id)
+                if imgui.selectable(f"{mname}##mat_opt_{mid}", selected)[0]:
+                    self._browser_ctrl.set_entity_material(entity_id, mid)
+                if selected:
+                    imgui.set_item_default_focus()
+            imgui.end_combo()
 
-        _btn_w = 55
-        can_save = not is_saved
-        if not can_save:
+        # ── 保存图标按钮 ──
+        imgui.same_line()
+        if is_saved:
             imgui.begin_disabled(True)
-        save_label = "Save As" if (not is_saved and file_path == "") else "Save"
-        if imgui.button(f"{save_label}##mat_save_{entity_id}", (_btn_w, 0)):
+        if imgui.small_button(f"{fa.ICON_FA_FLOPPY_DISK}##mat_save_{entity_id}"):
             default_name = f"{current_name}.mat" if current_name else "material.mat"
+            # ★ 默认保存到项目 Materials 目录
+            from Application.Editor.ProjectManager import ProjectManager
+            start_dir = None
+            if ProjectManager.is_open():
+                import os
+                proj_dir = ProjectManager.get_project_dir()
+                mat_dir = os.path.join(proj_dir, "Materials")
+                start_dir = mat_dir
             FileDialog.save_mat(
                 callback=lambda p: self._on_mat_save(entity_id, p),
                 default_name=default_name,
+                start_dir=start_dir,
             )
-        if not can_save:
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Save material to .mat file")
+        if is_saved:
             imgui.end_disabled()
-
-        imgui.same_line()
-        if imgui.button(f"Load##mat_load_{entity_id}", (_btn_w, 0)):
-            FileDialog.open_mat(
-                callback=lambda p: self._on_mat_load(entity_id, p),
-            )
 
         # ── Name 可编辑 ──
         changed, new_name = imgui.input_text("Name##mat_name", current_name, 64)

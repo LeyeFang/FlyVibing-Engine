@@ -150,6 +150,12 @@ class Engine:
     scene: 'SceneManager' = None                       # SceneManager 实例 (init 时赋值)
     window: Window = None
     renderer: Renderer = None
+
+    @classmethod
+    def get_window(cls) -> Window | None:
+        """返回当前 Engine 的窗口实例（公共接口）。"""
+        return cls.window
+
     window_type: WindowType = None
     renderer_type: RendererType = None
     run_state: bool = True

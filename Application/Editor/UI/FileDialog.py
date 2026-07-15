@@ -71,6 +71,13 @@ SCENE_FILTERS: list[str] = [
     "*",
 ]
 
+PROJ_FILTERS: list[str] = [
+    "Project Files",
+    "*.myproj",
+    "All Files",
+    "*",
+]
+
 
 # ════════════════════════════════════════════════════════════════
 # 目录记忆 — 轻量 JSON 持久化
@@ -301,6 +308,38 @@ class FileDialog:
         )
         cls._callback = callback
         cls._active_type = "scene_save"
+
+    @classmethod
+    def open_project(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+    ) -> None:
+        """打开"打开项目"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("project_open")
+        cls._active_dialog = pfd.open_file(
+            "Open Project", d, PROJ_FILTERS, pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "project_open"
+
+    @classmethod
+    def save_project(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+        default_name: str = "MyProject.myproj",
+    ) -> None:
+        """打开"保存项目"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("project_save")
+        cls._active_dialog = pfd.save_file(
+            "Save Project",
+            os.path.join(d, default_name),
+            PROJ_FILTERS,
+            pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "project_save"
 
     # ============================================================
     # 每帧轮询 (在 UIManager.draw_all 末尾调用)

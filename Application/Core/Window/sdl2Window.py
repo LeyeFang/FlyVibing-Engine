@@ -52,6 +52,12 @@ class sdl2Window(Window):
         return (w.value, h.value)
 
     @classmethod
+    def SetTitle(cls, title: str) -> None:
+        """设置窗口标题。"""
+        if cls.sdl2_window is not None:
+            sdl2.SDL_SetWindowTitle(cls.sdl2_window, title.encode('utf-8'))
+
+    @classmethod
     def GetNativeHandle(cls):
         """返回 SDL2 原生窗口句柄 (SDL_Window 指针)。"""
         return cls.sdl2_window

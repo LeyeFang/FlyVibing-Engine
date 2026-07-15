@@ -46,6 +46,13 @@ class ComponentRegistry:
         if esper.has_component(entity_id, comp_cls):
             return False
         instance = comp_cls()
+        # ★ MeshRenderer 默认 mesh 设为 Cube 而非 Square
+        if isinstance(instance, MeshRenderer):
+            from Application.Resource.ResourceManager import ResourceManager
+            try:
+                instance.mesh_id = ResourceManager.GetDefaultMesh('Cube')
+            except Exception:
+                pass  # fallback to default mesh_id=1
         self._mgr.entity_mgr.add_component(entity_id, instance)
         return True
 

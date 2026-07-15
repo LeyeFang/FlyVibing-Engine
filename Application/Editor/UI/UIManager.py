@@ -137,6 +137,61 @@ class UIManager:
         cls._draw_status_bar()
 
     # ============================================================
+    # Project 菜单回调
+    # ============================================================
+
+    @classmethod
+    def _on_new_project(cls) -> None:
+        """创建新项目 → 仅内存，不弹对话框。"""
+        from Application.Editor.ProjectManager import ProjectManager
+        ProjectManager.create_new("Untitled")
+
+    @classmethod
+    def _on_open_project(cls) -> None:
+        """打开已有项目 → 弹出打开对话框。"""
+        from Application.Editor.UI.FileDialog import FileDialog
+        FileDialog.open_project(
+            callback=lambda p: cls._do_open_project(p),
+        )
+
+    @classmethod
+    def _do_open_project(cls, path: str) -> None:
+        if not path:
+            return
+        from Application.Editor.ProjectManager import ProjectManager
+        ProjectManager.open_project(path)
+
+    @classmethod
+    def _on_save_project(cls) -> None:
+        from Application.Editor.ProjectManager import ProjectManager
+        ProjectManager.save_project()
+
+    @classmethod
+    def _on_save_as_project(cls) -> None:
+        """另存为 → 弹出保存对话框。"""
+        from Application.Editor.UI.FileDialog import FileDialog
+        from Application.Editor.ProjectManager import ProjectManager
+        default_name = f"{ProjectManager.get_project_name()}.myproj"
+        FileDialog.save_project(
+            callback=lambda p: cls._do_save_as_project(p),
+            default_name=default_name,
+        )
+
+    @classmethod
+    def _do_save_as_project(cls, path: str) -> None:
+        if not path:
+            return
+        from Application.Editor.ProjectManager import ProjectManager
+        ProjectManager.save_project_as(path)
+
+    @classmethod
+    def _on_exit(cls) -> None:
+        """退出应用 — 通过 WindowCloseEvent 走与关闭窗口相同的逻辑。"""
+        from Application.Core.Events.WindowEvent import WindowCloseEvent
+        from Application.Editor.EditorHost import EditorHost
+        WindowCloseEvent.Pack(engine=EditorHost)
+
+    # ============================================================
     # 菜单栏（内联在 MainDockSpace 中）
     # ============================================================
 
@@ -152,18 +207,24 @@ class UIManager:
 
             # ── File 菜单 ──
             if imgui.begin_menu("File", True):
-                if imgui.menu_item("New Scene", "Ctrl+N", False, False)[0]:
-                    pass
-                if imgui.menu_item("Open Scene...", "Ctrl+O", False, False)[0]:
-                    pass
+                if imgui.menu_item("New Project", "", False, True)[0]:
+                    cls._on_new_project()
+                if imgui.menu_item("Open Project...", "", False, True)[0]:
+                    cls._on_open_project()
                 imgui.separator()
-                if imgui.menu_item("Save Scene", "Ctrl+S", False, False)[0]:
-                    pass
-                if imgui.menu_item("Save As...", "Ctrl+Shift+S", False, False)[0]:
-                    pass
+                from Application.Editor.ProjectManager import ProjectManager
+                has_path = bool(ProjectManager.is_open() and ProjectManager.get_project_dir())
+                if not has_path:
+                    imgui.begin_disabled(True)
+                if imgui.menu_item("Save Project", "Ctrl+S", False, True)[0]:
+                    cls._on_save_project()
+                if not has_path:
+                    imgui.end_disabled()
+                if imgui.menu_item("Save Project As...", "Ctrl+Shift+S", False, True)[0]:
+                    cls._on_save_as_project()
                 imgui.separator()
-                if imgui.menu_item("Exit", "Alt+F4", False, False)[0]:
-                    pass
+                if imgui.menu_item("Exit", "Alt+F4", False, True)[0]:
+                    cls._on_exit()
                 imgui.end_menu()
 
             # ── Edit 菜单 ──

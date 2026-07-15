@@ -73,6 +73,8 @@ class SceneSync:
 
         scene._next_eid = max_eid + 1 if max_eid > 0 else 1
         scene.main_camera_entity_id = st.main_camera_id
+        # ★ 同步 GameType（用户可能在 UI 切过 2D/3D）
+        scene.game_type = st.game_type
 
     # ════════════════════════════════════════════════════════════
     # Scene → esper (加载)

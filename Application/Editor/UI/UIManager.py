@@ -142,9 +142,69 @@ class UIManager:
 
     @classmethod
     def _on_new_project(cls) -> None:
-        """创建新项目 → 仅内存，不弹对话框。"""
+        """创建新项目 → 清空当前场景，恢复到默认状态。"""
         from Application.Editor.ProjectManager import ProjectManager
+        from Application.Editor.EditorHost import EditorHost
+
+        # 1. 清空 esper 数据库
+        import esper
+        try:
+            esper.clear_database()
+        except Exception:
+            pass
+
+        # 2. 重置 SceneManager 追踪数据
+        scene_mgr = EditorHost.scene
+        if scene_mgr is not None:
+            scene_mgr.entities.clear()
+            scene_mgr._entity_names.clear()
+            scene_mgr._entity_parent.clear()
+            scene_mgr._editor_visible.clear()
+            scene_mgr.scene_camera = None
+            scene_mgr.scene_camera_id = None
+
+        # 3. 重新创建默认实体（cameras + cube）
+        scene_mgr.cam_mgr.create_defaults(scene_mgr)
+        from Application.Core.Scene.SceneManager import SceneManager
+        SceneManager._create_default_cube(scene_mgr)
+
+        # 4. 清空渲染器命令队列 + 可见集合 + 注册新实体
+        renderer = getattr(EditorHost, 'renderer', None)
+        if renderer is not None:
+            # 清空待处理命令（避免旧 entity 的注册命令被执行）
+            if hasattr(renderer, '_command_queue') and renderer._command_queue is not None:
+                renderer._command_queue.dequeue_all()
+            # 清空可见集合
+            if hasattr(renderer, '_resources') and hasattr(renderer._resources, '_visible_entities'):
+                renderer._resources._visible_entities.clear()
+            # 清空已注册 entity（旧 VAO 引用）
+            if hasattr(renderer, 'registered_entities'):
+                renderer.registered_entities.clear()
+            # 注册默认实体
+            from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand
+            for eid_str in list(scene_mgr.entities.keys()):
+                renderer.enqueue(EntityRegistrationCommand(int(eid_str), register=True))
+
+        # 5. 创建新 Project（仅内存）
         ProjectManager.create_new("Untitled")
+        # ★ 主线程安全同步窗口标题
+        ProjectManager._update_window_title()
+
+        # 6. 重置视口到 3D
+        try:
+            from Application.Editor.UI.controllers.ViewportController import ViewportController
+            ViewportController.switch_to_3d()
+        except Exception:
+            pass
+
+        # 7. 清除选中
+        try:
+            from Application.Editor.UI.controllers.SelectionController import SelectionController
+            SelectionController.clear()
+        except Exception:
+            pass
+
+        print("[Project] New project created — all states reset to defaults")
 
     @classmethod
     def _on_open_project(cls) -> None:

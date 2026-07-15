@@ -92,6 +92,10 @@ class ResourcePanel(BasePanel):
             ResourceManager.material_count = new_mid
             ResourceManager.loaded_material[str(new_mid)] = mat
             print(f"[Resource] Imported Material '{mat.name}' → #{new_mid}")
+            # ★ 注册到项目，下次 Open Project 自动加载 + 重映射
+            from Application.Editor.ProjectManager import ProjectManager
+            if ProjectManager.is_open():
+                ProjectManager.register_material(file_path, new_mid)
         except Exception as e:
             print(f"[Resource] Failed to import material: {e}")
 

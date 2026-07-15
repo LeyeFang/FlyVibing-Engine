@@ -83,12 +83,12 @@ class ProjectManager:
             cls._is_saved = True
             cls._update_window_title()
             print(f"[Project] Opened: {cls._project_name}  ({len(cls._get_all_resource_paths())} resources)")
-            # ★ 自动加载所有资源
-            cls._load_all_resources()
-            # ★ 自动加载启动场景
+            # ★ 自动加载所有资源 → 获取 ID 映射
+            id_map = cls._load_all_resources()
+            # ★ 自动加载启动场景 → 重映射 material_id
             startup = cls._data.get("startup_scene", "")
             if startup:
-                cls._load_startup_scene(startup)
+                cls._load_startup_scene(startup, id_map)
             return True
         except Exception as e:
             print(f"[Project] Failed to open: {e}")
@@ -96,10 +96,11 @@ class ProjectManager:
 
     @classmethod
     def save_project(cls) -> bool:
-        """保存到当前路径。未保存过则返回 False。"""
+        """保存到当前路径。自动先保存场景。未保存过则返回 False。"""
         if not cls._project_path:
             print("[Project] Save failed: no path (use Save As first)")
             return False
+        cls._save_scene_if_needed()
         cls._save()
         cls._is_saved = True
         cls._update_window_title()
@@ -108,7 +109,7 @@ class ProjectManager:
 
     @classmethod
     def save_project_as(cls, path: str) -> bool:
-        """另存为 → 更新路径并保存。"""
+        """另存为 → 更新路径并保存。自动先保存场景。"""
         if not path:
             return False
         if not path.endswith(".myproj"):
@@ -116,6 +117,7 @@ class ProjectManager:
         cls._project_path = os.path.abspath(path)
         cls._project_name = os.path.splitext(os.path.basename(path))[0]
         cls._data["name"] = cls._project_name
+        cls._save_scene_if_needed()
         cls._save()
         cls._is_saved = True
         cls._update_window_title()
@@ -163,16 +165,29 @@ class ProjectManager:
     # ════════════════════════════════════════════════════════════
 
     @classmethod
-    def register_material(cls, file_path: str) -> None:
-        """将 .mat 文件路径注册到项目资源列表（自动去重）。"""
+    def register_material(cls, file_path: str, material_id: int | None = None) -> None:
+        """将 .mat 文件路径及运行时 ID 注册到项目资源列表（自动去重）。"""
         rel = cls._to_relative(file_path)
         if not rel:
             return
         mats: list = cls._data.setdefault("resources", {}).setdefault("materials", [])
-        if rel not in mats:
-            mats.append(rel)
-            cls._mark_dirty()
-            print(f"[Project] Registered material: {rel}")
+        # 检查是否已注册（按路径匹配）
+        for entry in mats:
+            existing = entry if isinstance(entry, dict) else {"path": entry}
+            if existing.get("path") == rel:
+                if material_id is not None:
+                    if isinstance(entry, str):
+                        mats.remove(entry)
+                        mats.append({"path": rel, "material_id": material_id})
+                    else:
+                        entry["material_id"] = material_id
+                return
+        entry: dict = {"path": rel}
+        if material_id is not None:
+            entry["material_id"] = material_id
+        mats.append(entry)
+        cls._mark_dirty()
+        print(f"[Project] Registered material: {rel} (id={material_id})")
 
     @classmethod
     def set_startup_scene(cls, scene_path: str) -> None:
@@ -204,6 +219,19 @@ class ProjectManager:
             json.dump(cls._data, fh, indent=2, ensure_ascii=False)
 
     @classmethod
+    def _save_scene_if_needed(cls) -> None:
+        """保存项目前先保存当前场景（如果有路径）。"""
+        scene_rel = cls._data.get("startup_scene", "")
+        if not scene_rel:
+            return
+        scene_path = cls._resolve_path(scene_rel)
+        if not scene_path:
+            return
+        from Application.Editor.EditorHost import EditorHost
+        EditorHost.save_active_scene_to_file(scene_path)
+        print(f"[Project] Auto-saved scene: {scene_rel}")
+
+    @classmethod
     def _auto_save(cls) -> None:
         """自动保存：仅当已有文件路径时写入（未 Save As 的项目不写盘）。"""
         if cls._project_path:
@@ -216,9 +244,13 @@ class ProjectManager:
 
     @classmethod
     def _to_relative(cls, abs_path: str) -> str:
-        """绝对路径 → 相对于项目根目录的路径。"""
-        if not abs_path or not cls._project_path:
+        """绝对路径 → 相对于项目根目录的路径。
+        若项目尚未 Save As（无 project path），保留绝对路径。
+        """
+        if not abs_path:
             return ""
+        if not cls._project_path:
+            return abs_path  # 未保存项目 → 暂存绝对路径
         proj_dir = os.path.dirname(cls._project_path)
         try:
             return os.path.relpath(abs_path, proj_dir)
@@ -227,11 +259,13 @@ class ProjectManager:
 
     @classmethod
     def _get_all_resource_paths(cls) -> list[str]:
-        """获取所有注册的资源路径（相对于项目根目录）。"""
+        """获取所有注册的资源路径（相对于项目根目录）。兼容新旧格式。"""
         result = []
         for category in ("materials", "shaders", "textures", "meshes"):
-            for p in cls._data.get("resources", {}).get(category, []):
-                result.append(p)
+            for entry in cls._data.get("resources", {}).get(category, []):
+                path = entry if isinstance(entry, str) else entry.get("path", "")
+                if path:
+                    result.append(path)
         return result
 
     @classmethod
@@ -243,14 +277,20 @@ class ProjectManager:
         return os.path.join(proj_dir, rel_path)
 
     @classmethod
-    def _load_all_resources(cls) -> None:
-        """加载项目引用的所有资源文件到 ResourceManager。"""
+    def _load_all_resources(cls) -> dict[int, int]:
+        """加载项目引用的所有资源文件到 ResourceManager。
+        
+        Returns:
+            {old_material_id: new_material_id} 映射，供场景加载时重映射 entity 引用。
+        """
         from Application.Resource.ResourceManager import ResourceManager
         from Application.Resource.Material import Material
 
+        id_map: dict[int, int] = {}
         loaded_count = 0
         for category in ("materials", "shaders", "textures", "meshes"):
-            for rel_path in cls._data.get("resources", {}).get(category, []):
+            for entry in cls._data.get("resources", {}).get(category, []):
+                rel_path, old_id = cls._parse_resource_entry(entry)
                 abs_path = cls._resolve_path(rel_path)
                 if not os.path.isfile(abs_path):
                     print(f"[Project] WARNING: Resource not found: {abs_path}")
@@ -262,18 +302,52 @@ class ProjectManager:
                         new_id = ResourceManager.material_count
                         ResourceManager.loaded_material[str(new_id)] = mat
                         loaded_count += 1
+                        if old_id is not None:
+                            id_map[old_id] = new_id
                         print(f"[Project] Loaded material '{mat.name}' → #{new_id}")
                 except Exception as e:
                     print(f"[Project] Failed to load {abs_path}: {e}")
         if loaded_count:
-            print(f"[Project] Loaded {loaded_count} resources")
+            print(f"[Project] Loaded {loaded_count} resources, id_map={id_map}")
+        return id_map
 
     @classmethod
-    def _load_startup_scene(cls, rel_path: str) -> None:
-        """加载启动场景。"""
+    def _parse_resource_entry(cls, entry) -> tuple[str, int | None]:
+        """解析资源条目：兼容旧格式 "path" 和新格式 {"path": ..., "material_id": ...}。"""
+        if isinstance(entry, dict):
+            return entry.get("path", ""), entry.get("material_id")
+        return entry, None  # 旧格式：纯路径字符串
+
+    @classmethod
+    def _load_startup_scene(cls, rel_path: str, id_map: dict[int, int] | None = None) -> None:
+        """加载启动场景，并重映射 entity 的 material_id。"""
         abs_path = cls._resolve_path(rel_path)
         if not os.path.isfile(abs_path):
             print(f"[Project] WARNING: Startup scene not found: {abs_path}")
             return
         from Application.Editor.EditorHost import EditorHost
         EditorHost.load_scene_from_file(abs_path)
+        # ★ 重映射 entity material_id：旧 ID → 新 ID
+        if id_map:
+            cls._remap_entity_materials(id_map)
+
+    @classmethod
+    def _remap_entity_materials(cls, id_map: dict[int, int]) -> None:
+        """遍历所有 entity 的 MeshRenderer，将 material_id 从旧 ID 映射到新 ID。"""
+        import esper
+        from Application.Core.Scene.BasicComponents import MeshRenderer
+        from Application.Editor.EditorHost import EditorHost
+
+        remapped = 0
+        for entity_id, mr in esper.get_component(MeshRenderer):
+            if mr.material_id in id_map:
+                old = mr.material_id
+                mr.material_id = id_map[old]
+                remapped += 1
+                # ★ 通知渲染器重新注册（新 material 需要新 GPU 资源）
+                _renderer = getattr(EditorHost, 'renderer', None)
+                if _renderer is not None:
+                    from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand
+                    _renderer.enqueue(EntityRegistrationCommand(entity_id, register=True))
+        if remapped:
+            print(f"[Project] Remapped {remapped} entity materials: {id_map}")

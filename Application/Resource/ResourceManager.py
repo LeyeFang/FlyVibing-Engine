@@ -392,7 +392,12 @@ class ResourceManager:
     ) -> Material:
         key = f"{material_id}"
         if key not in cls.loaded_material:
-            print(f"[Resource] WARNING: Material #{material_id} not found, falling back to default")
+            # ★ 每个 session 每个缺失 ID 只警告一次
+            if not hasattr(cls, '_warned_material_ids'):
+                cls._warned_material_ids: set[int] = set()
+            if material_id not in cls._warned_material_ids:
+                cls._warned_material_ids.add(material_id)
+                print(f"[Resource] WARNING: Material #{material_id} not found, falling back to default")
             return cls.loaded_material["1"]  # default material
         return cls.loaded_material[key]
 

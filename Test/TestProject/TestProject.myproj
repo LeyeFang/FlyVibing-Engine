@@ -3,7 +3,10 @@
   "name": "TestProject",
   "startup_scene": "MI-SSSEP.scene",
   "resources": {
-    "materials": [],
+    "materials": [
+      "cue.mat",
+      "task.mat"
+    ],
     "shaders": [],
     "textures": [],
     "meshes": []

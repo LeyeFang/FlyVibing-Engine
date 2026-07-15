@@ -82,6 +82,9 @@ class ResourceBrowserController:
             for id_str, mat in ResourceManager.loaded_material.items():
                 mid = int(id_str)
                 mat_name = getattr(mat, 'name', '') or f"Material #{mid}"
+                # ★ 过滤内部 clone（xxx_copy），只显示用户创建的材质
+                if mat_name.endswith("_copy"):
+                    continue
                 shader_id = getattr(mat, 'shader_id', '?')
                 result.append({
                     'id': mid,
@@ -138,14 +141,14 @@ class ResourceBrowserController:
 
     @classmethod
     def get_material_options(cls) -> list[tuple[int, str]]:
-        """返回 [(material_id, label), ...] 列表，供下拉选择用。"""
+        """返回 [(material_id, label), ...] 列表，供下拉选择用。过滤内部 clone。"""
         result = []
         for id_str, data in ResourceManager.loaded_material.items():
             mid = int(id_str)
             mat_name = getattr(data, 'name', '') or f"Material #{mid}"
-            shader_id = getattr(data, 'shader_id', '?')
-            label = f"{mat_name} (Shader: {shader_id})"
-            result.append((mid, label))
+            if mat_name.endswith("_copy"):
+                continue  # ★ 过滤内部 clone
+            result.append((mid, mat_name))
         return result
 
     @classmethod

@@ -61,10 +61,12 @@ class ScenePanel(BasePanel):
             if not file_path.endswith(".mat"):
                 file_path += ".mat"
             SceneBrowserController.save_material_to_file(entity_id, file_path)
-            # ★ 自动注册到项目
+            # ★ 自动注册到项目（携带运行时 material_id）
             from Application.Editor.ProjectManager import ProjectManager
+            from Application.Editor.EditorHost import EditorHost
             if ProjectManager.is_open():
-                ProjectManager.register_material(file_path)
+                mid = EditorHost.scene.GetEntityMaterial(entity_id)
+                ProjectManager.register_material(file_path, mid)
 
     @staticmethod
     def _on_mat_load(entity_id: int, file_path: str) -> None:
@@ -665,6 +667,10 @@ class ScenePanel(BasePanel):
         # ── Material 下拉选择 + 保存图标 ──
         mat_names = {mid: name for mid, name in mat_options}
         current_mat_label = mat_names.get(current_mat_id, display_name)
+        # ★ 如果 material 已丢失（不在 loaded_material 中），标记 (Lost)
+        mat_lost = (str(current_mat_id) not in ResourceManager.loaded_material)
+        if mat_lost:
+            current_mat_label = f"{current_mat_label} (Lost)"
         if imgui.begin_combo("Material##mat_select", current_mat_label):
             for mid, mname in mat_options:
                 selected = (mid == current_mat_id)

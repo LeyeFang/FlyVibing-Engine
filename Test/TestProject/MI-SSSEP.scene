@@ -2,7 +2,7 @@
   "version": "0.1.0",
   "scene": {
     "name": "MI-SSSEP",
-    "game_type": "3d",
+    "game_type": "2d",
     "entities": {
       "1": {
         "name": "DefaultCamera3D",
@@ -92,7 +92,7 @@
           }
         }
       },
-      "4": {
+      "3": {
         "name": "Left",
         "components": {
           "Transform": {
@@ -122,7 +122,7 @@
           }
         }
       },
-      "5": {
+      "4": {
         "name": "Right",
         "components": {
           "Transform": {
@@ -152,7 +152,7 @@
           }
         }
       },
-      "6": {
+      "5": {
         "name": "left_cue",
         "components": {
           "Transform": {
@@ -181,9 +181,9 @@
             "visible": true
           }
         },
-        "parent_id": 4
+        "parent_id": 3
       },
-      "7": {
+      "6": {
         "name": "right_cue",
         "components": {
           "Transform": {
@@ -212,9 +212,9 @@
             "visible": true
           }
         },
-        "parent_id": 5
+        "parent_id": 4
       },
-      "8": {
+      "7": {
         "name": "Task_Cue",
         "components": {
           "Transform": {
@@ -246,7 +246,7 @@
       }
     },
     "main_camera_entity_id": 1,
-    "next_eid": 9,
+    "next_eid": 8,
     "node_graph": {
       "version": "0.1.0",
       "nodes": {

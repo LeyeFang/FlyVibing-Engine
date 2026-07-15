@@ -138,8 +138,12 @@ class OpenGLResourceManager:
         Args:
             entity_id: 实体 ID
         """
-        mesh_id = self._renderer.engine.scene.GetEntityMesh(entity_id)
-        material_id = self._renderer.engine.scene.GetEntityMaterial(entity_id)
+        # ★ 跳过无 MeshRenderer 的实体（如 Camera）
+        try:
+            mesh_id = self._renderer.engine.scene.GetEntityMesh(entity_id)
+            material_id = self._renderer.engine.scene.GetEntityMaterial(entity_id)
+        except KeyError:
+            return  # 实体无 MeshRenderer，静默跳过
         mesh = ResourceManager.GetMesh(mesh_id)
         material: Material = ResourceManager.GetMaterial(material_id)
         shader_id = material.shader_id

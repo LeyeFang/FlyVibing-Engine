@@ -175,14 +175,14 @@ class EditorHost(Engine):
         # ★ 加载后: Scene → esper + node graph → panel
         cls.scene.SyncFromScene(scene, clear_existing=True)
         cls._sync_node_graph_from_scene()
-        # ★ 同步视口模式到 ViewportController
+        # ★ 同步视口模式到 ViewportController（含摄像机投影切换）
         try:
             from Application.Editor.UI.controllers.ViewportController import ViewportController
             from Application.Core.Scene.Scene import GameType
             if scene.game_type == GameType.GAME_2D:
-                ViewportController._mode_2d = True
+                ViewportController.switch_to_2d()
             else:
-                ViewportController._mode_2d = False
+                ViewportController.switch_to_3d()
         except Exception:
             pass
         # ★ 立即刷新 camera gizmo（force=True 跳过 hash 检查，原子完成 unregister+register）

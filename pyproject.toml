@@ -1,7 +1,7 @@
 [project]
 name = "your-project"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "cffi==2.0.0",
     "esper==3.7",
@@ -22,9 +22,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gui = [
-    "imgui-bundle; python_version < '3.13'"
-]
 gui-314 = [
     "imgui-bundle @ git+https://github.com/pthom/imgui_bundle@e58ff91"
 ]

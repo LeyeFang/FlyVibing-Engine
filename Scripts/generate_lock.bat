@@ -182,6 +182,44 @@ for %%p in (
     )
 )
 
+:: Wildcard scan: non-standard version folders (e.g. "18", preview builds)
+for /d %%v in ("%ProgramFiles(x86)%\Microsoft Visual Studio\*") do (
+    if exist "%%v\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [OK] MSVC found: %%v\BuildTools
+        exit /b 0
+    )
+    if exist "%%v\Community\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [OK] MSVC found: %%v\Community
+        exit /b 0
+    )
+    if exist "%%v\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [OK] MSVC found: %%v\Professional
+        exit /b 0
+    )
+    if exist "%%v\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [OK] MSVC found: %%v\Enterprise
+        exit /b 0
+    )
+)
+for /d %%v in ("%ProgramFiles%\Microsoft Visual Studio\*") do (
+    if exist "%%v\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [OK] MSVC found: %%v\BuildTools
+        exit /b 0
+    )
+    if exist "%%v\Community\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [OK] MSVC found: %%v\Community
+        exit /b 0
+    )
+    if exist "%%v\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [OK] MSVC found: %%v\Professional
+        exit /b 0
+    )
+    if exist "%%v\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [OK] MSVC found: %%v\Enterprise
+        exit /b 0
+    )
+)
+
 echo [MISSING] MSVC C++ compiler
 echo   -^> Option A ^(lightweight^): Visual Studio Build Tools 2022
 echo     https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022
@@ -196,7 +234,7 @@ exit /b 0
 
 :: ============================================================
 :: :FindMSVC - Auto-detect Visual Studio and load MSVC environment
-:: Search order: vswhere -> common install paths
+:: Search order: vswhere -> common install paths -> wildcard
 :: ============================================================
 :FindMSVC
 where cl >nul 2>nul
@@ -244,6 +282,76 @@ for %%p in (
     if exist "%%p\VC\Auxiliary\Build\vcvarsall.bat" (
         echo [MSVC] Found: %%p\VC\Auxiliary\Build\vcvarsall.bat
         call "%%p\VC\Auxiliary\Build\vcvarsall.bat" x64
+        if !errorlevel! equ 0 (
+            echo [MSVC] Environment loaded successfully
+            exit /b 0
+        )
+    )
+)
+
+:: Wildcard scan: non-standard version folders (e.g. "18", preview builds)
+for /d %%v in ("%ProgramFiles(x86)%\Microsoft Visual Studio\*") do (
+    if exist "%%v\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [MSVC] Found: %%v\BuildTools\VC\Auxiliary\Build\vcvarsall.bat
+        call "%%v\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+        if !errorlevel! equ 0 (
+            echo [MSVC] Environment loaded successfully
+            exit /b 0
+        )
+    )
+    if exist "%%v\Community\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [MSVC] Found: %%v\Community\VC\Auxiliary\Build\vcvarsall.bat
+        call "%%v\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
+        if !errorlevel! equ 0 (
+            echo [MSVC] Environment loaded successfully
+            exit /b 0
+        )
+    )
+    if exist "%%v\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [MSVC] Found: %%v\Professional\VC\Auxiliary\Build\vcvarsall.bat
+        call "%%v\Professional\VC\Auxiliary\Build\vcvarsall.bat" x64
+        if !errorlevel! equ 0 (
+            echo [MSVC] Environment loaded successfully
+            exit /b 0
+        )
+    )
+    if exist "%%v\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [MSVC] Found: %%v\Enterprise\VC\Auxiliary\Build\vcvarsall.bat
+        call "%%v\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+        if !errorlevel! equ 0 (
+            echo [MSVC] Environment loaded successfully
+            exit /b 0
+        )
+    )
+)
+for /d %%v in ("%ProgramFiles%\Microsoft Visual Studio\*") do (
+    if exist "%%v\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [MSVC] Found: %%v\BuildTools\VC\Auxiliary\Build\vcvarsall.bat
+        call "%%v\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+        if !errorlevel! equ 0 (
+            echo [MSVC] Environment loaded successfully
+            exit /b 0
+        )
+    )
+    if exist "%%v\Community\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [MSVC] Found: %%v\Community\VC\Auxiliary\Build\vcvarsall.bat
+        call "%%v\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
+        if !errorlevel! equ 0 (
+            echo [MSVC] Environment loaded successfully
+            exit /b 0
+        )
+    )
+    if exist "%%v\Professional\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [MSVC] Found: %%v\Professional\VC\Auxiliary\Build\vcvarsall.bat
+        call "%%v\Professional\VC\Auxiliary\Build\vcvarsall.bat" x64
+        if !errorlevel! equ 0 (
+            echo [MSVC] Environment loaded successfully
+            exit /b 0
+        )
+    )
+    if exist "%%v\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" (
+        echo [MSVC] Found: %%v\Enterprise\VC\Auxiliary\Build\vcvarsall.bat
+        call "%%v\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
         if !errorlevel! equ 0 (
             echo [MSVC] Environment loaded successfully
             exit /b 0

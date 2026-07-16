@@ -9,6 +9,7 @@ cd /d "%SCRIPT_DIR%"
 
 :: Virtual environment paths
 set VENV_314=%PROJECT_ROOT%\.venv-py314t
+set VENV_PYTHON=%VENV_314%\Scripts\python.exe
 
 :: Navigate to project root
 cd /d "%PROJECT_ROOT%"
@@ -38,38 +39,35 @@ echo Processing Python 3.14t environment
 echo ========================================
 
 call :FindMSVC
-if exist "%VENV_314%\Scripts\activate.bat" (
+if exist "%VENV_PYTHON%" (
     echo Updating environment and generating lock file...
     echo [INFO] Injecting pre-built imgui-bundle wheel...
-    cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv pip install --reinstall "%PROJECT_ROOT%\Resource\wheels\imgui_bundle-1.92.5-cp314-cp314t-win_amd64.whl""
+    cmd /c "set VIRTUAL_ENV=%VENV_314%&& uv pip install --python "%VENV_PYTHON%" --reinstall "%PROJECT_ROOT%\Resource\wheels\imgui_bundle-1.92.5-cp314-cp314t-win_amd64.whl""
     if !errorlevel! equ 0 (
         echo [INFO] Wheel injected.
-        cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --no-install-project --extra device --active && uv lock"
+        cmd /c "set VIRTUAL_ENV=%VENV_314%&& uv sync --python "%VENV_PYTHON%" --no-install-project --extra device&& uv lock --python "%VENV_PYTHON%""
+        if !errorlevel! equ 0 (
+            if exist "%PROJECT_ROOT%\uv.lock" (
+                copy /Y "%PROJECT_ROOT%\uv.lock" "%SCRIPT_DIR%\uv-py314t.lock"
+                echo [OK] Saved uv-py314t.lock to %SCRIPT_DIR%
+                del /Q "%PROJECT_ROOT%\uv.lock"
+                echo [OK] Deleted uv.lock from project root
+            ) else (
+                echo [WARN] uv.lock was not generated, please check
+            )
+        ) else (
+            echo [FAIL] uv sync / lock failed. Check network or dependencies.
+        )
     ) else (
         echo [ERROR] Wheel injection failed. Is Resource\wheels\ present?
         pause
         exit /b 1
     )
-    if !errorlevel! equ 0 (
-        if exist "%PROJECT_ROOT%\uv.lock" (
-            copy /Y "%PROJECT_ROOT%\uv.lock" "%SCRIPT_DIR%\uv-py314t.lock"
-            echo [OK] Saved uv-py314t.lock to %SCRIPT_DIR%
-            del /Q "%PROJECT_ROOT%\uv.lock"
-            echo [OK] Deleted uv.lock from project root
-        ) else (
-            echo [WARN] uv.lock was not generated, please check
-        )
-    ) else (
-        echo [FAIL] uv sync / lock failed. Check network or dependencies.
-    )
 ) else (
     echo [ERROR] Virtual environment not found: %VENV_314%
+    pause
+    exit /b 1
 )
-
-echo.
-echo All done. Press any key to exit...
-pause >nul
-exit /b 0
 
 
 :: ============================================================

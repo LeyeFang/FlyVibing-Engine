@@ -2,19 +2,22 @@
 setlocal enabledelayedexpansion
 
 :: ============================================
-:: Script dir (Scripts) and project root
+:: Script dir (Scripts) and project root (resolved to absolute path)
 :: ============================================
-set "SCRIPT_DIR=%~dp0"
-set "PROJECT_ROOT=%SCRIPT_DIR%.."
+set SCRIPT_DIR=%~dp0
+cd /d "%SCRIPT_DIR%.." || (echo [ERROR] Cannot enter project directory & pause & exit /b 1)
+set PROJECT_ROOT=%CD%
+cd /d "%SCRIPT_DIR%"
 
 :: Venv paths
-set "VENV_314=%PROJECT_ROOT%\.venv-py314t"
+set VENV_314=%PROJECT_ROOT%\.venv-py314t
+set VENV_PYTHON=%VENV_314%\Scripts\python.exe
 
 :: Lock file paths
-set "LOCK_314=%SCRIPT_DIR%uv-py314t.lock"
+set LOCK_314=%SCRIPT_DIR%uv-py314t.lock
 
 :: Navigate to project root
-cd /d "%PROJECT_ROOT%" || (echo [ERROR] Cannot enter project directory & pause & exit /b 1)
+cd /d "%PROJECT_ROOT%"
 
 :: ============================================
 :: Check uv is installed
@@ -88,7 +91,7 @@ if !errorlevel! neq 0 (
 :: Copy lock file and sync
 copy /Y "%LOCK_314%" "%PROJECT_ROOT%\uv.lock" >nul
 echo [SYNC] Installing dependencies (may take a few minutes^)...
-cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --active"
+cmd /c "set VIRTUAL_ENV=%VENV_314%&& uv sync --python "%VENV_PYTHON%" --no-install-project"
 if !errorlevel! neq 0 (
     echo [ERROR] Dependency install failed for .venv-py314t
     del /Q "%PROJECT_ROOT%\uv.lock" 2>nul
@@ -96,7 +99,7 @@ if !errorlevel! neq 0 (
     exit /b 1
 )
 :: After sync, regenerate lockfile to keep it up-to-date
-cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv lock"
+cmd /c "set VIRTUAL_ENV=%VENV_314%&& uv lock --python "%VENV_PYTHON%""
 copy /Y "%PROJECT_ROOT%\uv.lock" "%LOCK_314%" >nul
 echo [OK] Updated %LOCK_314%
 del /Q "%PROJECT_ROOT%\uv.lock" 2>nul

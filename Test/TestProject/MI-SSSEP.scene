@@ -266,8 +266,8 @@
           "id": 153,
           "node_type": "OnFrameUpdate",
           "pos": [
-            80,
-            280
+            -178.0,
+            255.0
           ],
           "props": {},
           "pin_ids": {
@@ -286,10 +286,402 @@
           "pin_ids": {
             "exec": 157
           }
+        },
+        "200": {
+          "id": 200,
+          "node_type": "VarSet",
+          "pos": [
+            320,
+            80
+          ],
+          "props": {
+            "mode": "manual",
+            "var_name": "counter",
+            "value": 0.0
+          },
+          "pin_ids": {
+            "exec_in": 3000,
+            "Name": 3001,
+            "Value": 3002,
+            "exec_out": 3003
+          }
+        },
+        "201": {
+          "id": 201,
+          "node_type": "VarSet",
+          "pos": [
+            580,
+            80
+          ],
+          "props": {
+            "mode": "manual",
+            "var_name": "next_time",
+            "value": 1.0
+          },
+          "pin_ids": {
+            "exec_in": 3010,
+            "Name": 3011,
+            "Value": 3012,
+            "exec_out": 3013
+          }
+        },
+        "210": {
+          "id": 210,
+          "node_type": "VarGet",
+          "pos": [
+            84.0,
+            276.0
+          ],
+          "props": {
+            "var_name": "next_time"
+          },
+          "pin_ids": {
+            "exec_in": 3100,
+            "Name": 3101,
+            "exec_out": 3102,
+            "Value": 3103
+          }
+        },
+        "211": {
+          "id": 211,
+          "node_type": "TimeTrigger",
+          "pos": [
+            320,
+            320
+          ],
+          "props": {
+            "mode": "pin"
+          },
+          "pin_ids": {
+            "exec_in": 3110,
+            "Time": 3111,
+            "Elapsed": 3112,
+            "out_0": 3113,
+            "out_1": 3114,
+            "out_2": 3115,
+            "out_3": 3116,
+            "out_4": 3117,
+            "out_5": 3118,
+            "out_6": 3119,
+            "out_7": 3120
+          }
+        },
+        "220": {
+          "id": 220,
+          "node_type": "SerialSend",
+          "pos": [
+            560,
+            320
+          ],
+          "props": {
+            "mode": "manual",
+            "format": "bytes",
+            "port": "COM2",
+            "baud_rate": 9600,
+            "value": 1.0
+          },
+          "pin_ids": {
+            "exec_in": 3200,
+            "exec_out": 3201,
+            "Port": 3202,
+            "BaudRate": 3203,
+            "Value": 3204
+          }
+        },
+        "221": {
+          "id": 221,
+          "node_type": "VarGet",
+          "pos": [
+            800,
+            320
+          ],
+          "props": {
+            "var_name": "counter"
+          },
+          "pin_ids": {
+            "exec_in": 3210,
+            "Name": 3211,
+            "exec_out": 3212,
+            "Value": 3213
+          }
+        },
+        "222": {
+          "id": 222,
+          "node_type": "Constant",
+          "pos": [
+            771.0,
+            574.0
+          ],
+          "props": {
+            "value": 1.0
+          },
+          "pin_ids": {
+            "Result": 3220
+          }
+        },
+        "223": {
+          "id": 223,
+          "node_type": "ScalarMath",
+          "pos": [
+            1040,
+            400
+          ],
+          "props": {
+            "operation": "sum"
+          },
+          "pin_ids": {
+            "In_0": 3230,
+            "In_1": 3231,
+            "In_2": 3232,
+            "In_3": 3233,
+            "In_4": 3234,
+            "In_5": 3235,
+            "In_6": 3236,
+            "In_7": 3237,
+            "Result": 3238
+          }
+        },
+        "224": {
+          "id": 224,
+          "node_type": "VarSet",
+          "pos": [
+            1280,
+            320
+          ],
+          "props": {
+            "mode": "pin",
+            "var_name": "counter"
+          },
+          "pin_ids": {
+            "exec_in": 3240,
+            "Name": 3241,
+            "Value": 3242,
+            "exec_out": 3243
+          }
+        },
+        "225": {
+          "id": 225,
+          "node_type": "VarGet",
+          "pos": [
+            1520,
+            320
+          ],
+          "props": {
+            "var_name": "next_time"
+          },
+          "pin_ids": {
+            "exec_in": 3250,
+            "Name": 3251,
+            "exec_out": 3252,
+            "Value": 3253
+          }
+        },
+        "227": {
+          "id": 227,
+          "node_type": "ScalarMath",
+          "pos": [
+            1763.0,
+            574.0
+          ],
+          "props": {
+            "operation": "sum"
+          },
+          "pin_ids": {
+            "In_0": 3270,
+            "In_1": 3271,
+            "In_2": 3272,
+            "In_3": 3273,
+            "In_4": 3274,
+            "In_5": 3275,
+            "In_6": 3276,
+            "In_7": 3277,
+            "Result": 3278
+          }
+        },
+        "228": {
+          "id": 228,
+          "node_type": "VarSet",
+          "pos": [
+            2000,
+            320
+          ],
+          "props": {
+            "mode": "pin",
+            "var_name": "next_time"
+          },
+          "pin_ids": {
+            "exec_in": 3280,
+            "Name": 3281,
+            "Value": 3282,
+            "exec_out": 3283
+          }
+        },
+        "230": {
+          "id": 230,
+          "node_type": "Constant",
+          "pos": [
+            2240,
+            480
+          ],
+          "props": {
+            "value": 10.0
+          },
+          "pin_ids": {
+            "Result": 3300
+          }
+        },
+        "231": {
+          "id": 231,
+          "node_type": "Compare",
+          "pos": [
+            2480,
+            400
+          ],
+          "props": {
+            "operation": "gte"
+          },
+          "pin_ids": {
+            "A": 3310,
+            "B": 3311,
+            "Result": 3312
+          }
+        },
+        "232": {
+          "id": 232,
+          "node_type": "Branch",
+          "pos": [
+            2720,
+            320
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 3320,
+            "Condition": 3321,
+            "True": 3322,
+            "False": 3323
+          }
+        },
+        "233": {
+          "id": 233,
+          "node_type": "ExitGame",
+          "pos": [
+            2960,
+            240
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 3330
+          }
         }
       },
-      "links": {},
-      "next_id": 158
+      "links": {
+        "400": {
+          "id": 400,
+          "from_pin": 152,
+          "to_pin": 3000
+        },
+        "401": {
+          "id": 401,
+          "from_pin": 3003,
+          "to_pin": 3010
+        },
+        "402": {
+          "id": 402,
+          "from_pin": 154,
+          "to_pin": 3100
+        },
+        "411": {
+          "id": 411,
+          "from_pin": 3102,
+          "to_pin": 3110
+        },
+        "403": {
+          "id": 403,
+          "from_pin": 3113,
+          "to_pin": 3200
+        },
+        "404": {
+          "id": 404,
+          "from_pin": 3201,
+          "to_pin": 3210
+        },
+        "405": {
+          "id": 405,
+          "from_pin": 3212,
+          "to_pin": 3240
+        },
+        "406": {
+          "id": 406,
+          "from_pin": 3243,
+          "to_pin": 3250
+        },
+        "407": {
+          "id": 407,
+          "from_pin": 3252,
+          "to_pin": 3280
+        },
+        "408": {
+          "id": 408,
+          "from_pin": 3283,
+          "to_pin": 3320
+        },
+        "410": {
+          "id": 410,
+          "from_pin": 3322,
+          "to_pin": 3330
+        },
+        "420": {
+          "id": 420,
+          "from_pin": 3103,
+          "to_pin": 3111
+        },
+        "421": {
+          "id": 421,
+          "from_pin": 3213,
+          "to_pin": 3230
+        },
+        "422": {
+          "id": 422,
+          "from_pin": 3220,
+          "to_pin": 3231
+        },
+        "423": {
+          "id": 423,
+          "from_pin": 3238,
+          "to_pin": 3242
+        },
+        "424": {
+          "id": 424,
+          "from_pin": 3253,
+          "to_pin": 3270
+        },
+        "425": {
+          "id": 425,
+          "from_pin": 3220,
+          "to_pin": 3271
+        },
+        "426": {
+          "id": 426,
+          "from_pin": 3278,
+          "to_pin": 3282
+        },
+        "427": {
+          "id": 427,
+          "from_pin": 3238,
+          "to_pin": 3310
+        },
+        "428": {
+          "id": 428,
+          "from_pin": 3300,
+          "to_pin": 3311
+        },
+        "429": {
+          "id": 429,
+          "from_pin": 3312,
+          "to_pin": 3321
+        }
+      },
+      "next_id": 3331
     }
   }
 }

@@ -3,6 +3,7 @@
 
 "string" → UTF-8 文本
 "bytes"  → float32 小端 4 字节
+"byte"   → uint8 单字节 (1–255, 0 为复位保留)
 """
 
 import struct
@@ -24,6 +25,12 @@ def encode(value, fmt: str = "string") -> bytes:
             return struct.pack("<f", float(value))
         except (TypeError, ValueError, struct.error):
             return struct.pack("<f", 0.0)
+    elif fmt == "byte":
+        try:
+            v = max(1, min(255, int(float(value))))
+            return struct.pack("<B", v)
+        except (TypeError, ValueError, struct.error):
+            return struct.pack("<B", 1)
     else:
         return str(value).encode("utf-8")
 

@@ -412,6 +412,10 @@ class NodeEditorPanel(BasePanel):
             if inst.node_type == "SerialSend":
                 self._draw_serial_send_widgets(nid, inst)
 
+            # ParallelSend 节点 UI 控件
+            if inst.node_type == "ParallelSend":
+                self._draw_parallel_send_widgets(nid, inst)
+
             # ScalarMath 节点 UI 控件
             if inst.node_type == "ScalarMath":
                 self._draw_scalar_math_widgets(nid, inst)
@@ -621,6 +625,46 @@ class NodeEditorPanel(BasePanel):
             return sorted([p.device for p in serial.tools.list_ports.comports()])
         except Exception:
             return []
+
+    # ── ParallelSend 节点专用控件 ───────────────────────────
+
+    def _draw_parallel_send_widgets(self, nid: int, inst) -> None:
+        """在 ParallelSend 节点体内绘制地址下拉和 Manual/Pin 值输入。
+
+        Address: 始终以 combo 展示 (0x378 LPT1 / 0x278 LPT2 / 0x3BC LPT3)。
+        Value:   Manual 模式—手动输入 (1–255)；Pin 模式—从上游连线读取 (pin 可见)。
+        """
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(105)
+
+        # ── 地址 (始终显示) ──
+        address = int(inst.props.get("address", 0x378))
+        addr_labels = ["0x378 (LPT1)", "0x278 (LPT2)", "0x3BC (LPT3)"]
+        addr_values = [0x378, 0x278, 0x3BC]
+        try:
+            idx = addr_values.index(address)
+        except ValueError:
+            idx = -1
+        changed, new_idx = _ne_combo(f"Address##par_addr_{nid}", idx, addr_labels)
+        if changed and 0 <= new_idx < len(addr_values):
+            inst.props["address"] = addr_values[new_idx]
+
+        # ── 模式切换 (仅影响 Value) ──
+        mode = inst.props.get("mode", "manual")
+        imgui.dummy(imgui.ImVec2(0, 1))
+        if imgui.radio_button(f"Manual##par_mode_man_{nid}", mode == "manual"):
+            inst.props["mode"] = "manual"
+        imgui.same_line()
+        if imgui.radio_button(f"Pin##par_mode_pin_{nid}", mode == "pin"):
+            inst.props["mode"] = "pin"
+
+        if mode == "manual":
+            v = int(inst.props.get("value", 1))
+            changed, nv = imgui.input_int(f"Value (1-255)##par_val_{nid}", v)
+            if changed:
+                inst.props["value"] = max(1, min(255, nv))
+
+        imgui.pop_item_width()
 
     # ── ScalarMath 节点专用控件 ────────────────────────────
 
@@ -1145,6 +1189,14 @@ class NodeEditorPanel(BasePanel):
                 return [p for p in nd.pins
                         if p.name not in ("Port", "BaudRate", "Value")]
             return list(nd.pins)
+
+        # ── ParallelSend: Address 始终由 widget 展示；Manual 模式额外隐藏 Value pin ──
+        if inst.node_type == "ParallelSend":
+            mode = inst.props.get("mode", "manual")
+            hidden = {"Address"}
+            if mode == "manual":
+                hidden.add("Value")
+            return [p for p in nd.pins if p.name not in hidden]
 
         # ── TimeTrigger: 动态 exec_out 引脚 ──
         if inst.node_type == "TimeTrigger":

@@ -539,3 +539,14 @@ _reg(NodeTypeDef(
     ],
     "Send signal via serial port",
 ))
+
+_reg(NodeTypeDef(
+    "ParallelSend", "Parallel Send", "IO", IO_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+        PinDef(_gen_id(), "Address", "data", "input", "int"),
+        PinDef(_gen_id(), "Value", "data", "input", "variant"),
+    ],
+    "Send uint8 via LPT port",
+))

@@ -95,5 +95,6 @@ MENU_SECTIONS: list[tuple[str, list]] = [
     ]),
     ("IO", [
         ("Serial Send", "SerialSend"),
+        ("Parallel Send", "ParallelSend"),
     ]),
 ]

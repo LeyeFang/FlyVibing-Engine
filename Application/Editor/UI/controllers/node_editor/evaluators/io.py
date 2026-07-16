@@ -1,8 +1,9 @@
 """
-Evaluators: IO 节点 (SerialSend)。
+Evaluators: IO 节点 (SerialSend, ParallelSend)。
 
-SerialSend — 通过串口发送信号，支持 Manual / Pin 双模式，String / Bytes 双格式。
-实际串口 I/O 由 Functions/SerialParallelDevice 线程池执行，本求值器只做入队。
+SerialSend   — 通过串口发送信号，支持 Manual / Pin 双模式，String / Bytes 双格式。
+ParallelSend — 通过并口发送 uint8 值 (1–255)，Manual / Pin 双模式，5ms 后自动复位。
+实际 I/O 由 Functions/SerialParallelDevice 线程池执行，本求值器只做入队。
 """
 
 from typing import Any
@@ -50,11 +51,14 @@ def _eval_serial_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
     else:
         port = _read_input_raw(node_id, "Port", ctx, g, "")
         if not port:
-            port = "COM1"
+            port = str(inst.props.get("port", "COM1"))
         port = str(port)
 
         baud_raw = _read_input_raw(node_id, "BaudRate", ctx, g, 0)
-        baud = int(baud_raw) if baud_raw else 9600
+        if baud_raw is None or baud_raw == 0:
+            baud = int(inst.props.get("baud_rate", 9600))
+        else:
+            baud = int(baud_raw)
 
         value = _read_input_raw(node_id, "Value", ctx, g, 0)
         if value is None:
@@ -72,3 +76,48 @@ def _eval_serial_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
     print(f"[SerialSend] {port}@{baud} fmt={fmt} val={value} → {len(payload)}B [{_hex}]")
 
 register_evaluator("SerialSend", _eval_serial_send)
+
+
+# ── ParallelSend ───────────────────────────────────────────
+
+def _eval_parallel_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
+    """ParallelSend — 通过并口发送一个 uint8 值 (1–255)。
+
+    Manual 模式: Address / Value 全部从节点属性读取。
+    Pin 模式:    Address / Value 全部从上游连线读取。
+
+    实际写入由 Functions/SerialParallelDevice 的独立 I/O 线程执行，
+    写入后 5ms 自动复位为零。本函数仅做参数读取 + 入队 — 不阻塞逻辑线程。
+    """
+    inst = g._canvas.nodes[node_id]
+    mode = inst.props.get("mode", "manual")
+
+    if mode == "manual":
+        address = int(inst.props.get("address", 0x378))
+        value = inst.props.get("value", 1)
+    else:
+        addr_raw = _read_input_raw(node_id, "Address", ctx, g, None)
+        if addr_raw is None:
+            address = int(inst.props.get("address", 0x378))
+        else:
+            try:
+                address = int(float(addr_raw))
+            except (TypeError, ValueError):
+                address = int(inst.props.get("address", 0x378))
+        value = _read_input_raw(node_id, "Value", ctx, g, 1)
+        if value is None:
+            value = 1
+
+    # ── 钳位到 1–255 (0 留给自动复位) ──
+    try:
+        ival = max(1, min(255, int(float(value))))
+    except (TypeError, ValueError):
+        ival = 1
+
+    # ── 编码 + 入队 ──
+    from Application.Functions.SerialParallelDevice import write_parallel
+
+    write_parallel(address, ival, "byte")
+    print(f"[ParallelSend] 0x{address:04X} ← 0x{ival:02X} ({ival})")
+
+register_evaluator("ParallelSend", _eval_parallel_send)

@@ -40,7 +40,16 @@ echo ========================================
 call :FindMSVC
 if exist "%VENV_314%\Scripts\activate.bat" (
     echo Updating environment and generating lock file...
-    cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --no-install-project --extra device --extra gui-314 --active && uv lock"
+    echo [INFO] Injecting pre-built imgui-bundle wheel...
+    cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv pip install --reinstall "%PROJECT_ROOT%\Resource\wheels\imgui_bundle-1.92.5-cp314-cp314t-win_amd64.whl""
+    if !errorlevel! equ 0 (
+        echo [INFO] Wheel injected.
+        cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --no-install-project --extra device --active && uv lock"
+    ) else (
+        echo [ERROR] Wheel injection failed. Is Resource\wheels\ present?
+        pause
+        exit /b 1
+    )
     if !errorlevel! equ 0 (
         if exist "%PROJECT_ROOT%\uv.lock" (
             copy /Y "%PROJECT_ROOT%\uv.lock" "%SCRIPT_DIR%\uv-py314t.lock"

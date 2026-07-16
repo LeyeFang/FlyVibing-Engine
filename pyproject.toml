@@ -23,7 +23,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gui-314 = [
-    "imgui-bundle @ file:Resource/wheels/imgui_bundle-1.92.5-cp314-cp314t-win_amd64.whl"
+    "imgui-bundle @ git+https://github.com/pthom/imgui_bundle@e58ff91"
 ]
 device = [
     "econexg[lsl,usb]",

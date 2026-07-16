@@ -29,15 +29,26 @@ call :PreFlightCheck
 
 
 :: ------------------------------------------------------------
-:: Python 3.14t: sync deps (with gui-314, build from source) + generate lock file
+:: Python 3.14t: sync deps + generate lock file
 :: ------------------------------------------------------------
 echo ========================================
 echo Processing Python 3.14t environment
 echo ========================================
+
+:: Auto-detect pre-built imgui-bundle wheel
+set WHEEL_PATH=%PROJECT_ROOT%\Resource\wheels\imgui_bundle-1.92.5-cp314-cp314t-win_amd64.whl
+if exist "%WHEEL_PATH%" (
+    echo [INFO] Pre-built imgui-bundle wheel found, will inject to skip compilation.
+)
+
 call :FindMSVC
 if exist "%VENV_314%\Scripts\activate.bat" (
     echo Updating environment and generating lock file...
-    cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --extra device --extra gui-314 --active && uv lock"
+    if exist "%WHEEL_PATH%" (
+        cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv pip install "%WHEEL_PATH%""
+        echo [INFO] Wheel injected.
+    )
+    cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --no-install-project --extra device --extra gui-314 --active && uv lock"
     if !errorlevel! equ 0 (
         if exist "%PROJECT_ROOT%\uv.lock" (
             copy /Y "%PROJECT_ROOT%\uv.lock" "%SCRIPT_DIR%\uv-py314t.lock"

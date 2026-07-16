@@ -37,33 +37,10 @@ echo ========================================
 echo Processing Python 3.14t environment
 echo ========================================
 
-:: Auto-detect pre-built imgui-bundle wheel
-set WHEEL_PATH=%PROJECT_ROOT%\Resource\wheels\imgui_bundle-1.92.5-cp314-cp314t-win_amd64.whl
-set USE_WHEEL=0
-if exist "%WHEEL_PATH%" (
-    echo [INFO] Pre-built imgui-bundle wheel found, will skip compilation.
-    set USE_WHEEL=1
-) else (
-    echo [INFO] No pre-built wheel, will build imgui-bundle from source.
-)
-
 call :FindMSVC
 if exist "%VENV_314%\Scripts\activate.bat" (
     echo Updating environment and generating lock file...
-    if !USE_WHEEL! equ 1 (
-        cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv pip install --reinstall "%WHEEL_PATH%""
-        if !errorlevel! neq 0 (
-            echo [WARN] Wheel injection failed, falling back to source build.
-            set USE_WHEEL=0
-        ) else (
-            echo [INFO] Wheel injected.
-        )
-    )
-    if !USE_WHEEL! equ 1 (
-        cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --no-install-project --no-build-package imgui-bundle --extra device --active && uv lock"
-    ) else (
-        cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --no-install-project --extra device --extra gui-314 --active && uv lock"
-    )
+    cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --no-install-project --extra device --extra gui-314 --active && uv lock"
     if !errorlevel! equ 0 (
         if exist "%PROJECT_ROOT%\uv.lock" (
             copy /Y "%PROJECT_ROOT%\uv.lock" "%SCRIPT_DIR%\uv-py314t.lock"

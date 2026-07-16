@@ -1,15 +1,17 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: Get script directory (Scripts) and project root
+:: Get script directory (Scripts) and project root (resolved to absolute path)
 set SCRIPT_DIR=%~dp0
-set PROJECT_ROOT=%SCRIPT_DIR%..
+cd /d "%SCRIPT_DIR%.." || (echo [ERROR] Cannot enter project directory & pause & exit /b 1)
+set PROJECT_ROOT=%CD%
+cd /d "%SCRIPT_DIR%"
 
 :: Virtual environment paths
 set VENV_314=%PROJECT_ROOT%\.venv-py314t
 
 :: Navigate to project root
-cd /d "%PROJECT_ROOT%" || (echo [ERROR] Cannot enter project directory & pause & exit /b 1)
+cd /d "%PROJECT_ROOT%"
 
 :: Check if uv is installed
 where uv >nul 2>nul
@@ -37,18 +39,31 @@ echo ========================================
 
 :: Auto-detect pre-built imgui-bundle wheel
 set WHEEL_PATH=%PROJECT_ROOT%\Resource\wheels\imgui_bundle-1.92.5-cp314-cp314t-win_amd64.whl
+set USE_WHEEL=0
 if exist "%WHEEL_PATH%" (
-    echo [INFO] Pre-built imgui-bundle wheel found, will inject to skip compilation.
+    echo [INFO] Pre-built imgui-bundle wheel found, will skip compilation.
+    set USE_WHEEL=1
+) else (
+    echo [INFO] No pre-built wheel, will build imgui-bundle from source.
 )
 
 call :FindMSVC
 if exist "%VENV_314%\Scripts\activate.bat" (
     echo Updating environment and generating lock file...
-    if exist "%WHEEL_PATH%" (
-        cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv pip install "%WHEEL_PATH%""
-        echo [INFO] Wheel injected.
+    if !USE_WHEEL! equ 1 (
+        cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv pip install --reinstall "%WHEEL_PATH%""
+        if !errorlevel! neq 0 (
+            echo [WARN] Wheel injection failed, falling back to source build.
+            set USE_WHEEL=0
+        ) else (
+            echo [INFO] Wheel injected.
+        )
     )
-    cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --no-install-project --extra device --extra gui-314 --active && uv lock"
+    if !USE_WHEEL! equ 1 (
+        cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --no-install-project --no-build-package imgui-bundle --extra device --active && uv lock"
+    ) else (
+        cmd /c "call "%VENV_314%\Scripts\activate.bat" && uv sync --no-install-project --extra device --extra gui-314 --active && uv lock"
+    )
     if !errorlevel! equ 0 (
         if exist "%PROJECT_ROOT%\uv.lock" (
             copy /Y "%PROJECT_ROOT%\uv.lock" "%SCRIPT_DIR%\uv-py314t.lock"

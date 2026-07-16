@@ -162,7 +162,7 @@ Property pins use _SKIP sentinel: unconnected (pin mode) or unchecked (manual mo
 | type_name    | input pins                              | output pins | props                                      |
 |--------------|-----------------------------------------|-------------|--------------------------------------------|
 | SerialSend   | exec_in,Port(string),BaudRate(int),Value(var) | exec_out | mode: manual/pin, format: string/bytes, port, baud_rate, value |
-| ParallelSend | exec_in,Address(int),Value(var)        | exec_out | mode: manual/pin, address: int (0x378 LPT1, 0x278 LPT2, 0x3BC LPT3), value: 1-255 |
+| ParallelSend | exec_in,Address(int),Value(var)        | exec_out | mode: manual/pin, address: int (0x3FF8 LPT1, 0x3FF0 LPT2, 0x3FE8 LPT3), value: 1-255 |
 
 SerialSend format "string"→UTF-8, "bytes"→float32 LE 4 bytes. ParallelSend always sends uint8 (1-255, 0 reserved for auto-reset after 5ms).
 
@@ -201,7 +201,7 @@ The exec_in usually comes from VarGet.exec_out (the VarGet that fed Compare.A).
 
 #### Pattern 5: Parallel port trigger (EEG/SSVEP)
 ```
-OnFrameUpdate → VarGet("next_time") → TimeTrigger(mode=pin) → ParallelSend(Address=0x378, Value=1)
+OnFrameUpdate → VarGet("next_time") → TimeTrigger(mode=pin) → ParallelSend(Address=0x3FF8, Value=1)
   → VarGet("counter") → ScalarMath(sum) → VarSet("counter", mode=pin)
   → VarGet("next_time") → ScalarMath(sum) → VarSet("next_time", mode=pin)
   → Branch(Condition←Compare(A←ScalarMath.Result, B←Constant(N), gte)) → ExitGame

@@ -93,17 +93,17 @@ def _eval_parallel_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) 
     mode = inst.props.get("mode", "manual")
 
     if mode == "manual":
-        address = int(inst.props.get("address", 0x378))
+        address = int(inst.props.get("address", 0x3FF8))
         value = inst.props.get("value", 1)
     else:
         addr_raw = _read_input_raw(node_id, "Address", ctx, g, None)
         if addr_raw is None:
-            address = int(inst.props.get("address", 0x378))
+            address = int(inst.props.get("address", 0x3FF8))
         else:
             try:
                 address = int(float(addr_raw))
             except (TypeError, ValueError):
-                address = int(inst.props.get("address", 0x378))
+                address = int(inst.props.get("address", 0x3FF8))
         value = _read_input_raw(node_id, "Value", ctx, g, 1)
         if value is None:
             value = 1

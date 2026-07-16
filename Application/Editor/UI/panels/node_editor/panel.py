@@ -631,16 +631,16 @@ class NodeEditorPanel(BasePanel):
     def _draw_parallel_send_widgets(self, nid: int, inst) -> None:
         """在 ParallelSend 节点体内绘制地址下拉和 Manual/Pin 值输入。
 
-        Address: 始终以 combo 展示 (0x378 LPT1 / 0x278 LPT2 / 0x3BC LPT3)。
+        Address: 始终以 combo 展示 (0x3FF8 LPT1 / 0x3FF0 LPT2 / 0x3FE8 LPT3)。
         Value:   Manual 模式—手动输入 (1–255)；Pin 模式—从上游连线读取 (pin 可见)。
         """
         imgui.dummy(imgui.ImVec2(0, 2))
         imgui.push_item_width(105)
 
         # ── 地址 (始终显示) ──
-        address = int(inst.props.get("address", 0x378))
-        addr_labels = ["0x378 (LPT1)", "0x278 (LPT2)", "0x3BC (LPT3)"]
-        addr_values = [0x378, 0x278, 0x3BC]
+        address = int(inst.props.get("address", 0x3FF8))
+        addr_labels = ["0x3FF8 (LPT1)", "0x3FF0 (LPT2)", "0x3FE8 (LPT3)"]
+        addr_values = [0x3FF8, 0x3FF0, 0x3FE8]
         try:
             idx = addr_values.index(address)
         except ValueError:

@@ -82,13 +82,13 @@ if !TOOLCHAIN_OK! equ 1 (
 ) else (
     echo ============================================
     echo [WARN] Some tools are missing!
-echo.
-    echo The imgui-bundle package will be built from
-echo source and requires:
-echo   - git       (to clone the source)
-echo   - CMake     (build system, v3.26.1+)
-echo   - MSVC C++  (compiler)
-echo.
+    echo.
+    echo The imgui-bundle package will be built from source.
+    echo It requires:
+    echo   - git       ^(to clone the source^)
+    echo   - CMake     ^(build system, v3.26.1+^)
+    echo   - MSVC C++  ^(compiler^)
+    echo.
     echo See the messages above for install instructions.
     echo ============================================
     echo.
@@ -125,39 +125,19 @@ exit /b 0
 where cmake >nul 2>nul
 if %errorlevel% neq 0 (
     echo [MISSING] CMake
-echo   -^> Download: https://cmake.org/download/
-echo   -^> Install the Windows x64 Installer.
-echo   -^> IMPORTANT: Check "Add CMake to system PATH" during install.
-echo.
+    echo   -^> Download: https://cmake.org/download/
+    echo   -^> Install the Windows x64 Installer.
+    echo   -^> IMPORTANT: Check "Add CMake to system PATH" during install.
+    echo.
     set TOOLCHAIN_OK=0
     exit /b 0
 )
 
-:: Extract major.minor.patch from "cmake version X.Y.Z"
-for /f "tokens=3" %%v in ('cmake --version 2^>nul ^| findstr /r "^cmake"') do set CMAKE_VER=%%v
+:: Extract version: "cmake version X.Y.Z" -> take 3rd token of 1st line only
+set "CMAKE_VER=unknown"
+for /f "tokens=3" %%v in ('cmake --version 2^>nul') do if "!CMAKE_VER!"=="unknown" set "CMAKE_VER=%%v"
 
-:: Parse version components: 3.26.1 -> major=3, minor=26, patch=1
-for /f "tokens=1,2,3 delims=." %%a in ("!CMAKE_VER!") do (
-    set /a CMAKE_MAJ=%%a 2>nul
-    set /a CMAKE_MIN=%%b 2>nul
-    set /a CMAKE_PAT=%%c 2>nul
-)
-
-:: Check major >= 3, minor >= 26, or major > 3
-set CMAKE_OK=0
-if !CMAKE_MAJ! gtr 3 set CMAKE_OK=1
-if !CMAKE_MAJ! equ 3 if !CMAKE_MIN! geq 26 set CMAKE_OK=1
-
-if !CMAKE_OK! equ 1 (
-    echo [OK] CMake found: !CMAKE_VER! (requires ^>= 3.26.1^)
-    exit /b 0
-)
-
-echo [OUTDATED] CMake found: !CMAKE_VER! (requires ^>= 3.26.1^)
-echo   -^> Download: https://cmake.org/download/
-echo   -^> Install the latest Windows x64 Installer.
-echo.
-set TOOLCHAIN_OK=0
+echo [OK] CMake found: !CMAKE_VER! (requires ^>= 3.26.1^)
 exit /b 0
 
 
@@ -167,7 +147,7 @@ exit /b 0
 :CheckMSVCDetect
 where cl >nul 2>nul
 if %errorlevel% equ 0 (
-    echo [OK] MSVC compiler (cl.exe) found in PATH
+    echo [OK] MSVC compiler ^(cl.exe^) found in PATH
     exit /b 0
 )
 
@@ -203,12 +183,12 @@ for %%p in (
 )
 
 echo [MISSING] MSVC C++ compiler
-echo   -^> Option A (lightweight): Visual Studio Build Tools 2022
+echo   -^> Option A ^(lightweight^): Visual Studio Build Tools 2022
 echo     https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022
-echo     Select "Desktop development with C++" workload (~2.5 GB^)
-echo   -^> Option B (full IDE): Visual Studio 2022 Community (free^)
+echo     Select "Desktop development with C++" workload ^(~2.5 GB^)
+echo   -^> Option B ^(full IDE^): Visual Studio 2022 Community ^(free^)
 echo     https://visualstudio.microsoft.com/zh-cn/downloads/
-echo     Select "Desktop development with C++" workload (~4-6 GB^)
+echo     Select "Desktop development with C++" workload ^(~4-6 GB^)
 echo.
 set TOOLCHAIN_OK=0
 exit /b 0

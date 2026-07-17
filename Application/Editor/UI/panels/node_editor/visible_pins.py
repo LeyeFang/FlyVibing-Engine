@@ -122,9 +122,9 @@ def _v_random(inst, nd, canvas=None) -> list:
 
 @rule("RandomSetSeed")
 def _v_random_set_seed(inst, nd, canvas=None) -> list:
-    """Manual 模式隐藏 Seed pin。"""
-    mode = inst.props.get("mode", "manual")
-    if mode == "manual":
+    """仅 Pin 模式显示 Seed pin。"""
+    source = inst.props.get("source") or inst.props.get("mode", "manual")
+    if source != "pin":
         return [p for p in nd.pins if p.name != "Seed"]
     return list(nd.pins)
 

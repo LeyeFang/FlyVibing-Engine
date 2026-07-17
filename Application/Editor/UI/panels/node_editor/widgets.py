@@ -213,21 +213,39 @@ def _draw_random_widgets(nid: int, inst, _canvas) -> None:
 
 @register("RandomSetSeed")
 def _draw_random_set_seed_widgets(nid: int, inst, _canvas) -> None:
+    """Source 下拉: Manual / Pin / Hardware Random。"""
     imgui.dummy(imgui.ImVec2(0, 2))
-    imgui.push_item_width(105)
+    imgui.push_item_width(130)
 
-    mode = inst.props.get("mode", "manual")
-    if imgui.radio_button(f"Manual##rss_mode_man_{nid}", mode == "manual"):
-        inst.props["mode"] = "manual"
-    imgui.same_line()
-    if imgui.radio_button(f"Pin##rss_mode_pin_{nid}", mode == "pin"):
-        inst.props["mode"] = "pin"
+    # ── 向后兼容 ──
+    source = inst.props.get("source")
+    if source is None:
+        source = inst.props.get("mode", "manual")
+        inst.props["source"] = source
 
-    if mode == "manual":
+    source_labels = ["Manual", "Pin", "Hardware Random"]
+    source_keys   = ["manual", "pin", "hardware"]
+    try:
+        src_idx = source_keys.index(source)
+    except ValueError:
+        src_idx = 0
+
+    changed, new_idx = _ne_combo(f"Source##rss_src_{nid}", src_idx, source_labels)
+    if changed:
+        inst.props["source"] = source_keys[new_idx]
+        source = source_keys[new_idx]
+
+    if source == "manual":
         seed = int(inst.props.get("seed", 0))
         changed, new_seed = imgui.input_int(f"Seed##rss_seed_{nid}", seed)
         if changed:
             inst.props["seed"] = new_seed
+    elif source == "hardware":
+        # 只读显示上一次生成的种子 (首次为 0，执行后才会更新)
+        imgui.begin_disabled(True)
+        seed = inst.props.get("seed", 0)
+        imgui.input_int(f"Last Seed##rss_seed_{nid}", seed)
+        imgui.end_disabled()
 
     imgui.pop_item_width()
 

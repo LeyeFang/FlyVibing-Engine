@@ -94,7 +94,7 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 | MathSubtract   | A,B (float)                   | Result (float) | — (legacy, hidden)           |
 | MathMultiply   | A,B (float)                   | Result (float) | — (legacy, hidden)           |
 | MathDivide     | A,B (float)                   | Result (float) | — (legacy, hidden)           |
-| RandomSetSeed  | exec_in,exec_out,Seed(int)   | (exec_out)     | mode: manual/pin, seed: int  |
+| RandomSetSeed  | exec_in,exec_out,Seed(int)   | (exec_out)     | source: manual/pin/hardware, seed: int  |
 | Random         | Min,Max,Mean,StdDev (float)   | Result (float) | distribution: uniform/gaussian/discrete, mode: manual/pin |
 | MathRandomUniform  | Min,Max (float)           | Result (float) | — (legacy, hidden)           |
 | MathRandomGaussian | Mean,StdDev (float)       | Result (float) | — (legacy, hidden)           |

@@ -89,19 +89,37 @@ def _get_global_rng() -> random.Random:
 
 
 def _eval_random_set_seed(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
-    """RandomSetSeed — 设置全局随机种子（Manual / Pin 双模式）。"""
-    global _global_rng, _global_rng_seed
-    inst = g._canvas.nodes[node_id]
-    mode = inst.props.get("mode", "manual")
+    """RandomSetSeed — 设置全局随机种子。
 
-    if mode == "manual":
+    Source 选项:
+      - manual:   手输整数种子 (可复现)
+      - pin:      从上游连线读取 Seed pin (可复现)
+      - hardware: 使用 os.urandom(8) 生成不可复现的真随机种子
+
+    向后兼容: 若 source 不存在则 fallback 到 mode 属性。
+    """
+    global _global_rng, _global_rng_seed
+    import os
+
+    inst = g._canvas.nodes[node_id]
+    source = inst.props.get("source")
+    if source is None:
+        mode = inst.props.get("mode", "manual")
+        source = mode  # "manual" or "pin"
+
+    if source == "manual":
         seed = int(inst.props.get("seed", 0))
-    else:
+    elif source == "pin":
         seed = int(_read_data_input(node_id, "Seed", ctx, g, 0))
+    elif source == "hardware":
+        # 限制在 32-bit signed int 范围内 (imgui input_int 的 C++ 绑定上限)
+        seed = int.from_bytes(os.urandom(4), "big", signed=True)
+        inst.props["seed"] = seed  # 回写供 widget 只读显示
+    else:
+        seed = int(inst.props.get("seed", 0))
 
     _global_rng_seed = seed
     _global_rng = random.Random(seed) if seed != 0 else None
-    # 同时写入 context 变量，方便其他节点感知
     ctx.set_var("_global_random_seed", seed)
 
 register_evaluator("RandomSetSeed", _eval_random_set_seed)

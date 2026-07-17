@@ -500,6 +500,14 @@ _reg(NodeTypeDef(
     "A number value",
 ))
 
+_reg(NodeTypeDef(
+    "StringConst", "String Constant", "Variable", VAR_COLOR,
+    [
+        PinDef(_gen_id(), "Value", "data", "output", "string"),
+    ],
+    "A string value",
+))
+
 
 # ═══════════════════════════════════════════════════════════════
 # Debug 节点
@@ -549,4 +557,24 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "Value", "data", "input", "variant"),
     ],
     "Send uint8 via LPT port",
+))
+
+_reg(NodeTypeDef(
+    "PathVar", "Path", "IO", IO_COLOR,
+    [
+        PinDef(_gen_id(), "Path", "data", "output", "string"),
+    ],
+    "Directory or file path",
+))
+
+_reg(NodeTypeDef(
+    "TextFileWrite", "Write Text File", "IO", IO_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+        PinDef(_gen_id(), "FilePath", "data", "input", "string"),
+        PinDef(_gen_id(), "FileName", "data", "input", "string"),
+        PinDef(_gen_id(), "Value", "data", "input", "variant"),
+    ],
+    "Write content to a text file",
 ))

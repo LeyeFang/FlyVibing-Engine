@@ -118,6 +118,7 @@ TimeTrigger behavior: fires when ctx.elapsed_time >= threshold. Re-armable: incr
 | VarSet    | exec_in,Name(string),Value(var)| exec_out (exec)        | mode: manual/pin, var_name, value |
 | VarGet    | exec_in,Name(string)          | exec_out,Value(var)     | var_name                       |
 | Constant  | —                             | Result (float)          | value: float                   |
+| StringConst| —                            | Value (string)          | value: string                  |
 
 VarSet manual mode: Name from textbox prop, Value from props.value.
 VarSet pin mode: Name from upstream link, Value from upstream link.
@@ -163,8 +164,13 @@ Property pins use _SKIP sentinel: unconnected (pin mode) or unchecked (manual mo
 |--------------|-----------------------------------------|-------------|--------------------------------------------|
 | SerialSend   | exec_in,Port(string),BaudRate(int),Value(var) | exec_out | mode: manual/pin, format: string/bytes, port, baud_rate, value |
 | ParallelSend | exec_in,Address(int),Value(var)        | exec_out | mode: manual/pin, address: int (0x3FF8 LPT1, 0x3FF0 LPT2, 0x3FE8 LPT3), value: 1-255 |
+| PathVar      | —                                      | Path (string) | browse_mode: directory/file, path: string |
+| TextFileWrite| exec_in,FilePath(string),FileName(string),Value(var) | exec_out | mode: manual/pin, write_mode: w/a, delimiter: none/space/newline/tab/comma, file_path, file_name, value |
 
 SerialSend format "string"→UTF-8, "bytes"→float32 LE 4 bytes. ParallelSend always sends uint8 (1-255, 0 reserved for auto-reset after 5ms).
+PathVar outputs a directory or file path selected via OS file browser. browse_mode=directory uses select_folder, browse_mode=file uses open_file (.txt/.csv/.log/.json).
+TextFileWrite writes str(value) + delimiter to {file_path}/{file_name}.txt. FileName auto-appends .txt suffix. Directory created if missing. write_mode="w" overwrites, "a" appends. Delimiter appended after each write: none="", space=" ", newline="\\n", tab="\\t", comma=",".
+FilePath is always handled by widget (Browse button); pin connection overrides widget value.
 
 ---
 
@@ -206,6 +212,25 @@ OnFrameUpdate → VarGet("next_time") → TimeTrigger(mode=pin) → ParallelSend
   → VarGet("next_time") → ScalarMath(sum) → VarSet("next_time", mode=pin)
   → Branch(Condition←Compare(A←ScalarMath.Result, B←Constant(N), gte)) → ExitGame
 ```
+
+#### Pattern 6: Write to text file (logging experiment data)
+```
+OnGameStart → VarSet(trial=1, mode=manual) → VarSet(max_trials=10, mode=manual)
+OnFrameUpdate → VarGet("next_time") → TimeTrigger(mode=pin)
+  TimeTrigger.out_0 → TextFileWrite(
+      mode=pin,
+      write_mode="a", delimiter="newline",
+      FilePath←PathVar(browse_mode=directory, path="D:/Data/"),
+      FileName←StringConst(value="experiment_log"),  // → experiment_log.txt
+      Value←VarGet("trial").Value
+    )
+  → VarGet("trial") → ScalarMath(sum:+1) → VarSet("trial", mode=pin)
+  → Branch(Condition←Compare(A←ScalarMath.Result, B←VarGet("max_trials").Value, gte))
+  Branch.True → ExitGame
+```
+Key: TextFileWrite creates the directory and file automatically. FileName "experiment_log" becomes "experiment_log.txt".
+Use StringConst for static strings, VarGet for dynamic values (but note VarGet returns float — use StringConst for file names).
+PathVar provides a reusable directory path that can fan out to multiple TextFileWrite nodes.
 
 ---
 

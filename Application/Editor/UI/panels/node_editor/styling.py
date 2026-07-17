@@ -47,6 +47,7 @@ MENU_SECTIONS: list[tuple[str, list]] = [
     ("Math", [
         ("Variable", [
             ("Constant", "Constant"),
+            ("String Constant", "StringConst"),
             ("Set Variable", "VarSet"),
             ("Get Variable", "VarGet"),
             ("Make Vec3", "MakeVec3"),
@@ -96,5 +97,7 @@ MENU_SECTIONS: list[tuple[str, list]] = [
     ("IO", [
         ("Serial Send", "SerialSend"),
         ("Parallel Send", "ParallelSend"),
+        ("Path", "PathVar"),
+        ("Write Text File", "TextFileWrite"),
     ]),
 ]

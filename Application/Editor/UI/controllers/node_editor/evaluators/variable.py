@@ -1,9 +1,10 @@
 """
-Evaluators: 变量节点 (VarSet, VarGet, Constant)。
+Evaluators: 变量节点 (VarSet, VarGet, Constant, StringConst)。
 
-VarSet:  Manual/Pin 双模式写入变量。
-VarGet:  读取变量。
-Constant: 固定浮点值输出。
+VarSet:      Manual/Pin 双模式写入变量。
+VarGet:      读取变量。
+Constant:    固定浮点值输出。
+StringConst: 固定字符串值输出。
 """
 
 from ..evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
@@ -57,3 +58,20 @@ def _eval_constant(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> No
     _write_data_output(node_id, "Result", value, ctx, g)
 
 register_evaluator("Constant", _eval_constant)
+
+
+# ── StringConst ────────────────────────────────────────────
+
+def _eval_string_const(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
+    """StringConst — 输出一个字符串常量。"""
+    inst = g._canvas.nodes[node_id]
+    value = str(inst.props.get("value", ""))
+    # 直接写入 output pin，不做 float 强制转换
+    nd = g._types[inst.node_type]
+    for p in nd.pins:
+        if p.name == "Value" and p.direction == "output":
+            inst_pin_id = inst.pin_ids.get(p.name)
+            if inst_pin_id is not None:
+                ctx.set_pin(inst_pin_id, value)
+
+register_evaluator("StringConst", _eval_string_const)

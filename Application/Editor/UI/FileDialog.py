@@ -341,6 +341,36 @@ class FileDialog:
         cls._callback = callback
         cls._active_type = "project_save"
 
+    @classmethod
+    def open_directory(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+    ) -> None:
+        """打开"选择目录"对话框（文件夹选择器）。"""
+        d = start_dir if (start_dir and os.path.isdir(start_dir)) else _DialogMemory.get_dir("directory")
+        cls._active_dialog = pfd.select_folder(
+            "Select Directory", d, pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "directory"
+
+    @classmethod
+    def open_text(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+    ) -> None:
+        """打开"选择文本文件"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("text")
+        cls._active_dialog = pfd.open_file(
+            "Select Text File", d,
+            ["Text Files", "*.txt *.csv *.log *.json", "All Files", "*"],
+            pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "text"
+
     # ============================================================
     # 每帧轮询 (在 UIManager.draw_all 末尾调用)
     # ============================================================

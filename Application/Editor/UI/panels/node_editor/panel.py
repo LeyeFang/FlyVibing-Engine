@@ -416,6 +416,14 @@ class NodeEditorPanel(BasePanel):
             if inst.node_type == "ParallelSend":
                 self._draw_parallel_send_widgets(nid, inst)
 
+            # PathVar 节点 UI 控件
+            if inst.node_type == "PathVar":
+                self._draw_path_var_widgets(nid, inst)
+
+            # TextFileWrite 节点 UI 控件
+            if inst.node_type == "TextFileWrite":
+                self._draw_text_file_write_widgets(nid, inst)
+
             # ScalarMath 节点 UI 控件
             if inst.node_type == "ScalarMath":
                 self._draw_scalar_math_widgets(nid, inst)
@@ -439,6 +447,10 @@ class NodeEditorPanel(BasePanel):
             # Constant 节点 UI 控件
             if inst.node_type == "Constant":
                 self._draw_constant_widgets(nid, inst)
+
+            # StringConst 节点 UI 控件
+            if inst.node_type == "StringConst":
+                self._draw_string_constant_widgets(nid, inst)
 
             # EntitySpawn 节点 UI 控件
             if inst.node_type == "EntitySpawn":
@@ -666,6 +678,127 @@ class NodeEditorPanel(BasePanel):
 
         imgui.pop_item_width()
 
+    # ── PathVar 节点专用控件 ───────────────────────────────
+
+    def _draw_path_var_widgets(self, nid: int, inst) -> None:
+        """在 PathVar 节点体内绘制 BrowseMode 切换和路径 Browse 按钮。
+
+        BrowseMode: Directory (select_folder) / File (open_file .txt)。
+        路径文本始终显示。
+        """
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(120)
+
+        # ── BrowseMode 切换 ──
+        browse_mode = inst.props.get("browse_mode", "directory")
+        if imgui.radio_button(f"Dir##pv_dir_{nid}", browse_mode == "directory"):
+            inst.props["browse_mode"] = "directory"
+        imgui.same_line()
+        if imgui.radio_button(f"File##pv_file_{nid}", browse_mode == "file"):
+            inst.props["browse_mode"] = "file"
+
+        # ── Browse 按钮 ──
+        if imgui.button(f"Browse...##pv_btn_{nid}"):
+            from Application.Editor.UI.FileDialog import FileDialog
+            if browse_mode == "directory":
+                FileDialog.open_directory(
+                    lambda p, i=inst: i.props.__setitem__("path", p),
+                    start_dir=inst.props.get("path", ""),
+                )
+            else:
+                FileDialog.open_text(
+                    lambda p, i=inst: i.props.__setitem__("path", p),
+                    start_dir=inst.props.get("path", ""),
+                )
+
+        # ── 路径文本 ──
+        imgui.same_line()
+        current = str(inst.props.get("path", ""))
+        if current:
+            display = current if len(current) <= 40 else "..." + current[-37:]
+            imgui.text_disabled(display)
+        else:
+            imgui.text_disabled("(no path)")
+
+        imgui.pop_item_width()
+
+    # ── TextFileWrite 节点专用控件 ─────────────────────────
+
+    def _draw_text_file_write_widgets(self, nid: int, inst) -> None:
+        """在 TextFileWrite 节点体内绘制全部参数控件。
+
+        WriteMode (w/a): 始终显示。
+        Delimiter:       始终显示。
+        FilePath Browse:  始终显示（pin 连接时 pin 值优先，widget 作为 fallback）。
+        Mode Manual/Pin:  影响 FileName 和 Value 的输入方式。
+        """
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(110)
+
+        # ── 写模式 (始终显示) ──
+        write_mode = inst.props.get("write_mode", "w")
+        if imgui.radio_button(f"w (new)##tfw_w_{nid}", write_mode == "w"):
+            inst.props["write_mode"] = "w"
+        imgui.same_line()
+        if imgui.radio_button(f"a (append)##tfw_a_{nid}", write_mode == "a"):
+            inst.props["write_mode"] = "a"
+
+        # ── 间隔符 (始终显示) ──
+        delim = inst.props.get("delimiter", "none")
+        delim_labels = ["None", "Space", "Newline", "Tab", "Comma"]
+        delim_keys   = ["none", "space", "newline", "tab", "comma"]
+        try:
+            delim_idx = delim_keys.index(delim)
+        except ValueError:
+            delim_idx = 0
+        changed, new_idx = _ne_combo(f"Delimiter##tfw_delim_{nid}", delim_idx, delim_labels)
+        if changed:
+            inst.props["delimiter"] = delim_keys[new_idx]
+
+        imgui.dummy(imgui.ImVec2(0, 2))
+
+        # ── FilePath Browse (始终显示) ──
+        if imgui.button(f"Browse Dir...##tfw_btn_{nid}"):
+            from Application.Editor.UI.FileDialog import FileDialog
+            FileDialog.open_directory(
+                lambda p, i=inst: i.props.__setitem__("file_path", p),
+                start_dir=inst.props.get("file_path", ""),
+            )
+        imgui.same_line()
+        fp = str(inst.props.get("file_path", ""))
+        if fp:
+            display_fp = fp if len(fp) <= 35 else "..." + fp[-32:]
+            imgui.text_disabled(display_fp)
+        else:
+            imgui.text_disabled("(no dir)")
+
+        imgui.dummy(imgui.ImVec2(0, 2))
+
+        # ── 模式切换 (影响 FileName + Value) ──
+        mode = inst.props.get("mode", "manual")
+        if imgui.radio_button(f"Manual##tfw_mode_man_{nid}", mode == "manual"):
+            inst.props["mode"] = "manual"
+        imgui.same_line()
+        if imgui.radio_button(f"Pin##tfw_mode_pin_{nid}", mode == "pin"):
+            inst.props["mode"] = "pin"
+
+        if mode == "manual":
+            # ── FileName ──
+            fname = str(inst.props.get("file_name", "output"))
+            changed, nf = imgui.input_text(f"File Name##tfw_fn_{nid}", fname)
+            if changed:
+                inst.props["file_name"] = nf
+            imgui.same_line()
+            imgui.text_disabled(".txt")
+
+            # ── Value ──
+            v = str(inst.props.get("value", ""))
+            changed, nv = imgui.input_text(f"Value##tfw_val_{nid}", v)
+            if changed:
+                inst.props["value"] = nv
+
+        imgui.pop_item_width()
+
     # ── ScalarMath 节点专用控件 ────────────────────────────
 
     def _draw_scalar_math_widgets(self, nid: int, inst) -> None:
@@ -822,6 +955,18 @@ class NodeEditorPanel(BasePanel):
         imgui.push_item_width(90)
         v = inst.props.get("value", 0.0)
         changed, nv = imgui.input_float(f"Value##const_val_{nid}", v, format="%.4f")
+        if changed:
+            inst.props["value"] = nv
+        imgui.pop_item_width()
+
+    # ── StringConst 节点专用控件 ───────────────────────────
+
+    def _draw_string_constant_widgets(self, nid: int, inst) -> None:
+        """在 StringConst 节点体内绘制字符串输入框。"""
+        imgui.dummy(imgui.ImVec2(0, 2))
+        imgui.push_item_width(120)
+        v = inst.props.get("value", "")
+        changed, nv = imgui.input_text(f"Value##strconst_val_{nid}", v)
         if changed:
             inst.props["value"] = nv
         imgui.pop_item_width()
@@ -1196,6 +1341,22 @@ class NodeEditorPanel(BasePanel):
             hidden = {"Address"}
             if mode == "manual":
                 hidden.add("Value")
+            return [p for p in nd.pins if p.name not in hidden]
+
+        # ── StringConst: 无特殊隐藏 ──
+        if inst.node_type == "StringConst":
+            return list(nd.pins)
+
+        # ── PathVar: 无特殊隐藏 ──
+        if inst.node_type == "PathVar":
+            return list(nd.pins)
+
+        # ── TextFileWrite: FilePath 始终由 widget 展示；Manual 模式隐藏 FileName/Value pin ──
+        if inst.node_type == "TextFileWrite":
+            mode = inst.props.get("mode", "manual")
+            hidden = {"FilePath"}
+            if mode == "manual":
+                hidden.update({"FileName", "Value"})
             return [p for p in nd.pins if p.name not in hidden]
 
         # ── TimeTrigger: 动态 exec_out 引脚 ──

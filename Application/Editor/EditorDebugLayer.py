@@ -45,19 +45,7 @@ class DebugLayer(Layer):
 
     @classmethod
     def OnRender(cls) -> None:
-        run_time = GetRunTime()
-        # 仅在 entity 的 material 支持 'time' 参数时才设置
-        try:
-            from Application.Core.Scene.SceneManager import SceneManager
-            from Application.Core.Scene.BasicComponents import MeshRenderer
-            mr = EditorHost.scene.GetComponent(cls.entity_id_2, MeshRenderer)
-            from Application.Resource.ResourceManager import ResourceManager
-            mat = ResourceManager.GetMaterial(mr.material_id)
-            if mat and 'time' in mat.uniforms_data:
-                EditorHost.scene.SetMaterialParams(
-                    cls.entity_id_2, {'time': run_time})
-        except Exception:
-            pass
+        pass
 
     @classmethod
     def OnUpdate(cls) -> None:

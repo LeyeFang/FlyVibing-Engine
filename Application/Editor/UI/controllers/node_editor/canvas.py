@@ -53,7 +53,7 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 - OnFrameUpdate: fires EVERY FRAME. Use for per-frame checks (TimeTrigger, input polling).
 - OnGameStop: fires ONCE when the game ends. Use for cleanup.
 - Exec chain: _walk_exec follows exec output→input links depth-first.
-- Data nodes (Constant, Compare, ScalarMath, MakeVec3, BreakVec3, VecMath, Random, legacy math):
+- Data nodes (Constant/Scale, StringConst, PathVar, Compare, ScalarMath, MakeVec3, BreakVec3, VecMath, Random, legacy math):
   NO exec pins. Evaluated LAZILY when their output pin is read via a data link.
 - Mixed nodes (VarGet): have BOTH exec_in and data output pins. Exec triggers read; data output
   is then available for downstream data links. When data-read without exec context, lazy-eval works too.
@@ -250,7 +250,9 @@ PathVar provides a reusable directory path that can fan out to multiple TextFile
 6. Compute next_id = 1 + max(all node IDs, pin IDs, link IDs).
 7. Always include the 3 default event nodes (OnGameStart, OnFrameUpdate, OnGameStop).
 8. Pure data nodes (Constant, Compare, ScalarMath, etc.) have NO exec pins — only connect them via data links.
-9. Use VarGet/Constant → ScalarMath/Compare → VarSet for arithmetic on variables.
+9. Use VarGet/Scale → ScalarMath/Compare → VarSet for arithmetic on variables.
+   Use StringConst for static string values, VarGet for numeric values.
+   Note: VarGet returns float (even for string var names); use StringConst for file names and paths.
 10. For repeated TimeTrigger: feed a variable into TimeTrigger.Time pin, increment that variable after each fire."""
 
 

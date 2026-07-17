@@ -26,8 +26,8 @@ from Application.Core.Events.Event import Event
 from Application.Core.Events.EngineEvent import LayerLifecycleEvent
 from Application.Core.Renderer.RenderCommand import SetViewProjectionCommand
 from Application.Core.Scene.SceneManager import SceneManager
-from Application.Editor.UI.controllers.NodeEditorController import _TYPES
-from Application.Editor.UI.controllers.GraphEvaluator import (
+from Application.Editor.UI.controllers.node_editor import _TYPES
+from Application.Editor.UI.controllers.node_editor.evaluator_engine import (
     GraphEvaluator,
     ExecutionContext,
 )

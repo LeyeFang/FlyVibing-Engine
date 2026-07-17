@@ -112,13 +112,19 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 
 TimeTrigger behavior: fires when ctx.elapsed_time >= threshold. Re-armable: increasing the threshold via variable/pin allows repeated triggering. Tracks _last_fired_threshold in state.
 
+#### Basic Nodes (fundamental value types)
+| type_name   | input pins | output pins    | props              |
+|-------------|------------|----------------|--------------------|
+| Constant    | —         | Result (float) | value: float       |
+| StringConst | —         | Value (string) | value: string      |
+
+Constant is displayed as "Scale" in the UI. StringConst outputs a raw string (no float coercion).
+
 #### Variable Nodes
 | type_name | input pins                    | output pins             | props                          |
 |-----------|-------------------------------|-------------------------|--------------------------------|
 | VarSet    | exec_in,Name(string),Value(var)| exec_out (exec)        | mode: manual/pin, var_name, value |
 | VarGet    | exec_in,Name(string)          | exec_out,Value(var)     | var_name                       |
-| Constant  | —                             | Result (float)          | value: float                   |
-| StringConst| —                            | Value (string)          | value: string                  |
 
 VarSet manual mode: Name from textbox prop, Value from props.value.
 VarSet pin mode: Name from upstream link, Value from upstream link.

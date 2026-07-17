@@ -44,10 +44,12 @@ _HDR_COLOR = imgui.ImVec4(0.600, 0.600, 0.600, 0.70)
 #   子项 = ("标签", "类型名")           ← 叶子 → 直接创建节点
 #   子项 = ("标签", [子项 ...])         ← 子菜单 → 展开更深层级
 MENU_SECTIONS: list[tuple[str, list]] = [
+    ("Basic", [
+        ("Scale", "Constant"),
+        ("String Constant", "StringConst"),
+    ]),
     ("Math", [
         ("Variable", [
-            ("Constant", "Constant"),
-            ("String Constant", "StringConst"),
             ("Set Variable", "VarSet"),
             ("Get Variable", "VarGet"),
             ("Make Vec3", "MakeVec3"),

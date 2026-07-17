@@ -42,6 +42,7 @@ SCENE_COLOR      = (0.878, 0.416, 0.153)  # 场景级操作 (同 Blender Orange)
 CAMERA_COLOR     = (0.314, 0.650, 0.920)  # 摄像机操作
 COMPONENT_COLOR  = (0.314, 0.710, 0.710)  # 组件操作
 IO_COLOR         = (0.878, 0.620, 0.314)  # IO / 串口 / 外部设备
+BASIC_COLOR      = (0.580, 0.580, 0.620)  # Basic / 基础值
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -493,7 +494,7 @@ _reg(NodeTypeDef(
 ))
 
 _reg(NodeTypeDef(
-    "Constant", "Constant", "Variable", VAR_COLOR,
+    "Constant", "Scale", "Basic", BASIC_COLOR,
     [
         PinDef(_gen_id(), "Result", "data", "output", "float"),
     ],
@@ -501,7 +502,7 @@ _reg(NodeTypeDef(
 ))
 
 _reg(NodeTypeDef(
-    "StringConst", "String Constant", "Variable", VAR_COLOR,
+    "StringConst", "String Constant", "Basic", BASIC_COLOR,
     [
         PinDef(_gen_id(), "Value", "data", "output", "string"),
     ],

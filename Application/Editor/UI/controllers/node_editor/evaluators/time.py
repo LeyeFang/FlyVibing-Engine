@@ -107,3 +107,66 @@ def _eval_time_trigger(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
                 ctx.set_pin(inst_pin_id, current)
 
 register_evaluator("TimeTrigger", _eval_time_trigger)
+
+
+# ── Get Date ────────────────────────────────────────────────
+
+def _eval_get_date(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
+    """Get Date — 输出当前日期时间字符串。
+
+    Props:
+      year, month, day, hour, minute:  bool — 是否包含该组件（默认全 True）
+      format:  str — 自定义 strftime 格式串，非空时忽略布尔开关
+
+    输出 pin:
+      DateString (string) — 可直连 TextFileWrite.FileName 或 Value
+    """
+    import datetime
+
+    inst = g._canvas.nodes[node_id]
+    fmt = str(inst.props.get("format", "")).strip()
+
+    if not fmt:
+        # ── 从布尔开关构建格式串 ──
+        show_year = inst.props.get("year", True)
+        show_month = inst.props.get("month", True)
+        show_day = inst.props.get("day", True)
+        show_hour = inst.props.get("hour", True)
+        show_minute = inst.props.get("minute", True)
+
+        date_parts: list[str] = []
+        time_parts: list[str] = []
+
+        if show_year:
+            date_parts.append("%Y")
+        if show_month:
+            date_parts.append("%m")
+        if show_day:
+            date_parts.append("%d")
+        if show_hour:
+            time_parts.append("%H")
+        if show_minute:
+            time_parts.append("%M")
+
+        if date_parts and time_parts:
+            fmt = "-".join(date_parts) + " " + ":".join(time_parts)
+        elif date_parts:
+            fmt = "-".join(date_parts)
+        elif time_parts:
+            fmt = ":".join(time_parts)
+        else:
+            fmt = "%Y-%m-%d %H:%M"  # 全默认
+
+    now = datetime.datetime.now()
+    date_str = now.strftime(fmt)
+
+    # ── 写入 DateString output pin ──
+    nd = g._types[inst.node_type]
+    for pin in nd.pins:
+        if pin.name == "DateString" and pin.direction == "output":
+            pid = inst.pin_ids.get(pin.name)
+            if pid is not None:
+                ctx.set_pin(pid, date_str)
+
+
+register_evaluator("TimeGetDate", _eval_get_date)

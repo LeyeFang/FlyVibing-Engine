@@ -264,6 +264,14 @@ _reg(NodeTypeDef(
     "When time reaches T",
 ))
 
+_reg(NodeTypeDef(
+    "TimeGetDate", "Get Date", "Time", TIME_COLOR,
+    [
+        PinDef(_gen_id(), "DateString", "data", "output", "string"),
+    ],
+    "Current date/time string",
+))
+
 
 # ═══════════════════════════════════════════════════════════════
 # Entity 节点 (Entity) — 实体生命周期

@@ -18,7 +18,16 @@ from typing import Any
 # ═══════════════════════════════════════════════════════════════
 
 class ExecutionContext:
-    """单帧内共享的执行上下文。"""
+    """单帧内共享的执行上下文。
+
+    dry_run 模式:
+      当 dry_run=True 时，所有副作用求值器 (SerialSend, ParallelSend,
+      TextFileWrite, Entity*, ExitGame 等) 应跳过真实操作，
+      改为调用 self.log() 输出"本应执行"的日志。
+
+      log 回调签名: fn(node_id: int, node_type: str, action: str, detail: str) -> None
+      若不设置 log，默认使用 print()。
+    """
 
     def __init__(self) -> None:
         self.delta_time: float = 0.0
@@ -26,6 +35,9 @@ class ExecutionContext:
         self.scene = None              # SceneManager 实例 (RuntimeNodeLayer 注入)
         self._pin_values: dict[int, Any] = {}
         self._variables: dict[str, Any] = {}
+        # ── 干跑 / 测试钩子 ──
+        self.dry_run: bool = False
+        self.log: callable | None = None
 
     def set_pin(self, pin_id: int, value: Any) -> None:
         self._pin_values[pin_id] = value
@@ -38,6 +50,14 @@ class ExecutionContext:
 
     def get_var(self, name: str) -> Any:
         return self._variables.get(name)
+
+    def emit_log(self, node_id: int, node_type: str, action: str, detail: str = "") -> None:
+        """干跑 / 调试日志 — 若设置了 log 回调则调用之，否则 print。"""
+        if self.log is not None:
+            self.log(node_id, node_type, action, detail)
+        else:
+            tag = "[DRY-RUN]" if self.dry_run else "[LOG]"
+            print(f"{tag} #{node_id}<{node_type}> {action}" + (f" | {detail}" if detail else ""))
 
 
 # ═══════════════════════════════════════════════════════════════

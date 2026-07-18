@@ -10,6 +10,10 @@ from ..evaluator_engine import ExecutionContext, GraphEvaluator, register_evalua
 
 def _eval_exit_game(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     """ExitGame — 设置 _pending_stop 标记，主线程下帧消费并停止 PIE。"""
+    if ctx.dry_run:
+        ctx.emit_log(node_id, "ExitGame", "stop", "game exit requested (skipped in dry-run)")
+        return
+
     try:
         from Application.Editor.UI.controllers.SimulationController import SimulationController
         SimulationController.stop()

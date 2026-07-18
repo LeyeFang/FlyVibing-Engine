@@ -10,8 +10,6 @@ Evaluators: Camera 节点 — 摄像机配置与控制。
 from ...evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
 from ...data_model import EntityRef
 
-from Application.Core.Scene.BasicComponents import Camera as CamComponent
-
 
 # ── 辅助: 从 EntityRef pin 读取 eid ──────────────────────────
 
@@ -40,10 +38,16 @@ def _eval_camera_set_main(node_id: int, ctx: ExecutionContext,
                           g: GraphEvaluator) -> None:
     """将指定 entity 设为当前场景的主渲染摄像机。"""
     eid = _read_entity_ref(node_id, "Entity", ctx, g)
+
+    if ctx.dry_run:
+        ctx.emit_log(node_id, "CameraSetMain", "set_main_camera", f"eid={eid}")
+        return
+
     if eid < 0 or not ctx.scene.EntityExists(eid):
         print("[CameraSetMain] Invalid entity — skipped")
         return
 
+    from Application.Core.Scene.BasicComponents import Camera as CamComponent
     st = ctx.scene
     st.scene_camera_id = eid
     st.scene_camera = ctx.scene.GetComponent(eid, CamComponent)

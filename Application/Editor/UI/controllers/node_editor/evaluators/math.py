@@ -219,7 +219,7 @@ def _eval_scalar_math(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
     op = inst.props.get("operation", "sum")
     nd = g._types[inst.node_type]
 
-    # 收集所有已连接的输入值（跳过未连接的 pin）
+    # 收集所有已连接的输入值
     values = []
     for i in range(8):
         pin_name = f"In_{i}"
@@ -250,7 +250,7 @@ def _eval_scalar_math(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
         for v in values[1:]:
             result = result / v if v != 0.0 else 0.0
     else:
-        result = 0.0
+        result = sum(values)
 
     _write_data_output(node_id, "Result", result, ctx, g)
 

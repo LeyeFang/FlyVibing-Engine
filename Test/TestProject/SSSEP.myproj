@@ -1,0 +1,14 @@
+{
+  "version": "0.1.0",
+  "name": "SSSEP",
+  "startup_scene": "SSSEP.scene",
+  "resources": {
+    "materials": [
+      "cue.mat",
+      "task.mat"
+    ],
+    "shaders": [],
+    "textures": [],
+    "meshes": []
+  }
+}

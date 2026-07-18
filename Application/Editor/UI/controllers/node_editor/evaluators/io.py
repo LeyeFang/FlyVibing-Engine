@@ -68,6 +68,11 @@ def _eval_serial_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
             value = 0.0
 
     # ── 编码 + 入队 ──
+    if ctx.dry_run:
+        ctx.emit_log(node_id, "SerialSend", "send",
+                     f"port={port}, baud={baud}, fmt={fmt}, val={value}")
+        return
+
     from Application.Functions.SerialParallelDevice import send as spd_send
     from Application.Functions.SerialParallelDevice.protocol import encode
 
@@ -118,6 +123,11 @@ def _eval_parallel_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) 
         ival = 1
 
     # ── 编码 + 入队 ──
+    if ctx.dry_run:
+        ctx.emit_log(node_id, "ParallelSend", "write",
+                     f"addr=0x{address:04X}, val=0x{ival:02X} ({ival})")
+        return
+
     from Application.Functions.SerialParallelDevice import write_parallel
 
     write_parallel(address, ival, "byte")
@@ -217,6 +227,13 @@ def _eval_text_file_write(node_id: int, ctx: ExecutionContext, g: GraphEvaluator
         full_path = file_name
 
     # ── 写入 ──
+    if ctx.dry_run:
+        ctx.emit_log(node_id, "TextFileWrite", "write",
+                     f"mode={write_mode}, path={full_path}, "
+                     f"content={content[:80]}{'...' if len(content)>80 else ''}, "
+                     f"delim={delimiter_key}")
+        return
+
     try:
         with open(full_path, write_mode, encoding="utf-8") as f:
             f.write(content + delim)

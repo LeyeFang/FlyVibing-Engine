@@ -5,7 +5,6 @@ Evaluators: 实体生命周期 v2 — EntitySpawn (类型安全 EntityRef)。
 """
 
 import copy
-import numpy as np
 
 from ...evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
 from ...data_model import EntityRef
@@ -14,6 +13,10 @@ from ..math import _read_data_input
 
 
 # ── EntitySpawn ───────────────────────────────────────────────
+
+# ★ 干跑模式用假实体 ID 计数器
+_dry_run_eid_counter: int = 9000
+
 
 def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     """Spawn Entity — 从 Scene.entities 模板实例化实体。
@@ -27,11 +30,34 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
 
     Returns:
       EntityRef — 类型安全的实例引用。
+
+    dry_run 模式:
+      跳过 ECS 创建，输出假 EntityRef (eid=9000+) 以保持数据流连通。
     """
+    global _dry_run_eid_counter
     inst = g._canvas.nodes[node_id]
 
     template_name = inst.props.get("template", "")
     name_override = _read_data_input(node_id, "Name", ctx, g, "")
+
+    instance_name = str(name_override) if name_override else template_name
+    final_name = instance_name if instance_name else ""
+
+    # ── dry_run: 跳过 ECS 创建，输出假 EntityRef ──
+    if ctx.dry_run:
+        _dry_run_eid_counter += 1
+        fake_eid = _dry_run_eid_counter
+        ctx.emit_log(node_id, "EntitySpawn", "spawn",
+                     f"name='{final_name}', template='{template_name}', "
+                     f"dry_eid={fake_eid}")
+        # 仍然输出 EntityRef，保持数据流连通
+        nd = g._types[inst.node_type]
+        for pin in nd.pins:
+            if pin.name == "Entity" and pin.direction == "output":
+                inst_pin_id = inst.pin_ids.get(pin.name)
+                if inst_pin_id is not None:
+                    ctx.set_pin(inst_pin_id, EntityRef(eid=fake_eid))
+        return
 
     # ── 1. 从 Scene.entities 查找模板定义 ──
     from Application.Core.Scene.Scene import Scene
@@ -44,8 +70,6 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
             template_old_eid, entity_def = result
 
     # ── 2. 在 ECS World 中一步创建实体（含所有模板组件，原子操作）──
-    instance_name = str(name_override) if name_override else template_name
-    final_name = instance_name if instance_name else ""
     if entity_def is not None:
         template_comps = list(entity_def.components.values())
         eid = ctx.scene.AddEntity(final_name, *template_comps)
@@ -126,6 +150,7 @@ def _instantiate_components(eid: int, entity_def, ctx: ExecutionContext) -> None
 def _read_vec3_input(node_id: int, pin_name: str, ctx: ExecutionContext,
                      g: GraphEvaluator):
     """读取 vec3 类型的 data input pin，返回 np.ndarray 或 None。"""
+    import numpy as np
     inst = g._canvas.nodes[node_id]
     nd = g._types[inst.node_type]
     for p in nd.pins:

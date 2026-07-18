@@ -70,6 +70,7 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ("Get Delta Time", "TimeGetDelta"),
         ("Delay", "TimeDelay"),
         ("Time Trigger", "TimeTrigger"),
+        ("Get Date", "TimeGetDate"),
     ]),
     ("Flow", [
         ("Sequence", "Sequence"),

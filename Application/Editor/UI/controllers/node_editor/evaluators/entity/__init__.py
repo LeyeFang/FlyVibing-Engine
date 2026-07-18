@@ -24,6 +24,9 @@ def _eval_entity_destroy(node_id: int, ctx: ExecutionContext, g: GraphEvaluator)
     
     eid = _resolve_entity_id(node_id, "EntityID", ctx, g)
     if eid is not None and eid > 0:
+        if ctx.dry_run:
+            ctx.emit_log(node_id, "EntityDestroy", "delete", f"eid={eid}")
+            return
         ok = ctx.scene.DeleteEntity(eid)
         if ok:
             print(f"[EntityDestroy] Entity #{eid} destroyed")
@@ -33,15 +36,26 @@ def _eval_entity_destroy(node_id: int, ctx: ExecutionContext, g: GraphEvaluator)
 
 def _resolve_entity_id(node_id: int, pin_name: str,
                        ctx: ExecutionContext, g: GraphEvaluator) -> int | None:
-    """从 data input pin 解析实体 ID — 支持 int 和 EntityRef 两种类型。"""
-    from .lifecycle import EntityRef  # noqa: F811  (import from sibling module)
-    val = _read_data_input(node_id, pin_name, ctx, g, None)
-    if val is None:
-        return None
-    if isinstance(val, EntityRef):
-        return val.eid
-    if isinstance(val, (int, float)):
-        return int(val)
+    """从 data input pin 解析实体 ID — 支持 int / float / EntityRef 三种类型。
+
+    直接使用 g._read_input 绕过 _read_data_input 的 float() 强转，
+    避免 EntityRef → float 的 TypeError。
+    """
+    from .lifecycle import EntityRef  # noqa: F811
+    inst = g._canvas.nodes[node_id]
+    nd = g._types[inst.node_type]
+    for p in nd.pins:
+        if p.name == pin_name and p.direction == "input":
+            inst_pin_id = inst.pin_ids.get(p.name)
+            if inst_pin_id is not None:
+                val = g._read_input(inst_pin_id, ctx)
+                if val is None:
+                    return None
+                if isinstance(val, EntityRef):
+                    return val.eid
+                if isinstance(val, (int, float)):
+                    return int(val)
+                return None
     return None
 
 
@@ -55,6 +69,11 @@ def _eval_entity_add_mesh(node_id: int, ctx: ExecutionContext, g: GraphEvaluator
     mesh_val = _read_data_input(node_id, "MeshID", ctx, g, -1)
     mat_val = _read_data_input(node_id, "MaterialID", ctx, g, -1)
     eid, mid, matid = int(eid_val), int(mesh_val), int(mat_val)
+
+    if ctx.dry_run:
+        ctx.emit_log(node_id, "EntityAddMesh", "add_component",
+                     f"eid={eid}, mesh={mid}, mat={matid}")
+        return
 
     if eid < 0 or not ctx.scene.EntityExists(eid):
         print(f"[Node:EntityAddMesh] Invalid entity #{eid}")
@@ -75,6 +94,11 @@ register_evaluator("EntityAddMesh", _eval_entity_add_mesh)
 def _eval_entity_add_camera(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     eid_val = _read_data_input(node_id, "EntityID", ctx, g, -1)
     eid = int(eid_val)
+
+    if ctx.dry_run:
+        ctx.emit_log(node_id, "EntityAddCamera", "add_component", f"eid={eid}")
+        return
+
     if eid < 0 or not ctx.scene.EntityExists(eid):
         return
 
@@ -87,14 +111,18 @@ register_evaluator("EntityAddCamera", _eval_entity_add_camera)
 # ── EntitySetRenderVisible ───────────────────────────────────
 
 def _eval_entity_set_render_visible(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
-    eid_val = _read_data_input(node_id, "EntityID", ctx, g, -1)
+    eid = _resolve_entity_id(node_id, "EntityID", ctx, g)
     visible_val = _read_data_input(node_id, "Visible", ctx, g, 1)
-    eid = int(eid_val)
     visible = bool(int(visible_val))
-    if eid < 0 or not ctx.scene.EntityExists(eid):
+
+    if ctx.dry_run:
+        ctx.emit_log(node_id, "EntitySetRenderVisible", "set_visible",
+                     f"eid={eid}, visible={visible}")
         return
 
-    # ★ 通过 SceneManager API → 内部发送 EntityVisibilityCommand 到渲染器
+    if eid is None or eid < 0 or not ctx.scene.EntityExists(eid):
+        return
+
     ctx.scene.SetEntityRenderVisible(eid, visible=visible)
 
 register_evaluator("EntitySetRenderVisible", _eval_entity_set_render_visible)

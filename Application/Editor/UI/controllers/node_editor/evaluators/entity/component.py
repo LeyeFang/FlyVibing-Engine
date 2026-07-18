@@ -7,8 +7,6 @@ Evaluators: Component 节点 — 通用组件 CRUD。
   ComponentRemove — 按名称从实体移除组件
 """
 
-import numpy as np
-
 from ...evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
 from ..math import _read_data_input
 
@@ -67,6 +65,7 @@ def _to_vec3_tuple(
         val
     ) -> tuple[float, float, float]:
     """将各种 vec3 表示转换为 (x, y, z) 元组。"""
+    import numpy as np
     if val is None:
         return (0.0, 0.0, 0.0)
     if isinstance(val, (tuple, list)):

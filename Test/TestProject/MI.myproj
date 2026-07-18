@@ -1,0 +1,14 @@
+{
+  "version": "0.1.0",
+  "name": "MI",
+  "startup_scene": "MI.scene",
+  "resources": {
+    "materials": [
+      "cue.mat",
+      "task.mat"
+    ],
+    "shaders": [],
+    "textures": [],
+    "meshes": []
+  }
+}

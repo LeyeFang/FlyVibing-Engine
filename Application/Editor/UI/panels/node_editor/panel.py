@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections import defaultdict, deque
 from pathlib import Path
 
 from imgui_bundle import imgui
@@ -188,6 +189,10 @@ class NodeEditorPanel(BasePanel):
         if imgui.small_button("Export"):
             self._export_error = ""
             imgui.open_popup("Export Graph")
+
+        imgui.same_line()
+        if imgui.small_button("Rearrange"):
+            self._auto_layout(canvas)
 
         # ── Import 弹出窗口 ──
         self._draw_import_popup(canvas)
@@ -671,6 +676,144 @@ class NodeEditorPanel(BasePanel):
             for title, items in MENU_SECTIONS:
                 _draw_add_menu_section(title, items, canvas, avail)
             imgui.end_popup()
+
+    # ============================================================
+    # 子步骤: 自动布局
+    # ============================================================
+
+    @staticmethod
+    def _auto_layout(canvas: NodeCanvas) -> None:
+        """拓扑分层自动布局 — 沿 exec 链路 BFS 分配层级。
+
+        纯数据节点 (无 exec pin) 放在消费它们的 exec 节点左侧一层。
+        同层节点按类型分组排序以减少连线交叉。
+
+        层间距 320px, 节点间距 100px, 高度根据 pin 数量估算。
+        """
+        if not canvas.nodes:
+            return
+
+        H_SPACING = 320
+        V_SPACING = 100
+        V_HEADER = 30
+        V_PER_PIN = 18
+
+        # ── 1. 分类连线 (exec vs data) ──
+        exec_down: dict[int, list[int]] = defaultdict(list)
+        data_down: dict[int, list[int]] = defaultdict(list)
+        data_up: dict[int, list[int]] = defaultdict(list)
+
+        for link in canvas.links.values():
+            src_nid = canvas.find_pin_node(link.from_pin)
+            dst_nid = canvas.find_pin_node(link.to_pin)
+            if src_nid is None or dst_nid is None:
+                continue
+
+            pin_name = canvas.find_pin_name(link.from_pin)
+            src_inst = canvas.nodes.get(src_nid)
+            if src_inst and pin_name:
+                ndef = _TYPES.get(src_inst.node_type)
+                if ndef:
+                    pdef = next((p for p in ndef.pins if p.name == pin_name), None)
+                    if pdef and pdef.kind == "exec":
+                        exec_down[src_nid].append(dst_nid)
+                        continue
+            data_down[src_nid].append(dst_nid)
+            data_up[dst_nid].append(src_nid)
+
+        # ── 2. 找根节点 ──
+        event_types = {"OnGameStart", "OnFrameUpdate", "OnGameStop"}
+        roots = [nid for nid, inst in canvas.nodes.items()
+                 if inst.node_type in event_types]
+
+        # ── 3. BFS 沿 exec 边分配 layer ──
+        layer: dict[int, int] = {}
+        queue = deque()
+        for r in roots:
+            layer[r] = 0
+            queue.append(r)
+
+        while queue:
+            nid = queue.popleft()
+            for dn in exec_down.get(nid, []):
+                if dn not in layer:
+                    layer[dn] = layer[nid] + 1
+                    queue.append(dn)
+
+        # 未被 BFS 到达的 exec 节点: 从其 exec 前驱推算 layer
+        for nid in canvas.nodes:
+            if nid in layer:
+                continue
+            pred_layers = [layer[s] for s, ds in exec_down.items()
+                           if nid in ds and s in layer]
+            layer[nid] = (max(pred_layers) + 1) if pred_layers else len(roots)
+
+        # ── 4. 将节点按 layer 分组 ──
+        layer_nodes: dict[int, list[int]] = defaultdict(list)
+        max_exec_layer = max(layer.values()) if layer else 0
+
+        for nid, inst in canvas.nodes.items():
+            ndef = _TYPES.get(inst.node_type)
+            has_exec = ndef and any(p.kind == "exec" for p in ndef.pins)
+
+            if not has_exec:
+                # 纯数据节点: 放在消费者的左侧一层
+                consumers = data_down.get(nid, [])
+                if consumers:
+                    cons_layers = [layer.get(c, 0) for c in consumers]
+                    dl = max(cons_layers) - 1
+                    layer_nodes[max(0, dl)].append(nid)
+                else:
+                    # 孤立数据节点 → 最右侧
+                    layer_nodes[max_exec_layer + 1].append(nid)
+            else:
+                layer_nodes[layer.get(nid, 0)].append(nid)
+
+        # ── 5. 层内排序 (按类型分组, 减少连线交叉) ──
+        type_order: dict[str, int] = {
+            "OnGameStart": 0, "OnFrameUpdate": 1, "OnGameStop": 2,
+            "RandomSetSeed": 10, "VarGet": 11, "VarSet": 12,
+            "StringConst": 13,
+            "TextFileWrite": 20, "EntitySpawn": 21, "EntityGet": 22,
+            "EntitySetRenderVisible": 23, "EntityDestroy": 24,
+            "TimeTrigger": 30, "TimeGetElapsed": 31, "TimeDelay": 32,
+            "TimeGetDate": 33,
+            "Branch": 40, "Sequence": 41,
+            "Compare": 50, "ScalarMath": 51, "Constant": 52,
+            "Random": 54, "PathVar": 55,
+            "ParallelSend": 60, "SerialSend": 61,
+            "ExitGame": 70,
+            "MakeVec3": 80, "BreakVec3": 81, "VecMath": 82,
+            "ComponentAdd": 90, "SetComponent": 91,
+            "GetComponent": 92, "ComponentRemove": 93,
+            "CameraSetMain": 95,
+            "EntityAddMesh": 100, "EntityAddCamera": 101,
+            "Print": 110, "PrintString": 111,
+            "MathAdd": 120, "MathSubtract": 121,
+            "MathMultiply": 122, "MathDivide": 123,
+            "MathRandomUniform": 124, "MathRandomGaussian": 125,
+        }
+
+        for lyr, nids in layer_nodes.items():
+            nids.sort(key=lambda nid: (
+                type_order.get(canvas.nodes[nid].node_type, 99),
+                nid,
+            ))
+
+        # ── 6. 分配坐标 ──
+        for lyr in sorted(layer_nodes.keys()):
+            for idx, nid in enumerate(layer_nodes[lyr]):
+                inst = canvas.nodes[nid]
+                ndef = _TYPES.get(inst.node_type)
+                pin_count = len(ndef.pins) if ndef else 2
+                est_h = V_HEADER + pin_count * V_PER_PIN
+                x = 80 + lyr * H_SPACING
+                y = 80 + idx * V_SPACING
+                # 如果节点比间距高，不额外偏移 (保持简单)
+                inst.pos = (float(x), float(y))
+
+        print(f"[Rearrange] {len(canvas.nodes)} nodes laid out "
+              f"in {len(layer_nodes)} layers")
 
     # ============================================================
     # 子步骤: 位置同步

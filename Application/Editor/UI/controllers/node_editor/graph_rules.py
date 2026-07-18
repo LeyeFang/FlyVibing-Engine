@@ -1,0 +1,244 @@
+"""
+节点图 JSON 参考文档 (v0.1.0) — 每次导出 scene 时附带此规则文档。
+
+Agent 通过此文档理解节点图的 JSON 结构和可用节点类型。
+"""
+
+_NODE_GRAPH_RULES = """## Node Graph JSON Reference (v0.1.0)
+
+### JSON Structure
+The node_graph is a JSON object with these keys:
+- "version": "0.1.0"
+- "nodes": { "<nid>": {NodeInstance}, ... }  — nid is globally unique int (string key)
+- "links": { "<lid>": {LinkInstance}, ... }  — lid is globally unique int (string key)
+- "next_id": int — 1 + max(all node/link/pin IDs), ensures no collision on future additions
+- "_rules": "<this document>"
+
+### NodeInstance Format
+  "id": <int>, "node_type": "<type_name>", "pos": [<x>, <y>],
+  "props": {<key>: <value>, ...},  — mode-dependent props (see per-node table)
+  "pin_ids": {"<pin_name>": <int>, ...}  — instance-level unique pin IDs
+
+### LinkInstance Format
+  "id": <int>, "from_pin": <int> (output pin ID), "to_pin": <int> (input pin ID)
+
+### Pin IDs
+Every node has a pin_ids dict mapping logical pin name → instance-unique integer.
+All links reference these instance-level IDs, NOT template-level PinDef IDs.
+When writing a graph, assign pin IDs sequentially starting from a high base (e.g., nid*10).
+
+### Connection Rules (CRITICAL)
+1. exec pins connect exec→exec: output exec pin → input exec pin
+2. data pins connect data→data: output data pin → input data pin
+3. NEVER connect exec→data or data→exec
+4. One output pin can fan out to multiple input pins (both exec and data)
+5. An input pin can only receive from ONE output pin
+6. Event nodes (OnGameStart/OnFrameUpdate/OnGameStop) have NO input exec pins — they are graph roots
+
+### Execution Model
+- OnGameStart: fires ONCE when the game begins. Use for initialization (set variables, spawn entities).
+- OnFrameUpdate: fires EVERY FRAME. Use for per-frame checks (TimeTrigger, input polling).
+- OnGameStop: fires ONCE when the game ends. Use for cleanup.
+- Exec chain: _walk_exec follows exec output→input links depth-first.
+- Data nodes (Constant/Scale, StringConst, PathVar, Compare, ScalarMath, MakeVec3, BreakVec3, VecMath, Random, legacy math):
+  NO exec pins. Evaluated LAZILY when their output pin is read via a data link.
+- Mixed nodes (VarGet): have BOTH exec_in and data output pins. Exec triggers read; data output
+  is then available for downstream data links. When data-read without exec context, lazy-eval works too.
+- _blocked pattern: TimeDelay and TimeTrigger set _blocked=True to pause exec chain.
+  Branch sets _blocked=True after manually walking the matching branch.
+- Variable store: ctx._variables persists across frames. VarSet writes, VarGet reads.
+  Variables are NOT cleared between triggers — use them for state (counters, timers).
+
+### Pin Naming Convention
+- exec_in / exec_out: execution flow pins
+- out_0..out_7: Sequence or TimeTrigger multi-output exec pins
+- Data pins have descriptive names: Value, Result, A, B, X, Y, Z, In_0..In_7, etc.
+- Pin direction is determined by the node type definition (see tables below)
+
+---
+
+### NODE TYPE REFERENCE
+
+#### Event Nodes (graph roots — no input pins)
+| type_name      | output pins                  | notes                            |
+|----------------|------------------------------|----------------------------------|
+| OnGameStart    | exec (exec)                  | fires once at game start         |
+| OnFrameUpdate  | exec (exec), delta (float)   | fires every frame                |
+| OnGameStop     | exec (exec)                  | fires once at game stop          |
+
+#### Flow Nodes
+| type_name | input pins              | output pins               | props              |
+|-----------|-------------------------|---------------------------|--------------------|
+| Sequence  | exec_in (exec)          | out_0,out_1,out_2 (exec) | —                  |
+| Branch    | exec_in,Condition(bool) | True,False (exec)         | —                  |
+
+#### Math Nodes (pure data — no exec pins)
+| type_name      | input pins                    | output pins    | props                        |
+|----------------|-------------------------------|----------------|------------------------------|
+| ScalarMath     | In_0..In_7 (float)           | Result (float) | operation: sum/sub/mul/div   |
+| Compare        | A (float), B (float)          | Result (bool)  | operation: gt/lt/eq/neq/gte/lte |
+| MathAdd        | A,B (float)                   | Result (float) | — (legacy, hidden)           |
+| MathSubtract   | A,B (float)                   | Result (float) | — (legacy, hidden)           |
+| MathMultiply   | A,B (float)                   | Result (float) | — (legacy, hidden)           |
+| MathDivide     | A,B (float)                   | Result (float) | — (legacy, hidden)           |
+| RandomSetSeed  | exec_in,exec_out,Seed(int)   | (exec_out)     | source: manual/pin/hardware, seed: int  |
+| Random         | Min,Max,Mean,StdDev (float)   | Result (float) | distribution: uniform/gaussian/discrete, mode: manual/pin |
+| MathRandomUniform  | Min,Max (float)           | Result (float) | — (legacy, hidden)           |
+| MathRandomGaussian | Mean,StdDev (float)       | Result (float) | — (legacy, hidden)           |
+| MakeVec3       | X,Y,Z (float)                 | Vec3 (vec3)    | —                            |
+| BreakVec3      | Vec3 (vec3)                   | X,Y,Z (float)  | —                            |
+| VecMath        | A,B (vec3)                    | Result(var)   | operation: add/sub/mul/div/dot/cross/normalize/length |
+
+#### Time Nodes
+| type_name      | input pins               | output pins                    | props                  |
+|----------------|--------------------------|--------------------------------|------------------------|
+| TimeGetElapsed | exec_in (exec)           | exec_out (exec), Elapsed(float)| —                      |
+| TimeGetDelta   | exec_in (exec)           | exec_out (exec), Delta(float)  | —                      |
+| TimeDelay      | exec_in,Seconds(float)   | exec_out (exec)                | —                      |
+| TimeTrigger    | exec_in,Time(float)      | Elapsed(float), out_0..out_7(exec×8) | mode: manual/pin, time: float |
+| TimeGetDate    | —                        | DateString (string)            | year,month,day,hour,minute: bool, format: str |
+
+TimeTrigger behavior: fires when ctx.elapsed_time >= threshold. Re-armable: increasing the threshold via variable/pin allows repeated triggering. Tracks _last_fired_threshold in state.
+
+#### Basic Nodes (fundamental value types)
+| type_name   | input pins | output pins    | props              |
+|-------------|------------|----------------|--------------------|
+| Constant    | —         | Result (float) | value: float       |
+| StringConst | —         | Value (string) | value: string      |
+
+Constant is displayed as "Scale" in the UI. StringConst outputs a raw string (no float coercion).
+
+#### Variable Nodes
+| type_name | input pins                    | output pins             | props                          |
+|-----------|-------------------------------|-------------------------|--------------------------------|
+| VarSet    | exec_in,Name(string),Value(var)| exec_out (exec)        | mode: manual/pin, var_name, value |
+| VarGet    | exec_in,Name(string)          | exec_out,Value(var)     | var_name                       |
+
+VarSet manual mode: Name from textbox prop, Value from props.value.
+VarSet pin mode: Name from upstream link, Value from upstream link.
+VarGet: reads ctx.get_var(name) and writes to Value output.
+
+#### Entity Nodes
+| type_name             | input pins                                  | output pins          | props            |
+|-----------------------|---------------------------------------------|----------------------|------------------|
+| EntitySpawn           | exec_in (exec)                              | exec_out,Entity(ref) | template: string |
+| EntityDestroy         | exec_in,EntityID(int)                       | exec_out             | —                |
+| EntityGet             | exec_in,Name(string)                        | exec_out,Entity(ref) | —                |
+| EntityAddMesh         | exec_in,EntityID,MeshID,MaterialID (int)    | exec_out             | —                |
+| EntityAddCamera       | exec_in,EntityID (int)                      | exec_out             | —                |
+| EntitySetRenderVisible| exec_in,EntityID(int),Visible(bool)         | exec_out             | —                |
+
+EntitySpawn: creates entity from Scene.entities template (dropdown). Recursively spawns children.
+EntityRef: type-safe wrapper with is_valid property. Output as entity_ref on data pins.
+
+#### Game Nodes
+| type_name    | input pins                  | output pins | notes                    |
+|--------------|-----------------------------|-------------|--------------------------|
+| CameraSetMain| exec_in,Entity(entity_ref)  | exec_out    | sets scene_camera_id     |
+| ExitGame     | exec_in                     | —           | terminal node, no output |
+
+#### Component Nodes
+| type_name      | input pins                                    | output pins | props             |
+|----------------|-----------------------------------------------|-------------|-------------------|
+| ComponentAdd   | exec_in,Entity(ref),Position,Rotation,Scale(vec3),MeshID,MaterialID(int),Visible(bool) | exec_out | mode, component, per-prop enabled |
+| ComponentRemove| exec_in,Entity(ref)                           | exec_out | component (dropdown) |
+| SetComponent   | exec_in,Entity(ref),Position,Rotation,Scale(vec3),MeshID,MaterialID(int),Visible(bool) | exec_out | mode, component, per-prop enabled |
+| GetComponent   | exec_in,Entity(ref)                           | exec_out, Position,Rotation,Scale(vec3),MeshID,MaterialID(int),Visible(bool) | component (dropdown) |
+
+Property pins use _SKIP sentinel: unconnected (pin mode) or unchecked (manual mode) → property not modified.
+
+#### Debug Nodes
+| type_name   | input pins           | output pins | props           |
+|-------------|----------------------|-------------|-----------------|
+| Print       | exec_in,Value(var)   | exec_out    | —               |
+| PrintString | exec_in              | exec_out    | message: string |
+
+#### IO Nodes
+| type_name    | input pins                              | output pins | props                                      |
+|--------------|-----------------------------------------|-------------|--------------------------------------------|
+| SerialSend   | exec_in,Port(string),BaudRate(int),Value(var) | exec_out | mode: manual/pin, format: string/bytes, port, baud_rate, value |
+| ParallelSend | exec_in,Address(int),Value(var)        | exec_out | mode: manual/pin, address: int (0x3FF8 LPT1, 0x3FF0 LPT2, 0x3FE8 LPT3), value: 1-255 |
+| PathVar      | —                                      | Path (string) | browse_mode: directory/file, path: string |
+| TextFileWrite| exec_in,FilePath(string),FileName(string),Value(var) | exec_out | mode: manual/pin, write_mode: w/a, delimiter: none/space/newline/tab/comma, file_path, file_name, value |
+
+SerialSend format "string"→UTF-8, "bytes"→float32 LE 4 bytes. ParallelSend always sends uint8 (1-255, 0 reserved for auto-reset after 5ms).
+PathVar outputs a directory or file path selected via OS file browser. browse_mode=directory uses select_folder, browse_mode=file uses open_file (.txt/.csv/.log/.json).
+TextFileWrite writes str(value) + delimiter to {file_path}/{file_name}.txt. FileName auto-appends .txt suffix. Directory created if missing. write_mode="w" overwrites, "a" appends. Delimiter appended after each write: none="", space=" ", newline="\\n", tab="\\t", comma=",".
+FilePath is always handled by widget (Browse button); pin connection overrides widget value.
+
+---
+
+### COMMON PATTERNS
+
+#### Pattern 1: Timer + Repeated Action (e.g., send every 1s, 10 times then exit)
+```
+OnGameStart → VarSet(counter=0, mode=manual) → VarSet(next_time=1.0, mode=manual)
+OnFrameUpdate → VarGet("next_time") → TimeTrigger(mode=pin, Time←VarGet.Value)
+TimeTrigger.out_0 → SerialSend/ParallelSend → VarGet("counter") → ScalarMath(sum:+1) → VarSet("counter", mode=pin)
+  → VarGet("next_time") → ScalarMath(sum:+1) → VarSet("next_time", mode=pin)
+  → Branch(exec_in, Condition←Compare(A←ScalarMath.Result, B←Constant(10), gte))
+  Branch.True → ExitGame
+```
+Key: TimeTrigger re-arms because next_time increases each fire. Compare.A uses ScalarMath(counter+1).Result directly (no need for a second VarGet).
+
+#### Pattern 2: OnFrameUpdate per-frame action (no timer)
+```
+OnFrameUpdate → TimeGetElapsed → Print(Value←TimeGetElapsed.Elapsed)
+```
+
+#### Pattern 3: Spawn entity on start
+```
+OnGameStart → EntitySpawn(template="MyEntity") → ...
+```
+
+#### Pattern 4: Conditional branch
+```
+... → VarGet("some_var") → Compare(A←VarGet.Value, B←Constant(threshold), gte)
+  → Branch(Condition←Compare.Result) → True: ... / False: ...
+```
+Note: Branch needs exec_in from the chain. The Condition is a data link from Compare.Result.
+The exec_in usually comes from VarGet.exec_out (the VarGet that fed Compare.A).
+
+#### Pattern 5: Parallel port trigger (EEG/SSVEP)
+```
+OnFrameUpdate → VarGet("next_time") → TimeTrigger(mode=pin) → ParallelSend(Address=0x3FF8, Value=1)
+  → VarGet("counter") → ScalarMath(sum) → VarSet("counter", mode=pin)
+  → VarGet("next_time") → ScalarMath(sum) → VarSet("next_time", mode=pin)
+  → Branch(Condition←Compare(A←ScalarMath.Result, B←Constant(N), gte)) → ExitGame
+```
+
+#### Pattern 6: Write to text file (logging experiment data)
+```
+OnGameStart → VarSet(trial=1, mode=manual) → VarSet(max_trials=10, mode=manual)
+OnFrameUpdate → VarGet("next_time") → TimeTrigger(mode=pin)
+  TimeTrigger.out_0 → TextFileWrite(
+      mode=pin,
+      write_mode="a", delimiter="newline",
+      FilePath←PathVar(browse_mode=directory, path="D:/Data/"),
+      FileName←StringConst(value="experiment_log"),  // → experiment_log.txt
+      Value←VarGet("trial").Value
+    )
+  → VarGet("trial") → ScalarMath(sum:+1) → VarSet("trial", mode=pin)
+  → Branch(Condition←Compare(A←ScalarMath.Result, B←VarGet("max_trials").Value, gte))
+  Branch.True → ExitGame
+```
+Key: TextFileWrite creates the directory and file automatically. FileName "experiment_log" becomes "experiment_log.txt".
+Use StringConst for static strings, VarGet for dynamic values (but note VarGet returns float — use StringConst for file names).
+PathVar provides a reusable directory path that can fan out to multiple TextFileWrite nodes.
+
+---
+
+### WRITING A GRAPH — STEP BY STEP
+
+1. Plan the exec flow: which event nodes trigger what chains.
+2. Assign node IDs starting from 200 (reserve 151-199 for default event nodes).
+3. For each node, assign pin IDs. Use a scheme like node_id*10+0, node_id*10+1, ... for clarity.
+4. Write nodes dict with correct node_type, pin_ids mapping, and props.
+5. Write links dict: exec links first (to establish execution order), then data links.
+6. Compute next_id = 1 + max(all node IDs, pin IDs, link IDs).
+7. Always include the 3 default event nodes (OnGameStart, OnFrameUpdate, OnGameStop).
+8. Pure data nodes (Constant, Compare, ScalarMath, etc.) have NO exec pins — only connect them via data links.
+9. Use VarGet/Scale → ScalarMath/Compare → VarSet for arithmetic on variables.
+   Use StringConst for static string values, VarGet for numeric values.
+   Note: VarGet returns float (even for string var names); use StringConst for file names and paths.
+10. For repeated TimeTrigger: feed a variable into TimeTrigger.Time pin, increment that variable after each fire."""

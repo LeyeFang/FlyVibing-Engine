@@ -228,7 +228,7 @@ def dry_run_simulation(
     max_frames: int = 60,
     verbose: bool = False,
     real_time: bool = False,
-    target_fps: float = 60.0,
+    target_fps: float = 0.0,
 ) -> dict:
     """L2: 干跑模拟 — 构建 GraphEvaluator，设置 dry_run=True，模拟 N 帧。
 
@@ -236,8 +236,9 @@ def dry_run_simulation(
         scene_data:   已加载的 scene JSON dict。
         max_frames:   最大模拟帧数。
         verbose:      是否逐节点打印执行追踪。
-        real_time:    True=真实时间模式 (time.sleep 维持帧率), False=fake 时间模式。
-        target_fps:   真实时间模式下的目标帧率 (默认 60)。
+        real_time:    True=真实时间模式, False=fake 时间模式 (simulated delta)。
+        target_fps:   真实时间模式下的目标帧率。0=不限制帧率，
+                      仅测量实际 wall-clock 耗时；>0 时用 time.sleep 维持帧率。
 
     Returns:
         {
@@ -292,15 +293,19 @@ def dry_run_simulation(
 
     # 时间参数
     if real_time:
-        simulated_dt = 1.0 / target_fps
-        target_frame_s = 1.0 / target_fps
-        frame_times: list[float] = []  # 每帧的 wall-clock 耗时 (ms)
+        target_frame_s = 1.0 / target_fps if target_fps > 0 else 0.0
+        frame_times: list[float] = []   # 每帧的 wall-clock 耗时 (ms)
+        prev_wall = _time_mod.perf_counter()  # 上一帧结束时刻（用于 delta_time）
+        simulated_dt = 1.0 / 60.0       # 第一帧用默认值，后续用真实时长
     else:
         simulated_dt = 1.0 / 60.0
 
     # ── Header ──
     mode_label = "Real-Time" if real_time else "Fake-Time"
-    fps_label = f"@{target_fps:.0f}fps" if real_time else "@~60fps"
+    if real_time:
+        fps_label = "(unrestricted)" if target_fps <= 0 else f"@{target_fps:.0f}fps"
+    else:
+        fps_label = "@~60fps"
     print(f"\n{'='*60}")
     print(f"  Dry-Run Simulation ({mode_label}) — max {max_frames} frames {fps_label}")
     print(f"  Nodes: {len(canvas.nodes)}  Links: {len(canvas.links)}")
@@ -331,8 +336,14 @@ def dry_run_simulation(
         if verbose and frame % 60 == 0:
             print(f"\n── Frame {frame} (t={ctx.elapsed_time:.1f}s) ──")
 
-        # 真实时间: 记录帧开始时刻, 帧结束后 sleep
-        frame_start = _time_mod.perf_counter() if real_time else 0.0
+        # 真实时间: 记录帧开始时刻，帧结束后记录耗时
+        if real_time:
+            frame_start = _time_mod.perf_counter()
+            # 使用上一帧的真实 wall-clock 时长作为 delta_time
+            now = frame_start
+            ctx.delta_time = max(now - prev_wall, 1e-9)
+            ctx.elapsed_time += ctx.delta_time
+            prev_wall = now
 
         try:
             evaluator.trigger("OnFrameUpdate", ctx)
@@ -343,14 +354,15 @@ def dry_run_simulation(
                 traceback.print_exc()
             break
 
-        # 真实时间: 记录耗时并 sleep 剩余时间
+        # 真实时间: 记录耗时
         if real_time:
             elapsed = _time_mod.perf_counter() - frame_start
             frame_times.append(elapsed * 1000.0)  # ms
-            # sleep 以维持目标帧率
-            sleep_needed = target_frame_s - elapsed
-            if sleep_needed > 0:
-                _time_mod.sleep(sleep_needed)
+            # 仅在明确设定了目标帧率时 sleep
+            if target_frame_s > 0:
+                sleep_needed = target_frame_s - elapsed
+                if sleep_needed > 0:
+                    _time_mod.sleep(sleep_needed)
 
         # 检测 ExitGame 是否被触发
         for evt in logger.events:
@@ -442,9 +454,10 @@ def main():
     parser.add_argument(
         "--fps",
         type=float,
-        default=60.0,
-        help="Target FPS in real-time mode (default: 60). Lower values give more idle time "
-             "between frames; higher values stress-test the evaluator throughput.",
+        default=0.0,
+        help="Target FPS in real-time mode. 0 = unrestricted (measure raw throughput, "
+             "no throttling); >0 = use time.sleep() to maintain that frame rate "
+             "(useful for simulating real-time constraints).",
     )
     args = parser.parse_args()
 

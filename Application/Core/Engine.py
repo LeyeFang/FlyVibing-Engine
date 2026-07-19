@@ -398,7 +398,8 @@ class Engine:
                 layer.OnUpdate()
                 if not cls.run_state:
                     break
-            _time.sleep(0.005)
+            # 不在此处 sleep — 帧率由实际工作负载和 vsync 自然调节；
+            # 需要限帧的场景由上层（验证器 --fps 参数）控制。
 
     # ════════════════════════════════════════════════════════════
     # 时间系统

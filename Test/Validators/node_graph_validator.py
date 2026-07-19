@@ -227,8 +227,17 @@ def dry_run_simulation(
     scene_data: dict,
     max_frames: int = 60,
     verbose: bool = False,
+    real_time: bool = False,
+    target_fps: float = 60.0,
 ) -> dict:
     """L2: 干跑模拟 — 构建 GraphEvaluator，设置 dry_run=True，模拟 N 帧。
+
+    Args:
+        scene_data:   已加载的 scene JSON dict。
+        max_frames:   最大模拟帧数。
+        verbose:      是否逐节点打印执行追踪。
+        real_time:    True=真实时间模式 (time.sleep 维持帧率), False=fake 时间模式。
+        target_fps:   真实时间模式下的目标帧率 (默认 60)。
 
     Returns:
         {
@@ -236,8 +245,11 @@ def dry_run_simulation(
             "total_events": int,
             "events_by_type": dict,
             "errors": list[str],
+            "perf": dict | None,  # 仅 real_time 模式下返回
         }
     """
+    import time as _time_mod
+
     from Application.Editor.UI.controllers.node_editor.node_types import _TYPES
     from Application.Editor.UI.controllers.node_editor.canvas import NodeCanvas
     from Application.Editor.UI.controllers.node_editor.evaluator_engine import (
@@ -257,6 +269,7 @@ def dry_run_simulation(
                 "total_events": 0,
                 "events_by_type": {},
                 "errors": errors,
+                "perf": None,
             }
 
     try:
@@ -268,6 +281,7 @@ def dry_run_simulation(
             "total_events": 0,
             "events_by_type": {},
             "errors": errors,
+            "perf": None,
         }
 
     # ── 2. 构建 GraphEvaluator + ExecutionContext (dry_run) ──
@@ -276,11 +290,19 @@ def dry_run_simulation(
     ctx.dry_run = True
     ctx.log = logger
 
-    # 模拟 delta_time ≈ 16ms (60fps)
-    simulated_dt = 1.0 / 60.0
+    # 时间参数
+    if real_time:
+        simulated_dt = 1.0 / target_fps
+        target_frame_s = 1.0 / target_fps
+        frame_times: list[float] = []  # 每帧的 wall-clock 耗时 (ms)
+    else:
+        simulated_dt = 1.0 / 60.0
 
+    # ── Header ──
+    mode_label = "Real-Time" if real_time else "Fake-Time"
+    fps_label = f"@{target_fps:.0f}fps" if real_time else "@~60fps"
     print(f"\n{'='*60}")
-    print(f"  Dry-Run Simulation — max {max_frames} frames @ ~60fps")
+    print(f"  Dry-Run Simulation ({mode_label}) — max {max_frames} frames {fps_label}")
     print(f"  Nodes: {len(canvas.nodes)}  Links: {len(canvas.links)}")
     print(f"{'='*60}")
 
@@ -289,7 +311,11 @@ def dry_run_simulation(
     ctx.elapsed_time = 0.0
     ctx.delta_time = 0.0
     try:
+        _t0 = _time_mod.perf_counter()
         evaluator.trigger("OnGameStart", ctx)
+        _startup_ms = (_time_mod.perf_counter() - _t0) * 1000.0
+        if real_time:
+            print(f"  [Perf] OnGameStart: {_startup_ms:.2f} ms")
     except Exception as e:
         errors.append(f"OnGameStart error: {e}")
         if verbose:
@@ -305,6 +331,9 @@ def dry_run_simulation(
         if verbose and frame % 60 == 0:
             print(f"\n── Frame {frame} (t={ctx.elapsed_time:.1f}s) ──")
 
+        # 真实时间: 记录帧开始时刻, 帧结束后 sleep
+        frame_start = _time_mod.perf_counter() if real_time else 0.0
+
         try:
             evaluator.trigger("OnFrameUpdate", ctx)
         except Exception as e:
@@ -314,7 +343,16 @@ def dry_run_simulation(
                 traceback.print_exc()
             break
 
-        # 检测 ExitGame 是否被触发 (查看 log 事件)
+        # 真实时间: 记录耗时并 sleep 剩余时间
+        if real_time:
+            elapsed = _time_mod.perf_counter() - frame_start
+            frame_times.append(elapsed * 1000.0)  # ms
+            # sleep 以维持目标帧率
+            sleep_needed = target_frame_s - elapsed
+            if sleep_needed > 0:
+                _time_mod.sleep(sleep_needed)
+
+        # 检测 ExitGame 是否被触发
         for evt in logger.events:
             if evt["action"] == "stop" and evt["node_type"] == "ExitGame":
                 exit_requested = True
@@ -334,12 +372,34 @@ def dry_run_simulation(
     # ── 汇总 ──
     print(f"\n{logger.summary()}")
 
+    # ── 性能统计 (仅 real_time 模式) ──
+    perf = None
+    if real_time and frame_times:
+        import statistics
+        frame_times_sorted = sorted(frame_times)
+        n = len(frame_times_sorted)
+        perf = {
+            "frames_measured": n,
+            "min_ms": min(frame_times_sorted),
+            "max_ms": max(frame_times_sorted),
+            "avg_ms": sum(frame_times_sorted) / n,
+            "median_ms": statistics.median(frame_times_sorted),
+            "p99_ms": frame_times_sorted[int(n * 0.99)] if n > 1 else frame_times_sorted[0],
+        }
+        print(f"\n  ── Frame Performance ({n} frames) ──")
+        print(f"  Min:    {perf['min_ms']:8.3f} ms")
+        print(f"  Max:    {perf['max_ms']:8.3f} ms")
+        print(f"  Avg:    {perf['avg_ms']:8.3f} ms")
+        print(f"  Median: {perf['median_ms']:8.3f} ms")
+        print(f"  P99:    {perf['p99_ms']:8.3f} ms")
+
     from collections import Counter
     return {
         "frames_simulated": frame,
         "total_events": len(logger.events),
         "events_by_type": dict(Counter(e["node_type"] for e in logger.events)),
         "errors": errors,
+        "perf": perf,
     }
 
 
@@ -372,6 +432,19 @@ def main():
         "--static-only", "-s",
         action="store_true",
         help="Static check only (skip dry-run even if --frames is set)",
+    )
+    parser.add_argument(
+        "--real-time", "-r",
+        action="store_true",
+        help="Real-time mode — use time.sleep() between frames to measure real performance "
+             "(default: fake-time with simulated delta). Useful for profiling BCI/device nodes.",
+    )
+    parser.add_argument(
+        "--fps",
+        type=float,
+        default=60.0,
+        help="Target FPS in real-time mode (default: 60). Lower values give more idle time "
+             "between frames; higher values stress-test the evaluator throughput.",
     )
     args = parser.parse_args()
 
@@ -411,6 +484,8 @@ def main():
             scene_data,
             max_frames=args.frames,
             verbose=args.verbose,
+            real_time=args.real_time,
+            target_fps=args.fps,
         )
         dry_run_errors = result.get("errors", [])
         if dry_run_errors:

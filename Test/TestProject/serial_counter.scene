@@ -222,7 +222,6 @@
             320
           ],
           "props": {
-            "mode": "pin",
             "format": "bytes",
             "port": "COM2",
             "baud_rate": 9600
@@ -230,8 +229,6 @@
           "pin_ids": {
             "exec_in": 3200,
             "exec_out": 3201,
-            "Port": 3202,
-            "BaudRate": 3203,
             "Value": 3204
           }
         },

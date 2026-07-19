@@ -11,11 +11,9 @@ _reg(NodeTypeDef(
     [
         PinDef(_gen_id(), "exec_in", "exec", "input"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
-        PinDef(_gen_id(), "Port", "data", "input", "string"),
-        PinDef(_gen_id(), "BaudRate", "data", "input", "int"),
         PinDef(_gen_id(), "Value", "data", "input", "variant"),
     ],
-    "Send signal via serial port",
+    "Send signal via serial port.",
 ))
 
 _reg(NodeTypeDef(

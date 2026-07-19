@@ -36,36 +36,19 @@ def _read_input_raw(node_id: int, pin_name: str, ctx: ExecutionContext,
 def _eval_serial_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     """SerialSend — 通过串口发送一个值。
 
-    Format: "string" → UTF-8 文本, "bytes" → float32 小端 4 字节
-    Manual 模式: Port / BaudRate / Value 全部从节点属性读取。
-    Pin 模式:    Port / BaudRate / Value 全部从上游连线读取。
+    Port / BaudRate / Format 始终从节点属性读取（实验级配置）。
+    Value 从上游数据 pin 读入（动态值）。
 
     实际写入由 Functions/SerialParallelDevice 的独立 I/O 线程执行，
     本函数仅做参数读取 + 编码 + 入队 — 不阻塞逻辑线程。
     """
     inst = g._canvas.nodes[node_id]
-    mode = inst.props.get("mode", "manual")
+    port = str(inst.props.get("port", "COM1"))
+    baud = int(inst.props.get("baud_rate", 9600))
     fmt = inst.props.get("format", "bytes")
-
-    if mode == "manual":
-        port = str(inst.props.get("port", "COM1"))
-        baud = int(inst.props.get("baud_rate", 9600))
-        value = inst.props.get("value", 0.0)
-    else:
-        port = _read_input_raw(node_id, "Port", ctx, g, "")
-        if not port:
-            port = str(inst.props.get("port", "COM1"))
-        port = str(port)
-
-        baud_raw = _read_input_raw(node_id, "BaudRate", ctx, g, 0)
-        if baud_raw is None or baud_raw == 0:
-            baud = int(inst.props.get("baud_rate", 9600))
-        else:
-            baud = int(baud_raw)
-
-        value = _read_input_raw(node_id, "Value", ctx, g, 0)
-        if value is None:
-            value = 0.0
+    value = _read_input_raw(node_id, "Value", ctx, g, 0)
+    if value is None:
+        value = 0.0
 
     # ── 编码 + 入队 ──
     if ctx.dry_run:

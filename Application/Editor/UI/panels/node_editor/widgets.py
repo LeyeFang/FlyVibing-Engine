@@ -254,56 +254,46 @@ def _draw_random_set_seed_widgets(nid: int, inst, _canvas) -> None:
 
 @register("SerialSend")
 def _draw_serial_send_widgets(nid: int, inst, _canvas) -> None:
-    """Manual 模式: 端口 + 波特率 + 值 + 格式；Pin 模式: 全部从上游连线。"""
+    """Port / BaudRate / Format 始终在节点属性中配置；Value 从上游 pin 传入。"""
     imgui.dummy(imgui.ImVec2(0, 2))
     imgui.push_item_width(105)
 
-    mode = inst.props.get("mode", "manual")
-    if imgui.radio_button(f"Manual##ser_mode_man_{nid}", mode == "manual"):
-        inst.props["mode"] = "manual"
-    imgui.same_line()
-    if imgui.radio_button(f"Pin##ser_mode_pin_{nid}", mode == "pin"):
-        inst.props["mode"] = "pin"
-
-    if mode == "manual":
-        port = str(inst.props.get("port", "COM1"))
-        ports = _list_com_ports()
-        if ports:
-            try:
-                idx = ports.index(port)
-            except ValueError:
-                idx = -1
-            if idx < 0:
-                ports.append(port)
-                idx = len(ports) - 1
-            changed, new_idx = _ne_combo(f"Port##ser_port_{nid}", idx, ports)
-            if changed:
-                inst.props["port"] = ports[new_idx]
-        else:
-            changed, new_port = imgui.input_text(f"Port##ser_port_{nid}", port)
-            if changed:
-                inst.props["port"] = new_port
-
-        baud = int(inst.props.get("baud_rate", 9600))
-        changed, new_baud = imgui.input_int(f"Baud##ser_baud_{nid}", baud)
-        if changed:
-            inst.props["baud_rate"] = new_baud
-
-        v = inst.props.get("value", 0.0)
-        changed, nv = imgui.input_float(f"Value##ser_val_{nid}", v, format="%.4f")
-        if changed:
-            inst.props["value"] = nv
-
-        fmt = inst.props.get("format", "bytes")
-        fmt_labels = ["Bytes (float32 LE)", "String (UTF-8)"]
-        fmt_keys = ["bytes", "string"]
+    # ── Port ──
+    port = str(inst.props.get("port", "COM1"))
+    ports = _list_com_ports()
+    if ports:
         try:
-            fmt_idx = fmt_keys.index(fmt)
+            idx = ports.index(port)
         except ValueError:
-            fmt_idx = 0
-        changed, new_fmt_idx = _ne_combo(f"Format##ser_fmt_{nid}", fmt_idx, fmt_labels)
+            idx = -1
+        if idx < 0:
+            ports.append(port)
+            idx = len(ports) - 1
+        changed, new_idx = _ne_combo(f"Port##ser_port_{nid}", idx, ports)
         if changed:
-            inst.props["format"] = fmt_keys[new_fmt_idx]
+            inst.props["port"] = ports[new_idx]
+    else:
+        changed, new_port = imgui.input_text(f"Port##ser_port_{nid}", port)
+        if changed:
+            inst.props["port"] = new_port
+
+    # ── Baud Rate ──
+    baud = int(inst.props.get("baud_rate", 9600))
+    changed, new_baud = imgui.input_int(f"Baud##ser_baud_{nid}", baud)
+    if changed:
+        inst.props["baud_rate"] = new_baud
+
+    # ── Format ──
+    fmt = inst.props.get("format", "bytes")
+    fmt_labels = ["Bytes (float32 LE)", "String (UTF-8)"]
+    fmt_keys = ["bytes", "string"]
+    try:
+        fmt_idx = fmt_keys.index(fmt)
+    except ValueError:
+        fmt_idx = 0
+    changed, new_fmt_idx = _ne_combo(f"Format##ser_fmt_{nid}", fmt_idx, fmt_labels)
+    if changed:
+        inst.props["format"] = fmt_keys[new_fmt_idx]
 
     imgui.pop_item_width()
 

@@ -129,16 +129,6 @@ def _v_random_set_seed(inst, nd, canvas=None) -> list:
     return list(nd.pins)
 
 
-@rule("SerialSend")
-def _v_serial_send(inst, nd, canvas=None) -> list:
-    """Manual 模式隐藏 Port / BaudRate / Value pin。"""
-    mode = inst.props.get("mode", "manual")
-    if mode == "manual":
-        return [p for p in nd.pins
-                if p.name not in ("Port", "BaudRate", "Value")]
-    return list(nd.pins)
-
-
 @rule("ParallelSend")
 def _v_parallel_send(inst, nd, canvas=None) -> list:
     """Address 始终由 widget 展示；Manual 模式额外隐藏 Value。"""

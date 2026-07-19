@@ -156,12 +156,13 @@ Property pins use _SKIP sentinel: unconnected (pin mode) or unchecked (manual mo
 #### IO Nodes
 | type_name    | input pins                              | output pins | props                                      |
 |--------------|-----------------------------------------|-------------|--------------------------------------------|
-| SerialSend   | exec_in,Port(string),BaudRate(int),Value(var) | exec_out | mode: manual/pin, format: string/bytes, port, baud_rate, value |
+| SerialSend   | exec_in,Value(var) | exec_out | format: string/bytes, port, baud_rate |
 | ParallelSend | exec_in,Address(int),Value(var)        | exec_out | mode: manual/pin, address: int (0x3FF8 LPT1, 0x3FF0 LPT2, 0x3FE8 LPT3), value: 1-255 |
 | PathVar      | —                                      | Path (string) | browse_mode: directory/file, path: string |
 | TextFileWrite| exec_in,FilePath(string),FileName(string),Value(var) | exec_out | mode: manual/pin, write_mode: w/a, delimiter: none/space/newline/tab/comma, file_path, file_name, value |
 
-SerialSend format "string"→UTF-8, "bytes"→float32 LE 4 bytes. ParallelSend always sends uint8 (1-255, 0 reserved for auto-reset after 5ms).
+SerialSend format "string"→UTF-8, "bytes"→float32 LE 4 bytes. Port/BaudRate always read from node props; Value from upstream pin.
+ParallelSend always sends uint8 (1-255, 0 reserved for auto-reset after 5ms).
 PathVar outputs a directory or file path selected via OS file browser. browse_mode=directory uses select_folder, browse_mode=file uses open_file (.txt/.csv/.log/.json).
 TextFileWrite writes str(value) + delimiter to {file_path}/{file_name}.txt. FileName auto-appends .txt suffix. Directory created if missing. write_mode="w" overwrites, "a" appends. Delimiter appended after each write: none="", space=" ", newline="\\n", tab="\\t", comma=",".
 FilePath is always handled by widget (Browse button); pin connection overrides widget value.

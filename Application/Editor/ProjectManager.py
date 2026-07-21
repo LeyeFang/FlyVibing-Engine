@@ -82,6 +82,12 @@ class ProjectManager:
             cls._project_name = cls._data.get("name", os.path.splitext(os.path.basename(path))[0])
             cls._is_saved = True
             cls._update_window_title()
+
+            # ★ 清空旧项目的场景列表，避免跨项目累积
+            from Application.Editor.EditorHost import EditorHost
+            EditorHost._scenes.clear()
+            EditorHost._active_scene = None
+
             print(f"[Project] Opened: {cls._project_name}  ({len(cls._get_all_resource_paths())} resources)")
             # ★ 自动加载所有资源 → 获取 ID 映射
             id_map = cls._load_all_resources()

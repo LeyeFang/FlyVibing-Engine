@@ -141,6 +141,20 @@ class SimulationController:
 
         GameRuntime.push_layer(RuntimeLayer)
         GameRuntime.push_layer(RuntimeDebugLayer)
+
+        # ── 根据场景 GameType 设置窗口模式 ──
+        from Application.Runtime.RuntimeWindow import RuntimeWindow
+        from Application.Core.Scene.Scene import GameType
+        gt = editor_scene.game_type if editor_scene else GameType.GAME_3D
+        if gt == GameType.OVERLAY:
+            RuntimeWindow._transparent = True
+            RuntimeWindow._topmost = True
+            RuntimeWindow._click_through = True
+        else:
+            RuntimeWindow._transparent = False
+            RuntimeWindow._topmost = False
+            RuntimeWindow._click_through = False
+
         # ── 统一后端: PIE 使用与编辑器相同的窗口/渲染器类型 ──
         #     若 EditorHost 未初始化 (如测试环境), 回退到 GLFW + OpenGL
         GameRuntime.start(

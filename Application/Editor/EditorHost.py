@@ -88,11 +88,24 @@ class EditorHost(Engine):
 
     @classmethod
     def switch_scene(cls, name: str) -> bool:
-        """切换到指定名称的场景。返回是否成功。"""
-        if name in cls._scenes:
-            cls._active_scene = cls._scenes[name]
-            return True
-        return False
+        """切换到指定名称的场景。返回是否成功。
+
+        切换时同步:
+          1. ECS 世界 (清空旧实体, 加载新场景)
+          2. Node Editor 面板画布 (加载新场景的节点图)
+          3. GPU 渲染器 (注册新 MeshRenderer 实体)
+        """
+        if name not in cls._scenes:
+            return False
+        cls._active_scene = cls._scenes[name]
+        # ★ 同步 ECS 世界
+        cls.scene.SyncFromScene(cls._active_scene, clear_existing=True)
+        # ★ 同步 Node Editor 面板的节点图
+        cls._sync_node_graph_from_scene()
+        # ★ 注册 GPU 实体
+        cls._register_mesh_entities_after_load()
+        print(f"[EditorHost] Switched to scene: {name}")
+        return True
 
     @classmethod
     def _register_mesh_entities_after_load(cls) -> None:

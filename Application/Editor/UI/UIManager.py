@@ -146,6 +146,10 @@ class UIManager:
         from Application.Editor.ProjectManager import ProjectManager
         from Application.Editor.EditorHost import EditorHost
 
+        # 0. 清空旧场景注册表
+        EditorHost._scenes.clear()
+        EditorHost._active_scene = None
+
         # 1. 清空 esper 数据库
         import esper
         try:

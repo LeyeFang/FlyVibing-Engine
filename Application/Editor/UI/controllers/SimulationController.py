@@ -150,8 +150,10 @@ class SimulationController:
         if gt == GameType.OVERLAY:
             RuntimeWindow._transparent = True
             RuntimeWindow._topmost = True
-            RuntimeWindow._click_through = False  # 暂无命中判定, 先不穿透
-            print(f"[Simulation] Window mode: OVERLAY (transparent + topmost)")
+            RuntimeWindow._click_through = True  # OverlayInputLayer 提供命中判定
+            from Application.Runtime.OverlayInputLayer import OverlayInputLayer
+            GameRuntime.push_layer(OverlayInputLayer)
+            print(f"[Simulation] Window mode: OVERLAY (transparent + topmost + click-through)")
         else:
             RuntimeWindow._transparent = False
             RuntimeWindow._topmost = False

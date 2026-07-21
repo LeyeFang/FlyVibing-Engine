@@ -18,7 +18,6 @@ import numpy as np
 from OpenGL import GL as gl
 
 from Application.Core.Renderer.OpenGL.OpenGLUtils import OpenGLUtils
-from Application.Core.Scene.SceneManager import SceneManager
 
 
 class OpenGLPickSystem:

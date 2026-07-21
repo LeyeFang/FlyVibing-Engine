@@ -67,6 +67,19 @@ class RuntimeWindow(glfwWindow):
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
     # ════════════════════════════════════════════════════════════
+    # 点击穿透 — Overlay 模式通过 Pick 系统判定
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _is_click_through_target(cls, ndc_x: float, ndc_y: float) -> bool:
+        """Overlay 模式: 光标下有渲染内容 → 捕获, 透明背景 → 穿透。"""
+        try:
+            from Application.Runtime.OverlayInputLayer import OverlayInputLayer
+            return OverlayInputLayer.is_cursor_hit()
+        except Exception:
+            return True  # 保守: 全捕获
+
+    # ════════════════════════════════════════════════════════════
     # 清理 — 仅销毁自身窗口，不调用 glfw.terminate()
     # ════════════════════════════════════════════════════════════
 

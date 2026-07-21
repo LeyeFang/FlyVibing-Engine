@@ -497,6 +497,7 @@ class glfwWindow(Window):
         fbw, fbh = glfw.get_framebuffer_size(cls.glfw_window)
         cx, cy = glfw.get_cursor_pos(cls.glfw_window)
 
+        # 透明窗口下 GLFW 将标题栏坐标报告为负值 — cy < 0 即非客户区
         in_client = (0.0 <= cx < fbw) and (0.0 <= cy < fbh)
 
         if not in_client:
@@ -510,10 +511,6 @@ class glfwWindow(Window):
                 _win32_remove_style(hwnd, _WS_EX_TRANSPARENT)
             else:
                 _win32_add_style(hwnd, _WS_EX_TRANSPARENT)
-
-        # ★ 每帧刷新置顶 — 防止穿透点击后窗口被挤到后方
-        if cls._topmost:
-            _win32_set_topmost(hwnd)
 
     @classmethod
     def _is_click_through_target(cls, ndc_x: float, ndc_y: float) -> bool:

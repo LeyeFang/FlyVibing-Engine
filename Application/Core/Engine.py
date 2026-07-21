@@ -591,6 +591,9 @@ class Engine:
 
         renderer = cls.renderer
         window = cls.window
+        # ── 点击穿透更新 (PIE overlay 模式依赖此调用, Editor 主线冗余但无害) ──
+        if hasattr(window, '_update_click_through_state'):
+            window._update_click_through_state()
         # ── 帧开始 ──
         renderer.StartFrame()
         # ── 层渲染 ──

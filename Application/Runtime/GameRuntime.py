@@ -100,8 +100,11 @@ class GameRuntime(Engine):
                 # ★ 同步默认摄像机 ID（Editor Init 创建的，Runtime 复用）
                 cls.scene.main_camera_id = editor_scene.main_camera_id
                 cls.scene.main_camera_2d_id = editor_scene.main_camera_2d_id
+                cls.scene.main_camera_overlay_id = editor_scene.main_camera_overlay_id
                 # ★ 将摄像机实体注册到 Runtime 的 entities 追踪表
-                for cam_id in (editor_scene.main_camera_id, editor_scene.main_camera_2d_id):
+                for cam_id in (editor_scene.main_camera_id,
+                               editor_scene.main_camera_2d_id,
+                               editor_scene.main_camera_overlay_id):
                     if cam_id is not None:
                         cls.scene.entities[str(cam_id)] = 1
                         cls.scene._entity_names[cam_id] = editor_scene._entity_names.get(cam_id, f"Camera_{cam_id}")

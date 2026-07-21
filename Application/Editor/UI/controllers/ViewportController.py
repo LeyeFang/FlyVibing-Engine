@@ -63,9 +63,12 @@ class ViewportController:
     def switch_to_overlay(cls) -> None:
         """切换到 Overlay 模式。
 
-        Overlay 是运行时模式，编辑器视口不变，但触发 SceneCameraUpdateEvent
-        强制渲染器刷新（消除按钮点击后的感知延迟）。
+        Overlay 使用正交投影 (与 2D 一致)，将 EditorCamera 切到正交俯视，
+        并 Pack SceneCameraUpdateEvent 通知渲染器刷新。
         """
+        cam = EditorCamera.get_instance()
+        cam.set_2d_top_down_view()
+        cls._mode_2d = True
         SceneCameraUpdateEvent.Pack()
 
     @classmethod

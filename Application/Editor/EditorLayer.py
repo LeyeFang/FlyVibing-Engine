@@ -23,6 +23,7 @@ from Application.Core.Layers.Layer import Layer
 
 # ── 应用层: 编辑器 ──
 from Application.Editor.EditorCamera import EditorCamera
+from Application.Editor.EditorInputLayer import EditorInputLayer
 from Application.Editor.Gizmos.Grid import Grid
 from Application.Editor.Gizmos.OutlinerID import OutlinerID
 from Application.Editor.Gizmos.TransformGizmo import TransformGizmo
@@ -95,6 +96,10 @@ class EditorLayer(Layer):
         # ── 注册选中变化回调 → 自动 invalidate camera gizmo ──
         from Application.Editor.UI.controllers.SelectionController import SelectionController
         SelectionController.register_selection_callback(cls.invalidate_camera_gizmos)
+        # ── 推入 EditorInputLayer (输入系统拆分) ──
+        EditorHost.push_layer(EditorInputLayer)
+        EditorInputLayer.renderer = cls.renderer
+        EditorInputLayer._editor_layer = cls  # 提前注入: OnAttach 之前就可能收到事件
         # ── 启动时自动创建新 Project（仅内存，未保存）──
         from Application.Editor.ProjectManager import ProjectManager
         if not ProjectManager.is_open():
@@ -113,67 +118,15 @@ class EditorLayer(Layer):
         imgui.backends.glfw_shutdown()
         imgui.destroy_context()
 
-    @classmethod
-    def OnEvent(cls, event: Event) -> None:
-        # ── 防御: 渲染线程已退出时 ImGui 上下文已被销毁 ──
-        if imgui.get_current_context() is None:
-            return
-        # ── MouseMoveEvent: 始终更新拾取鼠标位置 (主线程安全, 零 GL 调用) ──
-        if isinstance(event, MouseMoveEvent):
-            if cls.renderer is not None:
-                cls.renderer.update_pick_mouse(event.pos_x, event.pos_y)
-            return
-        # ── SceneCameraUpdateEvent: 始终处理 (ViewportController / DebugLayer 触发) ──
-        if isinstance(event, SceneCameraUpdateEvent):
-            cls._sync_camera_to_renderer()
-            cls.invalidate_camera_gizmos()  # 模式切换 → 强制刷新 gizmo
-            return
-        # ── 窗口 resize 始终处理，不受面板鼠标拦截影响 ──
-        if isinstance(event, WindowResizeEvent):
-            w, h = event.unpack()
-            io = imgui.get_io()
-            io.display_size = (float(w), float(h))
-            # 投影矩阵依赖 aspect_ratio，resize 后需重新推送
-            cls._sync_camera_to_renderer()
-            return
-        # ── 键盘事件: ImGui 捕获键盘时跳过 (如正在文本框输入) ──
-        if isinstance(event, KeyboardButtonEvent):
-            io = imgui.get_io()
-            if not io.want_capture_keyboard:
-                if (event.key == KeyButtonCode.Space
-                        and event.action == KeyActionCode.Press):
-                    cls._toggle_preview_camera()
-            return
-        if cls._mouse_in_any_panel():
-            return
-        if cls.renderer is None:
-            return
-        cam = EditorCamera.get_instance()
-        if isinstance(event, ScrollerEvent):
-            _, y_offset = event.unpack()
-            cam.on_scroll(y_offset)
-            cls._sync_camera_to_renderer()
-        elif isinstance(event, MouseGragEvent):
-            bt, offset_x, offset_y = event.unpack()
-            if bt == MouseButtonCode.Left:
-                # ── 左键拖动: gizmo 拖拽优先 ──
-                if TransformGizmo.is_dragging():
-                    cls._handle_gizmo_drag(event.pos_x, event.pos_y)
-                    return
-                return  # 非 gizmo 左键拖动不操作视图，仅用于点选
-            cam.on_mouse_drag(bt, offset_x, offset_y, IsShiftPressed())
-            cls._sync_camera_to_renderer()
-        elif isinstance(event, MouseButtonEvent):
-            if event.button != MouseButtonCode.Left:
-                return
-            if event.action == MouseActionCode.Press:
-                cls._handle_left_press(event.pos_x, event.pos_y, cam)
-            else:  # Release
-                cls._handle_left_release(event.pos_x, event.pos_y, cam)
-
     # ════════════════════════════════════════════════════════════
     # Camera Gizmo — ECS Camera entity 可视化
     # ════════════════════════════════════════════════════════════
+
+    # 注: OnEvent 已拆分至 EditorInputLayer
+
+    @classmethod
+    def OnEvent(cls, event: Event) -> None:
+        pass  # 输入事件由 EditorInputLayer 处理
 
     _camera_gizmo_keys: set[str] = set()
     """当前已注册的 camera gizmo overlay key 集合。"""
@@ -189,17 +142,25 @@ class EditorLayer(Layer):
 
     @classmethod
     def _toggle_preview_camera(cls) -> None:
-        """SPACE: 切换编辑器摄像机 / entity 摄像机预览。"""
+        """SPACE: 切换编辑器摄像机 / entity 摄像机预览。
+
+        Overlay 模式与 2D 模式一致: 预览使用 2D 摄像机。
+        """
         from Application.Editor.UI.controllers.ViewportController import ViewportController
-        from Application.Core.Scene.SceneManager import SceneManager
+        from Application.Core.Scene.Scene import GameType
         if cls._preview_entity_id is not None:
             cls._preview_entity_id = None
             print("[EditorLayer] Preview: OFF (editor camera)")
         else:
             is_2d = ViewportController.is_2d()
-            cls._preview_entity_id = (
-                EditorHost.scene.get_main_camera_2d_id() if is_2d else EditorHost.scene.get_main_camera_id()
-            )
+            is_overlay = (EditorHost.scene is not None
+                          and EditorHost.scene.game_type == GameType.OVERLAY)
+            if is_overlay:
+                cls._preview_entity_id = EditorHost.scene.get_main_camera_overlay_id()
+            elif is_2d:
+                cls._preview_entity_id = EditorHost.scene.get_main_camera_2d_id()
+            else:
+                cls._preview_entity_id = EditorHost.scene.get_main_camera_id()
             print(f"[EditorLayer] Preview: ON (entity {cls._preview_entity_id})")
         cls.invalidate_camera_gizmos()  # 强制刷新 gizmo (隐藏预览自身)
         cls._sync_camera_to_renderer()
@@ -555,16 +516,6 @@ class EditorLayer(Layer):
     # ════════════════════════════════════════════════════════════
     # 工具方法
     # ════════════════════════════════════════════════════════════
-
-    @classmethod
-    def _mouse_in_any_panel(cls) -> bool:
-        """检查鼠标是否悬停在任意 ImGui 面板区域内。"""
-        io = imgui.get_io()
-        mx, my = io.mouse_pos
-        for x, y, w, h in UIManager._panel_rects:
-            if x <= mx <= x + w and y <= my <= y + h:
-                return True
-        return False
 
     @classmethod
     def _sync_camera_to_renderer(cls) -> None:

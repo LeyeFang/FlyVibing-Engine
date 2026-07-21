@@ -53,6 +53,7 @@ class SceneManager:
         self.scene_camera_id: int | None = None
         self.main_camera_id: int | None = None
         self.main_camera_2d_id: int | None = None
+        self.main_camera_overlay_id: int | None = None
         self._entity_names: dict[int, str] = {}
         self._entity_parent: dict[int, int] = {}
         self._editor_visible: set[int] = set()
@@ -475,3 +476,6 @@ class SceneManager:
 
     def get_main_camera_2d_id(self) -> int | None:
         return self.cam_mgr.get_main_2d_id()
+
+    def get_main_camera_overlay_id(self) -> int | None:
+        return self.cam_mgr.get_main_overlay_id()

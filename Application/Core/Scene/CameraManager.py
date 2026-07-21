@@ -30,7 +30,7 @@ class CameraManager:
         self._mgr = scene_mgr
 
     def create_defaults(self, st: SceneManager) -> None:
-        """在指定 SceneManager 的 esper 世界中创建默认摄像机。"""
+        """在指定 SceneManager 的 esper 世界中创建默认摄像机 (3D + 2D + Overlay)。"""
         # ── 3D 透视摄像机 ──
         st.main_camera_id = esper.create_entity(
             Transform(position_x=0.0, position_y=0.0, position_z=10.0),
@@ -59,11 +59,31 @@ class CameraManager:
         st._entity_names[st.main_camera_2d_id] = "DefaultCamera2D"
         st._editor_visible.add(st.main_camera_2d_id)
 
+        # ── Overlay 正交摄像机 (屏幕空间, 原点在中心) ──
+        st.main_camera_overlay_id = esper.create_entity(
+            Transform(
+                position_x=0.0, position_y=0.0, position_z=5.0,
+                rotation_x=math.pi / 2.0,  # 俯视 GL XZ 平面
+            ),
+            Camera(is_primary=False),
+        )
+        cam_overlay = esper.component_for_entity(st.main_camera_overlay_id, Camera)
+        cam_overlay.projection_type = ProjectionType.ORTHOGRAPHIC
+        cam_overlay.ortho_size = 5.0     # 屏幕半高 (NDC 对应 [-5,5])
+        cam_overlay.near_plane = 0.01
+        cam_overlay.far_plane = 100.0
+        st.entities[f'{st.main_camera_overlay_id}'] = 1
+        st._entity_names[st.main_camera_overlay_id] = "DefaultCameraOverlay"
+        st._editor_visible.add(st.main_camera_overlay_id)
+
     def get_main_id(self) -> int | None:
         return self._mgr.main_camera_id
 
     def get_main_2d_id(self) -> int | None:
         return self._mgr.main_camera_2d_id
+
+    def get_main_overlay_id(self) -> int | None:
+        return self._mgr.main_camera_overlay_id
 
     def set_game_type(self, game_type) -> None:
         """设置场景游戏类型并自动切换默认摄像机。"""
@@ -79,8 +99,17 @@ class CameraManager:
         return self._mgr.game_type
 
     def _apply(self, st: SceneManager) -> None:
-        """根据 game_type 选择默认摄像机。"""
+        """根据 game_type 选择默认摄像机 (更新 scene_camera_id + scene_camera 引用)。"""
         if st.game_type == GameType.GAME_2D and st.main_camera_2d_id is not None:
             st.scene_camera_id = st.main_camera_2d_id
+        elif st.game_type == GameType.OVERLAY and st.main_camera_overlay_id is not None:
+            st.scene_camera_id = st.main_camera_overlay_id
         else:
             st.scene_camera_id = st.main_camera_id
+
+        # ★ 同步 scene_camera 组件引用
+        if st.scene_camera_id is not None:
+            try:
+                st.scene_camera = esper.component_for_entity(st.scene_camera_id, Camera)
+            except KeyError:
+                st.scene_camera = None

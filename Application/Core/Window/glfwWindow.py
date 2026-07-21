@@ -91,8 +91,9 @@ def _win32_has_style(hwnd: int, style_bit: int) -> bool:
 
 
 def _win32_set_topmost(hwnd: int) -> None:
-    """将窗口置顶 (HWND_TOPMOST)。"""
-    _user32.SetWindowPos(hwnd, _HWND_TOPMOST, 0, 0, 0, 0, _SWP_FLAGS)
+    """将窗口置顶 (HWND_TOPMOST) — 不含 SWP_NOZORDER，必须改变 z-order。"""
+    _user32.SetWindowPos(hwnd, _HWND_TOPMOST, 0, 0, 0, 0,
+                         _SWP_FLAGS & ~0x0004)  # 去掉 SWP_NOZORDER
 
 
 def _win32_strip_chrome(hwnd: int) -> None:
@@ -501,15 +502,18 @@ class glfwWindow(Window):
         if not in_client:
             # 非客户区 — 强制关闭穿透，保证标题栏/边框可操作
             _win32_remove_style(hwnd, _WS_EX_TRANSPARENT)
-            return
-
-        # 客户区内 — 根据子类覆写的命中测试判定
-        ndc_x = (cx / fbw) * 2.0 - 1.0
-        ndc_y = 1.0 - (cy / fbh) * 2.0
-        if cls._is_click_through_target(ndc_x, ndc_y):
-            _win32_remove_style(hwnd, _WS_EX_TRANSPARENT)
         else:
-            _win32_add_style(hwnd, _WS_EX_TRANSPARENT)
+            # 客户区内 — 根据子类覆写的命中测试判定
+            ndc_x = (cx / fbw) * 2.0 - 1.0
+            ndc_y = 1.0 - (cy / fbh) * 2.0
+            if cls._is_click_through_target(ndc_x, ndc_y):
+                _win32_remove_style(hwnd, _WS_EX_TRANSPARENT)
+            else:
+                _win32_add_style(hwnd, _WS_EX_TRANSPARENT)
+
+        # ★ 每帧刷新置顶 — 防止穿透点击后窗口被挤到后方
+        if cls._topmost:
+            _win32_set_topmost(hwnd)
 
     @classmethod
     def _is_click_through_target(cls, ndc_x: float, ndc_y: float) -> bool:

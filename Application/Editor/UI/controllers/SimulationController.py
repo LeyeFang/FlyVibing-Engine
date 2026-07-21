@@ -143,13 +143,15 @@ class SimulationController:
         GameRuntime.push_layer(RuntimeDebugLayer)
 
         # ── 根据场景 GameType 设置窗口模式 ──
+        # ★ 从 SceneManager 读取 game_type（与 ScenePanel 的 set_game_type 同源）
         from Application.Runtime.RuntimeWindow import RuntimeWindow
         from Application.Core.Scene.Scene import GameType
-        gt = editor_scene.game_type if editor_scene else GameType.GAME_3D
+        gt = EditorHost.scene.game_type if EditorHost.scene else GameType.GAME_3D
         if gt == GameType.OVERLAY:
             RuntimeWindow._transparent = True
             RuntimeWindow._topmost = True
-            RuntimeWindow._click_through = True
+            RuntimeWindow._click_through = False  # 暂无命中判定, 先不穿透
+            print(f"[Simulation] Window mode: OVERLAY (transparent + topmost)")
         else:
             RuntimeWindow._transparent = False
             RuntimeWindow._topmost = False

@@ -205,6 +205,9 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
     def clear_frame(self) -> None:
         self._core.clear_frame()
 
+    def set_clear_color(self, r: float, g: float, b: float, a: float) -> None:
+        self._core.set_clear_color(r, g, b, a)
+
     def update_viewport(self, w: int, h: int) -> None:
         self._core.update_viewport(w, h)
 

@@ -51,16 +51,21 @@ class ViewportController:
 
     @classmethod
     def switch_to_3d(cls) -> None:
-        """切换到 3D 透视模式。
-
-        通过 EditorCamera.set_3d_perspective_view() 恢复之前视角，
-        并 Pack SceneCameraUpdateEvent 通知渲染器刷新矩阵缓存。
-        """
+        """切换到 3D 透视模式。"""
         if not cls._mode_2d:
             return
         cam = EditorCamera.get_instance()
         cam.set_3d_perspective_view()
         cls._mode_2d = False
+        SceneCameraUpdateEvent.Pack()
+
+    @classmethod
+    def switch_to_overlay(cls) -> None:
+        """切换到 Overlay 模式。
+
+        Overlay 是运行时模式，编辑器视口不变，但触发 SceneCameraUpdateEvent
+        强制渲染器刷新（消除按钮点击后的感知延迟）。
+        """
         SceneCameraUpdateEvent.Pack()
 
     @classmethod

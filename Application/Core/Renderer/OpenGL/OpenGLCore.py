@@ -38,20 +38,25 @@ class OpenGLCore:
         gl.glDepthFunc(gl.GL_LESS)
 
         # ── 清屏颜色默认值 ──
-        gl.glClearColor(0.2, 0.2, 0.2, 1.0)
+        self._clear_color = (0.2, 0.2, 0.2, 1.0)
+        gl.glClearColor(*self._clear_color)
 
     def update_viewport(self, width: int, height: int) -> None:
         """更新视口尺寸 (渲染线程调用)。"""
         gl.glViewport(0, 0, width, height)
 
-    def clear_frame(self, r: float = 0.2, g: float = 0.2, b: float = 0.2, a: float = 1.0) -> None:
-        """清屏 (深灰色默认)。
-
-        Args:
-            r, g, b, a: 清屏颜色 RGBA 分量
-        """
-        gl.glClearColor(r, g, b, a)
+    def clear_frame(self, r: float = None, g: float = None, b: float = None, a: float = None) -> None:
+        """清屏 — 使用存储的默认颜色或传入的覆盖值。"""
+        cr = r if r is not None else self._clear_color[0]
+        cg = g if g is not None else self._clear_color[1]
+        cb = b if b is not None else self._clear_color[2]
+        ca = a if a is not None else self._clear_color[3]
+        gl.glClearColor(cr, cg, cb, ca)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+
+    def set_clear_color(self, r: float, g: float, b: float, a: float) -> None:
+        """更新存储的清屏颜色 (下一帧生效)。"""
+        self._clear_color = (r, g, b, a)
 
     def _clear_depth_for_overlays(self) -> None:
         """清理深度缓冲 (为 screen-space overlay 准备)."""

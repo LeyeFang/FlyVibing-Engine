@@ -301,6 +301,7 @@ class ScenePanel(BasePanel):
         current_gt = self._browser_ctrl.get_game_type()
         is_3d = (current_gt == "3d")
         is_2d = (current_gt == "2d")
+        is_overlay = (current_gt == "overlay")
 
         # ── 3D 按钮 ──
         if is_3d:
@@ -326,10 +327,15 @@ class ScenePanel(BasePanel):
 
         imgui.same_line()
 
-        # Overlay 按钮 (未来实现)
-        imgui.begin_disabled(True)
-        imgui.button("Overlay", (btn_w, 0))
-        imgui.end_disabled()
+        # ── Overlay 按钮 ──
+        if is_overlay:
+            imgui.push_style_color(
+                imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
+        if imgui.button("Overlay", (btn_w, 0)):
+            self._browser_ctrl.set_game_type("overlay")
+            self._viewport_ctrl.switch_to_overlay()
+        if is_overlay:
+            imgui.pop_style_color(1)
 
     # ============================================================
     # 区域 3: Entity 树 (可展开父子层级, 支持拖拽建立父子关系)

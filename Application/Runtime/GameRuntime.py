@@ -59,6 +59,12 @@ class GameRuntime(Engine):
         cls.init(window_type=window_type, renderer_type=renderer_type)
         # ── 从 Editor 同步场景状态到 Runtime ──
         cls._sync_scene_from_editor()
+        # ── Overlay 模式: 发送 SetClearColorCommand (alpha=0 透明背景) ──
+        if cls.scene is not None and cls.scene.game_type is not None:
+            from Application.Core.Scene.Scene import GameType
+            if cls.scene.game_type == GameType.OVERLAY and cls.renderer is not None:
+                from Application.Core.Renderer.RenderCommand import SetClearColorCommand
+                cls.renderer.enqueue(SetClearColorCommand(r=0.0, g=0.0, b=0.0, a=0.0))
         # ── 帧同步: PIE 作为 slave, 等待 Editor 每帧完成后再渲染 ──
         from Application.Editor.EditorHost import EditorHost
         if EditorHost._frame_sync is not None:

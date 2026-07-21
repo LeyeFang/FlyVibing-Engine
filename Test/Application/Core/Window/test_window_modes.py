@@ -38,7 +38,7 @@ from Application.Core.Window.glfwWindow import glfwWindow, WindowMode
 # ═══════════════════════════════════════════════════════════════
 
 class _TestWindow(glfwWindow):
-    """测试窗口 — 覆写需要 Engine 的方法以在无 engine 环境下安全运行。"""
+    """测试窗口 — 复用主线 InputPipeline + 点击穿透，覆写命中测试和按键钩子。"""
 
     @classmethod
     def _set_window_hints(cls) -> None:
@@ -47,23 +47,34 @@ class _TestWindow(glfwWindow):
         glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
         glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, glfw.TRUE)
 
-    # ── 覆写: 跳过依赖 Engine 事件系统的部分 ──
+    # ── 点击穿透: 光标命中三角形时捕获鼠标，透明背景穿透 ──
 
     @classmethod
-    def Create(cls) -> '_TestWindow':
-        """创建窗口但不注册 InputPipeline (需要 _engine)。"""
-        cls.glfw_window = cls._create_window()
-        # 不注册 glfw 回调 — 测试自行管理输入
-        return cls
+    def _is_click_through_target(cls, ndc_x: float, ndc_y: float) -> bool:
+        """命中三角形 → 捕获鼠标 (不穿透); 透明背景 → 穿透。"""
+        return _point_in_triangle_ndc(ndc_x, ndc_y)
+
+    # ── 按键钩子: 处理 F1/F2/F3/ESC, 其余键忽略 ──
 
     @classmethod
-    def Update(cls) -> None:
-        """轮询事件但不 Pack Engine 事件。"""
-        if cls._click_through and cls.glfw_window is not None:
-            cls._update_click_through_state()
-        glfw.poll_events()
-        if glfw.window_should_close(cls.glfw_window):
-            pass  # 测试自行检查 window_should_close
+    def _make_key_hook(cls):
+        _kls = cls
+        def hook(key, scancode, action, mods):
+            if action != glfw.PRESS:
+                return
+            if key == glfw.KEY_ESCAPE:
+                glfw.set_window_should_close(_kls.glfw_window)
+            elif key == glfw.KEY_F1:
+                print("\n[KEY] F1 → Windowed")
+                _kls.set_window_mode(WindowMode.WINDOWED)
+            elif key == glfw.KEY_F2:
+                print("\n[KEY] F2 → Borderless")
+                _kls.set_window_mode(WindowMode.BORDERLESS)
+            elif key == glfw.KEY_F3:
+                print("\n[KEY] F3 → Fullscreen")
+                _kls.set_window_mode(WindowMode.FULLSCREEN)
+            # 其余键: 不 Pack 事件 (无 engine), 静默忽略
+        return hook
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -90,6 +101,26 @@ _TRIANGLE_NDC = np.array([
     [ 0.6, -0.4],
 ], dtype=np.float32)
 _TRIANGLE_VERTICES = _TRIANGLE_NDC.flatten()
+
+
+def _point_in_triangle_ndc(px: float, py: float) -> bool:
+    """重心坐标法: 判断 NDC 点是否在三角形内。"""
+    a, b, c = _TRIANGLE_NDC[0], _TRIANGLE_NDC[1], _TRIANGLE_NDC[2]
+    v0 = c - a
+    v1 = b - a
+    v2 = np.array([px, py], dtype=np.float32) - a
+    dot00 = float(np.dot(v0, v0))
+    dot01 = float(np.dot(v0, v1))
+    dot02 = float(np.dot(v0, v2))
+    dot11 = float(np.dot(v1, v1))
+    dot12 = float(np.dot(v1, v2))
+    denom = dot00 * dot11 - dot01 * dot01
+    if abs(denom) < 1e-10:
+        return False
+    inv = 1.0 / denom
+    u = (dot11 * dot02 - dot01 * dot12) * inv
+    v = (dot00 * dot12 - dot01 * dot02) * inv
+    return u >= 0.0 and v >= 0.0 and (u + v) <= 1.0
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -157,49 +188,36 @@ def _ask_transparent() -> bool:
 # ═══════════════════════════════════════════════════════════════
 
 def main() -> None:
-    # ── 0. 用户选择 ──
+    # ── 0. 设置全局事件回调为 no-op (无 Engine 时安全吞掉所有事件) ──
+    from Application.Core.Events.Event import BindPackCallback
+    BindPackCallback(lambda instance: None)
+
+    # ── 1. 用户选择 ──
     mode = _ask_mode()
     transparent = _ask_transparent()
 
-    # ── 1. 设置窗口标志 ──
+    # ── 2. 设置窗口标志 ──
     _TestWindow._window_mode = mode
     _TestWindow._transparent = transparent
     _TestWindow._click_through = transparent  # 透明 → 启用穿透
     _TestWindow._topmost = transparent        # 透明 → 窗口置顶
     _TestWindow._window_title = "Window Mode Test — Red Triangle"
 
-    # ── 2. 创建窗口 ──
+    # ── 3. 创建窗口 (使用主线 Create, 包含完整 InputPipeline) ──
     _TestWindow.Create()
     glfw.make_context_current(_TestWindow.glfw_window)
     glfw.swap_interval(1)
 
-    # ── 3. 编译 shader + VAO ──
+    # ── 4. 编译 shader + VAO ──
     prog = _compile_shader_program()
     vao = _setup_vao(prog)
-
-    # ── 4. 按键回调 — 运行时窗口模式切换 ──
-    def on_key(win, key, scancode, action, mods):
-        if action != glfw.PRESS:
-            return
-        if key == glfw.KEY_ESCAPE:
-            glfw.set_window_should_close(win, True)
-        elif key == glfw.KEY_F1:
-            print("\n[KEY] F1 → Windowed")
-            _TestWindow.set_window_mode(WindowMode.WINDOWED)
-        elif key == glfw.KEY_F2:
-            print("\n[KEY] F2 → Borderless")
-            _TestWindow.set_window_mode(WindowMode.BORDERLESS)
-        elif key == glfw.KEY_F3:
-            print("\n[KEY] F3 → Fullscreen")
-            _TestWindow.set_window_mode(WindowMode.FULLSCREEN)
-
-    glfw.set_key_callback(_TestWindow.glfw_window, on_key)
 
     # ── 5. 打印操作说明 ──
     print()
     print("=" * 50)
     print(f"  Initial mode: {mode.value}")
     print(f"  Transparent:  {'YES' if transparent else 'NO'}")
+    print(f"  Click-through: {'YES (triangle=capture, bg=pass-through)' if transparent else 'NO'}")
     print("=" * 50)
     print("  F1 — Windowed")
     print("  F2 — Borderless")
@@ -208,12 +226,10 @@ def main() -> None:
     print("=" * 50)
     print()
 
-    # ── 6. 主循环 ──
+    # ── 6. 主循环 (使用主线 Update, 包含点击穿透) ──
     frame = 0
     while not glfw.window_should_close(_TestWindow.glfw_window):
         frame += 1
-
-        # ★ 使用 glfwWindow.Update() — 内部处理点击穿透 + poll_events
         _TestWindow.Update()
 
         # 渲染

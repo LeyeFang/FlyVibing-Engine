@@ -210,4 +210,16 @@ class UpdateHighlightConfigCommand(RenderCommand):
         )
 
 
+@dataclass
+class SetClearColorCommand(RenderCommand):
+    """设置清屏颜色 (RGBA)。
 
+    调用方: GameRuntime.start() — Overlay 模式设 alpha=0 实现透明背景
+    """
+    r: float = 0.2
+    g: float = 0.2
+    b: float = 0.2
+    a: float = 1.0
+
+    def execute(self, renderer: Any) -> None:
+        renderer.set_clear_color(self.r, self.g, self.b, self.a)

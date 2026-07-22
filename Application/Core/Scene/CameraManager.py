@@ -30,51 +30,35 @@ class CameraManager:
         self._mgr = scene_mgr
 
     def create_defaults(self, st: SceneManager) -> None:
-        """在指定 SceneManager 的 esper 世界中创建默认摄像机 (3D + 2D + Overlay)。"""
+        """在指定 SceneManager 的 esper 世界中创建默认摄像机 (通过 Prefab 实例化)。"""
+        from Application.Resource.ResourceManager import ResourceManager
+        from Application.Core.Scene.PrefabManager import PrefabManager
+
+        def _instantiate_named_prefab(name: str) -> int | None:
+            """查找已加载的内置 prefab 并实例化到场景。返回 root entity ID。"""
+            for pid_str, pdata in ResourceManager.loaded_prefab.items():
+                if pdata.get('name') == name and pdata.get('prefab_data') is not None:
+                    eids = PrefabManager.instantiate_to_scene(pdata['prefab_data'], st)
+                    return eids[0] if eids else None
+            return None
+
         # ── 3D 透视摄像机 ──
-        st.main_camera_id = esper.create_entity(
-            Transform(position_x=0.0, position_y=0.0, position_z=10.0),
-            Camera(is_primary=True),
-        )
-        st.scene_camera_id = st.main_camera_id
-        st.scene_camera = esper.component_for_entity(st.scene_camera_id, Camera)
-        st.entities[f'{st.main_camera_id}'] = 1
-        st._entity_names[st.main_camera_id] = "DefaultCamera3D"
-        st._editor_visible.add(st.main_camera_id)
+        eid_3d = _instantiate_named_prefab('DefaultCamera3D')
+        if eid_3d is not None:
+            st.main_camera_id = eid_3d
+            st.scene_camera_id = eid_3d
+            import esper
+            st.scene_camera = esper.component_for_entity(eid_3d, Camera)
 
         # ── 2D 正交俯视摄像机 ──
-        st.main_camera_2d_id = esper.create_entity(
-            Transform(
-                position_x=0.0, position_y=0.0, position_z=10.0,
-                rotation_x=math.pi / 2.0,
-            ),
-            Camera(is_primary=False),
-        )
-        cam_2d = esper.component_for_entity(st.main_camera_2d_id, Camera)
-        cam_2d.projection_type = ProjectionType.ORTHOGRAPHIC
-        cam_2d.ortho_size = 10.0
-        cam_2d.near_plane = 0.1
-        cam_2d.far_plane = 100.0
-        st.entities[f'{st.main_camera_2d_id}'] = 1
-        st._entity_names[st.main_camera_2d_id] = "DefaultCamera2D"
-        st._editor_visible.add(st.main_camera_2d_id)
+        eid_2d = _instantiate_named_prefab('DefaultCamera2D')
+        if eid_2d is not None:
+            st.main_camera_2d_id = eid_2d
 
-        # ── Overlay 正交摄像机 (屏幕空间, 原点在中心) ──
-        st.main_camera_overlay_id = esper.create_entity(
-            Transform(
-                position_x=0.0, position_y=0.0, position_z=5.0,
-                rotation_x=math.pi / 2.0,  # 俯视 GL XZ 平面
-            ),
-            Camera(is_primary=False),
-        )
-        cam_overlay = esper.component_for_entity(st.main_camera_overlay_id, Camera)
-        cam_overlay.projection_type = ProjectionType.ORTHOGRAPHIC
-        cam_overlay.ortho_size = 5.0     # 屏幕半高 (NDC 对应 [-5,5])
-        cam_overlay.near_plane = 0.01
-        cam_overlay.far_plane = 100.0
-        st.entities[f'{st.main_camera_overlay_id}'] = 1
-        st._entity_names[st.main_camera_overlay_id] = "DefaultCameraOverlay"
-        st._editor_visible.add(st.main_camera_overlay_id)
+        # ── Overlay 正交摄像机 ──
+        eid_ov = _instantiate_named_prefab('DefaultCameraOverlay')
+        if eid_ov is not None:
+            st.main_camera_overlay_id = eid_ov
 
     def get_main_id(self) -> int | None:
         return self._mgr.main_camera_id

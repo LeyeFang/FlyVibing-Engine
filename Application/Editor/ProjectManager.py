@@ -52,7 +52,10 @@ class ProjectManager:
 
     @classmethod
     def create_new(cls, name: str = "Untitled") -> None:
-        """创建新项目（仅内存，不写盘）。标记为未保存。"""
+        """创建新项目（仅内存，不写盘）。标记为未保存。
+
+        同时重置编辑器视口到默认 3D 模式。
+        """
         cls._project_path = ""
         cls._project_name = name
         cls._is_saved = False
@@ -67,6 +70,12 @@ class ProjectManager:
                 "meshes": [],
             },
         }
+        # ★ 新项目 → 重置视口为 3D
+        try:
+            from Application.Editor.UI.controllers.ViewportController import ViewportController
+            ViewportController.switch_to_3d()
+        except Exception:
+            pass
         print(f"[Project] Created (unsaved): {name}")
 
     @classmethod

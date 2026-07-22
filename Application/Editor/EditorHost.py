@@ -200,8 +200,8 @@ class EditorHost(Engine):
             pass
         # ★ 立即刷新 camera gizmo（force=True 跳过 hash 检查，原子完成 unregister+register）
         try:
-            from Application.Editor.EditorLayer import EditorLayer
-            EditorLayer._refresh_camera_gizmos(force=True)
+            from Application.Editor.EditorGizmoLayer import EditorGizmoLayer
+            EditorGizmoLayer._refresh_camera_gizmos(force=True)
             print(f"[EditorHost] Scene loaded: {len(cls._active_scene.entities)} entities, "
                   f"camera gizmos refreshed")
         except Exception as e:

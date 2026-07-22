@@ -57,6 +57,13 @@ JSON_FILTERS: list[str] = [
     "*",
 ]
 
+PREFAB_FILTERS: list[str] = [
+    "Prefab Files",
+    "*.prefab",
+    "All Files",
+    "*",
+]
+
 MAT_FILTERS: list[str] = [
     "Material Files",
     "*.mat",
@@ -244,6 +251,38 @@ class FileDialog:
         )
         cls._callback = callback
         cls._active_type = "json_save"
+
+    @classmethod
+    def open_prefab(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+    ) -> None:
+        """打开"导入 Prefab"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("prefab_open")
+        cls._active_dialog = pfd.open_file(
+            "Import Prefab", d, PREFAB_FILTERS, pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "prefab_open"
+
+    @classmethod
+    def save_prefab(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+        default_name: str = "NewPrefab.prefab",
+    ) -> None:
+        """打开"保存 Prefab"对话框。"""
+        d = start_dir if start_dir is not None else _DialogMemory.get_dir("prefab_save")
+        cls._active_dialog = pfd.save_file(
+            "Save Prefab",
+            os.path.join(d, default_name),
+            PREFAB_FILTERS,
+            pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "prefab_save"
 
     @classmethod
     def open_mat(

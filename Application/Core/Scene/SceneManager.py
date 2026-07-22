@@ -111,18 +111,14 @@ class SceneManager:
 
     @classmethod
     def _create_default_cube(cls, inst: 'SceneManager') -> None:
-        """在 inst 的当前 esper 世界中创建一个默认 Cube 实体（调试用）。"""
+        """在 inst 的当前 esper 世界中创建默认 Cube 实体（通过 Prefab 实例化）。"""
         from Application.Resource.ResourceManager import ResourceManager
-        cube_mesh_id = ResourceManager.GetDefaultMesh('Cube')
+        from Application.Core.Scene.PrefabManager import PrefabManager
 
-        cube_id = esper.create_entity(
-            Transform(),
-            MeshRenderer(mesh_id=cube_mesh_id),
-        )
-        inst.entities[f'{cube_id}'] = 1
-        inst._entity_names[cube_id] = "DefaultCube"
-        inst._editor_visible.add(cube_id)
-        # 注: GPU 注册延迟到 EditorLayer.OnAttach（渲染器就绪后）
+        for pid_str, pdata in ResourceManager.loaded_prefab.items():
+            if pdata.get('name') == 'DefaultCube' and pdata.get('prefab_data') is not None:
+                PrefabManager.instantiate_to_scene(pdata['prefab_data'], inst)
+                return
 
     def _reset_state(self) -> None:
         """重置实例的追踪数据（为新世界做准备）。"""

@@ -12,10 +12,12 @@ class ResourceBrowserController:
     TYPE_SHADER   = "shader"
     TYPE_TEXTURE  = "texture"
     TYPE_MATERIAL = "material"
+    TYPE_PREFAB   = "prefab"
 
     @classmethod
     def get_resource_types(cls) -> list[str]:
-        return [cls.TYPE_MESH, cls.TYPE_SHADER, cls.TYPE_TEXTURE, cls.TYPE_MATERIAL]
+        return [cls.TYPE_MESH, cls.TYPE_SHADER, cls.TYPE_TEXTURE,
+                cls.TYPE_MATERIAL, cls.TYPE_PREFAB]
 
     # ── 分类查询 ────────────────────────────────────────────
 
@@ -93,6 +95,17 @@ class ResourceBrowserController:
                     'path': f"Shader: {shader_id}",
                 })
 
+        if filter_type is None or filter_type == cls.TYPE_PREFAB:
+            for id_str, pdata in ResourceManager.loaded_prefab.items():
+                pid = int(id_str)
+                p_name = pdata.get('name', '') or f"Prefab #{pid}"
+                result.append({
+                    'id': pid,
+                    'name': p_name,
+                    'type': cls.TYPE_PREFAB,
+                    'path': pdata.get('path', ''),
+                })
+
         return result
 
     @classmethod
@@ -103,6 +116,7 @@ class ResourceBrowserController:
             cls.TYPE_SHADER:   len(ResourceManager.loaded_shader),
             cls.TYPE_TEXTURE:  len(ResourceManager.loaded_texture),
             cls.TYPE_MATERIAL: len(ResourceManager.loaded_material),
+            cls.TYPE_PREFAB:   len(ResourceManager.loaded_prefab),
         }
 
     # ── 资源 CRUD ───────────────────────────────────────────
@@ -119,6 +133,8 @@ class ResourceBrowserController:
                 return ResourceManager.DeleteTexture(resource_id)
             elif resource_type == cls.TYPE_MATERIAL:
                 return ResourceManager.DeleteMaterial(resource_id)
+            elif resource_type == cls.TYPE_PREFAB:
+                return ResourceManager.DeletePrefab(resource_id)
         except RuntimeError as e:
             print(f"[Resource] Delete blocked: {e}")
             return False
@@ -128,6 +144,47 @@ class ResourceBrowserController:
     def new_material(cls) -> int:
         """创建新材质。返回 material_id。"""
         return ResourceManager.NewMaterial()
+
+    @classmethod
+    def load_prefab(cls, filepath: str) -> int | None:
+        """导入 .prefab 文件到 ResourceManager。返回 prefab_id 或 None。"""
+        return ResourceManager.LoadPrefab(filepath)
+
+    @classmethod
+    def instantiate_prefab(cls, prefab_id: int) -> list[int]:
+        """将指定 prefab 实例化到当前场景。返回新创建的 entity ID 列表。"""
+        from Application.Core.Scene.PrefabManager import PrefabManager
+        from Application.Editor.EditorHost import EditorHost
+        pdata = ResourceManager.loaded_prefab.get(str(prefab_id))
+        if pdata is None or pdata.get('prefab_data') is None:
+            print(f"[Resource] Prefab #{prefab_id} not found or not loaded")
+            return []
+        prefab_data = pdata['prefab_data']
+        eids = PrefabManager.instantiate_to_scene(prefab_data, EditorHost.scene)
+
+        # ★ 注册新实体的 MeshRenderer 到 GPU
+        cls._register_mesh_entities(eids)
+        return eids
+
+    @classmethod
+    def _register_mesh_entities(cls, eids: list[int]) -> None:
+        """将指定 entity 列表中的 MeshRenderer 注册到 GPU。"""
+        try:
+            import esper
+            from Application.Core.Scene.BasicComponents import MeshRenderer
+            from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand
+            from Application.Editor.EditorHost import EditorHost
+            renderer = EditorHost.get_editor_renderer()
+            if renderer is None:
+                return
+            for eid in eids:
+                try:
+                    if esper.has_component(eid, MeshRenderer):
+                        renderer.enqueue(EntityRegistrationCommand(eid, register=True))
+                except KeyError:
+                    pass
+        except Exception:
+            pass
 
     # ── 选项列表 (供 Combo/下拉使用) ──────────────────────────
 

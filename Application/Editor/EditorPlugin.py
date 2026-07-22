@@ -54,11 +54,17 @@ class EditorPlugin(Plugin):
     # ════════════════════════════════════════════════════════════
 
     def get_layers(self) -> list[type[Layer]]:
-        """返回编辑器插件拥有的 Layer 类。
+        """返回编辑器插件拥有的 Layer 类（按 OnAttach 执行顺序）。
 
-        EditorLayer → 3D 视口交互 + ImGui 面板渲染
-        DebugLayer  → 性能 HUD + 场景调试实体
+        EditorImguiLayer → ImGui 上下文 / 字体 / Backend / 面板 (必须在最前)
+        EditorLayer      → 渲染器接入 / overlay 注册 / 层间连线
+        EditorGizmoLayer → Camera entity gizmo 可视化 / 预览切换
+        EditorInputLayer → 输入事件路由 (鼠标/键盘/滚轮/窗口)
+        DebugLayer       → 性能 HUD + 场景调试实体
         """
+        from Application.Editor.EditorImguiLayer import EditorImguiLayer
         from Application.Editor.EditorLayer import EditorLayer
+        from Application.Editor.EditorGizmoLayer import EditorGizmoLayer
+        from Application.Editor.EditorInputLayer import EditorInputLayer
         from Application.Editor.EditorDebugLayer import DebugLayer
-        return [EditorLayer, DebugLayer]
+        return [EditorImguiLayer, EditorLayer, EditorGizmoLayer, EditorInputLayer, DebugLayer]

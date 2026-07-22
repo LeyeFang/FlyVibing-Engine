@@ -376,18 +376,28 @@ class ScenePanel(BasePanel):
             imgui.end_drag_drop_target()
 
     def _draw_entity_toolbar(self) -> None:
-        """绘制实体工具栏: Add Entity / Delete。"""
+        """绘制实体工具栏: New / Save / Delete。"""
         av = imgui.get_content_region_avail().x
         spacing = imgui.get_style().item_spacing.x
-        btn_w = (av - spacing) / 2.0
+        btn_w = (av - spacing * 2) / 3.0
 
-        # ➕ Add Entity
-        if imgui.button(f"{fa.ICON_FA_PLUS}  Add Entity", (btn_w, 0)):
+        # ✨ New
+        if imgui.button(f"{fa.ICON_FA_PLUS}  New", (btn_w, 0)):
             self._browser_ctrl.add_entity()
         imgui.same_line()
 
-        # 🗑 Delete — 仅选中时可用
+        # 💾 Save — 仅选中时可用
         selected = self._selection_ctrl.get_selected()
+        save_disabled = (selected is None)
+        if save_disabled:
+            imgui.begin_disabled(True)
+        if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save", (btn_w, 0)):
+            self._save_selected_as_prefab(selected)
+        if save_disabled:
+            imgui.end_disabled()
+        imgui.same_line()
+
+        # 🗑 Delete — 仅选中时可用
         if selected is None:
             imgui.begin_disabled(True)
         if imgui.button(f"{fa.ICON_FA_TRASH}  Delete", (btn_w, 0)):
@@ -395,6 +405,24 @@ class ScenePanel(BasePanel):
             self._selection_ctrl.clear()
         if selected is None:
             imgui.end_disabled()
+
+    def _save_selected_as_prefab(self, selected_entity_id: int) -> None:
+        """将选中实体及其子实体树保存为 .prefab 文件（非阻塞）。"""
+        from Application.Editor.EditorHost import EditorHost
+        from Application.Core.Scene.PrefabManager import PrefabManager
+        from Application.Editor.UI.FileDialog import FileDialog
+
+        name = EditorHost.scene._entity_names.get(
+            selected_entity_id, f"Entity_{selected_entity_id}")
+        default_name = f"{name}.prefab"
+
+        # ★ 闭包捕获 selected_entity_id
+        def _on_save(filepath: str) -> None:
+            if not filepath:
+                return
+            PrefabManager.save_entity_tree(filepath, selected_entity_id, EditorHost.scene)
+
+        FileDialog.save_prefab(_on_save, default_name=default_name)
 
     def _draw_entity_node(
         self,

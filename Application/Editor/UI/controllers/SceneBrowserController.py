@@ -313,8 +313,8 @@ class SceneBrowserController:
         EditorHost.scene.SetEditorVisible(entity_id, visible)
         # ★ 通知 gizmo 刷新（眼图标会影响 camera gizmo 的 is_editor_visible）
         try:
-            from Application.Editor.EditorLayer import EditorLayer
-            EditorLayer.invalidate_camera_gizmos()
+            from Application.Editor.EditorGizmoLayer import EditorGizmoLayer
+            EditorGizmoLayer.invalidate_camera_gizmos()
         except Exception:
             pass
 

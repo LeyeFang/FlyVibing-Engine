@@ -17,10 +17,12 @@ TEXTURE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.bmp', '.tga', '.tiff', '.tif', 
 
 DEFAULT_MODEL_NAME = [
     'Square',
+    'Triangle',
     'Cube'
 ]
 DEFAULT_MODEL_FILE = [
     '2D/Square.obj',
+    '2D/Triangle.obj',
     '3D/Cube.obj'
 ]
 DEFAULT_SHADER_NAME = [
@@ -57,10 +59,12 @@ class ResourceManager:
     loaded_shader: dict[dict] = {}
     loaded_texture: dict[dict] = {}
     loaded_material: dict[dict] = {}
+    loaded_prefab: dict[dict] = {}
     mesh_count: int = 0
     shader_count: int = 0
     texture_count: int = 0
     material_count: int = 0
+    prefab_count: int = 0
 
     @classmethod
     def Init(
@@ -72,6 +76,7 @@ class ResourceManager:
         cls.__load_default_shader()
         cls.__load_default_texture()
         cls.__load_default_material()
+        cls.__load_default_prefab()
 
 
     # ==============================================================
@@ -549,6 +554,36 @@ class ResourceManager:
         del cls.loaded_material[key]
         return True
 
+    # ── Prefab ──────────────────────────────────────────────
+
+    @classmethod
+    def LoadPrefab(cls, filepath: str) -> int | None:
+        """加载 .prefab 文件并注册到资源管理器。返回 prefab_id。"""
+        from Application.Core.Scene.PrefabManager import PrefabManager
+
+        pdata = PrefabManager.load(filepath)
+        if pdata is None:
+            return None
+
+        cls.prefab_count += 1
+        pid = cls.prefab_count
+        cls.loaded_prefab[str(pid)] = {
+            'name': pdata.prefab_name,
+            'path': filepath,
+            'prefab_data': pdata,
+        }
+        print(f"[Resource] Loaded Prefab #{pid} '{pdata.prefab_name}' from {filepath}")
+        return pid
+
+    @classmethod
+    def DeletePrefab(cls, prefab_id: int) -> bool:
+        """删除已注册的 prefab。"""
+        key = str(prefab_id)
+        if key not in cls.loaded_prefab:
+            return False
+        del cls.loaded_prefab[key]
+        return True
+
 
     # Functions that only used in this class
     # ==============================================================
@@ -624,3 +659,30 @@ class ResourceManager:
             if getattr(mat, 'name', '') == "Default":
                 return int(mid)
         return cls.NewMaterial()  # fallback
+
+    @classmethod
+    def __load_default_prefab(cls) -> None:
+        """加载内置 Prefab（DefaultCamera3D / 2D / Overlay / Cube）。"""
+        import os
+        from Application.Core.Scene.PrefabManager import PrefabManager
+
+        default_prefab_dir = 'Resource/Prefabs/Builtin'
+        default_prefabs = [
+            'DefaultCamera3D',
+            'DefaultCamera2D',
+            'DefaultCameraOverlay',
+            'DefaultCube',
+        ]
+        for pname in default_prefabs:
+            fpath = os.path.join(default_prefab_dir, f'{pname}.prefab')
+            if os.path.exists(fpath):
+                pdata = PrefabManager.load(fpath)
+                if pdata is not None:
+                    cls.prefab_count += 1
+                    pid = cls.prefab_count
+                    cls.loaded_prefab[str(pid)] = {
+                        'name': pdata.prefab_name,
+                        'path': fpath,
+                        'prefab_data': pdata,
+                    }
+                    print(f"[Resource] Loaded builtin Prefab #{pid} '{pdata.prefab_name}'")

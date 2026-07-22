@@ -36,6 +36,7 @@ _TYPE_ICON = {
     "shader":   fa.ICON_FA_FILE_CODE,
     "texture":  fa.ICON_FA_IMAGE,
     "material": fa.ICON_FA_CIRCLE,
+    "prefab":   fa.ICON_FA_CUBE,
 }
 
 _TYPE_LABEL = {
@@ -43,6 +44,7 @@ _TYPE_LABEL = {
     "shader":   "Shader",
     "texture":  "Texture",
     "material": "Material",
+    "prefab":   "Prefab",
 }
 
 _TYPE_COLOR = {
@@ -50,10 +52,11 @@ _TYPE_COLOR = {
     "shader":   (0.788, 0.471, 0.471),   # 淡红
     "texture":  (0.471, 0.714, 0.471),   # 淡绿
     "material": (0.878, 0.753, 0.314),   # 暖金
+    "prefab":   (0.420, 0.650, 0.920),   # 与 mesh 同色
 }
 
 # ── 类型顺序 (用于排序) ──
-_TYPE_ORDER = ["mesh", "shader", "texture", "material"]
+_TYPE_ORDER = ["mesh", "shader", "texture", "material", "prefab"]
 
 # ── 未知类型的占位符 ──
 _UNKNOWN_ICON = "?"   # fa.ICON_FA_QUESTION 实际是 ASCII '?'，直接用字符串
@@ -99,6 +102,14 @@ class ResourcePanel(BasePanel):
         except Exception as e:
             print(f"[Resource] Failed to import material: {e}")
 
+    @staticmethod
+    def _on_import_prefab(file_path: str) -> None:
+        """FileDialog 回调: 从 .prefab 文件加载到 ResourceManager。"""
+        if not file_path:
+            return
+        from Application.Resource.ResourceManager import ResourceManager
+        ResourceManager.LoadPrefab(file_path)
+
     # ============================================================
     # 主绘制入口
     # ============================================================
@@ -143,6 +154,10 @@ class ResourcePanel(BasePanel):
             imgui.separator()
             if imgui.menu_item(f"{fa.ICON_FA_CIRCLE}  Material...", "", False, True)[0]:
                 FileDialog.open_mat(callback=self._on_import_material)
+                imgui.close_current_popup()
+            imgui.separator()
+            if imgui.menu_item(f"{fa.ICON_FA_CUBE}  Prefab...", "", False, True)[0]:
+                FileDialog.open_prefab(callback=self._on_import_prefab)
                 imgui.close_current_popup()
             imgui.end_popup()
 
@@ -198,6 +213,7 @@ class ResourcePanel(BasePanel):
             (fa.ICON_FA_FILE_CODE,   "Shaders"),
             (fa.ICON_FA_IMAGE,       "Textures"),
             (fa.ICON_FA_CIRCLE,      "Materials"),
+            (fa.ICON_FA_CUBE,        "Prefabs"),
         ]
         tab_count = len(tab_defs)
         av = imgui.get_content_region_avail().x
@@ -325,6 +341,14 @@ class ResourcePanel(BasePanel):
                 f"{icon}  {type_label}: {rname}",
             )
             imgui.separator()
+            if rtype == "prefab":
+                if imgui.menu_item(f"{fa.ICON_FA_PLUS}  Add to Scene", "", False, True)[0]:
+                    from Application.Editor.UI.controllers.ResourceBrowserController import ResourceBrowserController
+                    eids = ResourceBrowserController.instantiate_prefab(rid)
+                    if eids:
+                        print(f"[Resource] Added Prefab '{rname}' → {len(eids)} entities")
+                    imgui.close_current_popup()
+                imgui.separator()
             if imgui.menu_item(f"{fa.ICON_FA_TRASH}  Delete", "", False, True)[0]:
                 ok = self._resource_ctrl.delete_resource(rtype, rid)
                 if ok:
@@ -349,10 +373,9 @@ class ResourcePanel(BasePanel):
             self._selected_type = rtype
             self._selected_id = rid
 
-        # ── 拖拽源 (未来: 拖到 Scene Panel 赋值) ──
+        # ── 拖拽源 (rid 作为 payload int) ──
         if imgui.begin_drag_drop_source():
-            payload_data = (rtype, rid)
-            imgui.set_drag_drop_payload_py_id("RESOURCE", payload_data)
+            imgui.set_drag_drop_payload_py_id("RESOURCE", rid)
             imgui.text_colored(
                 imgui.ImVec4(*type_color, 1.00),
                 f"{icon}  {rname}",
@@ -398,7 +421,7 @@ class ResourcePanel(BasePanel):
         """根据当前激活的标签页和搜索过滤获取资源列表。"""
         # 映射 active_tab → resource_type (None=All)
         tab_map = {0: None, 1: "mesh", 2: "shader",
-                   3: "texture", 4: "material"}
+                   3: "texture", 4: "material", 5: "prefab"}
         filter_type = tab_map.get(self._active_tab)
 
         resources = self._resource_ctrl.get_all_resources(filter_type)

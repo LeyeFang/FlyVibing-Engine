@@ -87,8 +87,9 @@ class EditorInputLayer(Layer):
 
         # ── SceneCameraUpdateEvent: 始终处理 (ViewportController / DebugLayer 触发) ──
         if isinstance(event, SceneCameraUpdateEvent):
+            from Application.Editor.EditorGizmoLayer import EditorGizmoLayer
             cls._editor_layer._sync_camera_to_renderer()
-            cls._editor_layer.invalidate_camera_gizmos()
+            EditorGizmoLayer.invalidate_camera_gizmos()
             return
 
         # ── 窗口 resize 始终处理，不受面板鼠标拦截影响 ──
@@ -105,7 +106,8 @@ class EditorInputLayer(Layer):
             if not io.want_capture_keyboard:
                 if (event.key == KeyButtonCode.Space
                         and event.action == KeyActionCode.Press):
-                    cls._editor_layer._toggle_preview_camera()
+                    from Application.Editor.EditorGizmoLayer import EditorGizmoLayer
+                    EditorGizmoLayer._toggle_preview_camera()
             return
 
         # ── 鼠标在 ImGui 面板内 → 不处理 3D 视口输入 ──

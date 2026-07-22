@@ -1,0 +1,26 @@
+{
+  "format_version": 1,
+  "prefab_name": "DefaultCamera3D",
+  "root": {
+    "name": "DefaultCamera3D",
+    "components": {
+      "Transform": {
+        "position_x": 0.0, "position_y": 0.0, "position_z": 10.0,
+        "rotation_x": 0.0, "rotation_y": 0.0, "rotation_z": 0.0,
+        "scale_x": 1.0, "scale_y": 1.0, "scale_z": 1.0
+      },
+      "Camera": {
+        "projection_type": "perspective",
+        "fov": 45.0,
+        "aspect_ratio": 1.7777777777777777,
+        "ortho_size": 5.0,
+        "near_plane": 0.1,
+        "far_plane": 1000.0,
+        "local_forward": [0.0, 0.0, -1.0],
+        "up_vector": [0.0, 1.0, 0.0],
+        "is_primary": true
+      }
+    }
+  },
+  "children": {}
+}

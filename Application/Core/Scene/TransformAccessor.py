@@ -26,6 +26,12 @@ from Application.Core.Math.CoordinateSystem import (
     editor_to_gl_position, gl_to_editor_position,
     editor_to_gl_scale, gl_to_editor_scale,
 )
+from Application.Core.Math.Transform import (
+    calculate_entity_model,
+    local_to_world_position, world_to_local_position,
+    local_to_world_rotation, world_to_local_rotation,
+    local_to_world_scale, world_to_local_scale,
+)
 
 if TYPE_CHECKING:
     from Application.Core.Scene.SceneManager import SceneManager
@@ -42,11 +48,41 @@ class TransformAccessor:
     # ════════════════════════════════════════════════════════════
 
     def get_transform(self, entity_id: int) -> Transform:
-        """获取实体 Transform。"""
+        """获取实体 Transform 组件（返回引用，可修改）。"""
         try:
             return esper.component_for_entity(entity_id, Transform)
         except KeyError:
             return Transform()
+
+    def get_world_position(self, entity_id: int) -> tuple[float, float, float]:
+        """计算实体的世界位置 (local → world 沿父链推导)。"""
+        t = self.get_transform(entity_id)
+        parent_id = self._mgr._entity_parent.get(entity_id)
+        if parent_id is not None and parent_id != entity_id:
+            p_pos = self.get_world_position(parent_id)
+            return local_to_world_position(
+                (t.local_pos_x, t.local_pos_y, t.local_pos_z), p_pos)
+        return (t.local_pos_x, t.local_pos_y, t.local_pos_z)
+
+    def get_world_rotation(self, entity_id: int) -> tuple[float, float, float]:
+        """计算实体的世界旋转 (local → world 沿父链推导, Euler 分量累加)。"""
+        t = self.get_transform(entity_id)
+        parent_id = self._mgr._entity_parent.get(entity_id)
+        if parent_id is not None and parent_id != entity_id:
+            p_rot = self.get_world_rotation(parent_id)
+            return local_to_world_rotation(
+                (t.local_rot_x, t.local_rot_y, t.local_rot_z), p_rot)
+        return (t.local_rot_x, t.local_rot_y, t.local_rot_z)
+
+    def get_world_scale(self, entity_id: int) -> tuple[float, float, float]:
+        """计算实体的世界缩放 (local → world 沿父链推导, component-wise 乘法)。"""
+        t = self.get_transform(entity_id)
+        parent_id = self._mgr._entity_parent.get(entity_id)
+        if parent_id is not None and parent_id != entity_id:
+            p_scl = self.get_world_scale(parent_id)
+            return local_to_world_scale(
+                (t.local_scl_x, t.local_scl_y, t.local_scl_z), p_scl)
+        return (t.local_scl_x, t.local_scl_y, t.local_scl_z)
 
     def set_transform(self, entity_id: int, *,
                       position_xyz=None, rotation_xyz=None, scale_xyz=None) -> None:
@@ -64,34 +100,40 @@ class TransformAccessor:
 
         if position_xyz is not None:
             t.position_x, t.position_y, t.position_z = position_xyz
-            # 有父实体 → 从 world 反推 local
             if parent_id is not None and parent_id != entity_id:
                 try:
                     parent_t = esper.component_for_entity(parent_id, Transform)
-                    t.local_pos_x = position_xyz[0] - parent_t.position_x
-                    t.local_pos_y = position_xyz[1] - parent_t.position_y
-                    t.local_pos_z = position_xyz[2] - parent_t.position_z
+                    p_pos = (parent_t.position_x, parent_t.position_y, parent_t.position_z)
+                    lx, ly, lz = world_to_local_position(position_xyz, p_pos)
+                    t.local_pos_x, t.local_pos_y, t.local_pos_z = lx, ly, lz
                 except KeyError:
-                    pass
+                    t.local_pos_x, t.local_pos_y, t.local_pos_z = position_xyz
             else:
                 t.local_pos_x, t.local_pos_y, t.local_pos_z = position_xyz
             changed = True
 
         if rotation_xyz is not None:
             t.rotation_x, t.rotation_y, t.rotation_z = rotation_xyz
-            t.local_rot_x, t.local_rot_y, t.local_rot_z = rotation_xyz
+            if parent_id is not None and parent_id != entity_id:
+                try:
+                    parent_t = esper.component_for_entity(parent_id, Transform)
+                    p_rot = (parent_t.rotation_x, parent_t.rotation_y, parent_t.rotation_z)
+                    lx, ly, lz = world_to_local_rotation(rotation_xyz, p_rot)
+                    t.local_rot_x, t.local_rot_y, t.local_rot_z = lx, ly, lz
+                except KeyError:
+                    t.local_rot_x, t.local_rot_y, t.local_rot_z = rotation_xyz
+            else:
+                t.local_rot_x, t.local_rot_y, t.local_rot_z = rotation_xyz
             changed = True
 
         if scale_xyz is not None:
             t.scale_x, t.scale_y, t.scale_z = scale_xyz
-            # 有父实体 → 从 world 反推 local (component-wise)
             if parent_id is not None and parent_id != entity_id:
                 try:
                     parent_t = esper.component_for_entity(parent_id, Transform)
-                    psx, psy, psz = parent_t.scale_x, parent_t.scale_y, parent_t.scale_z
-                    t.local_scl_x = scale_xyz[0] / psx if psx != 0 else scale_xyz[0]
-                    t.local_scl_y = scale_xyz[1] / psy if psy != 0 else scale_xyz[1]
-                    t.local_scl_z = scale_xyz[2] / psz if psz != 0 else scale_xyz[2]
+                    p_scl = (parent_t.scale_x, parent_t.scale_y, parent_t.scale_z)
+                    lx, ly, lz = world_to_local_scale(scale_xyz, p_scl)
+                    t.local_scl_x, t.local_scl_y, t.local_scl_z = lx, ly, lz
                 except KeyError:
                     pass
             else:
@@ -127,7 +169,6 @@ class TransformAccessor:
         有父实体时: world = local_matrix @ parent_world_matrix
         无父实体时: world = world_matrix (position_xyz / rotation_xyz / scale_xyz)
         """
-        from Application.Core.Math.Transform import calculate_entity_model
         t = self.get_transform(entity_id)
         parent_id = self._mgr._entity_parent.get(entity_id)
 

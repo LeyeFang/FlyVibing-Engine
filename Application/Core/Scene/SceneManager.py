@@ -57,6 +57,8 @@ class SceneManager:
         self._entity_names: dict[int, str] = {}
         self._entity_parent: dict[int, int] = {}
         self._editor_visible: set[int] = set()
+        self._sid_map: dict[int, int] = {}     # scene-local sid → esper eid
+        self._eid_to_sid: dict[int, int] = {}  # esper eid → scene-local sid
         self.game_type = GameType.GAME_3D
 
         # ★ 组合子管理器
@@ -392,7 +394,7 @@ class SceneManager:
         t = esper.component_for_entity(entity_id, Transform)
         return {
             'position': SceneManager.gl_to_editor_position(t.position_x, t.position_y, t.position_z),
-            'rotation': (t.rotation_x, t.rotation_y, t.rotation_z),
+            'rotation': SceneManager.gl_to_editor_position(t.rotation_x, t.rotation_y, t.rotation_z),
             'scale': SceneManager.gl_to_editor_scale(t.scale_x, t.scale_y, t.scale_z),
         }
 
@@ -403,7 +405,7 @@ class SceneManager:
         t = esper.component_for_entity(entity_id, Transform)
         return {
             'position': SceneManager.gl_to_editor_position(t.local_pos_x, t.local_pos_y, t.local_pos_z),
-            'rotation': (t.local_rot_x, t.local_rot_y, t.local_rot_z),
+            'rotation': SceneManager.gl_to_editor_position(t.local_rot_x, t.local_rot_y, t.local_rot_z),
             'scale': SceneManager.gl_to_editor_scale(t.local_scl_x, t.local_scl_y, t.local_scl_z),
         }
 
@@ -427,9 +429,17 @@ class SceneManager:
                 transform.position_x, transform.position_y, transform.position_z = gl_x, gl_y, gl_z
 
         if rotation_xyz is not None:
-            transform.local_rot_x, transform.local_rot_y, transform.local_rot_z = rotation_xyz
-            # 子 entity 的 world rotation 也需要沿 parent chain 传播（暂时保持简单）
-            transform.rotation_x, transform.rotation_y, transform.rotation_z = rotation_xyz
+            gl_rx, gl_ry, gl_rz = SceneManager.editor_to_gl_position(*rotation_xyz)
+            transform.local_rot_x, transform.local_rot_y, transform.local_rot_z = gl_rx, gl_ry, gl_rz
+            # 有父实体时: world_rot = parent_world_rot + child_local_rot (Euler 累加)
+            if parent_id is not None and parent_id != entity_id:
+                from Application.Core.Math.Transform import local_to_world_rotation
+                parent_t = esper.component_for_entity(parent_id, Transform)
+                p_rot = (parent_t.rotation_x, parent_t.rotation_y, parent_t.rotation_z)
+                wrx, wry, wrz = local_to_world_rotation((gl_rx, gl_ry, gl_rz), p_rot)
+                transform.rotation_x, transform.rotation_y, transform.rotation_z = wrx, wry, wrz
+            else:
+                transform.rotation_x, transform.rotation_y, transform.rotation_z = gl_rx, gl_ry, gl_rz
 
         if scale_xyz is not None:
             gl_sx, gl_sy, gl_sz = SceneManager.editor_to_gl_scale(*scale_xyz)

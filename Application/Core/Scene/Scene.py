@@ -95,18 +95,18 @@ class Scene:
     # 游戏类型 — 决定默认摄像机系统和可用节点
     game_type: GameType = GameType.GAME_3D
 
-    # {entity_id: EntityData}
+    # {scene-local entity id: EntityData}  — 稳定 ID, 不随 esper 重分配变化
     entities: dict[int, EntityData] = field(default_factory=dict)
 
     # 节点图 — 定义此场景的运行时行为
     # 类型为 Optional[NodeCanvas] — 延迟引用以避免循环导入
     node_graph: Optional[object] = None
 
-    # 场景级设置
+    # 场景级设置 — 引用 entities 中的 scene-local ID
     main_camera_entity_id: Optional[int] = None
 
-    # 内部: 实体 ID 自增计数器
-    _next_eid: int = field(default=1, repr=False)
+    # 内部: scene-local 实体 ID 自增计数器 (每次 add_entity +1, 跨保存/加载稳定)
+    _next_sid: int = field(default=1, repr=False)
 
     # ════════════════════════════════════════════════════════════
     # 实体 CRUD (纯数据操作, 不涉及 esper)
@@ -132,8 +132,8 @@ class Scene:
                 MeshRenderer=MeshRenderer(mesh_id=cube_mesh_id),
             )
         """
-        eid = self._next_eid
-        self._next_eid += 1
+        eid = self._next_sid
+        self._next_sid += 1
 
         comp_dict: dict[str, object] = {}
         for comp_type_name, comp_instance in components.items():
@@ -374,7 +374,7 @@ class Scene:
             "game_type": self.game_type.value,
             "entities": entities_dict,
             "main_camera_entity_id": self.main_camera_entity_id,
-            "next_eid": self._next_eid,
+            "next_eid": self._next_sid,
         }
 
         # 节点图序列化 (如果实现了 to_dict)
@@ -400,7 +400,7 @@ class Scene:
             Scene 实例
         """
         scene = cls(name=data.get("name", "Untitled"))
-        scene._next_eid = data.get("next_eid", 1)
+        scene._next_sid = data.get("next_eid", 1)
         scene.main_camera_entity_id = data.get("main_camera_entity_id")
         # ── 恢复 game_type ──
         gt_raw = data.get("game_type", "3d")

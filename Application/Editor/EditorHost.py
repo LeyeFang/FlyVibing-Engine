@@ -90,20 +90,36 @@ class EditorHost(Engine):
     def switch_scene(cls, name: str) -> bool:
         """切换到指定名称的场景。返回是否成功。
 
-        切换时同步:
+        切换时:
+          0. 保存当前场景的 entity 状态 (SyncToScene)
           1. ECS 世界 (清空旧实体, 加载新场景)
           2. Node Editor 面板画布 (加载新场景的节点图)
           3. GPU 渲染器 (注册新 MeshRenderer 实体)
+          4. ViewportController (根据 game_type 切换 2D/3D)
         """
         if name not in cls._scenes:
             return False
+        # ★ 0. 离开当前场景前保存状态 (entity + node graph)
+        if cls._active_scene is not None:
+            cls.scene.SyncToScene(cls._active_scene)
+            cls._sync_node_graph_to_scene()  # ★ 保存旧场景的节点图
+        # ── 切换 ──
         cls._active_scene = cls._scenes[name]
-        # ★ 同步 ECS 世界
         cls.scene.SyncFromScene(cls._active_scene, clear_existing=True)
-        # ★ 同步 Node Editor 面板的节点图
+        # ★ 同步 Node Editor 面板的节点图 (新场景)
         cls._sync_node_graph_from_scene()
         # ★ 注册 GPU 实体
         cls._register_mesh_entities_after_load()
+        # ★ 根据 game_type 切换视口模式
+        try:
+            from Application.Editor.UI.controllers.ViewportController import ViewportController
+            from Application.Core.Scene.Scene import GameType
+            if cls._active_scene.game_type == GameType.GAME_2D:
+                ViewportController.switch_to_2d()
+            else:
+                ViewportController.switch_to_3d()
+        except Exception:
+            pass
         print(f"[EditorHost] Switched to scene: {name}")
         return True
 
@@ -146,23 +162,30 @@ class EditorHost(Engine):
 
     @classmethod
     def _sync_node_graph_from_scene(cls) -> None:
-        """加载后: 将 Scene.node_graph 恢复到 NodeEditorPanel 画布。"""
+        """加载后: 将 Scene.node_graph 恢复到 NodeEditorPanel 画布。
+
+        若新场景没有节点图 (node_graph is None)，则重置画布为默认空画布，
+        避免旧场景的节点图残留在面板中。
+        """
         scene = cls._active_scene
-        if scene is None or scene.node_graph is None:
-            return
         try:
             from Application.Editor.UI.controllers.node_editor.canvas import NodeCanvas
             from Application.Editor.UI.UIManager import UIManager
             panel = UIManager.find("Node Editor")
             if panel is None:
                 return
-            if isinstance(scene.node_graph, dict):
-                # 从 JSON dict 恢复
-                panel._canvas = NodeCanvas.from_dict(scene.node_graph)
+            if scene is not None and scene.node_graph is not None:
+                # ★ 恢复新场景的节点图
+                if isinstance(scene.node_graph, dict):
+                    panel._canvas = NodeCanvas.from_dict(scene.node_graph)
+                else:
+                    panel._canvas = scene.node_graph
+                panel._canvas_initialized = True
             else:
-                # 已是 NodeCanvas 实例（深拷贝后）
-                panel._canvas = scene.node_graph
-            panel._canvas_initialized = True
+                # ★ 新场景无节点图 → 重置为空画布（含默认节点）
+                panel._canvas = NodeCanvas()
+                panel._canvas.create_default_nodes()
+                panel._canvas_initialized = True
         except Exception:
             pass
 
@@ -176,6 +199,18 @@ class EditorHost(Engine):
         cls.scene.SyncToScene(scene)
         cls._sync_node_graph_to_scene()
         scene.save_to_file(path)
+        return True
+
+    @classmethod
+    def save_scene_to_file(cls, scene_name: str, path: str) -> bool:
+        """将指定名称的场景保存到 .scene 文件。"""
+        scene = cls._scenes.get(scene_name)
+        if scene is None:
+            return False
+        cls.scene.SyncToScene(scene)
+        cls._sync_node_graph_to_scene()
+        scene.save_to_file(path)
+        scene._file_path = path
         return True
 
     @classmethod

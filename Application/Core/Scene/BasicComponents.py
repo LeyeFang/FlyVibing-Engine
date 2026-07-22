@@ -17,7 +17,7 @@ class ObjectInfo:
 
 @component
 class Transform:
-    # ── 世界空间 (World / Global) ──
+    # ── 世界空间 (World / Global) — 由 local + parent 链动态推导，不应直接设置 ──
     position_x: float = 0
     position_y: float = 0
     position_z: float = 0
@@ -28,7 +28,7 @@ class Transform:
     scale_y: float = 1
     scale_z: float = 1
 
-    # ── 本地空间 (Local, 相对于父实体) ──
+    # ── 本地空间 (Local, 相对于父实体) — ★ 唯一信源 (source of truth) ──
     local_pos_x: float = 0
     local_pos_y: float = 0
     local_pos_z: float = 0
@@ -40,17 +40,8 @@ class Transform:
     local_scl_z: float = 1
 
     def __post_init__(self) -> None:
-        """dataclass 生成 __init__ 后自动调用 — 同步 local = world（根实体默认）。"""
-        if self.local_pos_x == 0 and self.local_pos_y == 0 and self.local_pos_z == 0:
-            self.local_pos_x = self.position_x
-            self.local_pos_y = self.position_y
-            self.local_pos_z = self.position_z
-            self.local_rot_x = self.rotation_x
-            self.local_rot_y = self.rotation_y
-            self.local_rot_z = self.rotation_z
-            self.local_scl_x = self.scale_x
-            self.local_scl_y = self.scale_y
-            self.local_scl_z = self.scale_z
+        """确保 local 字段有默认值 (esper 创建实体时可能跳过 dataclass 默认值)。"""
+        # 不做 world→local 复制 — 根实体调用方通过 SetEntityTransform 显式写入两边
 
 
 

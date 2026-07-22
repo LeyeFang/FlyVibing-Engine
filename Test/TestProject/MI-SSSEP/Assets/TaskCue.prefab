@@ -1,0 +1,35 @@
+{
+  "format_version": 1,
+  "prefab_name": "TaskCue",
+  "root": {
+    "name": "TaskCue",
+    "components": {
+      "Transform": {
+        "position_x": 0.0,
+        "position_y": 0.0,
+        "position_z": 6.0,
+        "rotation_x": 0,
+        "rotation_y": 0,
+        "rotation_z": 0,
+        "scale_x": 4.0,
+        "scale_y": 1.0,
+        "scale_z": 0.30000001192092896,
+        "local_pos_x": 0,
+        "local_pos_y": 0,
+        "local_pos_z": 0,
+        "local_rot_x": 0,
+        "local_rot_y": 0,
+        "local_rot_z": 0,
+        "local_scl_x": 1,
+        "local_scl_y": 1,
+        "local_scl_z": 1
+      },
+      "MeshRenderer": {
+        "mesh_id": 1,
+        "material_id": 3,
+        "visible": false
+      }
+    }
+  },
+  "children": {}
+}

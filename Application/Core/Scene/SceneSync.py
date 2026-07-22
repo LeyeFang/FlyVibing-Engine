@@ -13,6 +13,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import TYPE_CHECKING
 
+import dataclasses
 import esper
 
 from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
@@ -33,27 +34,36 @@ class SceneSync:
     # ════════════════════════════════════════════════════════════
 
     def sync_to_scene(self, scene: object) -> None:
-        """将当前 esper 世界中的实体同步到 Scene 数据容器。"""
-        import dataclasses
+        """将当前 esper 世界中的实体同步到 Scene 数据容器。
+
+        使用 scene-local stable ID (sid) 作为 entities 的 key,
+        esper eid → sid 映射从 SceneManager._eid_to_sid 读取。
+        """
         st = self._mgr
 
-        # 安全兜底: 确保组件注册表已初始化
         if not st._component_registry:
             st._component_registry["Camera"] = Camera
             st._component_registry["MeshRenderer"] = MeshRenderer
             st._component_registry["Transform"] = Transform
 
         scene.entities.clear()
-        max_eid = 0
+        max_sid = 0
 
         for entity_id_str in list(st.entities.keys()):
             eid = int(entity_id_str)
-            max_eid = max(max_eid, eid)
+            # ★ 使用 stable ID 而非 esper ID
+            sid = st._eid_to_sid.get(eid)
+            if sid is None:
+                sid = max_sid + 1 if max_sid == 0 else max_sid + 1
+                st._eid_to_sid[eid] = sid
+                st._sid_map[sid] = eid
+            max_sid = max(max_sid, sid)
 
             name = st._entity_names.get(eid, f"Entity_{eid}")
-            parent_id = st._entity_parent.get(eid)  # ★ 保存层级关系到 Scene
+            # ★ 父实体 ID 也转为 sid
+            parent_eid = st._entity_parent.get(eid)
+            parent_sid = st._eid_to_sid.get(parent_eid) if parent_eid is not None else None
 
-            # 直接从 esper 获取实体所有组件 (不依赖 registry 发现)
             comps: dict[str, object] = {}
             try:
                 all_comps = esper.components_for_entity(eid)
@@ -66,14 +76,18 @@ class SceneSync:
                     comps[comp_type] = dataclasses.asdict(comp_instance)
                 elif hasattr(comp_instance, 'to_dict'):
                     comps[comp_type] = comp_instance.to_dict()
+                else:
+                    try:
+                        comps[comp_type] = dict(vars(comp_instance))
+                    except Exception:
+                        pass
 
             if comps:
                 from Application.Core.Scene.Scene import EntityData
-                scene.entities[eid] = EntityData(name=name, components=comps, parent_id=parent_id)
+                scene.entities[sid] = EntityData(name=name, components=comps, parent_id=parent_sid)
 
-        scene._next_eid = max_eid + 1 if max_eid > 0 else 1
-        scene.main_camera_entity_id = st.main_camera_id
-        # ★ 同步 GameType（用户可能在 UI 切过 2D/3D）
+        scene._next_sid = max_sid + 1 if max_sid > 0 else 1
+        scene.main_camera_entity_id = st._eid_to_sid.get(st.main_camera_id)
         scene.game_type = st.game_type
 
     # ════════════════════════════════════════════════════════════
@@ -81,16 +95,19 @@ class SceneSync:
     # ════════════════════════════════════════════════════════════
 
     def sync_from_scene(self, scene: object, clear_existing: bool = True) -> None:
-        """从 Scene 数据容器恢复实体到 esper 世界。"""
+        """从 Scene 数据容器恢复实体到 esper 世界。
+
+        Scene.entities 的 key 是 scene-local stable ID (sid)。
+        创建 esper 实体后建立 sid↔eid 双向映射。
+        """
         st = self._mgr
 
-        # 安全兜底: 确保组件注册表已初始化
         if not st._component_registry:
             st._component_registry["Camera"] = Camera
             st._component_registry["MeshRenderer"] = MeshRenderer
             st._component_registry["Transform"] = Transform
 
-        # ── 清空现有实体 ──
+        # ── 清空现有实体 + 映射表 ──
         if clear_existing:
             for entity_id_str in list(st.entities.keys()):
                 eid = int(entity_id_str)
@@ -100,26 +117,33 @@ class SceneSync:
             st._entity_names.clear()
             st._entity_parent.clear()
             st._editor_visible.clear()
+            st._sid_map.clear()
+            st._eid_to_sid.clear()
             st.main_camera_id = None
             st.scene_camera = None
             st.scene_camera_id = None
             st.main_camera_2d_id = None
+            st.main_camera_overlay_id = None
+            # ★ 安全验证: esper 世界确实被清空
+            try:
+                remaining = list(esper.get_component(Transform))
+                if remaining:
+                    for eid, _ in remaining:
+                        esper.delete_entity(eid)
+                    print(f"[SceneSync] WARNING: {len(remaining)} entities survived clear_database, force-deleted")
+            except Exception:
+                pass
 
-        # ── 重建实体 ──
-        id_map: dict[int, int] = {}
-        _pending_parents: dict[int, int] = {}  # new_eid → old_parent_id
+        # ── 重建实体 (sid → esper eid) ──
+        _pending_parents: dict[int, int] = {}  # new_eid → parent_sid
 
-        for old_eid, ed in scene.entities.items():
+        for sid, ed in scene.entities.items():
             comp_instances = []
             for comp_name, comp_dict in ed.components.items():
                 comp_cls = st._component_registry.get(comp_name)
                 if comp_cls is None:
                     continue
-                if isinstance(comp_dict, comp_cls):
-                    comp_instances.append(comp_dict)
-                    continue
                 if isinstance(comp_dict, dict) and hasattr(comp_cls, '__dataclass_fields__'):
-                    # ★ 将 JSON 中的字符串值转换为对应的 Enum 类型
                     from dataclasses import fields
                     converted = dict(comp_dict)
                     for fld in fields(comp_cls):
@@ -129,7 +153,12 @@ class SceneSync:
                                 try:
                                     converted[fld.name] = fld_type(converted[fld.name])
                                 except (ValueError, KeyError):
-                                    pass  # 保持原始值（回退兼容）
+                                    pass
+                    comp_instances.append(comp_cls(**converted))
+                elif isinstance(comp_dict, dict):
+                    comp_instances.append(comp_cls(**comp_dict))
+                elif hasattr(comp_cls, '__dataclass_fields__'):
+                    converted = dataclasses.asdict(comp_dict)
                     comp_instances.append(comp_cls(**converted))
 
             if comp_instances:
@@ -137,77 +166,63 @@ class SceneSync:
             else:
                 new_eid = esper.create_entity(Transform())
 
-            id_map[old_eid] = new_eid
+            # ★ 建立 sid ↔ eid 双向映射
+            st._sid_map[sid] = new_eid
+            st._eid_to_sid[new_eid] = sid
             st.entities[f'{new_eid}'] = 1
             st._entity_names[new_eid] = ed.name
             st._editor_visible.add(new_eid)
-            # ★ 暂存 parent_id (用 old_eid), ID 重映射后再恢复
-            if ed.parent_id is not None:
-                _pending_parents[new_eid] = ed.parent_id
 
-            # 仅 MeshRenderer 实体注册到渲染器
+            if ed.parent_id is not None:
+                _pending_parents[new_eid] = ed.parent_id  # parent_sid
+
             has_mesh = any(isinstance(ci, MeshRenderer) for ci in comp_instances)
             if has_mesh:
                 _renderer = getattr(st.app, 'renderer', None)
                 if _renderer is not None:
                     _renderer.enqueue(EntityRegistrationCommand(new_eid, register=True))
 
-        # ── ID 重映射 ──
-        from Application.Core.Scene.Scene import EntityData
-        remapped: dict[int, object] = {}
-        for old_eid, new_eid in id_map.items():
-            ed = scene.entities[old_eid]
-            remapped[new_eid] = EntityData(name=ed.name, components=dict(ed.components))
-        scene.entities.clear()
-        scene.entities.update(remapped)
-        scene._next_eid = max(id_map.values()) + 1 if id_map else 1
+        # ── 恢复父子关系 (parent_sid → parent_eid) ──
+        for child_eid, parent_sid in _pending_parents.items():
+            parent_eid = st._sid_map.get(parent_sid)
+            if parent_eid is not None:
+                st._entity_parent[child_eid] = parent_eid
 
-        # ── 恢复父子关系 (ID 重映射后: old_parent_id → new_parent_id) ──
-        for child_eid, old_parent_id in _pending_parents.items():
-            new_parent_id = id_map.get(old_parent_id)
-            if new_parent_id is not None:
-                st._entity_parent[child_eid] = new_parent_id
-
+        # ── 恢复主摄像机 (main_camera_entity_id 是 sid) ──
         if scene.main_camera_entity_id is not None:
-            scene.main_camera_entity_id = id_map.get(
-                scene.main_camera_entity_id, scene.main_camera_entity_id)
+            cam_eid = st._sid_map.get(scene.main_camera_entity_id)
+            if cam_eid is not None:
+                try:
+                    st.main_camera_id = cam_eid
+                    st.scene_camera = esper.component_for_entity(cam_eid, Camera)
+                    st.scene_camera_id = cam_eid
+                except KeyError:
+                    st.main_camera_id = None
+                    st.scene_camera = None
+                    st.scene_camera_id = None
 
-        # ── 恢复主摄像机 ──
-        if scene.main_camera_entity_id is not None:
-            try:
-                st.main_camera_id = scene.main_camera_entity_id
-                st.scene_camera = esper.component_for_entity(
-                    scene.main_camera_entity_id, Camera)
-                st.scene_camera_id = scene.main_camera_entity_id
-            except KeyError:
-                st.main_camera_id = None
-                st.scene_camera = None
-                st.scene_camera_id = None
-        # ── 恢复 2D 摄像机：查找第一个 orthographic Camera ──
+        # ── 恢复 2D 摄像机 ──
         st.main_camera_2d_id = None
         for entity_id_str in st.entities:
             eid = int(entity_id_str)
             try:
                 if esper.has_component(eid, Camera):
                     cam = esper.component_for_entity(eid, Camera)
-                    if getattr(cam, 'projection_type', None) is not None:
+                    pt = getattr(cam, 'projection_type', None)
+                    if pt is not None:
                         from Application.Core.Scene.BasicComponents import ProjectionType
-                        if cam.projection_type == ProjectionType.ORTHOGRAPHIC or \
-                           str(cam.projection_type) == 'orthographic':
+                        if pt == ProjectionType.ORTHOGRAPHIC or str(pt) == 'orthographic':
                             st.main_camera_2d_id = eid
                             break
             except KeyError:
                 pass
-        # ── 兜底: 若无摄像机，创建默认 ──
-        has_camera = False
-        for entity_id_str in st.entities:
-            try:
-                if esper.has_component(int(entity_id_str), Camera):
-                    has_camera = True
-                    break
-            except KeyError:
-                pass
+
+        # ── 兜底: 无摄像机 → 创建默认 ──
+        has_camera = any(
+            esper.has_component(int(eid_str), Camera)
+            for eid_str in st.entities
+        )
         if not has_camera:
-            self._mgr._create_default_cameras(st)
+            self._mgr.cam_mgr.create_defaults(st)
 
         st.game_type = scene.game_type

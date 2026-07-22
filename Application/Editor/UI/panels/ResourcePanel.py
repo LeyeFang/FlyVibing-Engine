@@ -32,7 +32,7 @@ from Application.Editor.Services.ImportService import ImportService
 
 # ── 资源类型 → FA6 图标映射 ──────────────────────────────────
 _TYPE_ICON = {
-    "mesh":     fa.ICON_FA_CUBE,
+    "mesh":     fa.ICON_FA_CUBES,
     "shader":   fa.ICON_FA_FILE_CODE,
     "texture":  fa.ICON_FA_IMAGE,
     "material": fa.ICON_FA_CIRCLE,
@@ -209,7 +209,7 @@ class ResourcePanel(BasePanel):
         """绘制分类标签页: All | Meshes | Shaders | Textures | Materials"""
         tab_defs = [
             ("",                       "All"),
-            (fa.ICON_FA_CUBE,        "Meshes"),
+            (fa.ICON_FA_CUBES,       "Meshes"),
             (fa.ICON_FA_FILE_CODE,   "Shaders"),
             (fa.ICON_FA_IMAGE,       "Textures"),
             (fa.ICON_FA_CIRCLE,      "Materials"),

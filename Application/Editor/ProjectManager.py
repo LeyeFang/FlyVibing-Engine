@@ -63,11 +63,13 @@ class ProjectManager:
             "version": "0.1.0",
             "name": name,
             "startup_scene": "",
+            "scenes": [],
             "resources": {
                 "materials": [],
                 "shaders": [],
                 "textures": [],
                 "meshes": [],
+                "prefabs": [],
             },
         }
         # ★ 新项目 → 重置视口为 3D
@@ -100,10 +102,12 @@ class ProjectManager:
             print(f"[Project] Opened: {cls._project_name}  ({len(cls._get_all_resource_paths())} resources)")
             # ★ 自动加载所有资源 → 获取 ID 映射
             id_map = cls._load_all_resources()
-            # ★ 自动加载启动场景 → 重映射 material_id
+            # ★ 加载所有 scene 文件到 _scenes 字典
+            cls._load_all_scenes(id_map)
+            # ★ 设置启动场景为活跃
             startup = cls._data.get("startup_scene", "")
             if startup:
-                cls._load_startup_scene(startup, id_map)
+                cls._activate_scene(startup)
             return True
         except Exception as e:
             print(f"[Project] Failed to open: {e}")
@@ -186,7 +190,6 @@ class ProjectManager:
         if not rel:
             return
         mats: list = cls._data.setdefault("resources", {}).setdefault("materials", [])
-        # 检查是否已注册（按路径匹配）
         for entry in mats:
             existing = entry if isinstance(entry, dict) else {"path": entry}
             if existing.get("path") == rel:
@@ -201,8 +204,33 @@ class ProjectManager:
         if material_id is not None:
             entry["material_id"] = material_id
         mats.append(entry)
+
+    @classmethod
+    def register_prefab(cls, file_path: str, prefab_id: int | None = None) -> None:
+        """将 .prefab 文件路径及运行时 ID 注册到项目资源列表（自动去重）。"""
+        rel = cls._to_relative(file_path)
+        if not rel:
+            return
+        prefabs: list = cls._data.setdefault("resources", {}).setdefault("prefabs", [])
+        for entry in prefabs:
+            if entry.get("path") == rel:
+                if prefab_id is not None:
+                    entry["prefab_id"] = prefab_id
+                return
+        entry: dict = {"path": rel}
+        if prefab_id is not None:
+            entry["prefab_id"] = prefab_id
+        prefabs.append(entry)
         cls._mark_dirty()
-        print(f"[Project] Registered material: {rel} (id={material_id})")
+
+    @classmethod
+    def register_scene(cls, scene_name: str) -> None:
+        """注册场景名称（用于项目文件 scenes 列表）。"""
+        scenes: list = cls._data.setdefault("scenes", [])
+        if scene_name not in scenes:
+            scenes.append(scene_name)
+            cls._mark_dirty()
+            print(f"[Project] Registered scene: {scene_name}")
 
     @classmethod
     def set_startup_scene(cls, scene_path: str) -> None:
@@ -227,24 +255,106 @@ class ProjectManager:
 
     @classmethod
     def _save(cls) -> None:
+        """保存项目文件 — 同步活跃场景后再保存所有场景到各自文件。
+
+        关键: 不再对非活跃场景调用 SyncToScene，避免将活跃场景的 esper 数据
+        写入其他 Scene 对象造成跨场景数据污染。
+        """
         if not cls._project_path:
             return
+
+        from Application.Editor.EditorHost import EditorHost
+        scene_list: list[str] = []
+        proj_dir = os.path.dirname(cls._project_path)
+
+        # ★ 1. 先同步活跃场景 (捕获 esper 中最新的编辑 → Scene.entities)
+        #    同时同步节点图 → Scene.node_graph
+        active = EditorHost._active_scene
+        if active is not None:
+            try:
+                EditorHost.scene.SyncToScene(active)
+                EditorHost._sync_node_graph_to_scene()
+            except Exception as e:
+                print(f"[Project] Failed to sync active scene: {e}")
+
+        # ★ 2. 保存所有场景到各自文件
+        #    直接使用 Scene.entities 中已有的数据 (非活跃场景在切换时已同步)
+        for sname, scene_obj in EditorHost._scenes.items():
+            scene_path = getattr(scene_obj, '_file_path', None)
+            if scene_path:
+                # 已有路径 → 保存到原路径 (确保目录存在)
+                try:
+                    os.makedirs(os.path.dirname(scene_path), exist_ok=True)
+                    scene_obj.save_to_file(scene_path)
+                    rel = cls._to_relative(scene_path)
+                    if rel:
+                        scene_list.append(rel)
+                    continue
+                except Exception as e:
+                    print(f"[Project] Failed to save scene '{sname}' to {scene_path}: {e}")
+                    # 回退: 清除错误路径, 走 auto-save
+                    scene_obj._file_path = None
+
+            # 无路径或保存失败 → 自动保存到项目目录
+            safe_name = sname.replace(" ", "_").replace("/", "_").replace("\\", "_")
+            auto_path = os.path.join(proj_dir, "scenes", f"{safe_name}.scene")
+            try:
+                os.makedirs(os.path.dirname(auto_path), exist_ok=True)
+                scene_obj.save_to_file(auto_path)
+                scene_obj._file_path = auto_path
+                rel = cls._to_relative(auto_path)
+                if rel:
+                    scene_list.append(rel)
+                print(f"[Project] Auto-saved scene '{sname}' → {rel}")
+            except Exception as e:
+                print(f"[Project] Failed to auto-save scene '{sname}': {e}")
+
+        cls._data["scenes"] = scene_list
+
+        # ★ 3. 维护 startup_scene 的有效性
+        startup = cls._data.get("startup_scene", "")
+        if not startup and scene_list:
+            cls._data["startup_scene"] = scene_list[0]
+        elif startup and startup not in scene_list and scene_list:
+            print(f"[Project] startup_scene '{startup}' no longer exists, using '{scene_list[0]}'")
+            cls._data["startup_scene"] = scene_list[0]
+
+        # ── 收集用户 prefab ──
+        cls._sync_prefabs_to_data()
+
         os.makedirs(os.path.dirname(cls._project_path), exist_ok=True)
         with open(cls._project_path, "w", encoding="utf-8") as fh:
             json.dump(cls._data, fh, indent=2, ensure_ascii=False)
 
     @classmethod
+    def _sync_prefabs_to_data(cls) -> None:
+        """将 ResourceManager 中已注册的 prefab 同步到 _data['resources']['prefabs']。"""
+        from Application.Resource.ResourceManager import ResourceManager
+        prefabs: list[dict] = []
+        for pid_str, pdata in ResourceManager.loaded_prefab.items():
+            path = pdata.get('path', '')
+            if not path:
+                continue
+            rel = cls._to_relative(path)
+            if rel:
+                prefabs.append({"path": rel, "prefab_id": int(pid_str)})
+        cls._data.setdefault("resources", {})["prefabs"] = prefabs
+
+    @classmethod
     def _save_scene_if_needed(cls) -> None:
-        """保存项目前先保存当前场景（如果有路径）。"""
-        scene_rel = cls._data.get("startup_scene", "")
-        if not scene_rel:
-            return
-        scene_path = cls._resolve_path(scene_rel)
-        if not scene_path:
-            return
+        """保存项目前先同步活跃场景 (将 esper 变更写入 Scene.entities)。
+
+        实际的 .scene 文件写入由 _save() 统一处理，避免重复写入或路径错误。
+        """
         from Application.Editor.EditorHost import EditorHost
-        EditorHost.save_active_scene_to_file(scene_path)
-        print(f"[Project] Auto-saved scene: {scene_rel}")
+        active = EditorHost._active_scene
+        if active is None:
+            return
+        try:
+            EditorHost.scene.SyncToScene(active)
+            EditorHost._sync_node_graph_to_scene()
+        except Exception as e:
+            print(f"[Project] Failed to sync active scene: {e}")
 
     @classmethod
     def _auto_save(cls) -> None:
@@ -276,7 +386,7 @@ class ProjectManager:
     def _get_all_resource_paths(cls) -> list[str]:
         """获取所有注册的资源路径（相对于项目根目录）。兼容新旧格式。"""
         result = []
-        for category in ("materials", "shaders", "textures", "meshes"):
+        for category in ("materials", "shaders", "textures", "meshes", "prefabs"):
             for entry in cls._data.get("resources", {}).get(category, []):
                 path = entry if isinstance(entry, str) else entry.get("path", "")
                 if path:
@@ -303,7 +413,7 @@ class ProjectManager:
 
         id_map: dict[int, int] = {}
         loaded_count = 0
-        for category in ("materials", "shaders", "textures", "meshes"):
+        for category in ("materials", "shaders", "textures", "meshes", "prefabs"):
             for entry in cls._data.get("resources", {}).get(category, []):
                 rel_path, old_id = cls._parse_resource_entry(entry)
                 abs_path = cls._resolve_path(rel_path)
@@ -320,6 +430,20 @@ class ProjectManager:
                         if old_id is not None:
                             id_map[old_id] = new_id
                         print(f"[Project] Loaded material '{mat.name}' → #{new_id}")
+                    elif category == "prefabs":
+                        from Application.Core.Scene.PrefabManager import PrefabManager
+                        # 跳过已加载的同名 prefab (如 builtin)
+                        pdata = PrefabManager.load(abs_path)
+                        if pdata is None:
+                            continue
+                        already_loaded = any(
+                            pd.get('name') == pdata.prefab_name
+                            for pd in ResourceManager.loaded_prefab.values()
+                        )
+                        if not already_loaded:
+                            pid = ResourceManager.LoadPrefab(abs_path)
+                            if pid is not None:
+                                loaded_count += 1
                 except Exception as e:
                     print(f"[Project] Failed to load {abs_path}: {e}")
         if loaded_count:
@@ -334,8 +458,40 @@ class ProjectManager:
         return entry, None  # 旧格式：纯路径字符串
 
     @classmethod
+    def _load_all_scenes(cls, id_map: dict[int, int] | None = None) -> None:
+        """加载项目文件中 scenes 列表里的所有场景到 EditorHost._scenes。"""
+        from Application.Core.Scene.Scene import Scene
+        from Application.Editor.EditorHost import EditorHost
+
+        for rel_path in cls._data.get("scenes", []):
+            abs_path = cls._resolve_path(rel_path)
+            if not os.path.isfile(abs_path):
+                print(f"[Project] WARNING: Scene not found: {abs_path}")
+                continue
+            try:
+                scene = Scene.load_from_file(abs_path)
+                # ★ 重映射 material_id
+                if id_map:
+                    cls._remap_scene_materials(scene, id_map)
+                EditorHost._scenes[scene.name] = scene
+                print(f"[Project] Loaded scene: {scene.name} ({len(scene.entities)} entities)")
+            except Exception as e:
+                print(f"[Project] Failed to load scene {abs_path}: {e}")
+
+    @classmethod
+    def _activate_scene(cls, rel_path: str) -> None:
+        """激活指定路径的场景 (设为当前编辑场景)。"""
+        from Application.Editor.EditorHost import EditorHost
+        abs_path = cls._resolve_path(rel_path)
+        for sname, scene in EditorHost._scenes.items():
+            if getattr(scene, '_file_path', '') == abs_path:
+                EditorHost.switch_scene(sname)
+                return
+        # 场景不在 _scenes 中 → 直接加载
+        cls._load_startup_scene(rel_path, None)
+
+    @classmethod
     def _load_startup_scene(cls, rel_path: str, id_map: dict[int, int] | None = None) -> None:
-        """加载启动场景，并重映射 entity 的 material_id。"""
         abs_path = cls._resolve_path(rel_path)
         if not os.path.isfile(abs_path):
             print(f"[Project] WARNING: Startup scene not found: {abs_path}")
@@ -345,6 +501,20 @@ class ProjectManager:
         # ★ 重映射 entity material_id：旧 ID → 新 ID
         if id_map:
             cls._remap_entity_materials(id_map)
+
+    @classmethod
+    def _remap_scene_materials(cls, scene, id_map: dict[int, int]) -> None:
+        """遍历 Scene 对象的 EntityData，将 material_id 从旧 ID 映射到新 ID。"""
+        for eid, ed in scene.entities.items():
+            mr = ed.components.get("MeshRenderer")
+            if mr is None:
+                continue
+            if isinstance(mr, dict):
+                old = mr.get("material_id", 0)
+                if old in id_map:
+                    mr["material_id"] = id_map[old]
+            elif hasattr(mr, 'material_id') and mr.material_id in id_map:
+                mr.material_id = id_map[mr.material_id]
 
     @classmethod
     def _remap_entity_materials(cls, id_map: dict[int, int]) -> None:

@@ -121,3 +121,86 @@ def _build_R_T(rx: float, ry: float, rz: float) -> 'np.ndarray':
         [cz * sy * sx - sz * cx,       sz * sy * sx + cz * cx,       cy * sx],
         [cz * sy * cx + sz * sx,       sz * sy * cx - cz * sx,       cy * cx],
     ], dtype=np.float64)
+
+
+# ═══════════════════════════════════════════════════════════════
+# Local ↔ World 转换 (纯数学, 零 Scene/ECS 依赖)
+# ═══════════════════════════════════════════════════════════════
+
+def local_to_world_position(
+    local_pos: tuple[float, float, float],
+    parent_world_pos: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """Local 位置 → World 位置 (Euler 简化: 不考虑父旋转对子位置的影响)。
+
+    world = local + parent_world
+    """
+    return (local_pos[0] + parent_world_pos[0],
+            local_pos[1] + parent_world_pos[1],
+            local_pos[2] + parent_world_pos[2])
+
+
+def world_to_local_position(
+    world_pos: tuple[float, float, float],
+    parent_world_pos: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """World 位置 → Local 位置。
+
+    local = world - parent_world
+    """
+    return (world_pos[0] - parent_world_pos[0],
+            world_pos[1] - parent_world_pos[1],
+            world_pos[2] - parent_world_pos[2])
+
+
+def local_to_world_rotation(
+    local_rot: tuple[float, float, float],
+    parent_world_rot: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """Local 旋转 → World 旋转 (Euler 分量累加)。
+
+    world = local + parent_world
+    """
+    return (local_rot[0] + parent_world_rot[0],
+            local_rot[1] + parent_world_rot[1],
+            local_rot[2] + parent_world_rot[2])
+
+
+def world_to_local_rotation(
+    world_rot: tuple[float, float, float],
+    parent_world_rot: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """World 旋转 → Local 旋转 (Euler 分量相减)。
+
+    local = world - parent_world
+    """
+    return (world_rot[0] - parent_world_rot[0],
+            world_rot[1] - parent_world_rot[1],
+            world_rot[2] - parent_world_rot[2])
+
+
+def local_to_world_scale(
+    local_scl: tuple[float, float, float],
+    parent_world_scl: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """Local 缩放 → World 缩放 (component-wise 乘法)。
+
+    world = local * parent_world
+    """
+    return (local_scl[0] * parent_world_scl[0],
+            local_scl[1] * parent_world_scl[1],
+            local_scl[2] * parent_world_scl[2])
+
+
+def world_to_local_scale(
+    world_scl: tuple[float, float, float],
+    parent_world_scl: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """World 缩放 → Local 缩放 (component-wise 除法)。
+
+    local = world / parent_world
+    """
+    psx, psy, psz = parent_world_scl
+    return (world_scl[0] / psx if psx != 0 else world_scl[0],
+            world_scl[1] / psy if psy != 0 else world_scl[1],
+            world_scl[2] / psz if psz != 0 else world_scl[2])

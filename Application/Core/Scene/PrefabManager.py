@@ -62,14 +62,8 @@ class PrefabManager:
     ) -> bool:
         """将指定实体及其全部子实体保存为 .prefab 文件。
 
-        Args:
-            filepath: 目标文件路径 (含 .prefab 扩展名)
-            root_entity_id: 根实体 ID (EditorHost.scene 中的)
-            scene: SceneManager 实例
-            prefab_name: prefab 名称 (默认使用文件名)
-
-        Returns:
-            是否成功
+        父实体 ID 被重新映射为 prefab 内部索引 (0=root, 1..N=children),
+        确保加载后层级关系正确恢复。
         """
         if prefab_name is None:
             prefab_name = os.path.splitext(os.path.basename(filepath))[0]
@@ -82,19 +76,30 @@ class PrefabManager:
             print(f"[Prefab] WARNING: entity #{root_entity_id} not found")
             return False
 
-        root_data = entity_map[root_entity_id]
-        children = {eid: ed for eid, ed in entity_map.items() if eid != root_entity_id}
+        # ── 建立旧 esper ID → 新 prefab-local 索引映射 ──
+        old_to_new: dict[int, int] = {root_entity_id: 0}
+        child_ids = sorted(eid for eid in entity_map if eid != root_entity_id)
+        for i, eid in enumerate(child_ids, start=1):
+            old_to_new[eid] = i
 
-        # ── 序列化 ──
-        root_dict = _entity_to_dict(root_data)
+        # ── 序列化: parent_id 使用 prefab-local 索引 ──
+        def _ed_to_dict_with_remap(ed: EntityData) -> dict:
+            d = _entity_to_dict(ed)
+            if ed.parent_id is not None and ed.parent_id in old_to_new:
+                d["parent_id"] = old_to_new[ed.parent_id]
+            elif "parent_id" in d:
+                del d["parent_id"]
+            return d
+
+        root_data = _ed_to_dict_with_remap(entity_map[root_entity_id])
         children_dict: dict[str, dict] = {}
-        for eid, ed in sorted(children.items()):
-            children_dict[str(eid)] = _entity_to_dict(ed)
+        for eid in child_ids:
+            children_dict[str(old_to_new[eid])] = _ed_to_dict_with_remap(entity_map[eid])
 
         prefab_dict: dict = {
             "format_version": PrefabManager.FORMAT_VERSION,
             "prefab_name": prefab_name,
-            "root": root_dict,
+            "root": root_data,
             "children": children_dict,
         }
 

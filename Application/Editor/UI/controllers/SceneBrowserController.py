@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from Application.Core.Scene.SceneManager import SceneManager
-from Application.Core.Scene.BasicComponents import Camera
+from Application.Core.Scene.BasicComponents import Camera, MeshRenderer, Transform
 from Application.Editor.EditorHost import EditorHost
 
 # ── 输入安全常量 ─────────────────────────────────────────
@@ -33,12 +33,124 @@ class SceneBrowserController:
 
     selected_entity_id: Optional[int] = None
 
+    # ── 剪贴板 (Copy / Paste) ──────────────────────────────
+    _clipboard: Optional[dict] = None  # {name, components: {type_name: component_dict}}
+
     # ── Spawn 模板 ─────────────────────────────────────────
     ENTITY_TEMPLATES: dict[str, list[str]] = {
         "Empty":  ["Transform"],
         "Cube":   ["Transform", "MeshRenderer"],
         "Camera": ["Transform", "Camera"],
     }
+
+    # ── 剪贴板操作 ──────────────────────────────────────────
+
+    @classmethod
+    def _copy_entity_tree(cls, entity_id: int) -> dict | None:
+        """递归收集实体及其所有子实体的数据。返回 {root, children} 或 None。"""
+        import dataclasses
+        import copy
+        try:
+            import esper
+            comps = esper.components_for_entity(entity_id)
+        except KeyError:
+            return None
+        name = EditorHost.scene.GetEntityName(entity_id) or f"Entity_{entity_id}"
+        comp_dict: dict[str, dict] = {}
+        for comp_instance in comps:
+            type_name = type(comp_instance).__name__
+            if hasattr(comp_instance, '__dataclass_fields__'):
+                comp_dict[type_name] = dataclasses.asdict(comp_instance)
+            elif hasattr(comp_instance, 'to_dict'):
+                comp_dict[type_name] = comp_instance.to_dict()
+            else:
+                try:
+                    comp_dict[type_name] = copy.deepcopy(vars(comp_instance))
+                except Exception:
+                    pass
+        # 递归收集子实体
+        children_data = []
+        for child_id in EditorHost.scene.GetEntityChildren(entity_id):
+            child_tree = cls._copy_entity_tree(child_id)
+            if child_tree is not None:
+                children_data.append(child_tree)
+        return {"root": {"name": name, "components": comp_dict}, "children": children_data}
+
+    @classmethod
+    def copy_entity(cls, entity_id: int) -> bool:
+        """将实体及其整个子实体树深拷贝到剪贴板。返回是否成功。"""
+        tree = cls._copy_entity_tree(entity_id)
+        if tree is None:
+            return False
+        cls._clipboard = tree
+        name = tree["root"]["name"]
+        total = 1 + sum(1 + len(c.get("children", [])) for c in tree.get("children", []))
+        # 简化计数：只算直接子节点数
+        child_count = len(tree.get("children", []))
+        print(f"[SceneBrowser] Copied entity tree '{name}' (#{entity_id}) with {child_count} children to clipboard")
+        return True
+
+    @classmethod
+    def _paste_entity_tree(cls, tree: dict, parent_id: int | None = None) -> int | None:
+        """递归创建实体树。返回根实体 ID。"""
+        root_data = tree.get("root", {})
+        name = root_data.get("name", "Entity")
+        existing = EditorHost.scene.GetEntityByName(name)
+        if existing != -1:
+            name = f"{name}_copy"
+        # 重建组件
+        comp_classes: dict[str, type] = {
+            "Transform": Transform, "Camera": Camera, "MeshRenderer": MeshRenderer,
+        }
+        comp_instances = []
+        for type_name, comp_dict in root_data.get("components", {}).items():
+            comp_cls = comp_classes.get(type_name)
+            if comp_cls is None:
+                continue
+            try:
+                if hasattr(comp_cls, '__dataclass_fields__'):
+                    from dataclasses import fields
+                    from enum import Enum
+                    converted = dict(comp_dict)
+                    for fld in fields(comp_cls):
+                        if fld.name in converted and isinstance(converted[fld.name], str):
+                            fld_type = fld.type
+                            if isinstance(fld_type, type) and issubclass(fld_type, Enum):
+                                try:
+                                    converted[fld.name] = fld_type(converted[fld.name])
+                                except (ValueError, KeyError):
+                                    pass
+                    comp_instances.append(comp_cls(**converted))
+                else:
+                    comp_instances.append(comp_cls(**comp_dict))
+            except Exception as e:
+                print(f"[SceneBrowser] Paste: failed to reconstruct {type_name}: {e}")
+                continue
+        if not comp_instances:
+            comp_instances.append(Transform())
+        eid = EditorHost.scene.AddEntity(name, *comp_instances)
+        # 设置父子关系
+        if parent_id is not None:
+            EditorHost.scene.SetEntityParent(eid, parent_id)
+        # 递归创建子实体
+        for child_tree in tree.get("children", []):
+            cls._paste_entity_tree(child_tree, parent_id=eid)
+        return eid
+
+    @classmethod
+    def paste_entity(cls) -> int | None:
+        """从剪贴板创建实体树。返回根实体 ID，剪贴板为空则返回 None。"""
+        if cls._clipboard is None:
+            return None
+        eid = cls._paste_entity_tree(cls._clipboard)
+        name = cls._clipboard.get("root", {}).get("name", "Entity")
+        print(f"[SceneBrowser] Pasted entity tree '{name}' → root #{eid}")
+        return eid
+
+    @classmethod
+    def has_clipboard(cls) -> bool:
+        """剪贴板是否有数据。"""
+        return cls._clipboard is not None
 
     # ── 实体列表 ────────────────────────────────────────────
 
@@ -167,6 +279,39 @@ class SceneBrowserController:
         EditorHost.scene.SetEntityName(entity_id, name)
 
     @classmethod
+    def remove_component(cls, entity_id: int, component_type: str) -> bool:
+        """从实体移除指定类型的组件。
+
+        MeshRenderer 移除时同时注销 GPU 渲染资源。
+        """
+        _COMP_MAP = {
+            'Camera': Camera,
+            'MeshRenderer': MeshRenderer,
+        }
+        comp_cls = _COMP_MAP.get(component_type)
+        if comp_cls is None:
+            print(f"[SceneBrowser] Unknown component type: {component_type}")
+            return False
+
+        try:
+            import esper
+            # ★ 移除 MeshRenderer 前先注销 GPU 资源
+            if comp_cls is MeshRenderer:
+                renderer = getattr(EditorHost, 'renderer', None)
+                if renderer is not None:
+                    from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand
+                    renderer.enqueue(EntityRegistrationCommand(entity_id, register=False))
+            esper.remove_component(entity_id, comp_cls)
+            print(f"[SceneBrowser] Removed {component_type} from entity #{entity_id}")
+            return True
+        except KeyError:
+            print(f"[SceneBrowser] Entity #{entity_id} has no {component_type}")
+            return False
+        except Exception as e:
+            print(f"[SceneBrowser] Failed to remove {component_type}: {e}")
+            return False
+
+    @classmethod
     def get_camera_info(cls, entity_id: int) -> Optional[dict]:
         """获取实体的 Camera 组件信息（用于检视面板）。"""
         try:
@@ -217,20 +362,30 @@ class SceneBrowserController:
 
     @classmethod
     def set_game_type(cls, game_type_str: str) -> None:
-        """设置 GameType 并切换默认摄像机。"""
+        """设置 GameType 并切换默认摄像机。
+
+        同时写入 SceneManager (运行时) 和 _active_scene (持久化),
+        确保切换场景后 game_type 不丢失。
+        """
         from Application.Core.Scene.Scene import GameType
         gt = GameType(game_type_str)
         scene = EditorHost.scene
         if scene is None:
             return
         scene.game_type = gt
+        # ★ 同步到 Scene 数据对象 (持久化)
+        if EditorHost._active_scene is not None:
+            EditorHost._active_scene.game_type = gt
         # 切换默认摄像机
         from Application.Core.Scene.BasicComponents import Camera
         is_default = (scene.scene_camera_id == scene.main_camera_id
-                      or scene.scene_camera_id == scene.main_camera_2d_id)
+                      or scene.scene_camera_id == scene.main_camera_2d_id
+                      or scene.scene_camera_id == scene.main_camera_overlay_id)
         if is_default:
             if gt == GameType.GAME_2D and scene.main_camera_2d_id is not None:
                 scene.scene_camera_id = scene.main_camera_2d_id
+            elif gt == GameType.OVERLAY and scene.main_camera_overlay_id is not None:
+                scene.scene_camera_id = scene.main_camera_overlay_id
             else:
                 scene.scene_camera_id = scene.main_camera_id
             if scene.scene_camera_id is not None:
@@ -317,6 +472,13 @@ class SceneBrowserController:
             EditorGizmoLayer.invalidate_camera_gizmos()
         except Exception:
             pass
+
+    @classmethod
+    def set_editor_visible_tree(cls, entity_id: int, visible: bool) -> None:
+        """递归设置实体及其所有子实体的编辑器可见性。"""
+        cls.set_editor_visible(entity_id, visible)
+        for child_id in EditorHost.scene.GetEntityChildren(entity_id):
+            cls.set_editor_visible_tree(child_id, visible)
 
     # ── 渲染可见性 ──────────────────────────────────────────
 

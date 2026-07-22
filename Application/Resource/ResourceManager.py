@@ -573,6 +573,14 @@ class ResourceManager:
             'prefab_data': pdata,
         }
         print(f"[Resource] Loaded Prefab #{pid} '{pdata.prefab_name}' from {filepath}")
+
+        # ★ 注册到项目 (用户导入的 prefab)
+        try:
+            from Application.Editor.ProjectManager import ProjectManager
+            if ProjectManager.is_open():
+                ProjectManager.register_prefab(filepath, pid)
+        except Exception:
+            pass
         return pid
 
     @classmethod
@@ -675,6 +683,7 @@ class ResourceManager:
         ]
         for pname in default_prefabs:
             fpath = os.path.join(default_prefab_dir, f'{pname}.prefab')
+            fpath = os.path.abspath(fpath)
             if os.path.exists(fpath):
                 pdata = PrefabManager.load(fpath)
                 if pdata is not None:

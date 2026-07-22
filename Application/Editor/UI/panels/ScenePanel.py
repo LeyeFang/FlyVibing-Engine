@@ -345,7 +345,7 @@ class ScenePanel(BasePanel):
         self
     ) -> None:
         """绘制 Entity 层级树 + 工具栏按钮。"""
-        # ── 工具栏: Add / Delete ──
+        # ── 工具栏: New / Delete ──
         self._draw_entity_toolbar()
         imgui.spacing()
 
@@ -359,6 +359,8 @@ class ScenePanel(BasePanel):
                 if payload is not None:
                     self._browser_ctrl.set_entity_parent(payload.data_id, 0)
                 imgui.end_drag_drop_target()
+            # ★ 空白区域右键菜单 (无实体时)
+            self._draw_empty_area_context_menu()
             return
 
         selected = self._selection_ctrl.get_selected()
@@ -374,6 +376,8 @@ class ScenePanel(BasePanel):
             if payload is not None:
                 self._browser_ctrl.set_entity_parent(payload.data_id, 0)
             imgui.end_drag_drop_target()
+        # ★ 空白区域右键菜单
+        self._draw_empty_area_context_menu()
 
     def _draw_entity_toolbar(self) -> None:
         """绘制实体工具栏: New / Save / Delete。"""
@@ -429,7 +433,7 @@ class ScenePanel(BasePanel):
         entity_id: int,
         selected_id: int | None,
     ) -> None:
-        """递归绘制单个实体节点及其子节点。支持拖拽重设父子关系。"""
+        """递归绘制单个实体节点及其子节点。支持拖拽重设父子关系 + 右键菜单。"""
         info = self._browser_ctrl.get_entity_info(entity_id)
         if info is None:
             return
@@ -441,11 +445,12 @@ class ScenePanel(BasePanel):
         if not eye_visible:
             imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.35, 0.35, 0.35, 1.00))
         if imgui.small_button(f"{eye_icon}##eye_{entity_id}"):
-            self._browser_ctrl.set_editor_visible(entity_id, not eye_visible)
+            # ★ 递归设置实体树可见性 (父 → 所有子实体)
+            self._browser_ctrl.set_editor_visible_tree(entity_id, not eye_visible)
         if not eye_visible:
             imgui.pop_style_color(1)
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"Toggle editor visibility of '{name}'")
+            imgui.set_tooltip(f"Toggle editor visibility of '{name}' and its children")
         imgui.same_line()
 
         # ── 构建标签: 图标标记 ──
@@ -471,6 +476,9 @@ class ScenePanel(BasePanel):
             if selected_id == entity_id:
                 node_flags |= imgui.TreeNodeFlags_.selected
             opened = imgui.tree_node_ex(label, node_flags)
+
+        # ★ 右键菜单 — 必须在 tree_node_ex 之后、子节点递归之前
+        self._draw_entity_context_menu(entity_id)
 
         # ── 点击选中 ──
         if imgui.is_item_clicked():
@@ -498,6 +506,77 @@ class ScenePanel(BasePanel):
         elif opened:
             # 叶子节点不需要 tree_pop
             pass
+
+    # ============================================================
+    # 右键菜单
+    # ============================================================
+
+    def _draw_entity_context_menu(self, entity_id: int) -> None:
+        """绘制实体节点的右键菜单: Copy / Delete / Save as Prefab。
+
+        必须在 tree_node_ex() 之后立即调用，因为 ImGui 右键菜单
+        作用于「上一个提交的 item」。
+        """
+        if imgui.begin_popup_context_item(
+            f"entity_ctx_{entity_id}",
+            imgui.PopupFlags_.mouse_button_right,
+        ):
+            # ★ 选中该实体 (右键操作通常期望以该实体为目标)
+            self._selection_ctrl.select(entity_id)
+
+            if imgui.menu_item(f"{fa.ICON_FA_COPY}  Copy", "Ctrl+C", False, True)[0]:
+                self._browser_ctrl.copy_entity(entity_id)
+                imgui.close_current_popup()
+
+            imgui.separator()
+
+            if imgui.menu_item(f"{fa.ICON_FA_FLOPPY_DISK}  Save as Prefab", "", False, True)[0]:
+                self._save_selected_as_prefab(entity_id)
+                imgui.close_current_popup()
+
+            imgui.separator()
+
+            # ★ Delete 使用红色文字
+            imgui.push_style_color(
+                imgui.Col_.text, imgui.ImVec4(*ERROR_RED, 1.00))
+            if imgui.menu_item(f"{fa.ICON_FA_TRASH}  Delete", "Del", False, True)[0]:
+                self._browser_ctrl.delete_entity(entity_id)
+                self._selection_ctrl.clear()
+                imgui.close_current_popup()
+            imgui.pop_style_color(1)
+
+            imgui.end_popup()
+
+    def _draw_empty_area_context_menu(self) -> None:
+        """绘制 entity 列表空白区域的右键菜单: New / Paste。
+
+        使用 begin_popup_context_window 实现右键点击窗口空白区域弹出菜单。
+        """
+        if imgui.begin_popup_context_window(
+            "entity_list_empty_ctx",
+            imgui.PopupFlags_.mouse_button_right
+            | imgui.PopupFlags_.no_open_over_items,
+        ):
+            if imgui.menu_item(f"{fa.ICON_FA_PLUS}  New Entity", "", False, True)[0]:
+                eid = self._browser_ctrl.add_entity()
+                self._selection_ctrl.select(eid)
+                imgui.close_current_popup()
+
+            imgui.separator()
+
+            # ★ Paste: 仅剪贴板有数据时可用
+            has_clip = self._browser_ctrl.has_clipboard()
+            if not has_clip:
+                imgui.begin_disabled(True)
+            if imgui.menu_item(f"{fa.ICON_FA_PASTE}  Paste", "Ctrl+V", False, True)[0]:
+                eid = self._browser_ctrl.paste_entity()
+                if eid is not None:
+                    self._selection_ctrl.select(eid)
+                imgui.close_current_popup()
+            if not has_clip:
+                imgui.end_disabled()
+
+            imgui.end_popup()
 
     # ============================================================
     # 区域 4: 选中 Entity 的组件检视
@@ -530,6 +609,13 @@ class ScenePanel(BasePanel):
         imgui.text_disabled(f"Entity #{summary.entity_id}")
 
         # ── Transform ──
+        imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + 2)
+        imgui.begin_disabled(True)  # Transform 不可移除
+        if imgui.button(f"-##remove_Transform_{entity_id}", (22, 0)):
+            pass
+        imgui.end_disabled()
+        imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - 2)
+        imgui.same_line()
         if imgui.collapsing_header("Transform", imgui.TreeNodeFlags_.default_open):
             # ── Local / Global 切换 ──
             av = imgui.get_content_region_avail().x
@@ -570,11 +656,21 @@ class ScenePanel(BasePanel):
 
         # ── MeshRenderer（有 mesh 才显示） ──
         if summary.mesh_id is not None:
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + 2)
+            if imgui.button(f"-##remove_MeshRenderer_{entity_id}", (22, 0)):
+                self._browser_ctrl.remove_component(entity_id, "MeshRenderer")
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - 2)
+            imgui.same_line()
             if imgui.collapsing_header("MeshRenderer", imgui.TreeNodeFlags_.default_open):
                 self._draw_mesh_renderer_editor(entity_id, summary)
 
         # ── Camera（有 camera 才显示，可编辑） ──
         if summary.has_camera:
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + 2)
+            if imgui.button(f"-##remove_Camera_{entity_id}", (22, 0)):
+                self._browser_ctrl.remove_component(entity_id, "Camera")
+            imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - 2)
+            imgui.same_line()
             if imgui.collapsing_header("Camera", imgui.TreeNodeFlags_.default_open):
                 try:
                     cam = self._browser_ctrl.get_camera_info(entity_id)

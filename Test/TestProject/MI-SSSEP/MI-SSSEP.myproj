@@ -1,0 +1,43 @@
+{
+  "version": "0.1.0",
+  "name": "MI-SSSEP",
+  "startup_scene": "scenes\\MI.scene",
+  "scenes": [
+    "scenes\\SSSEP.scene",
+    "scenes\\MI-SSSEP.scene",
+    "scenes\\MI.scene"
+  ],
+  "resources": {
+    "materials": [
+      {
+        "path": "Assets\\cue.mat",
+        "material_id": 2
+      },
+      {
+        "path": "Assets\\task.mat",
+        "material_id": 4
+      }
+    ],
+    "shaders": [],
+    "textures": [],
+    "meshes": [],
+    "prefabs": [
+      {
+        "path": "..\\..\\..\\Resource\\Prefabs\\Builtin\\DefaultCamera3D.prefab",
+        "prefab_id": 1
+      },
+      {
+        "path": "..\\..\\..\\Resource\\Prefabs\\Builtin\\DefaultCamera2D.prefab",
+        "prefab_id": 2
+      },
+      {
+        "path": "..\\..\\..\\Resource\\Prefabs\\Builtin\\DefaultCameraOverlay.prefab",
+        "prefab_id": 3
+      },
+      {
+        "path": "..\\..\\..\\Resource\\Prefabs\\Builtin\\DefaultCube.prefab",
+        "prefab_id": 4
+      }
+    ]
+  }
+}

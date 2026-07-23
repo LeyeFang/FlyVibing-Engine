@@ -32,7 +32,11 @@ def encode(value, fmt: str = "string") -> bytes:
         except (TypeError, ValueError, struct.error):
             return struct.pack("<B", 1)
     else:
-        return str(value).encode("utf-8")
+        # string 格式: 标准化追加 "\n" 换行符 (避免尾部重复)
+        s = str(value)
+        if not s.endswith("\n"):
+            s += "\n"
+        return s.encode("utf-8")
 
 
 def decode(data: bytes, fmt: str = "bytes"):

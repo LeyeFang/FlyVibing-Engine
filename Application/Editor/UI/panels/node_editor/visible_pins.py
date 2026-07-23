@@ -175,7 +175,7 @@ def _v_time_trigger(inst, nd, canvas=None) -> list:
                 )
                 if has_link:
                     max_connected = i
-        show_up_to = max(max_connected + 2, 1)
+        show_up_to = max(max_connected + 1, 1)  # 只多显示 1 个空余 pin
         for p in nd.pins:
             if p.name.startswith("out_"):
                 idx = int(p.name.split("_")[1])
@@ -221,3 +221,44 @@ def _component_pins(inst, nd, kind: str) -> list:
                 if mode == "pin":
                     visible.append(p)
     return visible
+
+
+# ── NewTimer ────────────────────────────────────────────────
+
+@rule("NewTimer")
+def _v_new_timer(inst, nd, canvas=None) -> list:
+    """Manual 模式隐藏 Name 输入 Pin。"""
+    mode = inst.props.get("mode", "manual")
+    visible = []
+    for p in nd.pins:
+        if p.kind == "exec":
+            visible.append(p)
+        elif p.name == "Name" and mode == "pin":
+            visible.append(p)
+    return visible
+
+
+# ── SetTimer ────────────────────────────────────────────────
+
+@rule("SetTimer")
+def _v_set_timer(inst, nd, canvas=None) -> list:
+    """Reset 模式隐藏 Value Pin；set_time manual 模式也隐藏 Value Pin。"""
+    operate = inst.props.get("operate", "reset")
+    visible = []
+    for p in nd.pins:
+        if p.kind == "exec":
+            visible.append(p)
+        elif p.name == "Value":
+            if operate == "set_time":
+                mode = inst.props.get("mode", "pin")
+                if mode == "pin":
+                    visible.append(p)
+    return visible
+
+
+# ── TimeGetElapsed ──────────────────────────────────────────
+
+@rule("TimeGetElapsed")
+def _v_get_time(inst, nd, canvas=None) -> list:
+    """始终显示所有 pin（Timer 名由 widget 处理）。"""
+    return list(nd.pins)

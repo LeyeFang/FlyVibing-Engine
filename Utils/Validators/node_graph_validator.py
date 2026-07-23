@@ -225,7 +225,7 @@ class DryRunLogger:
 
 def dry_run_simulation(
     scene_data: dict,
-    max_frames: int = 60,
+    max_frames: int = 360,
     verbose: bool = False,
     real_time: bool = False,
     target_fps: float = 0.0,

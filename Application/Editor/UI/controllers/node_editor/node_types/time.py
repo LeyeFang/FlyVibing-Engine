@@ -13,7 +13,7 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "exec_out", "exec", "output"),
         PinDef(_gen_id(), "Elapsed", "data", "output", "float"),
     ],
-    "Time since start",
+    "Time since start (or named timer)",
 ))
 
 _reg(NodeTypeDef(
@@ -45,7 +45,27 @@ _reg(NodeTypeDef(
     ] + [
         PinDef(_gen_id(), f"out_{i}", "exec", "output") for i in range(8)
     ],
-    "When time reaches T",
+    "",  # 不显示 props 文本以缩减宽度
+))
+
+_reg(NodeTypeDef(
+    "NewTimer", "New Timer", "Time", TIME_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+        PinDef(_gen_id(), "Name", "data", "input", "string"),
+    ],
+    "",
+))
+
+_reg(NodeTypeDef(
+    "SetTimer", "Set Timer", "Time", TIME_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+        PinDef(_gen_id(), "Value", "data", "input", "float"),
+    ],
+    "",
 ))
 
 _reg(NodeTypeDef(

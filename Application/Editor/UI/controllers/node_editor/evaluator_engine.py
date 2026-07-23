@@ -35,9 +35,40 @@ class ExecutionContext:
         self.scene = None              # SceneManager 实例 (RuntimeNodeLayer 注入)
         self._pin_values: dict[int, Any] = {}
         self._variables: dict[str, Any] = {}
+        # ★ Timer 注册表: {name: {"start_elapsed": float, "offset": float}}
+        self._timers: dict[str, dict] = {}
         # ── 干跑 / 测试钩子 ──
         self.dry_run: bool = False
         self.log: callable | None = None
+
+    # ── Timer API ────────────────────────────────────────────
+
+    def create_timer(self, name: str) -> None:
+        """创建一个从当前 elapsed_time 开始计时的命名 Timer。"""
+        self._timers[name] = {"start_elapsed": self.elapsed_time, "offset": 0.0}
+
+    def get_timer(self, name: str) -> float | None:
+        """读取命名 Timer 的当前值。不存在返回 None。"""
+        t = self._timers.get(name)
+        if t is None:
+            return None
+        return self.elapsed_time - t["start_elapsed"] + t["offset"]
+
+    def set_timer(self, name: str, value: float) -> bool:
+        """设置命名 Timer 的当前值为指定值 (调整 offset)。不存在返回 False。"""
+        t = self._timers.get(name)
+        if t is None:
+            return False
+        t["start_elapsed"] = self.elapsed_time
+        t["offset"] = value
+        return True
+
+    def reset_timer(self, name: str) -> bool:
+        """重置命名 Timer 为 0 (offset=0, start_elapsed=now)。"""
+        return self.set_timer(name, 0.0)
+
+    def has_timer(self, name: str) -> bool:
+        return name in self._timers
 
     def set_pin(self, pin_id: int, value: Any) -> None:
         self._pin_values[pin_id] = value

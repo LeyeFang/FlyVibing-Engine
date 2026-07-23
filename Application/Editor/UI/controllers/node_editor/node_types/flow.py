@@ -10,8 +10,8 @@ _reg(NodeTypeDef(
     "Sequence", "Sequence", "Flow",
     _COLOR_FLOW,
     [PinDef(_gen_id(), "exec_in", "exec", "input")]
-    + [PinDef(_gen_id(), f"out_{i}", "exec", "output") for i in range(3)],
-    "Chain in order",
+    + [PinDef(_gen_id(), f"out_{i}", "exec", "output") for i in range(5)],
+    "Fan-out to 4 exec chains",
 ))
 
 _reg(NodeTypeDef(

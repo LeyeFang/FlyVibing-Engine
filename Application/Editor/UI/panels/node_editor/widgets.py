@@ -133,6 +133,38 @@ def _draw_var_name_combo(label: str, nid: int, inst, canvas) -> None:
         imgui.pop_item_width()
 
 
+# ── Timer 名称收集 (用于 TimeTrigger / GetTime 下拉框) ──
+
+def _collect_timer_names(canvas) -> list[str]:
+    """收集画布上所有 NewTimer 节点创建的 Timer 名称，去重排序。"""
+    names: set[str] = set()
+    for nid, inst in canvas.nodes.items():
+        if inst.node_type == "NewTimer":
+            n = inst.props.get("timer_name", "")
+            if n:
+                names.add(n)
+    return sorted(names)
+
+
+def _draw_timer_name_combo(label: str, nid: int, inst, canvas) -> None:
+    """绘制 Timer 选择下拉框：global + 已有 Timer 列表。丢失则自动回退 global。"""
+    existing = _collect_timer_names(canvas)
+    current = inst.props.get("timer", "")
+
+    items = ["global"] + existing
+    try:
+        idx = existing.index(current) + 1 if current else 0
+    except ValueError:
+        idx = 0  # 未找到 → 回退 global
+
+    changed, new_idx = _ne_combo(f"##timer_{label}_{nid}", idx, items)
+    if changed:
+        if new_idx == 0:
+            inst.props["timer"] = ""  # global
+        else:
+            inst.props["timer"] = existing[new_idx - 1]
+
+
 # ═══════════════════════════════════════════════════════════════
 # Widget 函数 — 每个节点类型一个
 # ═══════════════════════════════════════════════════════════════
@@ -494,23 +526,117 @@ def _draw_compare_widgets(nid: int, inst, _canvas) -> None:
 
 @register("TimeTrigger")
 def _draw_time_trigger_widgets(nid: int, inst, _canvas) -> None:
+    mode = inst.props.get("mode", "manual")
+    imgui.push_item_width(50)
+
+    # [M] [P] | T [____] | timer [____▼]  全都一行
+    if imgui.radio_button(f"M##tt_m_{nid}", mode == "manual"):
+        inst.props["mode"] = "manual"
+    imgui.same_line()
+    if imgui.radio_button(f"P##tt_p_{nid}", mode == "pin"):
+        inst.props["mode"] = "pin"
+    imgui.same_line(0, 4)
+    imgui.text_disabled("|")
+    imgui.same_line(0, 4)
+
+    if mode == "manual":
+        v = inst.props.get("time", 0.0)
+        changed, nv = imgui.input_float(f"##tt_t_{nid}", v, format="%.1f")
+        if changed:
+            inst.props["time"] = nv
+    else:
+        imgui.text_disabled("(pin)")
+
+    imgui.same_line(0, 4)
+    imgui.text_disabled("|")
+    imgui.same_line(0, 4)
+
+    # 紧凑 timer 列表
+    existing = _collect_timer_names(_canvas)
+    current = inst.props.get("timer", "")
+    items = ["global"] + existing
+    try:
+        idx = existing.index(current) + 1 if current else 0
+    except ValueError:
+        idx = 0
+    imgui.push_item_width(70)
+    changed, new_idx = imgui.combo(f"##tt_tmr_{nid}", idx, items, -1)
+    if changed:
+        inst.props["timer"] = "" if new_idx == 0 else existing[new_idx - 1]
+    imgui.pop_item_width()
+
+    imgui.pop_item_width()
+
+
+# ── NewTimer ───────────────────────────────────────────────
+
+@register("NewTimer")
+def _draw_new_timer_widgets(nid: int, inst, _canvas) -> None:
     imgui.dummy(imgui.ImVec2(0, 2))
     imgui.push_item_width(90)
 
     mode = inst.props.get("mode", "manual")
-    if imgui.radio_button(f"Manual##tt_mode_man_{nid}", mode == "manual"):
+    if imgui.radio_button(f"Manual##nt_mode_man_{nid}", mode == "manual"):
         inst.props["mode"] = "manual"
     imgui.same_line()
-    if imgui.radio_button(f"Pin##tt_mode_pin_{nid}", mode == "pin"):
+    if imgui.radio_button(f"Pin##nt_mode_pin_{nid}", mode == "pin"):
         inst.props["mode"] = "pin"
 
     if mode == "manual":
-        v = inst.props.get("time", 0.0)
-        changed, nv = imgui.input_float(f"Time (s)##tt_time_{nid}", v, format="%.2f")
+        v = inst.props.get("timer_name", "timer")
+        imgui.push_item_width(130)
+        changed, nv = imgui.input_text(f"Name##nt_name_{nid}", v, 64)
         if changed:
-            inst.props["time"] = nv
+            inst.props["timer_name"] = nv
+        imgui.pop_item_width()
 
     imgui.pop_item_width()
+
+
+# ── SetTimer ───────────────────────────────────────────────
+
+@register("SetTimer")
+def _draw_set_timer_widgets(nid: int, inst, _canvas) -> None:
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(120)
+
+    # Timer name
+    v = inst.props.get("timer_name", "")
+    changed, nv = imgui.input_text_with_hint(f"Timer##st_name_{nid}", "timer_name", v, 64)
+    if changed:
+        inst.props["timer_name"] = nv
+
+    # Operate
+    operate = inst.props.get("operate", "reset")
+    if imgui.radio_button(f"Reset##st_op_rst_{nid}", operate == "reset"):
+        inst.props["operate"] = "reset"
+    imgui.same_line()
+    if imgui.radio_button(f"Set Time##st_op_set_{nid}", operate == "set_time"):
+        inst.props["operate"] = "set_time"
+
+    if operate == "set_time":
+        mode = inst.props.get("mode", "manual")
+        if imgui.radio_button(f"Manual##st_m_man_{nid}", mode == "manual"):
+            inst.props["mode"] = "manual"
+        imgui.same_line()
+        if imgui.radio_button(f"Pin##st_m_pin_{nid}", mode == "pin"):
+            inst.props["mode"] = "pin"
+
+        if mode == "manual":
+            val = inst.props.get("value", 0.0)
+            changed, nv = imgui.input_float(f"Value##st_val_{nid}", val, format="%.2f")
+            if changed:
+                inst.props["value"] = nv
+
+    imgui.pop_item_width()
+
+
+# ── GetTime (TimeGetElapsed) ───────────────────────────────
+
+@register("TimeGetElapsed")
+def _draw_get_time_widgets(nid: int, inst, canvas) -> None:
+    imgui.dummy(imgui.ImVec2(0, 2))
+    _draw_timer_name_combo("gt", nid, inst, canvas)
 
 
 # ── VarSet ─────────────────────────────────────────────────

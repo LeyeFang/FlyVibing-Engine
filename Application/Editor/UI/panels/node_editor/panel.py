@@ -694,9 +694,10 @@ class NodeEditorPanel(BasePanel):
             return
 
         H_SPACING = 320
-        V_SPACING = 100
-        V_HEADER = 30
-        V_PER_PIN = 18
+        V_PADDING = 32
+        V_HEADER = 44
+        V_PER_PIN = 24
+        V_WIDGET_EXTRA = 40  # 有关联控件的节点额外高度 (VarGet/VarSet/Constant 等)
 
         # ── 1. 分类连线 (exec vs data) ──
         exec_down: dict[int, list[int]] = defaultdict(list)
@@ -777,7 +778,7 @@ class NodeEditorPanel(BasePanel):
             "TextFileWrite": 20, "EntitySpawn": 21, "EntityGet": 22,
             "EntitySetRenderVisible": 23, "EntityDestroy": 24,
             "TimeTrigger": 30, "TimeGetElapsed": 31, "TimeDelay": 32,
-            "TimeGetDate": 33,
+            "TimeGetDate": 33, "NewTimer": 34, "SetTimer": 35,
             "Branch": 40, "Sequence": 41,
             "Compare": 50, "ScalarMath": 51, "Constant": 52,
             "Random": 54, "PathVar": 55,
@@ -800,17 +801,27 @@ class NodeEditorPanel(BasePanel):
                 nid,
             ))
 
-        # ── 6. 分配坐标 ──
+        # ── 6. 分配坐标 (按每节点实际估算高度累加 Y, 避免重叠) ──
+        # 带内联控件的节点类型 (VarGet/VarSet/Constant 等) 渲染时额外高
+        _WIDGET_NODES = {
+            "VarGet", "VarSet", "Constant", "StringConst",
+            "EntitySpawn", "EntityGet", "EntitySetRenderVisible",
+            "ComponentAdd", "SetComponent", "GetComponent", "ComponentRemove",
+            "ParallelSend", "SerialSend", "PathVar", "TextFileWrite",
+            "TimeGetDate",
+        }
         for lyr in sorted(layer_nodes.keys()):
-            for idx, nid in enumerate(layer_nodes[lyr]):
+            current_y: float = 80.0
+            for nid in layer_nodes[lyr]:
                 inst = canvas.nodes[nid]
                 ndef = _TYPES.get(inst.node_type)
                 pin_count = len(ndef.pins) if ndef else 2
                 est_h = V_HEADER + pin_count * V_PER_PIN
+                if inst.node_type in _WIDGET_NODES:
+                    est_h += V_WIDGET_EXTRA
                 x = 80 + lyr * H_SPACING
-                y = 80 + idx * V_SPACING
-                # 如果节点比间距高，不额外偏移 (保持简单)
-                inst.pos = (float(x), float(y))
+                inst.pos = (float(x), float(current_y))
+                current_y += est_h + V_PADDING
 
         print(f"[Rearrange] {len(canvas.nodes)} nodes laid out "
               f"in {len(layer_nodes)} layers")

@@ -2259,7 +2259,7 @@
             "mode": "pin",
             "format": "string",
             "port": "COM3",
-            "baud_rate": 115200
+            "baud_rate": 9600
           },
           "pin_ids": {
             "exec_in": 10375,

@@ -35,6 +35,38 @@ class ProjectManager:
     _data: dict = {}
     _is_saved: bool = False           # ★ 是否已保存到磁盘
     _window_title_base: str = "MyGameEngine"
+    _engine_root: str = ""            # ★ 引擎根目录 (懒加载)
+
+    # ════════════════════════════════════════════════════════════
+    # 引擎根目录 & 内置资源判断
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _get_engine_root(cls) -> str:
+        """返回引擎根目录（懒加载）。
+        
+        ProjectManager.py 位于 Application/Editor/，
+        引擎根目录为其上两级。
+        """
+        if not cls._engine_root:
+            cls._engine_root = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..")
+            )
+        return cls._engine_root
+
+    @classmethod
+    def _is_builtin_resource(cls, abs_path: str) -> bool:
+        """判断一个绝对路径是否落在引擎内置 Resource 目录内。"""
+        if not abs_path:
+            return False
+        engine_resource_dir = os.path.join(cls._get_engine_root(), "Resource")
+        try:
+            return os.path.commonpath([
+                os.path.normpath(abs_path),
+                os.path.normpath(engine_resource_dir),
+            ]) == os.path.normpath(engine_resource_dir)
+        except ValueError:
+            return False  # 不同盘符
 
     # ════════════════════════════════════════════════════════════
     # 单例
@@ -369,11 +401,19 @@ class ProjectManager:
 
     @classmethod
     def _to_relative(cls, abs_path: str) -> str:
-        """绝对路径 → 相对于项目根目录的路径。
-        若项目尚未 Save As（无 project path），保留绝对路径。
+        """绝对路径 → 项目相对路径 或 builtin:// URI。
+
+        - 内置资源（引擎 Resource/ 目录下）→ "builtin://资源名"
+        - 用户资源 → 相对于项目根目录的路径
+        - 项目尚未 Save As（无 project path）→ 保留绝对路径
         """
         if not abs_path:
             return ""
+
+        # ★ 优先判断是否为引擎内置资源
+        if cls._is_builtin_resource(abs_path):
+            return cls._path_to_builtin_uri(abs_path)
+
         if not cls._project_path:
             return abs_path  # 未保存项目 → 暂存绝对路径
         proj_dir = os.path.dirname(cls._project_path)
@@ -381,6 +421,35 @@ class ProjectManager:
             return os.path.relpath(abs_path, proj_dir)
         except ValueError:
             return abs_path  # 不同盘符，保留绝对路径
+
+    @classmethod
+    def _path_to_builtin_uri(cls, abs_path: str) -> str:
+        """将引擎内置资源的绝对路径转为 builtin://Name URI。
+
+        例如: D:\\Engine\\Resource\\Meshes\\Builtin\\3D\\Cube.obj → builtin://Cube
+        """
+        from Application.Resource.ResourceManager import ResourceManager
+
+        # 遍历已加载资源，找匹配路径的内置资源名
+        for loaded_dict in [
+            ResourceManager.loaded_mesh,
+            ResourceManager.loaded_shader,
+            ResourceManager.loaded_texture,
+            ResourceManager.loaded_material,
+            ResourceManager.loaded_prefab,
+        ]:
+            for rid, info in loaded_dict.items():
+                # Material 是对象，其他资源是 dict，兼容两种存储格式
+                if isinstance(info, dict):
+                    if info.get('path') == abs_path and 'builtin_name' in info:
+                        return f"builtin://{info['builtin_name']}"
+                elif hasattr(info, 'builtin_name'):
+                    info_path = getattr(info, '_file_path', '') or getattr(info, 'path', '')
+                    if info_path == abs_path:
+                        return f"builtin://{info.builtin_name}"
+
+        # fallback: 用文件名 stem 作为名称
+        return f"builtin://{os.path.splitext(os.path.basename(abs_path))[0]}"
 
     @classmethod
     def _get_all_resource_paths(cls) -> list[str]:
@@ -395,11 +464,47 @@ class ProjectManager:
 
     @classmethod
     def _resolve_path(cls, rel_path: str) -> str:
-        """相对路径 → 绝对路径。"""
+        """相对路径 或 builtin:// URI → 绝对路径。
+
+        - "builtin://Name" → 从引擎 Resource 目录解析
+        - 绝对路径 → 直接返回
+        - 相对路径 → 相对于项目根目录拼接
+        """
+        if not rel_path:
+            return ""
+
+        # ★ 识别 builtin:// 协议
+        if rel_path.startswith("builtin://"):
+            return cls._resolve_builtin_uri(rel_path)
+
         if os.path.isabs(rel_path):
             return rel_path
         proj_dir = os.path.dirname(cls._project_path) if cls._project_path else ""
         return os.path.join(proj_dir, rel_path)
+
+    @classmethod
+    def _resolve_builtin_uri(cls, uri: str) -> str:
+        """将 builtin://Name 解析为引擎内的绝对路径。
+
+        例如: builtin://Cube → D:\\Engine\\Resource\\Meshes\\Builtin\\3D\\Cube.obj
+        """
+        from Application.Resource.ResourceManager import ResourceManager
+
+        name = uri[len("builtin://"):]
+        path = ResourceManager.ResolveBuiltinPath(name)
+        if path:
+            return path
+
+        # fallback: 在引擎 Resource 目录下搜索同名文件
+        engine_resource = os.path.join(cls._get_engine_root(), "Resource")
+        for root, dirs, files in os.walk(engine_resource):
+            for f in files:
+                stem = os.path.splitext(f)[0]
+                if stem == name:
+                    return os.path.join(root, f)
+
+        print(f"[Project] WARNING: Cannot resolve builtin URI: {uri}")
+        return ""
 
     @classmethod
     def _load_all_resources(cls) -> dict[int, int]:
@@ -416,6 +521,11 @@ class ProjectManager:
         for category in ("materials", "shaders", "textures", "meshes", "prefabs"):
             for entry in cls._data.get("resources", {}).get(category, []):
                 rel_path, old_id = cls._parse_resource_entry(entry)
+
+                # ★ 跳过内置资源 — ResourceManager.Init() 已经加载过了
+                if rel_path.startswith("builtin://"):
+                    continue
+
                 abs_path = cls._resolve_path(rel_path)
                 if not os.path.isfile(abs_path):
                     print(f"[Project] WARNING: Resource not found: {abs_path}")

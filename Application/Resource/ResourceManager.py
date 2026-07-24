@@ -602,7 +602,9 @@ class ResourceManager:
         default_model_dir = 'Resource/Meshes/Builtin'
         for mesh_name, file_name in zip(DEFAULT_MODEL_NAME, DEFAULT_MODEL_FILE):
             model_file_path = join(default_model_dir, file_name)
-            cls.__load_mesh_from_file(model_file_path, mesh_name)
+            mesh_id = cls.__load_mesh_from_file(model_file_path, mesh_name)
+            # ★ 标记为内置资源
+            cls.loaded_mesh[str(mesh_id)]['builtin_name'] = mesh_name
 
     @classmethod
     def __load_default_shader(
@@ -629,6 +631,7 @@ class ResourceManager:
             cls.loaded_shader[f'{current_shader_id}']['data'] = save_shader
             cls.loaded_shader[f'{current_shader_id}']['name'] = shader_name
             cls.loaded_shader[f'{current_shader_id}']['path'] = vert_path
+            cls.loaded_shader[f'{current_shader_id}']['builtin_name'] = shader_name
 
     @classmethod
     def __load_default_texture(
@@ -640,12 +643,14 @@ class ResourceManager:
         cls.loaded_texture[f'{cls.texture_count}'] = {
             'name': 'Default',
             'data': Texture.CreateWhiteTexture(),
+            'builtin_name': 'Default',
         }
         # --- 棋盘格调试纹理 ---
         cls.texture_count += 1
         cls.loaded_texture[f'{cls.texture_count}'] = {
             'name': 'Checkerboard',
             'data': Texture.CreateCheckerboard(),
+            'builtin_name': 'Checkerboard',
         }
 
     @classmethod
@@ -659,6 +664,7 @@ class ResourceManager:
         material.texture_id_list = [cls.GetDefaultTexture('Default')]
         material._is_saved = True
         cls.loaded_material[f"{current_id}"] = material
+        material.builtin_name = 'Default'
 
     @classmethod
     def GetDefaultMaterial(cls) -> int:
@@ -693,5 +699,43 @@ class ResourceManager:
                         'name': pdata.prefab_name,
                         'path': fpath,
                         'prefab_data': pdata,
+                        'builtin_name': pdata.prefab_name,
                     }
                     print(f"[Resource] Loaded builtin Prefab #{pid} '{pdata.prefab_name}'")
+
+    # ==============================================================
+    # 内置资源路径解析
+    # ==============================================================
+    @classmethod
+    def ResolveBuiltinPath(cls, builtin_name: str) -> str:
+        """根据内置资源名查找其在引擎中的绝对路径。
+
+        遍历所有已加载的内置资源（mesh/shader/texture/material/prefab），
+        匹配 builtin_name 字段，返回对应的文件路径。
+        程序化生成的资源（如纹理 Default/Checkerboard）返回空字符串。
+
+        Args:
+            builtin_name: 内置资源名称，如 "Cube", "Basic", "Default" 等
+
+        Returns:
+            绝对文件路径，找不到返回空字符串
+        """
+        for loaded_dict in [
+            cls.loaded_mesh,
+            cls.loaded_shader,
+            cls.loaded_texture,
+            cls.loaded_material,
+            cls.loaded_prefab,
+        ]:
+            for rid, info in loaded_dict.items():
+                # Material 是对象，其他资源是 dict，兼容两种存储格式
+                if isinstance(info, dict):
+                    if info.get('builtin_name') == builtin_name:
+                        path = info.get('path', '')
+                        if path and os.path.isfile(path):
+                            return path
+                elif hasattr(info, 'builtin_name') and info.builtin_name == builtin_name:
+                    path = getattr(info, '_file_path', '') or getattr(info, 'path', '')
+                    if path and os.path.isfile(path):
+                        return path
+        return ""

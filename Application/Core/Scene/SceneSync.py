@@ -18,6 +18,7 @@ import esper
 
 from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
 from Application.Core.Renderer.RenderCommand import EntityRegistrationCommand
+from Application.Core.Scene.DataContract import DataContract, format_value
 
 if TYPE_CHECKING:
     from Application.Core.Scene.SceneManager import SceneManager
@@ -72,15 +73,7 @@ class SceneSync:
 
             for comp_instance in all_comps:
                 comp_type = type(comp_instance).__name__
-                if hasattr(comp_instance, '__dataclass_fields__'):
-                    comps[comp_type] = dataclasses.asdict(comp_instance)
-                elif hasattr(comp_instance, 'to_dict'):
-                    comps[comp_type] = comp_instance.to_dict()
-                else:
-                    try:
-                        comps[comp_type] = dict(vars(comp_instance))
-                    except Exception:
-                        pass
+                comps[comp_type] = format_value(comp_instance)
 
             if comps:
                 from Application.Core.Scene.Scene import EntityData
@@ -139,27 +132,25 @@ class SceneSync:
 
         for sid, ed in scene.entities.items():
             comp_instances = []
-            for comp_name, comp_dict in ed.components.items():
+            for comp_name, comp_value in ed.components.items():
                 comp_cls = st._component_registry.get(comp_name)
                 if comp_cls is None:
                     continue
-                if isinstance(comp_dict, dict) and hasattr(comp_cls, '__dataclass_fields__'):
-                    from dataclasses import fields
-                    converted = dict(comp_dict)
-                    for fld in fields(comp_cls):
-                        if fld.name in converted and isinstance(converted[fld.name], str):
-                            fld_type = fld.type
-                            if isinstance(fld_type, type) and issubclass(fld_type, Enum):
-                                try:
-                                    converted[fld.name] = fld_type(converted[fld.name])
-                                except (ValueError, KeyError):
-                                    pass
-                    comp_instances.append(comp_cls(**converted))
-                elif isinstance(comp_dict, dict):
-                    comp_instances.append(comp_cls(**comp_dict))
-                elif hasattr(comp_cls, '__dataclass_fields__'):
-                    converted = dataclasses.asdict(comp_dict)
-                    comp_instances.append(comp_cls(**converted))
+
+                # 1. 已是组件实例 → 直接使用
+                if isinstance(comp_value, comp_cls):
+                    comp_instances.append(comp_value)
+                    continue
+
+                # 2. dict → 通过 DataContract 反序列化
+                if isinstance(comp_value, dict):
+                    if issubclass(comp_cls, DataContract):
+                        obj = comp_cls.deserialize(comp_value)
+                        if obj is not None:
+                            comp_instances.append(obj)
+                            continue
+                    # 兜底: dict → **kwargs
+                    comp_instances.append(comp_cls(**comp_value))
 
             if comp_instances:
                 new_eid = esper.create_entity(*comp_instances)

@@ -23,6 +23,7 @@ from Application.Core.Events.EngineEvent import EngineLifecycleEvent
 from Application.Core.Window.Window import Window
 from Application.Core.Renderer.Renderer import Renderer
 from Application.Core.Plugin import Plugin
+from Application.Core.Scene.DataContract import DataContract
 
 if TYPE_CHECKING:
     from Application.Editor.EditorWindow import EditorWindow
@@ -147,16 +148,19 @@ class EditorHost(Engine):
             pass
 
     @classmethod
-    def _sync_node_graph_to_scene(cls) -> None:
-        """保存前: 将 NodeEditorPanel 的画布同步到 Scene.node_graph。"""
-        scene = cls._active_scene
+    def _sync_node_graph_to_scene(cls, target_scene=None) -> None:
+        """保存前: 将 NodeEditorPanel 的画布同步到 Scene.node_graph。
+
+        通过 Serializable 协议序列化，杜绝对象引用共享导致跨场景污染。
+        """
+        scene = target_scene if target_scene is not None else cls._active_scene
         if scene is None:
             return
         try:
             from Application.Editor.UI.UIManager import UIManager
             panel = UIManager.find("Node Editor")
-            if panel is not None and panel._canvas is not None:
-                scene.node_graph = panel._canvas
+            if panel is not None and isinstance(panel._canvas, DataContract):
+                scene.node_graph = panel._canvas.serialize()
         except Exception:
             pass
 
@@ -164,8 +168,7 @@ class EditorHost(Engine):
     def _sync_node_graph_from_scene(cls) -> None:
         """加载后: 将 Scene.node_graph 恢复到 NodeEditorPanel 画布。
 
-        若新场景没有节点图 (node_graph is None)，则重置画布为默认空画布，
-        避免旧场景的节点图残留在面板中。
+        通过 Serializable 协议反序列化，确保画布和 Scene 在内存中完全独立。
         """
         scene = cls._active_scene
         try:
@@ -175,14 +178,16 @@ class EditorHost(Engine):
             if panel is None:
                 return
             if scene is not None and scene.node_graph is not None:
-                # ★ 恢复新场景的节点图
-                if isinstance(scene.node_graph, dict):
-                    panel._canvas = NodeCanvas.from_dict(scene.node_graph)
+                ng = scene.node_graph
+                if isinstance(ng, DataContract):
+                    panel._canvas = ng.deserialize(ng.serialize())  # dict → NodeCanvas
+                elif isinstance(ng, dict):
+                    panel._canvas = NodeCanvas.deserialize(ng)
                 else:
-                    panel._canvas = scene.node_graph
+                    panel._canvas = NodeCanvas()
+                    panel._canvas.create_default_nodes()
                 panel._canvas_initialized = True
             else:
-                # ★ 新场景无节点图 → 重置为空画布（含默认节点）
                 panel._canvas = NodeCanvas()
                 panel._canvas.create_default_nodes()
                 panel._canvas_initialized = True
@@ -203,12 +208,19 @@ class EditorHost(Engine):
 
     @classmethod
     def save_scene_to_file(cls, scene_name: str, path: str) -> bool:
-        """将指定名称的场景保存到 .scene 文件。"""
+        """将指定名称的场景保存到 .scene 文件。
+
+        仅活跃场景需要同步 panel 的 node_graph — 面板只显示活跃场景的图,
+        非活跃场景的 node_graph 在最后一次切换时已同步完毕。
+        """
         scene = cls._scenes.get(scene_name)
         if scene is None:
             return False
+        # ★ 同步 esper 状态到 Scene.entities
         cls.scene.SyncToScene(scene)
-        cls._sync_node_graph_to_scene()
+        # ★ 仅在保存活跃场景时同步 node_graph (面板显示的就是活跃场景的图)
+        if scene is cls._active_scene:
+            cls._sync_node_graph_to_scene(scene)
         scene.save_to_file(path)
         scene._file_path = path
         return True

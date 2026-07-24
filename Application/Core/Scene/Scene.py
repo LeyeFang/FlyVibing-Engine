@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
+from Application.Core.Scene.DataContract import format_value, parse_value
+
 
 # ═══════════════════════════════════════════════════════════════
 # GameType — 场景游戏类型
@@ -333,34 +335,13 @@ class Scene:
     def to_dict(self) -> dict:
         """转为可序列化的 dict。
 
-        组件实例通过 dataclasses.asdict() 递归转换。
-        自定义类型 (如 NodeCanvas) 需要实现自己的 to_dict()。
+        通过 Serializable 协议统一序列化所有支持的类型。
         """
-        import dataclasses
-        from enum import Enum
-
-        def _json_safe(obj):
-            """递归转换: Enum → value, tuple → list, 确保 json.dump 可用。"""
-            if isinstance(obj, Enum):
-                return obj.value
-            if isinstance(obj, tuple):
-                return list(obj)
-            if isinstance(obj, dict):
-                return {k: _json_safe(v) for k, v in obj.items()}
-            if isinstance(obj, (list, set)):
-                return [_json_safe(v) for v in obj]
-            return obj
-
         entities_dict: dict[str, dict] = {}
         for eid, ed in self.entities.items():
             comps: dict[str, dict] = {}
             for type_name, comp in ed.components.items():
-                if isinstance(comp, dict):
-                    comps[type_name] = _json_safe(comp)
-                elif hasattr(comp, '__dataclass_fields__'):
-                    comps[type_name] = _json_safe(dataclasses.asdict(comp))
-                elif hasattr(comp, 'to_dict'):
-                    comps[type_name] = _json_safe(comp.to_dict())
+                comps[type_name] = format_value(comp)
             entry: dict = {
                 "name": ed.name,
                 "components": comps,
@@ -377,9 +358,9 @@ class Scene:
             "next_eid": self._next_sid,
         }
 
-        # 节点图序列化 (如果实现了 to_dict)
-        if self.node_graph is not None and hasattr(self.node_graph, 'to_dict'):
-            result["node_graph"] = self.node_graph.to_dict()
+        # 节点图序列化 — 通过 Serializable 协议
+        if self.node_graph is not None:
+            result["node_graph"] = format_value(self.node_graph)
 
         return result
 
@@ -413,13 +394,11 @@ class Scene:
             eid = int(eid_str)
             comps: dict[str, object] = {}
             for type_name, comp_dict in ed_data.get("components", {}).items():
-                factory = (component_factories or {}).get(type_name)
-                if factory is not None and hasattr(factory, '__dataclass_fields__'):
-                    # 使用工厂函数重建 dataclass 组件
-                    comps[type_name] = factory(**comp_dict)
+                obj = parse_value(type_name, comp_dict)
+                if obj is not None:
+                    comps[type_name] = obj
                 else:
-                    # 保留为 dict (调用方后续处理)
-                    comps[type_name] = comp_dict
+                    comps[type_name] = comp_dict  # 未注册类型 → 保留 dict
 
             scene.entities[eid] = EntityData(
                 name=ed_data.get("name", "Entity"),
@@ -427,9 +406,10 @@ class Scene:
                 parent_id=ed_data.get("parent_id"),
             )
 
-        # ── 恢复节点图（保留为 dict，由 EditorHost 负责还原到 NodeEditorPanel）──
+        # ── 恢复节点图（通过 Serializable 协议）──
         if "node_graph" in data:
-            scene.node_graph = data["node_graph"]
+            ng = data["node_graph"]
+            scene.node_graph = parse_value("NodeCanvas", ng) if isinstance(ng, dict) else ng
 
         return scene
 

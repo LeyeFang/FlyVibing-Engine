@@ -12,9 +12,10 @@ from .data_model import NodeInstance, LinkInstance, _gen_id
 from .node_types import _TYPES
 from .graph_rules import _NODE_GRAPH_RULES
 from . import data_model  # 用于访问 _next_id
+from Application.Core.Scene.DataContract import DataContract, register_contract
 
 
-class NodeCanvas:
+class NodeCanvas(DataContract):
     """节点画布 — 管理节点实例与连线"""
 
     def __init__(self):
@@ -129,6 +130,15 @@ class NodeCanvas:
 
     # ── 序列化 ───────────────────────────────────────────
 
+    def serialize(self) -> dict:
+        """实现 Serializable 协议 — 序列化为纯 dict。"""
+        return self.to_dict()
+
+    @classmethod
+    def deserialize(cls, data: dict) -> 'NodeCanvas':
+        """实现 Serializable 协议 — 从 dict 反序列化。"""
+        return cls.from_dict(data)
+
     def to_dict(self) -> dict:
         """序列化画布状态为纯 dict（可 JSON 导出）。
 
@@ -207,3 +217,7 @@ class NodeCanvas:
         """清空画布（保留 _next_id 不重置）。"""
         self._nodes.clear()
         self._links.clear()
+
+
+# ── 注册到 Serializable 注册表 ──
+register_contract("NodeCanvas", NodeCanvas)

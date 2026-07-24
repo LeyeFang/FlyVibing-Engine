@@ -531,7 +531,7 @@
             "day": true,
             "hour": true,
             "minute": true,
-            "format": "MI-SSSEP-Seed-%Y-%m-%d-%H-%M"
+            "format": "MI-Seed-%Y-%m-%d-%H-%M"
           },
           "pin_ids": {
             "DateString": 10008
@@ -879,7 +879,7 @@
           ],
           "props": {
             "mode": "manual",
-            "var_name": "mi_code",
+            "var_name": "cue_val",
             "value": 0
           },
           "pin_ids": {
@@ -891,63 +891,6 @@
         },
         "226": {
           "id": 226,
-          "node_type": "VarSet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "manual",
-            "var_name": "sss_code",
-            "value": 0
-          },
-          "pin_ids": {
-            "exec_in": 10079,
-            "exec_out": 10080,
-            "Name": 10081,
-            "Value": 10082
-          }
-        },
-        "227": {
-          "id": 227,
-          "node_type": "VarSet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "manual",
-            "var_name": "trigger_val",
-            "value": 0
-          },
-          "pin_ids": {
-            "exec_in": 10083,
-            "exec_out": 10084,
-            "Name": 10085,
-            "Value": 10086
-          }
-        },
-        "228": {
-          "id": 228,
-          "node_type": "VarSet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "manual",
-            "var_name": "pulse_count",
-            "value": 0
-          },
-          "pin_ids": {
-            "exec_in": 10087,
-            "exec_out": 10088,
-            "Name": 10089,
-            "Value": 10090
-          }
-        },
-        "229": {
-          "id": 229,
           "node_type": "NewTimer",
           "pos": [
             0,
@@ -958,13 +901,13 @@
             "timer_name": "trial_phase"
           },
           "pin_ids": {
-            "exec_in": 10091,
-            "exec_out": 10092,
-            "Name": 10093
+            "exec_in": 10079,
+            "exec_out": 10080,
+            "Name": 10081
           }
         },
-        "230": {
-          "id": 230,
+        "227": {
+          "id": 227,
           "node_type": "SetTimer",
           "pos": [
             0,
@@ -977,30 +920,13 @@
             "value": -5.0
           },
           "pin_ids": {
-            "exec_in": 10094,
-            "exec_out": 10095,
-            "Value": 10096
+            "exec_in": 10082,
+            "exec_out": 10083,
+            "Value": 10084
           }
         },
-        "231": {
-          "id": 231,
-          "node_type": "NewTimer",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "manual",
-            "timer_name": "pulse"
-          },
-          "pin_ids": {
-            "exec_in": 10097,
-            "exec_out": 10098,
-            "Name": 10099
-          }
-        },
-        "232": {
-          "id": 232,
+        "228": {
+          "id": 228,
           "node_type": "Sequence",
           "pos": [
             0,
@@ -1008,16 +934,16 @@
           ],
           "props": {},
           "pin_ids": {
-            "exec_in": 10100,
-            "out_0": 10101,
-            "out_1": 10102,
-            "out_2": 10103,
-            "out_3": 10104,
-            "out_4": 10105
+            "exec_in": 10085,
+            "out_0": 10086,
+            "out_1": 10087,
+            "out_2": 10088,
+            "out_3": 10089,
+            "out_4": 10090
           }
         },
-        "233": {
-          "id": 233,
+        "229": {
+          "id": 229,
           "node_type": "TimeTrigger",
           "pos": [
             0,
@@ -1029,22 +955,22 @@
             "timer": "trial_phase"
           },
           "pin_ids": {
-            "exec_in": 10106,
-            "exec_out": 10107,
-            "Time": 10108,
-            "Elapsed": 10109,
-            "out_0": 10110,
-            "out_1": 10111,
-            "out_2": 10112,
-            "out_3": 10113,
-            "out_4": 10114,
-            "out_5": 10115,
-            "out_6": 10116,
-            "out_7": 10117
+            "exec_in": 10091,
+            "exec_out": 10092,
+            "Time": 10093,
+            "Elapsed": 10094,
+            "out_0": 10095,
+            "out_1": 10096,
+            "out_2": 10097,
+            "out_3": 10098,
+            "out_4": 10099,
+            "out_5": 10100,
+            "out_6": 10101,
+            "out_7": 10102
           }
         },
-        "234": {
-          "id": 234,
+        "230": {
+          "id": 230,
           "node_type": "TimeTrigger",
           "pos": [
             0,
@@ -1056,22 +982,22 @@
             "timer": "trial_phase"
           },
           "pin_ids": {
-            "exec_in": 10118,
-            "exec_out": 10119,
-            "Time": 10120,
-            "Elapsed": 10121,
-            "out_0": 10122,
-            "out_1": 10123,
-            "out_2": 10124,
-            "out_3": 10125,
-            "out_4": 10126,
-            "out_5": 10127,
-            "out_6": 10128,
-            "out_7": 10129
+            "exec_in": 10103,
+            "exec_out": 10104,
+            "Time": 10105,
+            "Elapsed": 10106,
+            "out_0": 10107,
+            "out_1": 10108,
+            "out_2": 10109,
+            "out_3": 10110,
+            "out_4": 10111,
+            "out_5": 10112,
+            "out_6": 10113,
+            "out_7": 10114
           }
         },
-        "235": {
-          "id": 235,
+        "231": {
+          "id": 231,
           "node_type": "TimeTrigger",
           "pos": [
             0,
@@ -1083,22 +1009,22 @@
             "timer": "trial_phase"
           },
           "pin_ids": {
-            "exec_in": 10130,
-            "exec_out": 10131,
-            "Time": 10132,
-            "Elapsed": 10133,
-            "out_0": 10134,
-            "out_1": 10135,
-            "out_2": 10136,
-            "out_3": 10137,
-            "out_4": 10138,
-            "out_5": 10139,
-            "out_6": 10140,
-            "out_7": 10141
+            "exec_in": 10115,
+            "exec_out": 10116,
+            "Time": 10117,
+            "Elapsed": 10118,
+            "out_0": 10119,
+            "out_1": 10120,
+            "out_2": 10121,
+            "out_3": 10122,
+            "out_4": 10123,
+            "out_5": 10124,
+            "out_6": 10125,
+            "out_7": 10126
           }
         },
-        "236": {
-          "id": 236,
+        "232": {
+          "id": 232,
           "node_type": "TimeTrigger",
           "pos": [
             0,
@@ -1110,49 +1036,22 @@
             "timer": "trial_phase"
           },
           "pin_ids": {
-            "exec_in": 10142,
-            "exec_out": 10143,
-            "Time": 10144,
-            "Elapsed": 10145,
-            "out_0": 10146,
-            "out_1": 10147,
-            "out_2": 10148,
-            "out_3": 10149,
-            "out_4": 10150,
-            "out_5": 10151,
-            "out_6": 10152,
-            "out_7": 10153
+            "exec_in": 10127,
+            "exec_out": 10128,
+            "Time": 10129,
+            "Elapsed": 10130,
+            "out_0": 10131,
+            "out_1": 10132,
+            "out_2": 10133,
+            "out_3": 10134,
+            "out_4": 10135,
+            "out_5": 10136,
+            "out_6": 10137,
+            "out_7": 10138
           }
         },
-        "237": {
-          "id": 237,
-          "node_type": "TimeTrigger",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "manual",
-            "time": 0,
-            "timer": "pulse"
-          },
-          "pin_ids": {
-            "exec_in": 10154,
-            "exec_out": 10155,
-            "Time": 10156,
-            "Elapsed": 10157,
-            "out_0": 10158,
-            "out_1": 10159,
-            "out_2": 10160,
-            "out_3": 10161,
-            "out_4": 10162,
-            "out_5": 10163,
-            "out_6": 10164,
-            "out_7": 10165
-          }
-        },
-        "238": {
-          "id": 238,
+        "233": {
+          "id": 233,
           "node_type": "Random",
           "pos": [
             0,
@@ -1162,57 +1061,18 @@
             "distribution": "discrete",
             "mode": "manual",
             "min": 1,
-            "max": 3
+            "max": 2
           },
           "pin_ids": {
-            "Min": 10166,
-            "Max": 10167,
-            "Mean": 10168,
-            "StdDev": 10169,
-            "Result": 10170
+            "Min": 10139,
+            "Max": 10140,
+            "Mean": 10141,
+            "StdDev": 10142,
+            "Result": 10143
           }
         },
-        "239": {
-          "id": 239,
-          "node_type": "Random",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "distribution": "discrete",
-            "mode": "manual",
-            "min": 11,
-            "max": 24
-          },
-          "pin_ids": {
-            "Min": 10171,
-            "Max": 10172,
-            "Mean": 10173,
-            "StdDev": 10174,
-            "Result": 10175
-          }
-        },
-        "240": {
-          "id": 240,
-          "node_type": "VarSet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "pin",
-            "var_name": "sss_code"
-          },
-          "pin_ids": {
-            "exec_in": 10176,
-            "exec_out": 10177,
-            "Name": 10178,
-            "Value": 10179
-          }
-        },
-        "241": {
-          "id": 241,
+        "234": {
+          "id": 234,
           "node_type": "Compare",
           "pos": [
             0,
@@ -1222,13 +1082,13 @@
             "operation": "eq"
           },
           "pin_ids": {
-            "A": 10180,
-            "B": 10181,
-            "Result": 10182
+            "A": 10144,
+            "B": 10145,
+            "Result": 10146
           }
         },
-        "242": {
-          "id": 242,
+        "235": {
+          "id": 235,
           "node_type": "Constant",
           "pos": [
             0,
@@ -1238,11 +1098,11 @@
             "value": 1
           },
           "pin_ids": {
-            "Result": 10183
+            "Result": 10147
           }
         },
-        "243": {
-          "id": 243,
+        "236": {
+          "id": 236,
           "node_type": "Branch",
           "pos": [
             0,
@@ -1250,78 +1110,267 @@
           ],
           "props": {},
           "pin_ids": {
-            "exec_in": 10184,
-            "exec_out": 10185,
-            "Condition": 10186,
-            "True": 10187,
-            "False": 10188
+            "exec_in": 10148,
+            "exec_out": 10149,
+            "Condition": 10150,
+            "True": 10151,
+            "False": 10152
           }
         },
-        "244": {
-          "id": 244,
-          "node_type": "Compare",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "operation": "eq"
-          },
-          "pin_ids": {
-            "A": 10189,
-            "B": 10190,
-            "Result": 10191
-          }
-        },
-        "245": {
-          "id": 245,
+        "237": {
+          "id": 237,
           "node_type": "Constant",
           "pos": [
             0,
             0
           ],
           "props": {
-            "value": 2
+            "value": 11
           },
           "pin_ids": {
-            "Result": 10192
+            "Result": 10153
           }
         },
-        "246": {
-          "id": 246,
-          "node_type": "Branch",
+        "238": {
+          "id": 238,
+          "node_type": "VarSet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "mode": "pin",
+            "var_name": "cue_val"
+          },
+          "pin_ids": {
+            "exec_in": 10154,
+            "exec_out": 10155,
+            "Name": 10156,
+            "Value": 10157
+          }
+        },
+        "239": {
+          "id": 239,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "arrow_body"
+          },
+          "pin_ids": {
+            "exec_in": 10158,
+            "exec_out": 10159,
+            "Name": 10160,
+            "Entity": 10161
+          }
+        },
+        "240": {
+          "id": 240,
+          "node_type": "EntitySetRenderVisible",
           "pos": [
             0,
             0
           ],
           "props": {},
           "pin_ids": {
-            "exec_in": 10193,
-            "exec_out": 10194,
-            "Condition": 10195,
-            "True": 10196,
-            "False": 10197
+            "exec_in": 10162,
+            "exec_out": 10163,
+            "EntityID": 10164,
+            "Visible": 10165
           }
         },
-        "247": {
-          "id": 247,
-          "node_type": "VarGet",
+        "241": {
+          "id": 241,
+          "node_type": "Constant",
           "pos": [
             0,
             0
           ],
           "props": {
-            "var_name": "sss_code"
+            "value": 1
           },
           "pin_ids": {
-            "exec_in": 10198,
-            "exec_out": 10199,
-            "Name": 10200,
-            "Value": 10201
+            "Result": 10166
+          }
+        },
+        "242": {
+          "id": 242,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "arrow_head_copy"
+          },
+          "pin_ids": {
+            "exec_in": 10167,
+            "exec_out": 10168,
+            "Name": 10169,
+            "Entity": 10170
+          }
+        },
+        "243": {
+          "id": 243,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10171,
+            "exec_out": 10172,
+            "EntityID": 10173,
+            "Visible": 10174
+          }
+        },
+        "244": {
+          "id": 244,
+          "node_type": "Constant",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "value": 1
+          },
+          "pin_ids": {
+            "Result": 10175
+          }
+        },
+        "245": {
+          "id": 245,
+          "node_type": "ParallelSend",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "mode": "pin",
+            "address": 16376
+          },
+          "pin_ids": {
+            "exec_in": 10176,
+            "exec_out": 10177,
+            "Address": 10178,
+            "Value": 10179
+          }
+        },
+        "246": {
+          "id": 246,
+          "node_type": "Constant",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "value": 12
+          },
+          "pin_ids": {
+            "Result": 10180
+          }
+        },
+        "247": {
+          "id": 247,
+          "node_type": "VarSet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "mode": "pin",
+            "var_name": "cue_val"
+          },
+          "pin_ids": {
+            "exec_in": 10181,
+            "exec_out": 10182,
+            "Name": 10183,
+            "Value": 10184
           }
         },
         "248": {
           "id": 248,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "arrow_head"
+          },
+          "pin_ids": {
+            "exec_in": 10185,
+            "exec_out": 10186,
+            "Name": 10187,
+            "Entity": 10188
+          }
+        },
+        "249": {
+          "id": 249,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10189,
+            "exec_out": 10190,
+            "EntityID": 10191,
+            "Visible": 10192
+          }
+        },
+        "250": {
+          "id": 250,
+          "node_type": "Constant",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "value": 1
+          },
+          "pin_ids": {
+            "Result": 10193
+          }
+        },
+        "251": {
+          "id": 251,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "arrow_body_copy"
+          },
+          "pin_ids": {
+            "exec_in": 10194,
+            "exec_out": 10195,
+            "Name": 10196,
+            "Entity": 10197
+          }
+        },
+        "252": {
+          "id": 252,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10198,
+            "exec_out": 10199,
+            "EntityID": 10200,
+            "Visible": 10201
+          }
+        },
+        "253": {
+          "id": 253,
           "node_type": "Constant",
           "pos": [
             0,
@@ -1334,33 +1383,33 @@
             "Result": 10202
           }
         },
-        "249": {
-          "id": 249,
-          "node_type": "VarSet",
+        "254": {
+          "id": 254,
+          "node_type": "ParallelSend",
           "pos": [
             0,
             0
           ],
           "props": {
             "mode": "pin",
-            "var_name": "mi_code"
+            "address": 16376
           },
           "pin_ids": {
             "exec_in": 10203,
             "exec_out": 10204,
-            "Name": 10205,
+            "Address": 10205,
             "Value": 10206
           }
         },
-        "250": {
-          "id": 250,
+        "255": {
+          "id": 255,
           "node_type": "EntityGet",
           "pos": [
             0,
             0
           ],
           "props": {
-            "entity_name": "arrow_body"
+            "entity_name": "TaskCue"
           },
           "pin_ids": {
             "exec_in": 10207,
@@ -1369,8 +1418,8 @@
             "Entity": 10210
           }
         },
-        "251": {
-          "id": 251,
+        "256": {
+          "id": 256,
           "node_type": "EntitySetRenderVisible",
           "pos": [
             0,
@@ -1384,8 +1433,8 @@
             "Visible": 10214
           }
         },
-        "252": {
-          "id": 252,
+        "257": {
+          "id": 257,
           "node_type": "Constant",
           "pos": [
             0,
@@ -1398,8 +1447,25 @@
             "Result": 10215
           }
         },
-        "253": {
-          "id": 253,
+        "258": {
+          "id": 258,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "arrow_body"
+          },
+          "pin_ids": {
+            "exec_in": 10216,
+            "exec_out": 10217,
+            "Name": 10218,
+            "Entity": 10219
+          }
+        },
+        "259": {
+          "id": 259,
           "node_type": "EntityGet",
           "pos": [
             0,
@@ -1409,125 +1475,27 @@
             "entity_name": "arrow_head_copy"
           },
           "pin_ids": {
-            "exec_in": 10216,
-            "exec_out": 10217,
-            "Name": 10218,
-            "Entity": 10219
-          }
-        },
-        "254": {
-          "id": 254,
-          "node_type": "EntitySetRenderVisible",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {},
-          "pin_ids": {
             "exec_in": 10220,
             "exec_out": 10221,
-            "EntityID": 10222,
-            "Visible": 10223
-          }
-        },
-        "255": {
-          "id": 255,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 1
-          },
-          "pin_ids": {
-            "Result": 10224
-          }
-        },
-        "256": {
-          "id": 256,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 64
-          },
-          "pin_ids": {
-            "Result": 10225
-          }
-        },
-        "257": {
-          "id": 257,
-          "node_type": "ScalarMath",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "operation": "sum"
-          },
-          "pin_ids": {
-            "In_0": 10226,
-            "In_1": 10227,
-            "Result": 10228,
-            "In_2": 10229,
-            "In_3": 10230,
-            "In_4": 10231,
-            "In_5": 10232,
-            "In_6": 10233,
-            "In_7": 10234
-          }
-        },
-        "258": {
-          "id": 258,
-          "node_type": "VarSet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "pin",
-            "var_name": "trigger_val"
-          },
-          "pin_ids": {
-            "exec_in": 10235,
-            "exec_out": 10236,
-            "Name": 10237,
-            "Value": 10238
-          }
-        },
-        "259": {
-          "id": 259,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 2
-          },
-          "pin_ids": {
-            "Result": 10239
+            "Name": 10222,
+            "Entity": 10223
           }
         },
         "260": {
           "id": 260,
-          "node_type": "VarSet",
+          "node_type": "EntityGet",
           "pos": [
             0,
             0
           ],
           "props": {
-            "mode": "pin",
-            "var_name": "mi_code"
+            "entity_name": "arrow_head"
           },
           "pin_ids": {
-            "exec_in": 10240,
-            "exec_out": 10241,
-            "Name": 10242,
-            "Value": 10243
+            "exec_in": 10224,
+            "exec_out": 10225,
+            "Name": 10226,
+            "Entity": 10227
           }
         },
         "261": {
@@ -1538,17 +1506,79 @@
             0
           ],
           "props": {
-            "entity_name": "arrow_head"
+            "entity_name": "arrow_body_copy"
           },
           "pin_ids": {
-            "exec_in": 10244,
-            "exec_out": 10245,
-            "Name": 10246,
-            "Entity": 10247
+            "exec_in": 10228,
+            "exec_out": 10229,
+            "Name": 10230,
+            "Entity": 10231
           }
         },
         "262": {
           "id": 262,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "TaskCue"
+          },
+          "pin_ids": {
+            "exec_in": 10232,
+            "exec_out": 10233,
+            "Name": 10234,
+            "Entity": 10235
+          }
+        },
+        "263": {
+          "id": 263,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10236,
+            "exec_out": 10237,
+            "EntityID": 10238,
+            "Visible": 10239
+          }
+        },
+        "264": {
+          "id": 264,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10240,
+            "exec_out": 10241,
+            "EntityID": 10242,
+            "Visible": 10243
+          }
+        },
+        "265": {
+          "id": 265,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10244,
+            "exec_out": 10245,
+            "EntityID": 10246,
+            "Visible": 10247
+          }
+        },
+        "266": {
+          "id": 266,
           "node_type": "EntitySetRenderVisible",
           "pos": [
             0,
@@ -1562,39 +1592,8 @@
             "Visible": 10251
           }
         },
-        "263": {
-          "id": 263,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 1
-          },
-          "pin_ids": {
-            "Result": 10252
-          }
-        },
-        "264": {
-          "id": 264,
-          "node_type": "EntityGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "entity_name": "arrow_body_copy"
-          },
-          "pin_ids": {
-            "exec_in": 10253,
-            "exec_out": 10254,
-            "Name": 10255,
-            "Entity": 10256
-          }
-        },
-        "265": {
-          "id": 265,
+        "267": {
+          "id": 267,
           "node_type": "EntitySetRenderVisible",
           "pos": [
             0,
@@ -1602,78 +1601,38 @@
           ],
           "props": {},
           "pin_ids": {
-            "exec_in": 10257,
-            "exec_out": 10258,
-            "EntityID": 10259,
-            "Visible": 10260
-          }
-        },
-        "266": {
-          "id": 266,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 1
-          },
-          "pin_ids": {
-            "Result": 10261
-          }
-        },
-        "267": {
-          "id": 267,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 128
-          },
-          "pin_ids": {
-            "Result": 10262
+            "exec_in": 10252,
+            "exec_out": 10253,
+            "EntityID": 10254,
+            "Visible": 10255
           }
         },
         "268": {
           "id": 268,
-          "node_type": "ScalarMath",
+          "node_type": "Constant",
           "pos": [
             0,
             0
           ],
           "props": {
-            "operation": "sum"
+            "value": 0
           },
           "pin_ids": {
-            "In_0": 10263,
-            "In_1": 10264,
-            "Result": 10265,
-            "In_2": 10266,
-            "In_3": 10267,
-            "In_4": 10268,
-            "In_5": 10269,
-            "In_6": 10270,
-            "In_7": 10271
+            "Result": 10256
           }
         },
         "269": {
           "id": 269,
-          "node_type": "VarSet",
+          "node_type": "Constant",
           "pos": [
             0,
             0
           ],
           "props": {
-            "mode": "pin",
-            "var_name": "trigger_val"
+            "value": 0
           },
           "pin_ids": {
-            "exec_in": 10272,
-            "exec_out": 10273,
-            "Name": 10274,
-            "Value": 10275
+            "Result": 10257
           }
         },
         "270": {
@@ -1684,28 +1643,24 @@
             0
           ],
           "props": {
-            "value": 3
+            "value": 0
           },
           "pin_ids": {
-            "Result": 10276
+            "Result": 10258
           }
         },
         "271": {
           "id": 271,
-          "node_type": "VarSet",
+          "node_type": "Constant",
           "pos": [
             0,
             0
           ],
           "props": {
-            "mode": "pin",
-            "var_name": "mi_code"
+            "value": 0
           },
           "pin_ids": {
-            "exec_in": 10277,
-            "exec_out": 10278,
-            "Name": 10279,
-            "Value": 10280
+            "Result": 10259
           }
         },
         "272": {
@@ -1716,592 +1671,14 @@
             0
           ],
           "props": {
-            "value": 192
+            "value": 0
           },
           "pin_ids": {
-            "Result": 10281
+            "Result": 10260
           }
         },
         "273": {
           "id": 273,
-          "node_type": "ScalarMath",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "operation": "sum"
-          },
-          "pin_ids": {
-            "In_0": 10282,
-            "In_1": 10283,
-            "Result": 10284,
-            "In_2": 10285,
-            "In_3": 10286,
-            "In_4": 10287,
-            "In_5": 10288,
-            "In_6": 10289,
-            "In_7": 10290
-          }
-        },
-        "274": {
-          "id": 274,
-          "node_type": "VarSet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "pin",
-            "var_name": "trigger_val"
-          },
-          "pin_ids": {
-            "exec_in": 10291,
-            "exec_out": 10292,
-            "Name": 10293,
-            "Value": 10294
-          }
-        },
-        "275": {
-          "id": 275,
-          "node_type": "EntityGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "entity_name": "TaskCue"
-          },
-          "pin_ids": {
-            "exec_in": 10295,
-            "exec_out": 10296,
-            "Name": 10297,
-            "Entity": 10298
-          }
-        },
-        "276": {
-          "id": 276,
-          "node_type": "EntitySetRenderVisible",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {},
-          "pin_ids": {
-            "exec_in": 10299,
-            "exec_out": 10300,
-            "EntityID": 10301,
-            "Visible": 10302
-          }
-        },
-        "277": {
-          "id": 277,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 1
-          },
-          "pin_ids": {
-            "Result": 10303
-          }
-        },
-        "278": {
-          "id": 278,
-          "node_type": "VarSet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "manual",
-            "var_name": "pulse_count",
-            "value": 0
-          },
-          "pin_ids": {
-            "exec_in": 10304,
-            "exec_out": 10305,
-            "Name": 10306,
-            "Value": 10307
-          }
-        },
-        "279": {
-          "id": 279,
-          "node_type": "SetTimer",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "operate": "set_time",
-            "mode": "manual",
-            "timer_name": "pulse",
-            "value": -0.05
-          },
-          "pin_ids": {
-            "exec_in": 10308,
-            "exec_out": 10309,
-            "Value": 10310
-          }
-        },
-        "280": {
-          "id": 280,
-          "node_type": "VarGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "var_name": "pulse_count"
-          },
-          "pin_ids": {
-            "exec_in": 10311,
-            "exec_out": 10312,
-            "Name": 10313,
-            "Value": 10314
-          }
-        },
-        "281": {
-          "id": 281,
-          "node_type": "Compare",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "operation": "lt"
-          },
-          "pin_ids": {
-            "A": 10315,
-            "B": 10316,
-            "Result": 10317
-          }
-        },
-        "282": {
-          "id": 282,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 80
-          },
-          "pin_ids": {
-            "Result": 10318
-          }
-        },
-        "283": {
-          "id": 283,
-          "node_type": "Branch",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {},
-          "pin_ids": {
-            "exec_in": 10319,
-            "exec_out": 10320,
-            "Condition": 10321,
-            "True": 10322,
-            "False": 10323
-          }
-        },
-        "284": {
-          "id": 284,
-          "node_type": "VarGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "var_name": "trigger_val"
-          },
-          "pin_ids": {
-            "exec_in": 10324,
-            "exec_out": 10325,
-            "Name": 10326,
-            "Value": 10327
-          }
-        },
-        "285": {
-          "id": 285,
-          "node_type": "ParallelSend",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "pin",
-            "address": 16376
-          },
-          "pin_ids": {
-            "exec_in": 10328,
-            "exec_out": 10329,
-            "Address": 10330,
-            "Value": 10331
-          }
-        },
-        "286": {
-          "id": 286,
-          "node_type": "VarGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "var_name": "sss_code"
-          },
-          "pin_ids": {
-            "exec_in": 10332,
-            "exec_out": 10333,
-            "Name": 10334,
-            "Value": 10335
-          }
-        },
-        "287": {
-          "id": 287,
-          "node_type": "SerialSend",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "pin",
-            "format": "string",
-            "port": "COM3",
-            "baud_rate": 115200
-          },
-          "pin_ids": {
-            "exec_in": 10336,
-            "exec_out": 10337,
-            "Value": 10338
-          }
-        },
-        "288": {
-          "id": 288,
-          "node_type": "VarGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "var_name": "pulse_count"
-          },
-          "pin_ids": {
-            "exec_in": 10339,
-            "exec_out": 10340,
-            "Name": 10341,
-            "Value": 10342
-          }
-        },
-        "289": {
-          "id": 289,
-          "node_type": "ScalarMath",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "operation": "sum"
-          },
-          "pin_ids": {
-            "In_0": 10343,
-            "In_1": 10344,
-            "Result": 10345,
-            "In_2": 10346,
-            "In_3": 10347,
-            "In_4": 10348,
-            "In_5": 10349,
-            "In_6": 10350,
-            "In_7": 10351
-          }
-        },
-        "290": {
-          "id": 290,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 1
-          },
-          "pin_ids": {
-            "Result": 10352
-          }
-        },
-        "291": {
-          "id": 291,
-          "node_type": "VarSet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "mode": "pin",
-            "var_name": "pulse_count"
-          },
-          "pin_ids": {
-            "exec_in": 10353,
-            "exec_out": 10354,
-            "Name": 10355,
-            "Value": 10356
-          }
-        },
-        "292": {
-          "id": 292,
-          "node_type": "SetTimer",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "operate": "set_time",
-            "mode": "manual",
-            "timer_name": "pulse",
-            "value": -0.05
-          },
-          "pin_ids": {
-            "exec_in": 10357,
-            "exec_out": 10358,
-            "Value": 10359
-          }
-        },
-        "293": {
-          "id": 293,
-          "node_type": "EntityGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "entity_name": "arrow_body"
-          },
-          "pin_ids": {
-            "exec_in": 10360,
-            "exec_out": 10361,
-            "Name": 10362,
-            "Entity": 10363
-          }
-        },
-        "294": {
-          "id": 294,
-          "node_type": "EntityGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "entity_name": "arrow_head_copy"
-          },
-          "pin_ids": {
-            "exec_in": 10364,
-            "exec_out": 10365,
-            "Name": 10366,
-            "Entity": 10367
-          }
-        },
-        "295": {
-          "id": 295,
-          "node_type": "EntityGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "entity_name": "arrow_head"
-          },
-          "pin_ids": {
-            "exec_in": 10368,
-            "exec_out": 10369,
-            "Name": 10370,
-            "Entity": 10371
-          }
-        },
-        "296": {
-          "id": 296,
-          "node_type": "EntityGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "entity_name": "arrow_body_copy"
-          },
-          "pin_ids": {
-            "exec_in": 10372,
-            "exec_out": 10373,
-            "Name": 10374,
-            "Entity": 10375
-          }
-        },
-        "297": {
-          "id": 297,
-          "node_type": "EntityGet",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "entity_name": "TaskCue"
-          },
-          "pin_ids": {
-            "exec_in": 10376,
-            "exec_out": 10377,
-            "Name": 10378,
-            "Entity": 10379
-          }
-        },
-        "298": {
-          "id": 298,
-          "node_type": "EntitySetRenderVisible",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {},
-          "pin_ids": {
-            "exec_in": 10380,
-            "exec_out": 10381,
-            "EntityID": 10382,
-            "Visible": 10383
-          }
-        },
-        "299": {
-          "id": 299,
-          "node_type": "EntitySetRenderVisible",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {},
-          "pin_ids": {
-            "exec_in": 10384,
-            "exec_out": 10385,
-            "EntityID": 10386,
-            "Visible": 10387
-          }
-        },
-        "300": {
-          "id": 300,
-          "node_type": "EntitySetRenderVisible",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {},
-          "pin_ids": {
-            "exec_in": 10388,
-            "exec_out": 10389,
-            "EntityID": 10390,
-            "Visible": 10391
-          }
-        },
-        "301": {
-          "id": 301,
-          "node_type": "EntitySetRenderVisible",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {},
-          "pin_ids": {
-            "exec_in": 10392,
-            "exec_out": 10393,
-            "EntityID": 10394,
-            "Visible": 10395
-          }
-        },
-        "302": {
-          "id": 302,
-          "node_type": "EntitySetRenderVisible",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {},
-          "pin_ids": {
-            "exec_in": 10396,
-            "exec_out": 10397,
-            "EntityID": 10398,
-            "Visible": 10399
-          }
-        },
-        "303": {
-          "id": 303,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 0
-          },
-          "pin_ids": {
-            "Result": 10400
-          }
-        },
-        "304": {
-          "id": 304,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 0
-          },
-          "pin_ids": {
-            "Result": 10401
-          }
-        },
-        "305": {
-          "id": 305,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 0
-          },
-          "pin_ids": {
-            "Result": 10402
-          }
-        },
-        "306": {
-          "id": 306,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 0
-          },
-          "pin_ids": {
-            "Result": 10403
-          }
-        },
-        "307": {
-          "id": 307,
-          "node_type": "Constant",
-          "pos": [
-            0,
-            0
-          ],
-          "props": {
-            "value": 0
-          },
-          "pin_ids": {
-            "Result": 10404
-          }
-        },
-        "308": {
-          "id": 308,
           "node_type": "VarSet",
           "pos": [
             0,
@@ -2313,14 +1690,14 @@
             "value": 0
           },
           "pin_ids": {
-            "exec_in": 10405,
-            "exec_out": 10406,
-            "Name": 10407,
-            "Value": 10408
+            "exec_in": 10261,
+            "exec_out": 10262,
+            "Name": 10263,
+            "Value": 10264
           }
         },
-        "309": {
-          "id": 309,
+        "274": {
+          "id": 274,
           "node_type": "VarGet",
           "pos": [
             0,
@@ -2330,14 +1707,14 @@
             "var_name": "trial"
           },
           "pin_ids": {
-            "exec_in": 10409,
-            "exec_out": 10410,
-            "Name": 10411,
-            "Value": 10412
+            "exec_in": 10265,
+            "exec_out": 10266,
+            "Name": 10267,
+            "Value": 10268
           }
         },
-        "310": {
-          "id": 310,
+        "275": {
+          "id": 275,
           "node_type": "ScalarMath",
           "pos": [
             0,
@@ -2347,19 +1724,19 @@
             "operation": "sum"
           },
           "pin_ids": {
-            "In_0": 10413,
-            "In_1": 10414,
-            "Result": 10415,
-            "In_2": 10416,
-            "In_3": 10417,
-            "In_4": 10418,
-            "In_5": 10419,
-            "In_6": 10420,
-            "In_7": 10421
+            "In_0": 10269,
+            "In_1": 10270,
+            "Result": 10271,
+            "In_2": 10272,
+            "In_3": 10273,
+            "In_4": 10274,
+            "In_5": 10275,
+            "In_6": 10276,
+            "In_7": 10277
           }
         },
-        "311": {
-          "id": 311,
+        "276": {
+          "id": 276,
           "node_type": "Constant",
           "pos": [
             0,
@@ -2369,11 +1746,11 @@
             "value": 1
           },
           "pin_ids": {
-            "Result": 10422
+            "Result": 10278
           }
         },
-        "312": {
-          "id": 312,
+        "277": {
+          "id": 277,
           "node_type": "VarSet",
           "pos": [
             0,
@@ -2384,14 +1761,14 @@
             "var_name": "trial"
           },
           "pin_ids": {
-            "exec_in": 10423,
-            "exec_out": 10424,
-            "Name": 10425,
-            "Value": 10426
+            "exec_in": 10279,
+            "exec_out": 10280,
+            "Name": 10281,
+            "Value": 10282
           }
         },
-        "313": {
-          "id": 313,
+        "278": {
+          "id": 278,
           "node_type": "VarGet",
           "pos": [
             0,
@@ -2401,14 +1778,14 @@
             "var_name": "trial"
           },
           "pin_ids": {
-            "exec_in": 10427,
-            "exec_out": 10428,
-            "Name": 10429,
-            "Value": 10430
+            "exec_in": 10283,
+            "exec_out": 10284,
+            "Name": 10285,
+            "Value": 10286
           }
         },
-        "314": {
-          "id": 314,
+        "279": {
+          "id": 279,
           "node_type": "Compare",
           "pos": [
             0,
@@ -2418,13 +1795,13 @@
             "operation": "gt"
           },
           "pin_ids": {
-            "A": 10431,
-            "B": 10432,
-            "Result": 10433
+            "A": 10287,
+            "B": 10288,
+            "Result": 10289
           }
         },
-        "315": {
-          "id": 315,
+        "280": {
+          "id": 280,
           "node_type": "Constant",
           "pos": [
             0,
@@ -2434,11 +1811,11 @@
             "value": 60
           },
           "pin_ids": {
-            "Result": 10434
+            "Result": 10290
           }
         },
-        "316": {
-          "id": 316,
+        "281": {
+          "id": 281,
           "node_type": "Branch",
           "pos": [
             0,
@@ -2446,15 +1823,15 @@
           ],
           "props": {},
           "pin_ids": {
-            "exec_in": 10435,
-            "exec_out": 10436,
-            "Condition": 10437,
-            "True": 10438,
-            "False": 10439
+            "exec_in": 10291,
+            "exec_out": 10292,
+            "Condition": 10293,
+            "True": 10294,
+            "False": 10295
           }
         },
-        "317": {
-          "id": 317,
+        "282": {
+          "id": 282,
           "node_type": "ExitGame",
           "pos": [
             0,
@@ -2462,11 +1839,11 @@
           ],
           "props": {},
           "pin_ids": {
-            "exec_in": 10440
+            "exec_in": 10296
           }
         },
-        "318": {
-          "id": 318,
+        "283": {
+          "id": 283,
           "node_type": "SetTimer",
           "pos": [
             0,
@@ -2479,9 +1856,9 @@
             "value": -0.02
           },
           "pin_ids": {
-            "exec_in": 10441,
-            "exec_out": 10442,
-            "Value": 10443
+            "exec_in": 10297,
+            "exec_out": 10298,
+            "Value": 10299
           }
         }
       },
@@ -2649,555 +2026,365 @@
         "532": {
           "id": 532,
           "from_pin": 10080,
-          "to_pin": 10083
+          "to_pin": 10082
         },
         "533": {
           "id": 533,
-          "from_pin": 10084,
-          "to_pin": 10087
-        },
-        "534": {
-          "id": 534,
-          "from_pin": 10088,
-          "to_pin": 10091
-        },
-        "535": {
-          "id": 535,
-          "from_pin": 10092,
-          "to_pin": 10094
-        },
-        "536": {
-          "id": 536,
-          "from_pin": 10095,
-          "to_pin": 10097
-        },
-        "537": {
-          "id": 537,
           "from_pin": 162,
           "to_pin": 10000
         },
+        "534": {
+          "id": 534,
+          "from_pin": 164,
+          "to_pin": 10085
+        },
+        "535": {
+          "id": 535,
+          "from_pin": 10086,
+          "to_pin": 10091
+        },
+        "536": {
+          "id": 536,
+          "from_pin": 10087,
+          "to_pin": 10103
+        },
+        "537": {
+          "id": 537,
+          "from_pin": 10088,
+          "to_pin": 10115
+        },
         "538": {
           "id": 538,
-          "from_pin": 164,
-          "to_pin": 10100
+          "from_pin": 10089,
+          "to_pin": 10127
         },
         "539": {
           "id": 539,
-          "from_pin": 10101,
-          "to_pin": 10106
+          "from_pin": 10155,
+          "to_pin": 10158
         },
         "540": {
           "id": 540,
-          "from_pin": 10102,
-          "to_pin": 10118
+          "from_pin": 10159,
+          "to_pin": 10162
         },
         "541": {
           "id": 541,
-          "from_pin": 10103,
-          "to_pin": 10130
+          "from_pin": 10163,
+          "to_pin": 10167
         },
         "542": {
           "id": 542,
-          "from_pin": 10104,
-          "to_pin": 10142
+          "from_pin": 10168,
+          "to_pin": 10171
         },
         "543": {
           "id": 543,
-          "from_pin": 10105,
-          "to_pin": 10154
+          "from_pin": 10172,
+          "to_pin": 10176
         },
         "544": {
           "id": 544,
-          "from_pin": 10204,
-          "to_pin": 10207
+          "from_pin": 10153,
+          "to_pin": 10157
         },
         "545": {
           "id": 545,
-          "from_pin": 10208,
-          "to_pin": 10211
+          "from_pin": 10161,
+          "to_pin": 10164
         },
         "546": {
           "id": 546,
-          "from_pin": 10212,
-          "to_pin": 10216
+          "from_pin": 10166,
+          "to_pin": 10165
         },
         "547": {
           "id": 547,
-          "from_pin": 10217,
-          "to_pin": 10220
+          "from_pin": 10170,
+          "to_pin": 10173
         },
         "548": {
           "id": 548,
-          "from_pin": 10221,
-          "to_pin": 10235
+          "from_pin": 10175,
+          "to_pin": 10174
         },
         "549": {
           "id": 549,
-          "from_pin": 10202,
-          "to_pin": 10206
+          "from_pin": 10153,
+          "to_pin": 10179
         },
         "550": {
           "id": 550,
-          "from_pin": 10210,
-          "to_pin": 10213
+          "from_pin": 10182,
+          "to_pin": 10185
         },
         "551": {
           "id": 551,
-          "from_pin": 10215,
-          "to_pin": 10214
+          "from_pin": 10186,
+          "to_pin": 10189
         },
         "552": {
           "id": 552,
-          "from_pin": 10219,
-          "to_pin": 10222
+          "from_pin": 10190,
+          "to_pin": 10194
         },
         "553": {
           "id": 553,
-          "from_pin": 10224,
-          "to_pin": 10223
+          "from_pin": 10195,
+          "to_pin": 10198
         },
         "554": {
           "id": 554,
-          "from_pin": 10225,
-          "to_pin": 10226
+          "from_pin": 10199,
+          "to_pin": 10203
         },
         "555": {
           "id": 555,
-          "from_pin": 10201,
-          "to_pin": 10227
+          "from_pin": 10180,
+          "to_pin": 10184
         },
         "556": {
           "id": 556,
-          "from_pin": 10228,
-          "to_pin": 10238
+          "from_pin": 10188,
+          "to_pin": 10191
         },
         "557": {
           "id": 557,
-          "from_pin": 10241,
-          "to_pin": 10244
+          "from_pin": 10193,
+          "to_pin": 10192
         },
         "558": {
           "id": 558,
-          "from_pin": 10245,
-          "to_pin": 10248
+          "from_pin": 10197,
+          "to_pin": 10200
         },
         "559": {
           "id": 559,
-          "from_pin": 10249,
-          "to_pin": 10253
+          "from_pin": 10202,
+          "to_pin": 10201
         },
         "560": {
           "id": 560,
-          "from_pin": 10254,
-          "to_pin": 10257
+          "from_pin": 10180,
+          "to_pin": 10206
         },
         "561": {
           "id": 561,
-          "from_pin": 10258,
-          "to_pin": 10272
+          "from_pin": 10095,
+          "to_pin": 10148
         },
         "562": {
           "id": 562,
-          "from_pin": 10239,
-          "to_pin": 10243
+          "from_pin": 10143,
+          "to_pin": 10144
         },
         "563": {
           "id": 563,
-          "from_pin": 10247,
-          "to_pin": 10250
+          "from_pin": 10147,
+          "to_pin": 10145
         },
         "564": {
           "id": 564,
-          "from_pin": 10252,
-          "to_pin": 10251
+          "from_pin": 10146,
+          "to_pin": 10150
         },
         "565": {
           "id": 565,
-          "from_pin": 10256,
-          "to_pin": 10259
+          "from_pin": 10151,
+          "to_pin": 10154
         },
         "566": {
           "id": 566,
-          "from_pin": 10261,
-          "to_pin": 10260
+          "from_pin": 10152,
+          "to_pin": 10181
         },
         "567": {
           "id": 567,
-          "from_pin": 10262,
-          "to_pin": 10263
+          "from_pin": 10208,
+          "to_pin": 10211
         },
         "568": {
           "id": 568,
-          "from_pin": 10201,
-          "to_pin": 10264
+          "from_pin": 10210,
+          "to_pin": 10213
         },
         "569": {
           "id": 569,
-          "from_pin": 10265,
-          "to_pin": 10275
+          "from_pin": 10215,
+          "to_pin": 10214
         },
         "570": {
           "id": 570,
-          "from_pin": 10278,
-          "to_pin": 10291
+          "from_pin": 10107,
+          "to_pin": 10207
         },
         "571": {
           "id": 571,
-          "from_pin": 10276,
-          "to_pin": 10280
+          "from_pin": 10217,
+          "to_pin": 10236
         },
         "572": {
           "id": 572,
-          "from_pin": 10281,
-          "to_pin": 10282
+          "from_pin": 10237,
+          "to_pin": 10220
         },
         "573": {
           "id": 573,
-          "from_pin": 10201,
-          "to_pin": 10283
+          "from_pin": 10221,
+          "to_pin": 10240
         },
         "574": {
           "id": 574,
-          "from_pin": 10284,
-          "to_pin": 10294
+          "from_pin": 10241,
+          "to_pin": 10224
         },
         "575": {
           "id": 575,
-          "from_pin": 10110,
-          "to_pin": 10176
+          "from_pin": 10225,
+          "to_pin": 10244
         },
         "576": {
           "id": 576,
-          "from_pin": 10175,
-          "to_pin": 10179
+          "from_pin": 10245,
+          "to_pin": 10228
         },
         "577": {
           "id": 577,
-          "from_pin": 10177,
-          "to_pin": 10184
+          "from_pin": 10229,
+          "to_pin": 10248
         },
         "578": {
           "id": 578,
-          "from_pin": 10170,
-          "to_pin": 10180
+          "from_pin": 10249,
+          "to_pin": 10232
         },
         "579": {
           "id": 579,
-          "from_pin": 10183,
-          "to_pin": 10181
+          "from_pin": 10233,
+          "to_pin": 10252
         },
         "580": {
           "id": 580,
-          "from_pin": 10182,
-          "to_pin": 10186
+          "from_pin": 10219,
+          "to_pin": 10238
         },
         "581": {
           "id": 581,
-          "from_pin": 10187,
-          "to_pin": 10203
+          "from_pin": 10256,
+          "to_pin": 10239
         },
         "582": {
           "id": 582,
-          "from_pin": 10188,
-          "to_pin": 10193
+          "from_pin": 10223,
+          "to_pin": 10242
         },
         "583": {
           "id": 583,
-          "from_pin": 10170,
-          "to_pin": 10189
+          "from_pin": 10257,
+          "to_pin": 10243
         },
         "584": {
           "id": 584,
-          "from_pin": 10192,
-          "to_pin": 10190
+          "from_pin": 10227,
+          "to_pin": 10246
         },
         "585": {
           "id": 585,
-          "from_pin": 10191,
-          "to_pin": 10195
+          "from_pin": 10258,
+          "to_pin": 10247
         },
         "586": {
           "id": 586,
-          "from_pin": 10196,
-          "to_pin": 10240
+          "from_pin": 10231,
+          "to_pin": 10250
         },
         "587": {
           "id": 587,
-          "from_pin": 10197,
-          "to_pin": 10277
+          "from_pin": 10259,
+          "to_pin": 10251
         },
         "588": {
           "id": 588,
-          "from_pin": 10296,
-          "to_pin": 10299
+          "from_pin": 10235,
+          "to_pin": 10254
         },
         "589": {
           "id": 589,
-          "from_pin": 10300,
-          "to_pin": 10304
+          "from_pin": 10260,
+          "to_pin": 10255
         },
         "590": {
           "id": 590,
-          "from_pin": 10305,
-          "to_pin": 10308
+          "from_pin": 10119,
+          "to_pin": 10216
         },
         "591": {
           "id": 591,
-          "from_pin": 10298,
-          "to_pin": 10301
+          "from_pin": 10262,
+          "to_pin": 10265
         },
         "592": {
           "id": 592,
-          "from_pin": 10303,
-          "to_pin": 10302
+          "from_pin": 10266,
+          "to_pin": 10279
         },
         "593": {
           "id": 593,
-          "from_pin": 10122,
-          "to_pin": 10295
+          "from_pin": 10268,
+          "to_pin": 10269
         },
         "594": {
           "id": 594,
-          "from_pin": 10312,
-          "to_pin": 10319
+          "from_pin": 10278,
+          "to_pin": 10270
         },
         "595": {
           "id": 595,
-          "from_pin": 10314,
-          "to_pin": 10315
+          "from_pin": 10271,
+          "to_pin": 10282
         },
         "596": {
           "id": 596,
-          "from_pin": 10318,
-          "to_pin": 10316
+          "from_pin": 10280,
+          "to_pin": 10283
         },
         "597": {
           "id": 597,
-          "from_pin": 10317,
-          "to_pin": 10321
+          "from_pin": 10284,
+          "to_pin": 10291
         },
         "598": {
           "id": 598,
-          "from_pin": 10329,
-          "to_pin": 10336
+          "from_pin": 10286,
+          "to_pin": 10287
         },
         "599": {
           "id": 599,
-          "from_pin": 10337,
-          "to_pin": 10339
+          "from_pin": 10290,
+          "to_pin": 10288
         },
         "600": {
           "id": 600,
-          "from_pin": 10340,
-          "to_pin": 10353
+          "from_pin": 10289,
+          "to_pin": 10293
         },
         "601": {
           "id": 601,
-          "from_pin": 10354,
-          "to_pin": 10357
+          "from_pin": 10294,
+          "to_pin": 10296
         },
         "602": {
           "id": 602,
-          "from_pin": 10327,
-          "to_pin": 10331
+          "from_pin": 10295,
+          "to_pin": 10297
         },
         "603": {
           "id": 603,
-          "from_pin": 10335,
-          "to_pin": 10338
-        },
-        "604": {
-          "id": 604,
-          "from_pin": 10342,
-          "to_pin": 10343
-        },
-        "605": {
-          "id": 605,
-          "from_pin": 10352,
-          "to_pin": 10344
-        },
-        "606": {
-          "id": 606,
-          "from_pin": 10345,
-          "to_pin": 10356
-        },
-        "607": {
-          "id": 607,
-          "from_pin": 10158,
-          "to_pin": 10311
-        },
-        "608": {
-          "id": 608,
-          "from_pin": 10322,
-          "to_pin": 10328
-        },
-        "609": {
-          "id": 609,
-          "from_pin": 10361,
-          "to_pin": 10380
-        },
-        "610": {
-          "id": 610,
-          "from_pin": 10381,
-          "to_pin": 10364
-        },
-        "611": {
-          "id": 611,
-          "from_pin": 10365,
-          "to_pin": 10384
-        },
-        "612": {
-          "id": 612,
-          "from_pin": 10385,
-          "to_pin": 10368
-        },
-        "613": {
-          "id": 613,
-          "from_pin": 10369,
-          "to_pin": 10388
-        },
-        "614": {
-          "id": 614,
-          "from_pin": 10389,
-          "to_pin": 10372
-        },
-        "615": {
-          "id": 615,
-          "from_pin": 10373,
-          "to_pin": 10392
-        },
-        "616": {
-          "id": 616,
-          "from_pin": 10393,
-          "to_pin": 10376
-        },
-        "617": {
-          "id": 617,
-          "from_pin": 10377,
-          "to_pin": 10396
-        },
-        "618": {
-          "id": 618,
-          "from_pin": 10363,
-          "to_pin": 10382
-        },
-        "619": {
-          "id": 619,
-          "from_pin": 10400,
-          "to_pin": 10383
-        },
-        "620": {
-          "id": 620,
-          "from_pin": 10367,
-          "to_pin": 10386
-        },
-        "621": {
-          "id": 621,
-          "from_pin": 10401,
-          "to_pin": 10387
-        },
-        "622": {
-          "id": 622,
-          "from_pin": 10371,
-          "to_pin": 10390
-        },
-        "623": {
-          "id": 623,
-          "from_pin": 10402,
-          "to_pin": 10391
-        },
-        "624": {
-          "id": 624,
-          "from_pin": 10375,
-          "to_pin": 10394
-        },
-        "625": {
-          "id": 625,
-          "from_pin": 10403,
-          "to_pin": 10395
-        },
-        "626": {
-          "id": 626,
-          "from_pin": 10379,
-          "to_pin": 10398
-        },
-        "627": {
-          "id": 627,
-          "from_pin": 10404,
-          "to_pin": 10399
-        },
-        "628": {
-          "id": 628,
-          "from_pin": 10134,
-          "to_pin": 10360
-        },
-        "629": {
-          "id": 629,
-          "from_pin": 10406,
-          "to_pin": 10409
-        },
-        "630": {
-          "id": 630,
-          "from_pin": 10410,
-          "to_pin": 10423
-        },
-        "631": {
-          "id": 631,
-          "from_pin": 10412,
-          "to_pin": 10413
-        },
-        "632": {
-          "id": 632,
-          "from_pin": 10422,
-          "to_pin": 10414
-        },
-        "633": {
-          "id": 633,
-          "from_pin": 10415,
-          "to_pin": 10426
-        },
-        "634": {
-          "id": 634,
-          "from_pin": 10424,
-          "to_pin": 10427
-        },
-        "635": {
-          "id": 635,
-          "from_pin": 10428,
-          "to_pin": 10435
-        },
-        "636": {
-          "id": 636,
-          "from_pin": 10430,
-          "to_pin": 10431
-        },
-        "637": {
-          "id": 637,
-          "from_pin": 10434,
-          "to_pin": 10432
-        },
-        "638": {
-          "id": 638,
-          "from_pin": 10433,
-          "to_pin": 10437
-        },
-        "639": {
-          "id": 639,
-          "from_pin": 10438,
-          "to_pin": 10440
-        },
-        "640": {
-          "id": 640,
-          "from_pin": 10439,
-          "to_pin": 10441
-        },
-        "641": {
-          "id": 641,
-          "from_pin": 10146,
-          "to_pin": 10405
+          "from_pin": 10131,
+          "to_pin": 10261
         }
       },
-      "next_id": 10444
+      "next_id": 10300
     }
   }
 }

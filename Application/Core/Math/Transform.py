@@ -36,7 +36,10 @@ def calculate_entity_model(
     Pure numpy — no pyrr dependency. Direct matrix construction avoids
     intermediate array allocations and matmuls for performance.
 
-    Convention: row-vector (v' = v * M), translation in last row.
+    Convention: row-vector (v' = v * M), M = S @ R @ T.
+    Entity origin (0,0,0,1) maps to (px, py, pz, 1) — position is world-space,
+    unchanged by rotation (standard game-engine convention).
+
     Returns: float64 ndarray 4×4, C-contiguous.
     """
     import math
@@ -85,18 +88,14 @@ def calculate_entity_model(
     R21 = r21                        # = cy*sx
     R22 = r22                        # = cy*cx
 
-    # ── Build final 4×4 matrix: M = T @ R @ S ──
-    # Upper-left 3×3 = R scaled by columns: M[i,j] = R[i,j] * S[j,j]
-    # Bottom row: M[3,j] = S[j,j] * dot([px,py,pz], R_col_j)
-    # Right column: M[i,3] = 0 (i<3), M[3,3] = 1
+    # ── Build final 4×4 matrix: M = S @ R @ T (row-vector: v' = v * S @ R + pos) ──
+    # Upper-left 3×3 = R scaled by columns
+    # Bottom row = position (world-space, unchanged by rotation)
     M = np.array([
         [R00 * sx,  R01 * sy,  R02 * sz,  0.0],
         [R10 * sx,  R11 * sy,  R12 * sz,  0.0],
         [R20 * sx,  R21 * sy,  R22 * sz,  0.0],
-        [sx * (px * R00 + py * R10 + pz * R20),
-         sy * (px * R01 + py * R11 + pz * R21),
-         sz * (px * R02 + py * R12 + pz * R22),
-         1.0],
+        [px,        py,        pz,        1.0],
     ], dtype=np.float64)
     return M
 

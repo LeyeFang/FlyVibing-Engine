@@ -27,7 +27,7 @@ from Application.Editor.EditorInputLayer import EditorInputLayer
 from Application.Editor.EditorGizmoLayer import EditorGizmoLayer
 from Application.Editor.Gizmos.Grid import Grid
 from Application.Editor.Gizmos.OutlinerID import OutlinerID
-from Application.Editor.Gizmos.TransformGizmo import TransformGizmo
+from Application.Editor.Gizmos.TransformGizmo import TransformGizmo, GizmoMode
 from Application.Editor.Gizmos.ViewGizmo import ViewGizmo
 from Application.Editor.UI.controllers.SelectionController import SelectionController
 
@@ -238,17 +238,27 @@ class EditorLayer(Layer):
         ray_o, ray_d = TransformGizmo.screen_to_world_ray(
             mx, my, vp_w, vp_h, view_mat, proj_mat)
 
-        if gizmo_info['kind'] == 'axis':
+        kind = gizmo_info['kind']
+        if kind == 'axis':
             TransformGizmo.begin_axis_drag(
                 entity_pos, gizmo_info['gl_dir'], cam.position, ray_o, ray_d)
-        elif gizmo_info['kind'] == 'plane':
+        elif kind == 'plane':
             d1, d2 = gizmo_info['gl_dirs']
             TransformGizmo.begin_plane_drag(
                 entity_pos, d1, d2, ray_o, ray_d)
+        elif kind == 'ring':
+            TransformGizmo.begin_ring_drag(
+                entity_pos, gizmo_info['gl_dir'], cam.position, ray_o, ray_d)
+        elif kind in ('scale_axis', 'scale_uniform'):
+            gl_dir = gizmo_info.get('gl_dir') if kind == 'scale_axis' else None
+            t_scl = EditorHost.scene.GetEntityTransform(selected)
+            current_scale = (t_scl.scale_x, t_scl.scale_y, t_scl.scale_z)
+            TransformGizmo.begin_scale_drag(
+                entity_pos, gl_dir, ray_o, ray_d, current_scale)
 
     @classmethod
     def _handle_gizmo_drag(cls, mx: int, my: int) -> None:
-        """处理 gizmo 拖拽: 计算新位置并更新实体 + gizmo。"""
+        """处理 gizmo 拖拽: 根据模式更新位置/旋转/缩放。"""
         vp_w = cls.renderer.viewport_width
         vp_h = cls.renderer.viewport_height
         cam = EditorCamera.get_instance()
@@ -257,21 +267,38 @@ class EditorLayer(Layer):
         ray_o, ray_d = TransformGizmo.screen_to_world_ray(
             mx, my, vp_w, vp_h, view_mat, proj_mat)
 
-        new_pos = TransformGizmo.update_drag(ray_o, ray_d)
-        if new_pos is None:
+        result = TransformGizmo.update_drag(ray_o, ray_d)
+        if result is None:
             return
 
         selected = SelectionController.get_selected()
-        if selected is not None:
-            from Application.Core.Math.Transform import _build_R_T
-            t = EditorHost.scene.GetEntityTransform(selected)
-            R_T = _build_R_T(t.rotation_x, t.rotation_y, t.rotation_z)
-            wp = np.array([float(new_pos[0]), float(new_pos[1]), float(new_pos[2])])
-            pre_pos = wp @ R_T
+        if selected is None:
+            return
+
+        mode = TransformGizmo.get_mode()
+
+        if mode == GizmoMode.GRAB:
+            new_pos = np.asarray(result, dtype=np.float32)
             EditorHost.scene.SetEntityTransform(
                 selected,
-                position_xyz=(float(pre_pos[0]), float(pre_pos[1]), float(pre_pos[2])))
+                position_xyz=(float(new_pos[0]), float(new_pos[1]), float(new_pos[2])))
             TransformGizmo.set_target_position(new_pos)
+
+        elif mode == GizmoMode.ROTATE:
+            delta_euler = np.asarray(result, dtype=np.float32)
+            t = EditorHost.scene.GetEntityTransform(selected)
+            new_rot = (
+                t.rotation_x + float(delta_euler[0]),
+                t.rotation_y + float(delta_euler[1]),
+                t.rotation_z + float(delta_euler[2]),
+            )
+            EditorHost.scene.SetEntityTransform(selected, rotation_xyz=new_rot)
+
+        elif mode == GizmoMode.SCALE:
+            # result 是 (sx, sy, sz)
+            EditorHost.scene.SetEntityTransform(
+                selected,
+                scale_xyz=(float(result[0]), float(result[1]), float(result[2])))
 
     @classmethod
     def _handle_left_release(cls, mx: int, my: int, cam) -> None:
@@ -288,6 +315,13 @@ class EditorLayer(Layer):
 
         if pick_type == 'entity':
             if IsKeyDown(KeyButtonCode.G):
+                TransformGizmo.set_mode(GizmoMode.GRAB)
+                SelectionController.select_with_gizmo(pick_value)
+            elif IsKeyDown(KeyButtonCode.R):
+                TransformGizmo.set_mode(GizmoMode.ROTATE)
+                SelectionController.select_with_gizmo(pick_value)
+            elif IsKeyDown(KeyButtonCode.S):
+                TransformGizmo.set_mode(GizmoMode.SCALE)
                 SelectionController.select_with_gizmo(pick_value)
             else:
                 SelectionController.select(pick_value)

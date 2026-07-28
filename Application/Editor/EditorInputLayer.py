@@ -108,6 +108,21 @@ class EditorInputLayer(Layer):
                         and event.action == KeyActionCode.Press):
                     from Application.Editor.EditorGizmoLayer import EditorGizmoLayer
                     EditorGizmoLayer._toggle_preview_camera()
+                # ── Gizmo 模式切换: G/R/S ──
+                if event.action == KeyActionCode.Press:
+                    from Application.Editor.Gizmos.TransformGizmo import TransformGizmo, GizmoMode
+                    if event.key == KeyButtonCode.G:
+                        TransformGizmo.set_mode(GizmoMode.GRAB)
+                    elif event.key == KeyButtonCode.R:
+                        TransformGizmo.set_mode(GizmoMode.ROTATE)
+                    elif event.key == KeyButtonCode.S:
+                        TransformGizmo.set_mode(GizmoMode.SCALE)
+                    # ★ 若已选中实体, 显示 gizmo
+                    from Application.Editor.UI.controllers.SelectionController import SelectionController
+                    sel = SelectionController.get_selected()
+                    if sel is not None:
+                        from Application.Editor.EditorHost import EditorHost as _eh
+                        TransformGizmo.show(_eh.get_editor_renderer(), sel)
             return
 
         # ── 鼠标在 ImGui 面板内 → 不处理 3D 视口输入 ──

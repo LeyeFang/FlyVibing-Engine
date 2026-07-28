@@ -60,8 +60,6 @@ class SelectionController:
     def select_with_gizmo(cls, entity_id: int) -> None:
         SceneBrowserController.select(entity_id)
         OutlinerID.set_selected_entities({entity_id})
-        TransformGizmo._visible = True
-        TransformGizmo._target_entity_id = entity_id
         try:
             from Application.Core.Math.Transform import calculate_entity_model
             t = EditorHost.scene.GetEntityTransform(entity_id)
@@ -70,6 +68,9 @@ class SelectionController:
                 rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
                 scale=(t.scale_x, t.scale_y, t.scale_z),
             )
+            from Application.Editor.EditorHost import EditorHost as _eh
+            renderer = _eh.get_editor_renderer()
+            TransformGizmo.show(renderer, entity_id)
             TransformGizmo.set_target_position(
                 (float(model[3, 0]), float(model[3, 1]), float(model[3, 2])))
         except Exception:
@@ -80,8 +81,7 @@ class SelectionController:
         """清除所有选中 — 同时更新数据层 & 渲染层。"""
         SceneBrowserController.clear_selection()
         OutlinerID.clear()
-        TransformGizmo._visible = False
-        TransformGizmo._target_entity_id = None
+        TransformGizmo.hide()
         cls._notify_selection_changed()
 
     # ── 查询 ────────────────────────────────────────────────

@@ -193,6 +193,10 @@ class TestHarness:
         renderer.viewport_width = self._width
         renderer.viewport_height = self._height
 
+        # ★ 桥接 engine.scene → SceneManager, 使测试中 renderer 能访问实体数据
+        renderer.engine = self.mock_app
+        self.mock_app.scene = SceneManager._current()
+
         # 覆写 OpenGLCore 的默认清屏颜色为深灰
         gl.glClearColor(*self._clear_color)
 
@@ -265,6 +269,7 @@ void main(){FragColor=texture(uTexture,TexCoord);}"""
         s.uniforms_name_type = {
             'model': 'mat4', 'view': 'mat4',
             'projection': 'mat4', 'uTexture': 'sampler2D',
+            'uColor': 'vec4',
         }
 
     # ── 6. 渲染器替换 ──────────────────────────────────────────

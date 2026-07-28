@@ -1,21 +1,23 @@
 """
-Test: TransformGizmo — 三轴箭头 + 三平面平移手柄
+Test: TransformGizmo — 三种变换模式 (G/R/S 键切换)
 ══════════════════════════════════════════════════════
 
 功能:
-  ★ TransformGizmo 注册: 3 轴箭头 + 3 平面手柄
-  ★ 点击实体 → 选中 + gizmo 定位到实体位置
-  ★ 点击 gizmo 轴 → 开始沿轴拖动平移
-  ★ 点击 gizmo 平面 → 开始平面内拖动平移
-  ★ 空格清除选中 (gizmo 定位到原点)
+  ★ G 键 → GRAB 模式 (position): 三轴箭头 + 三平面手柄
+  ★ R 键 → ROTATE 模式: 三色旋转环 + θ=0 处圆点手柄
+  ★ S 键 → SCALE 模式: 三轴圆 + 均匀缩放圆 (始终面朝摄像机)
+
+选取逻辑 (对齐主线):
+  ★ 鼠标点击实体          → 选中 + 轮廓高亮 (不显示 gizmo)
+  ★ G/R/S 键              → 切换模式 + 在已选中实体上显示 gizmo
+  ★ 点击空白处             → 取消选中 + 隐藏 gizmo
+  ★ 点击 gizmo 手柄并拖动  → 变换实体
 
 操作:
-  中键拖拽  = 轨道旋转 (与主线一致)
-  左键点击  = 拾取: 实体选中 / gizmo 轴拖动 / 空白清除选中
+  中键拖拽  = 轨道旋转
   滚轮      = 缩放
-  G 键      = 显示/隐藏 TransformGizmo
-  TAB 键    = 2D 正交俯视 / 3D 透视切换
-  X 键      = 切换 X-Ray 轮廓
+  TAB 键    = 2D/3D 切换
+  X 键      = X-Ray 轮廓
   空格      = 清除选中
   ESC       = 退出
 
@@ -36,7 +38,7 @@ from Application.Core.Scene.SceneManager import SceneManager
 from Application.Editor.EditorEvent import (
     SelecteEntityEvent, DeselectEntityEvent, ClearSelectionEvent)
 from Application.Editor.Gizmos.ViewGizmo import ViewGizmo
-from Application.Editor.Gizmos.TransformGizmo import TransformGizmo
+from Application.Editor.Gizmos.TransformGizmo import TransformGizmo, GizmoMode
 from Application.Editor.Gizmos.OutlinerID import OutlinerID
 
 from Test._test_harness import TestHarness
@@ -71,12 +73,11 @@ def main():
 
     # ── 交互状态 ──
     selected: set[int] = set()
-    xray: bool = True
     gizmo_shown: bool = False
 
     def sync():
+        """同步选中集合到 OutlinerID (轮廓高亮)。"""
         OutlinerID.set_selected_entities(selected)
-        OutlinerID.configure(xray=xray, outline_width=3)
 
     def update_gizmo_position():
         if selected:
@@ -96,38 +97,58 @@ def main():
     _orig_drag = pipeline.on_drag  # 保存预设的 on_drag (中键=orbit)
 
     def on_key(key, sc, act, mods):
-        nonlocal selected, xray, gizmo_shown
+        nonlocal selected, gizmo_shown
         if act != glfw.PRESS: return
         if key == glfw.KEY_ESCAPE:
             if gizmo_shown:
                 TransformGizmo.hide(); gizmo_shown = False
             else:
                 glfw.set_window_should_close(h.window, True)
-        elif key == glfw.KEY_G:
-            if gizmo_shown:
-                TransformGizmo.hide(); gizmo_shown = False
-                print("[GIZMO] hidden")
-            elif selected:
+            return
+        elif key in (glfw.KEY_G, glfw.KEY_R, glfw.KEY_S):
+            if key == glfw.KEY_G:
+                TransformGizmo.set_mode(GizmoMode.GRAB)
+                mode_name = "GRAB"
+            elif key == glfw.KEY_R:
+                TransformGizmo.set_mode(GizmoMode.ROTATE)
+                mode_name = "ROTATE"
+            else:
+                TransformGizmo.set_mode(GizmoMode.SCALE)
+                mode_name = "SCALE"
+            # ★ G/R/S 仅切换模式; 若已选中实体则刷新 gizmo
+            if selected:
                 eid = next(iter(selected))
+                if gizmo_shown:
+                    TransformGizmo.hide()
                 TransformGizmo.show(renderer, eid)
                 gizmo_shown = True
-                print(f"[GIZMO] shown at entity {eid}")
+                update_gizmo_position()
+                sync()
+                t = SceneManager._current().GetEntityTransform(eid)
+                print(f"[GIZMO] mode={mode_name} entity={eid} "
+                      f"pos=({t.position_x:.2f},{t.position_y:.2f},{t.position_z:.2f}) "
+                      f"rot=({t.rotation_x:.2f},{t.rotation_y:.2f},{t.rotation_z:.2f}) "
+                      f"scl=({t.scale_x:.2f},{t.scale_y:.2f},{t.scale_z:.2f})")
+            else:
+                print(f"[GIZMO] mode={mode_name} (no entity selected)")
+            return
         elif key == glfw.KEY_TAB:
             result = cam.toggle_2d_3d()
             print(f"[MODE] Switched to {'2D ORTHO' if result == '2d' else '3D PERSP'}")
+            return
         elif key == glfw.KEY_SPACE:
             if selected:
                 old = set(selected); selected.clear()
                 for eid in old:
                     DeselectEntityEvent.Pack(eid)
+                if gizmo_shown:
+                    TransformGizmo.hide(); gizmo_shown = False
                 sync(); update_gizmo_position()
-                print(f"  (Cleared: {sorted(old)})")
-        elif key == glfw.KEY_X:
-            xray = not xray; sync()
-            print(f"[MODE] X-Ray={'ON' if xray else 'OFF'}")
+                print(f"[CLEAR] deselected {sorted(old)}")
+            return
 
     def on_mouse_button(button, action, mods, x, y):
-        nonlocal selected
+        nonlocal selected, gizmo_shown
 
         if button != glfw.MOUSE_BUTTON_LEFT: return
         vp_w = renderer.viewport_width
@@ -146,28 +167,33 @@ def main():
                 t = SceneManager._current().GetEntityTransform(eid)
                 entity_pos = np.array(
                     [t.position_x, t.position_y, t.position_z], dtype=np.float32)
-                print(f"  [DBG-TEST] entity_pos=({entity_pos[0]:.2f},{entity_pos[1]:.2f},{entity_pos[2]:.2f})")
-                print(f"  [DBG-TEST] cam_pos=({cam.position[0]:.2f},{cam.position[1]:.2f},{cam.position[2]:.2f})")
-                print(f"  [DBG-TEST] vp={vp_w}x{vp_h}")
-                eid = next(iter(selected))
-                t = SceneManager._current().GetEntityTransform(eid)
-                entity_pos = np.array(
-                    [t.position_x, t.position_y, t.position_z], dtype=np.float32)
 
                 view_mat = cam.get_view_matrix()
                 proj_mat = cam.get_projection_matrix(vp_w / max(vp_h, 1))
                 ray_o, ray_d = TransformGizmo.screen_to_world_ray(
                     x, y, vp_w, vp_h, view_mat, proj_mat)
 
-                if gizmo_info['kind'] == 'axis':
+                kind = gizmo_info['kind']
+                if kind == 'axis':
                     TransformGizmo.begin_axis_drag(
                         entity_pos, gizmo_info['gl_dir'], cam.position, ray_o, ray_d)
                     print(f"[DRAG AXIS] axis={gizmo_info['name']}, entity={eid}")
-                elif gizmo_info['kind'] == 'plane':
+                elif kind == 'plane':
                     d1, d2 = gizmo_info['gl_dirs']
                     TransformGizmo.begin_plane_drag(
                         entity_pos, d1, d2, ray_o, ray_d)
                     print(f"[DRAG PLANE] plane={gizmo_info['name']}, entity={eid}")
+                elif kind == 'ring':
+                    TransformGizmo.begin_ring_drag(
+                        entity_pos, gizmo_info['gl_dir'], cam.position, ray_o, ray_d)
+                    print(f"[DRAG RING] axis={gizmo_info['name']}, entity={eid}")
+                elif kind in ('scale_axis', 'scale_uniform'):
+                    gl_dir = gizmo_info.get('gl_dir') if kind == 'scale_axis' else None
+                    t_scl = SceneManager._current().GetEntityTransform(eid)
+                    current_scale = (t_scl.scale_x, t_scl.scale_y, t_scl.scale_z)
+                    TransformGizmo.begin_scale_drag(
+                        entity_pos, gl_dir, ray_o, ray_d, current_scale)
+                    print(f"[DRAG SCALE] {gizmo_info['name']}, entity={eid}")
                 return
 
         else:  # RELEASE
@@ -200,22 +226,55 @@ def main():
 
                 elif pick_type == 'entity':
                     pid = pick_value
-                    print(f"[PICK ENTITY] entity_id={pid}")
-                    SelecteEntityEvent.Pack(pid)
+                    old_sel = set(selected)
                     selected = {pid}
+                    if pid not in old_sel:
+                        SelecteEntityEvent.Pack(pid)
                     update_gizmo_position()
+                    # ★ G/R/S 按住点击 → 选中 + gizmo
+                    if glfw.get_key(h.window, glfw.KEY_G) == glfw.PRESS:
+                        TransformGizmo.set_mode(GizmoMode.GRAB)
+                    elif glfw.get_key(h.window, glfw.KEY_R) == glfw.PRESS:
+                        TransformGizmo.set_mode(GizmoMode.ROTATE)
+                    elif glfw.get_key(h.window, glfw.KEY_S) == glfw.PRESS:
+                        TransformGizmo.set_mode(GizmoMode.SCALE)
+                    else:
+                        # 纯点击: 仅选中, 不显示 gizmo
+                        t = SceneManager._current().GetEntityTransform(pid)
+                        print(f"[SELECT] entity={pid} "
+                              f"pos=({t.position_x:.2f},{t.position_y:.2f},{t.position_z:.2f}) "
+                              f"rot=({t.rotation_x:.2f},{t.rotation_y:.2f},{t.rotation_z:.2f}) "
+                              f"scl=({t.scale_x:.2f},{t.scale_y:.2f},{t.scale_z:.2f}) "
+                              f"(gizmo=off)")
+                        sync()
+                        return
+                    # G/R/S held: 显示 gizmo
+                    if gizmo_shown:
+                        TransformGizmo.hide()
+                    TransformGizmo.show(renderer, pid)
+                    gizmo_shown = True
+                    sync()
+                    t = SceneManager._current().GetEntityTransform(pid)
+                    print(f"[SELECT+GIZMO] entity={pid} "
+                          f"pos=({t.position_x:.2f},{t.position_y:.2f},{t.position_z:.2f}) "
+                          f"rot=({t.rotation_x:.2f},{t.rotation_y:.2f},{t.rotation_z:.2f}) "
+                          f"scl=({t.scale_x:.2f},{t.scale_y:.2f},{t.scale_z:.2f})")
                 else:
                     if selected:
                         old = set(selected); selected.clear()
                         for eid in old:
                             DeselectEntityEvent.Pack(eid)
+                        if gizmo_shown:
+                            TransformGizmo.hide(); gizmo_shown = False
                         update_gizmo_position()
-                        print(f"[PICK] cleared {sorted(old)}")
+                        print(f"[DESELECT] cleared {sorted(old)}")
                 sync()
 
+    _drag_frame: int = 0
+
     def on_drag(button, dx, dy, x, y):
+        nonlocal _drag_frame
         if TransformGizmo.is_dragging():
-            print(f"  [DBG-TEST] on_drag: gizmo dragging at ({x},{y}) dx={dx:.1f} dy={dy:.1f}")
             vp_w = renderer.viewport_width
             vp_h = renderer.viewport_height
             view_mat = cam.get_view_matrix()
@@ -223,19 +282,49 @@ def main():
             ray_o, ray_d = TransformGizmo.screen_to_world_ray(
                 x, y, vp_w, vp_h, view_mat, proj_mat)
 
-            new_pos = TransformGizmo.update_drag(ray_o, ray_d)
-            if new_pos is not None:
-                print(f"  [DBG-TEST] on_drag: applying pos=({new_pos[0]:.2f},{new_pos[1]:.2f},{new_pos[2]:.2f})")
-                selected_id = next(iter(selected)) if selected else None
-                if selected_id is not None:
-                    SceneManager._current().SetEntityTransform(
-                        selected_id,
-                        position_xyz=(float(new_pos[0]), float(new_pos[1]), float(new_pos[2])))
-                    TransformGizmo.set_target_position(new_pos)
-            else:
-                print(f"  [DBG-TEST] on_drag: update_drag returned None")
+            result = TransformGizmo.update_drag(ray_o, ray_d)
+            if result is None:
+                return
+
+            selected_id = next(iter(selected)) if selected else None
+            if selected_id is None:
+                return
+
+            mode = TransformGizmo.get_mode()
+            if mode == GizmoMode.GRAB:
+                new_pos = np.asarray(result, dtype=np.float32)
+                SceneManager._current().SetEntityTransform(
+                    selected_id,
+                    position_xyz=(float(new_pos[0]), float(new_pos[1]), float(new_pos[2])))
+                TransformGizmo.set_target_position(new_pos)
+                if _drag_frame % 30 == 0:
+                    t = SceneManager._current().GetEntityTransform(selected_id)
+                    print(f"[DRAG-GRAB] frame={_drag_frame} pos=({t.position_x:.2f},{t.position_y:.2f},{t.position_z:.2f})")
+            elif mode == GizmoMode.ROTATE:
+                delta_euler = np.asarray(result, dtype=np.float32)
+                t = SceneManager._current().GetEntityTransform(selected_id)
+                new_rot = (
+                    t.rotation_x + float(delta_euler[0]),
+                    t.rotation_y + float(delta_euler[1]),
+                    t.rotation_z + float(delta_euler[2]),
+                )
+                SceneManager._current().SetEntityTransform(selected_id, rotation_xyz=new_rot)
+                if _drag_frame % 30 == 0:
+                    t2 = SceneManager._current().GetEntityTransform(selected_id)
+                    print(f"[DRAG-ROT] frame={_drag_frame} "
+                          f"pos=({t2.position_x:.3f},{t2.position_y:.3f},{t2.position_z:.3f}) "
+                          f"rot=({t2.rotation_x:.3f},{t2.rotation_y:.3f},{t2.rotation_z:.3f})")
+            elif mode == GizmoMode.SCALE:
+                SceneManager._current().SetEntityTransform(
+                    selected_id,
+                    scale_xyz=(float(result[0]), float(result[1]), float(result[2])))
+                if _drag_frame % 30 == 0:
+                    t2 = SceneManager._current().GetEntityTransform(selected_id)
+                    print(f"[DRAG-SCALE] frame={_drag_frame} scl=({t2.scale_x:.3f},{t2.scale_y:.3f},{t2.scale_z:.3f})")
+            _drag_frame += 1
             return
 
+        _drag_frame = 0
         # 非 gizmo 拖拽 → 交给主线预设 (中键=orbit/pan)
         _orig_drag(button, dx, dy, x, y)
 
@@ -250,7 +339,7 @@ def main():
     update_gizmo_position()
 
     # ── 主循环 ──
-    print("[TEST] Ready. Click entity → gizmo appears. Drag axis/plane to translate.")
+    print("[TEST] Ready. G=Grab R=Rotate S=Scale | Click entity → gizmo appears. Drag handles.")
     h.run_loop(cam)
 
     # ── 清理 ──

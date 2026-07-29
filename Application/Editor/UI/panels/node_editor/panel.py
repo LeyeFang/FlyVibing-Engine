@@ -792,36 +792,48 @@ class NodeEditorPanel(BasePanel):
             else:
                 layer_nodes[layer.get(nid, 0)].append(nid)
 
-        # ── 5. 层内排序 (按类型分组, 减少连线交叉) ──
-        type_order: dict[str, int] = {
-            "OnGameStart": 0, "OnFrameUpdate": 1, "OnGameStop": 2,
-            "RandomSetSeed": 10, "VarGet": 11, "VarSet": 12,
-            "StringConst": 13,
-            "TextFileWrite": 20, "EntitySpawn": 21, "EntityGet": 22,
-            "EntitySetRenderVisible": 23, "EntityDestroy": 24,
-            "TimeTrigger": 30, "TimeGetElapsed": 31, "TimeDelay": 32,
-            "TimeGetDate": 33, "NewTimer": 34, "SetTimer": 35,
-            "Branch": 40, "Sequence": 41,
-            "Compare": 50, "ScalarMath": 51, "Constant": 52,
-            "Random": 54, "PathVar": 55,
-            "ParallelSend": 60, "SerialSend": 61,
-            "ExitGame": 70,
-            "MakeVec3": 80, "BreakVec3": 81, "VecMath": 82,
-            "ComponentAdd": 90, "SetComponent": 91,
-            "GetComponent": 92, "ComponentRemove": 93,
-            "CameraSetMain": 95,
-            "EntityAddMesh": 100, "EntityAddCamera": 101,
-            "Print": 110, "PrintString": 111,
-            "MathAdd": 120, "MathSubtract": 121,
-            "MathMultiply": 122, "MathDivide": 123,
-            "MathRandomUniform": 124, "MathRandomGaussian": 125,
-        }
+        # ── 5. 层内排序: barycenter 扫掠降交叉 ──
+        #     数据边也参与重心计算, 纯数据节点按其消费者的 Y 排序
+        #     然后左→右、右→左各扫一次, 按前后继重心重排
+        _temp_y: dict[int, float] = {}
+        for lyr in sorted(layer_nodes.keys()):
+            _ty = 0.0
+            for nid in layer_nodes[lyr]:
+                _temp_y[nid] = _ty
+                _ty += 1.0
 
-        for lyr, nids in layer_nodes.items():
-            nids.sort(key=lambda nid: (
-                type_order.get(canvas.nodes[nid].node_type, 99),
-                nid,
-            ))
+        for _pass in range(2):
+            # 左→右: 按前驱的平均 Y 排序 (exec 前驱为主, 数据前驱为 fallback)
+            for lyr in sorted(layer_nodes.keys()):
+                nids = layer_nodes[lyr]
+                bary: dict[int, float] = {}
+                for nid in nids:
+                    preds = [s for s, ds in exec_down.items() if nid in ds]
+                    if not preds:
+                        preds = data_up.get(nid, [])
+                    if preds:
+                        bary[nid] = sum(_temp_y.get(p, 0.0) for p in preds) / len(preds)
+                    else:
+                        bary[nid] = float(nid % 1000)
+                nids.sort(key=lambda n: (bary.get(n, 0.0), n))
+                for i, nid in enumerate(nids):
+                    _temp_y[nid] = float(i)
+
+            # 右→左: 按后继的平均 Y 排序 (exec 后继为主, 数据消费者为 fallback)
+            for lyr in reversed(sorted(layer_nodes.keys())):
+                nids = layer_nodes[lyr]
+                bary = {}
+                for nid in nids:
+                    succs = exec_down.get(nid, [])
+                    if not succs:
+                        succs = data_down.get(nid, [])
+                    if succs:
+                        bary[nid] = sum(_temp_y.get(s, 0.0) for s in succs) / len(succs)
+                    else:
+                        bary[nid] = float(nid % 1000)
+                nids.sort(key=lambda n: (bary.get(n, 0.0), n))
+                for i, nid in enumerate(nids):
+                    _temp_y[nid] = float(i)
 
         # ── 6. 分配坐标 (按每节点实际估算高度累加 Y, 避免重叠) ──
         # 带内联控件的节点类型 (VarGet/VarSet/Constant 等) 渲染时额外高
@@ -844,6 +856,18 @@ class NodeEditorPanel(BasePanel):
                 x = 80 + lyr * H_SPACING
                 inst.pos = (float(x), float(current_y))
                 current_y += est_h + V_PADDING
+
+        # ── 6b. 纯数据节点 1:1 snap 到消费者 Y ──
+        for nid, inst in canvas.nodes.items():
+            ndef = _TYPES.get(inst.node_type)
+            has_exec = ndef and any(p.kind == "exec" for p in ndef.pins)
+            if has_exec:
+                continue
+            consumers = data_down.get(nid, [])
+            if len(consumers) == 1:
+                consumer_inst = canvas.nodes.get(consumers[0])
+                if consumer_inst:
+                    inst.pos = (inst.pos[0], consumer_inst.pos[1])
 
         print(f"[Rearrange] {len(canvas.nodes)} nodes laid out "
               f"in {len(layer_nodes)} layers")

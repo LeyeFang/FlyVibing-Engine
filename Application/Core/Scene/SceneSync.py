@@ -52,6 +52,12 @@ class SceneSync:
 
         for entity_id_str in list(st.entities.keys()):
             eid = int(entity_id_str)
+            # ★ 跳过摄像机实体 — 相机由 prefab 管理，不写入场景文件
+            try:
+                if esper.has_component(eid, Camera):
+                    continue
+            except KeyError:
+                pass
             # ★ 使用 stable ID 而非 esper ID
             sid = st._eid_to_sid.get(eid)
             if sid is None:

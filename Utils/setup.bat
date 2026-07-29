@@ -80,18 +80,32 @@ set "LOCK_FILE=%~dp0uv-py314t.lock"
 if exist "%LOCK_FILE%" (
     echo   Installing from lock file (reproducible build^)...
     copy /Y "%LOCK_FILE%" "%~dp0..\uv.lock" >nul
-    "%VENV_PATH%\Scripts\python.exe" -m uv sync --active
+    "%VENV_PATH%\Scripts\python.exe" -m uv sync --no-install-project
+    if !errorlevel! neq 0 (
+        echo   [ERROR] Dependency installation failed
+        echo   Check your network connection and try again.
+        del /Q "%~dp0..\uv.lock" 2>nul
+        pause
+        exit /b 1
+    )
     del /Q "%~dp0..\uv.lock" 2>nul
 ) else (
-    echo   Installing from pyproject.toml...
-    "%VENV_PATH%\Scripts\python.exe" -m uv pip install -e ".[device,gui-314]"
-)
-
-if !errorlevel! neq 0 (
-    echo   [ERROR] Dependency installation failed
-    echo   Check your network connection and try again.
-    pause
-    exit /b 1
+    echo   No lock file found, resolving from pyproject.toml...
+    "%VENV_PATH%\Scripts\python.exe" -m uv sync --no-install-project
+    if !errorlevel! neq 0 (
+        echo   [ERROR] Dependency installation failed
+        echo   Check your network connection and try again.
+        pause
+        exit /b 1
+    )
+    echo   Saving lock file for future reproducible builds...
+    if exist "%~dp0..\uv.lock" (
+        copy /Y "%~dp0..\uv.lock" "%LOCK_FILE%" >nul
+        echo   [OK] Saved to %LOCK_FILE%
+        del /Q "%~dp0..\uv.lock" 2>nul
+    ) else (
+        echo   [WARN] uv.lock was not generated, skipping lock file save
+    )
 )
 echo   [OK] Dependencies installed
 

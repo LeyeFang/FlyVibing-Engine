@@ -107,6 +107,20 @@ class NodeCanvas(DataContract):
                         return p.name
         return None
 
+    def find_pin_data_type(self, pin_id: int) -> str:
+        """查找实例级 Pin 的 data_type (如 "float", "exec", "vec3")。
+
+        用于连线着色——根据 pin 的数据类型决定连线颜色。
+        找不到时返回 "exec"（默认为执行流样式）。
+        """
+        for inst in self._nodes.values():
+            nd = _TYPES.get(inst.node_type)
+            if nd:
+                for p in nd.pins:
+                    if inst.pin_ids.get(p.name) == pin_id:
+                        return p.data_type
+        return "exec"
+
     # ── 默认节点 ───────────────────────────────────────────
 
     def create_default_nodes(self) -> None:

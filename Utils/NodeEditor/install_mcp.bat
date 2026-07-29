@@ -21,33 +21,26 @@ echo [1/4] Project dir: %PROJECT_DIR%
 :: -- 2. Install mcp packages --
 echo [2/4] Installing MCP Python package...
 
-:: Detect venv Python
+:: Detect venv Python (only .venv-py314t is the canonical venv)
 if exist "%PROJECT_DIR%\.venv-py314t\Scripts\python.exe" (
     set "PYTHON=%PROJECT_DIR%\.venv-py314t\Scripts\python.exe"
-) else if exist "%PROJECT_DIR%\.venv\Scripts\python.exe" (
-    set "PYTHON=%PROJECT_DIR%\.venv\Scripts\python.exe"
 ) else (
-    set "PYTHON=python"
+    echo [ERROR] Virtual environment not found: .venv-py314t\
+    echo Please run Utils\setup.bat or Utils\generate_venv.bat first.
+    pause & exit /b 1
 )
 
 echo   Using: %PYTHON%
 
-:: Step 2a: ensure pip
-echo   Step 2a: ensurepip...
-%PYTHON% -m ensurepip --default-pip 2>nul
-if %ERRORLEVEL% NEQ 0 (
-    echo   (pip already available or ensurepip skipped)
-)
-
-:: Step 2b: install mcp (the FastMCP package)
-echo   Step 2b: pip install mcp...
-%PYTHON% -m pip install mcp
+:: Step 2: install mcp via uv (reproducible, respects lockfile constraints)
+echo   Step 2: uv pip install mcp...
+uv pip install --python "%PYTHON%" mcp
 if %ERRORLEVEL% NEQ 0 (
     echo   [WARNING] 'mcp' install failed, trying 'fastmcp'...
-    %PYTHON% -m pip install fastmcp
+    uv pip install --python "%PYTHON%" fastmcp
     if %ERRORLEVEL% NEQ 0 (
         echo   [WARNING] Both 'mcp' and 'fastmcp' install failed.
-        echo   You can install manually: %PYTHON% -m pip install mcp
+        echo   You can install manually: uv pip install --python "%PYTHON%" mcp
         echo   Continuing anyway...
     )
 )

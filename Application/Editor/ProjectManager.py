@@ -110,6 +110,22 @@ class ProjectManager:
             ViewportController.switch_to_3d()
         except Exception:
             pass
+        # ★ 新项目 → 清空旧场景 + 创建默认场景 + 重置节点编辑器画布
+        try:
+            from Application.Editor.EditorHost import EditorHost
+            EditorHost._scenes.clear()
+            EditorHost._active_scene = None
+            # ★ 创建默认场景（放入 _scenes，后续 _ensure_default_scene 会同步 ECS 实体）
+            EditorHost.create_scene("Default")
+            from Application.Editor.UI.UIManager import UIManager
+            panel = UIManager.find("Node Editor")
+            if panel is not None:
+                from Application.Editor.UI.controllers.node_editor.canvas import NodeCanvas
+                panel._canvas = NodeCanvas()
+                panel._canvas.create_default_nodes()
+                panel._canvas_initialized = True
+        except Exception as e:
+            print(f"[Project] create_new cleanup failed: {e}")
         print(f"[Project] Created (unsaved): {name}")
 
     @classmethod

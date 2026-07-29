@@ -91,30 +91,52 @@ class GameRuntime(Engine):
 
     @classmethod
     def _sync_scene_from_editor(cls) -> None:
-        """从 Editor 同步 game_type + 摄像机到 Runtime。"""
+        """从 Editor 同步 game_type + 摄像机 + 渲染实体到 Runtime。"""
         from Application.Editor.EditorHost import EditorHost
+        import esper
+        from Application.Core.Scene.BasicComponents import MeshRenderer
+        editor_scene = EditorHost.scene
+        if editor_scene is None:
+            return
+        cls.scene.game_type = editor_scene.game_type
+        # ★ 同步默认摄像机 ID（Editor Init 创建的，Runtime 复用）
+        cls.scene.main_camera_id = editor_scene.main_camera_id
+        cls.scene.main_camera_2d_id = editor_scene.main_camera_2d_id
+        cls.scene.main_camera_overlay_id = editor_scene.main_camera_overlay_id
+        # ★ 将摄像机实体注册到 Runtime 的 entities 追踪表
+        for cam_id in (editor_scene.main_camera_id,
+                       editor_scene.main_camera_2d_id,
+                       editor_scene.main_camera_overlay_id):
+            if cam_id is not None:
+                cls.scene.entities[str(cam_id)] = 1
+                cls.scene._entity_names[cam_id] = editor_scene._entity_names.get(cam_id, f"Camera_{cam_id}")
+        # ★ 收集模板实体名称（EntitySpawn 用，不应被 EntityGet 找到）
+        _template_names: set[str] = set()
         try:
-            editor_scene = EditorHost.scene
-            if editor_scene is not None:
-                cls.scene.game_type = editor_scene.game_type
-                # ★ 同步默认摄像机 ID（Editor Init 创建的，Runtime 复用）
-                cls.scene.main_camera_id = editor_scene.main_camera_id
-                cls.scene.main_camera_2d_id = editor_scene.main_camera_2d_id
-                cls.scene.main_camera_overlay_id = editor_scene.main_camera_overlay_id
-                # ★ 将摄像机实体注册到 Runtime 的 entities 追踪表
-                for cam_id in (editor_scene.main_camera_id,
-                               editor_scene.main_camera_2d_id,
-                               editor_scene.main_camera_overlay_id):
-                    if cam_id is not None:
-                        cls.scene.entities[str(cam_id)] = 1
-                        cls.scene._entity_names[cam_id] = editor_scene._entity_names.get(cam_id, f"Camera_{cam_id}")
-                # ★ 根据 game_type 选择活跃摄像机
-                cls.scene.cam_mgr._apply(cls.scene)
-                print(f"[GameRuntime] Synced game_type from editor: "
-                      f"{editor_scene.game_type.value}, "
-                      f"camera_id={cls.scene.scene_camera_id}")
+            from Application.Runtime.RuntimeNodeLayer import RuntimeNodeLayer
+            if RuntimeNodeLayer._scene is not None:
+                for ed in RuntimeNodeLayer._scene.entities.values():
+                    _template_names.add(ed.name)
         except Exception:
             pass
+        # ★ 同步 MeshRenderer 实体到 Runtime（PIE 渲染需要）
+        #    跳过模板实体 — 它们只是数据模板，真正的渲染实体由 EntitySpawn 创建
+        mesh_count = 0
+        skipped_templates = 0
+        for eid, _ in esper.get_component(MeshRenderer):
+            if str(eid) not in cls.scene.entities:
+                name = editor_scene._entity_names.get(eid, f"Entity_{eid}")
+                if name in _template_names:
+                    skipped_templates += 1
+                    continue  # 模板实体：只做数据参考，不参与运行时渲染
+                cls.scene.entities[str(eid)] = 1
+                cls.scene._entity_names[eid] = name
+                mesh_count += 1
+        # ★ 根据 game_type 选择活跃摄像机
+        cls.scene.cam_mgr._apply(cls.scene)
+        print(f"[GameRuntime] Synced from editor: game_type={editor_scene.game_type.value}, "
+              f"camera_id={cls.scene.scene_camera_id}, mesh_entities={mesh_count}"
+              f"{f' (skipped {skipped_templates} templates)' if skipped_templates else ''}")
 
     @classmethod
     def stop(cls) -> None:
@@ -123,18 +145,16 @@ class GameRuntime(Engine):
         from Application.Functions.SerialParallelDevice import stop as spd_stop
         spd_stop()
         # ── 清理 Runtime 实体（跳过共享的 Editor 摄像机）──
-        import esper
         if cls.scene is not None:
             # ★ 不删除 Editor 拥有的实体（摄像机等）
             from Application.Editor.EditorHost import EditorHost
             editor_eids = set(EditorHost.scene.entities.keys()) if EditorHost.scene else set()
+            # ★ 使用 SceneManager.DeleteEntity 递归删除子实体，
+            #    避免 esper.delete_entity 裸删导致子实体泄露
             for eid_str in list(cls.scene.entities.keys()):
                 if eid_str in editor_eids:
-                    continue  # Editor 共用实体，不删
-                try:
-                    esper.delete_entity(int(eid_str))
-                except KeyError:
-                    pass
+                    continue
+                cls.scene.DeleteEntity(int(eid_str))
             cls.scene.entities.clear()
             cls.scene._entity_names.clear()
             cls.scene._entity_parent.clear()

@@ -270,7 +270,7 @@ class SceneManager:
         for eid, rend in esper.get_component(MeshRenderer):
             if not rend.visible:
                 continue
-            if str(eid) in st.entities:
+            if str(eid) in self.entities:
                 result.append(eid)
         return result
 

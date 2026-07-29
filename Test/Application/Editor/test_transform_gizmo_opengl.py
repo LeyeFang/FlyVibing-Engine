@@ -32,7 +32,8 @@ while _d and not os.path.exists(os.path.join(_d, '_path_setup.py')):
 if _d: sys.path.insert(0, _d)
 import _path_setup  # noqa: E402
 
-import math, numpy as np, glfw
+import numpy as np
+import glfw
 
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Editor.EditorEvent import (

@@ -33,6 +33,8 @@ from .styling import (
     _col,
     _apply_ne_style,
     _HDR_COLOR,
+    LINK_COLORS,
+    _LINK_COLOR_FALLBACK,
     MENU_SECTIONS,
     TEXT_DISABLED,
 )
@@ -78,8 +80,16 @@ def _draw_menu_item(
     else:
         changed, _selected = imgui.menu_item(label, "", False, True)
         if changed:
+            n_before = len(canvas.nodes)
             max_y = max((inst.pos[1] for inst in canvas.nodes.values()), default=40)
-            canvas.add_node(target, (80, max_y + 200))
+            nid = canvas.add_node(target, (80, max_y + 200))
+            if nid < 0:
+                print(f"[AddNode] FAILED: type '{target}' not registered")
+            else:
+                inst = canvas.nodes.get(nid)
+                print(f"[AddNode] nid={nid} type='{target}' "
+                      f"pos=({inst.pos[0]:.1f},{inst.pos[1]:.1f}) "
+                      f"total_nodes={n_before}→{len(canvas.nodes)}")
             imgui.close_current_popup()
             imgui.close_current_popup()
 
@@ -242,7 +252,6 @@ class NodeEditorPanel(BasePanel):
         避免 esper.get_component() 的世界切换时序问题。
         """
         from Application.Editor.EditorHost import EditorHost
-        from Application.Core.Scene.Scene import Scene
         from Application.Core.Scene.SceneManager import SceneManager
         from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
         import copy
@@ -255,14 +264,16 @@ class NodeEditorPanel(BasePanel):
 
         scene = EditorHost.get_active_scene()
         if scene is None:
-            try:
-                gt = st.GetGameType()
-            except Exception:
-                gt = None
-            scene = Scene("Default", game_type=gt)
-            EditorHost.set_active_scene(scene)
+            # ★ 走 create_scene 确保加入 _scenes 字典
+            scene = EditorHost.create_scene("Default")
+            if scene is None:
+                return
 
-        _sys_ids = {st.get_main_camera_id(), st.get_main_camera_2d_id()}
+        _sys_ids = {
+            st.get_main_camera_id(),
+            st.get_main_camera_2d_id(),
+            st.get_main_camera_overlay_id(),
+        }
         scene.entities.clear()
 
         # ★ 改用 st.entities 字典迭代（与 ScenePanel 同源），不再依赖 esper.get_component
@@ -343,9 +354,12 @@ class NodeEditorPanel(BasePanel):
     # ============================================================
 
     def _draw_nodes(self, canvas: NodeCanvas, ne) -> None:
+        n_drawn = 0
+        self._rendered_nids: set[int] = set()
         for nid, inst in list(canvas.nodes.items()):
             nd = _TYPES.get(inst.node_type)
             if nd is None:
+                print(f"[DrawNodes] SKIP nid={nid}: type '{inst.node_type}' not in _TYPES")
                 continue
 
             ne.set_node_position(
@@ -374,6 +388,11 @@ class NodeEditorPanel(BasePanel):
 
             self._draw_pins(canvas, ne, nid, inst, nd)
             ne.end_node()
+            self._rendered_nids.add(nid)
+            n_drawn += 1
+        if n_drawn != len(canvas.nodes):
+            print(f"[DrawNodes] drawn={n_drawn}/{len(canvas.nodes)} nodes "
+                  f"({len(canvas.nodes)-n_drawn} skipped)")
 
     # ============================================================
     # 子步骤: 引脚渲染
@@ -430,11 +449,14 @@ class NodeEditorPanel(BasePanel):
 
     def _draw_links(self, canvas: NodeCanvas, ne) -> None:
         for lk in canvas.links.values():
+            # ── 按 from_pin 的 data_type 决定连线颜色 ──
+            dtype = canvas.find_pin_data_type(lk.from_pin)
+            color = LINK_COLORS.get(dtype, _LINK_COLOR_FALLBACK)
             ne.link(
                 ne.LinkId(lk.id),
                 ne.PinId(lk.from_pin),
                 ne.PinId(lk.to_pin),
-                _col((0.7, 0.7, 0.7, 0.7)),
+                _col(color, 0.75),
                 2.0,
             )
 
@@ -831,9 +853,11 @@ class NodeEditorPanel(BasePanel):
     # ============================================================
 
     def _sync_positions(self, canvas: NodeCanvas, ne) -> None:
+        rendered = getattr(self, '_rendered_nids', set())
         for nid in list(canvas.nodes.keys()):
+            # ★ 跳过本帧未渲染的节点（新增节点编辑器还不认识，get_node_position 会返回垃圾值）
+            if nid not in rendered:
+                continue
             np = ne.get_node_position(ne.NodeId(nid))
             inst = canvas.nodes[nid]
-            if -1e6 < np.x < 1e6 and -1e6 < np.y < 1e6:
-                if (np.x, np.y) != inst.pos:
-                    inst.pos = (np.x, np.y)
+            inst.pos = (np.x, np.y)

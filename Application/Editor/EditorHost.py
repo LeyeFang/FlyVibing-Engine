@@ -156,13 +156,10 @@ class EditorHost(Engine):
         scene = target_scene if target_scene is not None else cls._active_scene
         if scene is None:
             return
-        try:
-            from Application.Editor.UI.UIManager import UIManager
-            panel = UIManager.find("Node Editor")
-            if panel is not None and isinstance(panel._canvas, DataContract):
-                scene.node_graph = panel._canvas.serialize()
-        except Exception:
-            pass
+        from Application.Editor.UI.UIManager import UIManager
+        panel = UIManager.find("Node Editor")
+        if panel is not None and isinstance(panel._canvas, DataContract):
+            scene.node_graph = panel._canvas.serialize()
 
     @classmethod
     def _sync_node_graph_from_scene(cls) -> None:
@@ -171,28 +168,25 @@ class EditorHost(Engine):
         通过 Serializable 协议反序列化，确保画布和 Scene 在内存中完全独立。
         """
         scene = cls._active_scene
-        try:
-            from Application.Editor.UI.controllers.node_editor.canvas import NodeCanvas
-            from Application.Editor.UI.UIManager import UIManager
-            panel = UIManager.find("Node Editor")
-            if panel is None:
-                return
-            if scene is not None and scene.node_graph is not None:
-                ng = scene.node_graph
-                if isinstance(ng, DataContract):
-                    panel._canvas = ng.deserialize(ng.serialize())  # dict → NodeCanvas
-                elif isinstance(ng, dict):
-                    panel._canvas = NodeCanvas.deserialize(ng)
-                else:
-                    panel._canvas = NodeCanvas()
-                    panel._canvas.create_default_nodes()
-                panel._canvas_initialized = True
+        from Application.Editor.UI.controllers.node_editor.canvas import NodeCanvas
+        from Application.Editor.UI.UIManager import UIManager
+        panel = UIManager.find("Node Editor")
+        if panel is None:
+            return
+        if scene is not None and scene.node_graph is not None:
+            ng = scene.node_graph
+            if isinstance(ng, DataContract):
+                panel._canvas = ng.deserialize(ng.serialize())
+            elif isinstance(ng, dict):
+                panel._canvas = NodeCanvas.deserialize(ng)
             else:
                 panel._canvas = NodeCanvas()
                 panel._canvas.create_default_nodes()
-                panel._canvas_initialized = True
-        except Exception:
-            pass
+            panel._canvas_initialized = True
+        else:
+            panel._canvas = NodeCanvas()
+            panel._canvas.create_default_nodes()
+            panel._canvas_initialized = True
 
     @classmethod
     def save_active_scene_to_file(cls, path: str) -> bool:

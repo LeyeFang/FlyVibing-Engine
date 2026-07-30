@@ -100,6 +100,11 @@ def _eval_time_trigger(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
         current = ctx.get_timer(timer_name)
         if current is None:
             current = ctx.elapsed_time
+        # ★ 安全检查: 若 timer 从未被 SetTimer 显式设置过，不触发
+        timer_data = ctx._timers.get(timer_name)
+        if timer_data and timer_data.get("_set_count", 0) == 0:
+            g.set_state(node_id, "_blocked", True)
+            return
     else:
         current = ctx.elapsed_time
 

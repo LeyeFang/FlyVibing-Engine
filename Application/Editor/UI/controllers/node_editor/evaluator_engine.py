@@ -45,7 +45,7 @@ class ExecutionContext:
 
     def create_timer(self, name: str) -> None:
         """创建一个从当前 elapsed_time 开始计时的命名 Timer。"""
-        self._timers[name] = {"start_elapsed": self.elapsed_time, "offset": 0.0}
+        self._timers[name] = {"start_elapsed": self.elapsed_time, "offset": 0.0, "_set_count": 0}
 
     def get_timer(self, name: str) -> float | None:
         """读取命名 Timer 的当前值。不存在返回 None。"""
@@ -61,6 +61,7 @@ class ExecutionContext:
             return False
         t["start_elapsed"] = self.elapsed_time
         t["offset"] = value
+        t["_set_count"] = t.get("_set_count", 0) + 1
         return True
 
     def reset_timer(self, name: str) -> bool:

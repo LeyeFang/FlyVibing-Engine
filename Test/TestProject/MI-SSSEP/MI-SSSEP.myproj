@@ -5,7 +5,8 @@
   "scenes": [
     "scenes\\SSSEP.scene",
     "scenes\\MI-SSSEP.scene",
-    "scenes\\MI.scene"
+    "scenes\\MI.scene",
+    "scenes\\MI-SSSEP-Version2.scene"
   ],
   "resources": {
     "materials": [

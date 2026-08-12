@@ -12,8 +12,16 @@ from .io_thread import io_loop
 from .protocol import encode
 
 
+# 已知并口地址 — 启动时统一复位到 0
+_KNOWN_PARALLEL_ADDRS = (0x3FF8, 0x3FF0, 0x3FE8)
+
+
 def start() -> None:
-    """启动 I/O 线程。幂等 — 重复调用无副作用。"""
+    """启动 I/O 线程。幂等 — 重复调用无副作用。
+
+    启动后立即复位所有已知并口地址到 0，确保端口处于已知安全状态，
+    避免上次运行残留的非零值被误认为有效 trigger。
+    """
     if state._running:
         return
     state._running = True
@@ -21,6 +29,11 @@ def start() -> None:
         target=io_loop, daemon=True, name="spd-io"
     )
     state._io_thread.start()
+
+    # ★ 启动时复位所有已知并口地址到 0
+    if state._pp is not None:
+        for addr in _KNOWN_PARALLEL_ADDRS:
+            state._tx_queue.put_nowait(ParallelTask(addr, b'\x00'))
 
 
 def stop() -> None:

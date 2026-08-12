@@ -15,6 +15,9 @@ MI-SSSEP 的精简修改版。基于 MI-SSSEP 场景，仅修改节点图。沿�
 | MI 基值 (Right) | 128 | 64 |
 | MI 基值 (None) | 192 | 96 |
 | SSSEP 计算时机 | Phase 0 内实时计算 | OnGameStart + 每 trial 结束时预计算 |
+| Phase 0 cue 触发 | 无 | **打 1 次条件 trigger (MI<<5 \| SSSEP)** |
+| Phase 2 脉冲内容 | ParallelSend(trigger 编码) | **ParallelSend(sss_code 仅编码 SSSEP)** |
+| Trigger 种类 | 42 | **32 (8×3 + 8)** |
 
 ## 实验条件
 
@@ -60,7 +63,14 @@ Trigger = (MI_code << 5) | SSSEP_code
 | None (3) | 11 | 00 11 01011 | 107 |
 | None (3) | 23 | 00 11 10111 | 119 |
 
-共 3 × 8 = **24 种** trigger 编码。
+共 3 × 8 = **24 种** cue 触发编码。
+
+## Trigger 种类汇总 (共 32 种)
+
+| 阶段 | 发送内容 | 种类数 | 说明 |
+|------|---------|--------|------|
+| Phase 0 (cue 出现) | `MI<<5 \| SSSEP` | 8×3 = 24 | Left/Right/Null cue 各 8 种 SSSEP |
+| Phase 2 (task cue 脉冲) | `SSSEP` (11-23) | 8 | 仅编码 SSSEP 条件 |
 
 ## Trial 流程
 
@@ -71,15 +81,22 @@ Trigger = (MI_code << 5) | SSSEP_code
 │ 选 MI 条件 (1-3) │ Cue 保持可见       │ 所有 Cue 隐藏    │
 │ SSSEP 已预计算   │ TaskCue 出现       │                  │
 │ 显示对应 cue     │ ★ 开始 80 脉冲    │                  │
-│ 编码 trigger     │   每 50ms 发送:   │                  │
-│                  │   - ParallelSend(trigger编码)       │
-│                  │   - SerialSend(SSSEP频率)           │
+│ ★ 打 1 次条件    │   每 50ms 发送:   │                  │
+│   trigger        │   - ParallelSend(sss_code)           │
+│   (MI<<5|SSSEP)  │   - SerialSend(SSSEP频率)           │
 │                  │   共 4s = 80 次    │                  │
 │                  │                    │                  │
 │ Cross ──────────────────────────────────────────────── │
 └──────────────────────────────────────────────────────┘
   0s               2s                  6s              10s
 ```
+
+### Phase 0 条件 trigger (新增)
+
+- **时机**: cue 出现的瞬间 (0s)
+- **内容**: `trigger_val = (MI<<5) \| sss_code` — 同时编码 MI 和 SSSEP 条件
+- **次数**: 每 trial 1 次 (共 60 次)
+- **发送**: Parallel port (0x3FF8)
 
 ### SSSEP 预计算机制
 
@@ -91,14 +108,15 @@ Trigger = (MI_code << 5) | SSSEP_code
 2. 如果 sss_idx ≤ 3: sss_code = sss_idx + 10
 3. 否则: sss_code = sss_idx × 2 + 7
 
-### 脉冲时序 (Phase 2, 2-6s, 不变)
+### 脉冲时序 (Phase 2, 2-6s)
 
 - 频率: 20 Hz (每 50ms 一次)
 - 持续: 4 秒
 - 次数: 80 次
 - 每次发送:
-  - **Parallel port (0x3FF8)**: trigger 编码 (MI<<5 | SSSEP)
+  - **Parallel port (0x3FF8)**: **SSSEP 频率码 (11,12,13,15,17,19,21,23)** — 仅编码 SSSEP
   - **Serial port (COM3, 9600)**: SSSEP 频率码
+- ★ 变更: 原版 80 脉冲发送 `trigger 编码 (MI<<5|SSSEP)`, 现改为仅发送 `sss_code`
 
 ## 实验参数 (不变)
 
@@ -109,7 +127,7 @@ Trigger = (MI_code << 5) | SSSEP_code
 | 单个 trial 时长 | 10 秒 |
 | MI 条件数 | 3 (Left/Right/None) |
 | SSSEP 条件数 | 8 (11,12,13,15,17,19,21,23) |
-| Trigger 编码数 | 24 |
+| Trigger 编码数 | 32 (Phase 0: 24 + Phase 2: 8) |
 | SSSEP 脉冲频率 | 20 Hz |
 | 每 trial 脉冲数 | 80 |
 | 全程注视点 | Cross |
@@ -133,3 +151,8 @@ Trigger = (MI_code << 5) | SSSEP_code
    - OnGameStart 末尾: 计算首个 trial 的 sss_code
    - Phase 10 末尾 (False 分支): 计算下一 trial 的 sss_code
 5. **节点 247 (旧 VarSet sss_code) 已移除**, 由新的 VarSet sss_code 节点替代
+6. **Phase 0 条件 trigger (新增 3 个 ParallelSend)**:
+   - 每个 MI 分支 (Left/Right/None) 在 VarSet trigger_val 后各接 1 个 ParallelSend
+   - 发送 `trigger_val = MI<<5 | sss_code` — cue 出现时打 1 次
+7. **Phase 2 脉冲变更**: 80 个脉冲的 ParallelSend 改为发送 `sss_code` (仅编码 SSSEP)
+   - 原发送 `trigger_val` 的连线 (10366→10370) 改为 `sss_code` (10374→10370)

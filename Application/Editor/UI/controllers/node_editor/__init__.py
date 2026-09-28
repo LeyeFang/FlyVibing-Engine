@@ -1,49 +1,14 @@
 """
-node_editor — 节点编辑器控制器层。
+[DEPRECATED / 搬迁 shim] 节点图运行时已迁至 `Application.Core.NodeGraph`。
 
-导出所有数据模型、类型注册表、画布、执行引擎。
+本文件仅为向后兼容的 re-export（包级名称）:
+    from Application.Core.NodeGraph import NodeCanvas, _TYPES, ...   ← 新代码请用新路径
+
+深路径导入（canvas / evaluator_engine / node_types / evaluators /
+graph_constraints / component_registry）请直接改用 `Application.Core.NodeGraph.<模块>`。
 """
 
-from .data_model import (
-    PinDef,
-    NodeTypeDef,
-    NodeInstance,
-    LinkInstance,
-    _gen_id,
-)
-from .node_types import _TYPES
-from .canvas import NodeCanvas
-from .evaluator_engine import (
-    ExecutionContext,
-    GraphEvaluator,
-    register_evaluator,
-    _EVALUATORS,
-)
+from Application.Core.NodeGraph import *  # noqa: F401,F403
+from Application.Core.NodeGraph import __all__ as _new_all  # noqa: F401
 
-# 导入所有 evaluator 模块以触发 register_evaluator() 注册
-from .evaluators import (  # noqa: F401
-    events,
-    time,
-    debug,
-    math,
-    entity,
-    vector,
-    variable,
-    flow,
-    action,
-    io,
-)
-
-__all__ = [
-    "PinDef",
-    "NodeTypeDef",
-    "NodeInstance",
-    "LinkInstance",
-    "_gen_id",
-    "_TYPES",
-    "NodeCanvas",
-    "ExecutionContext",
-    "GraphEvaluator",
-    "register_evaluator",
-    "_EVALUATORS",
-]
+__all__ = list(_new_all)

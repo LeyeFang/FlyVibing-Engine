@@ -261,6 +261,49 @@ class GraphBuilder:
         self.link(br, "True", exit_n, "exec_in")
         return br, exit_n, vg
 
+    # ── Gtec (g.HIamp EEG) — IO ▸ Gtec ────────────────────
+
+    def gtec_init(self, name: str = "HIAMP", *, template: str = "64ch",
+                  rate: int = 512, notch: str = "off",
+                  filter_type: str = "none", low_cut: float = 0.0,
+                  high_cut: float = 0.0, export: str = "npz",
+                  save_dir: str = ".", buffer_seconds: float = 10.0,
+                  serial: str = "") -> int:
+        """InitGtecDevice — 打开 + 配置 g.HIamp。
+
+        MUST 与 gtec_kill(name) 成对出现 (validate_graph 强制检查)。
+        notch: "off"/"50"/"60"; filter_type: none/highpass/lowpass/bandpass
+        (截止频率 0 = 未填不生效; 与类型不匹配的字段被忽略)。
+        """
+        return self.node("InitGtecDevice", ["exec_in", "exec_out"], {
+            "device": "HIAMP", "device_name": name, "serial": serial,
+            "template": template, "sampling_rate": rate,
+            "notch": notch, "filter_type": filter_type,
+            "low_cut": low_cut, "high_cut": high_cut,
+            "export_format": export, "save_dir": save_dir,
+            "buffer_seconds": buffer_seconds,
+        })
+
+    def gtec_start(self, name: str = "HIAMP") -> int:
+        """StartGtecRecord — 开始采集（写入窗口缓冲）。"""
+        return self.node("StartGtecRecord", ["exec_in", "exec_out"],
+                         {"device_name": name})
+
+    def gtec_stop(self, name: str = "HIAMP", scope: str = "session") -> int:
+        """StopGtecRecord — 停止采集并保存 (scope: session=全量 / buffer=窗口)。"""
+        return self.node("StopGtecRecord", ["exec_in", "exec_out"],
+                         {"device_name": name, "save_scope": scope})
+
+    def gtec_kill(self, name: str = "HIAMP") -> int:
+        """KillGtecDevice — 停止 + 释放设备（不保存）。MUST 与 gtec_init 成对。"""
+        return self.node("KillGtecDevice", ["exec_in", "exec_out"],
+                         {"device_name": name})
+
+    def gtec_get(self, name: str = "HIAMP") -> int:
+        """GetGtecData — 非销毁读取窗口缓冲（纯数据节点）。"""
+        return self.node("GetGtecData", ["Data", "Channels", "Samples", "Fs"],
+                         {"device_name": name})
+
     # ── 输出 ──────────────────────────────────────────────
 
     def build(self, rules: str = "") -> dict:

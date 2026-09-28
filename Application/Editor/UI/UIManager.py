@@ -1,3 +1,5 @@
+import os
+
 from imgui_bundle import imgui
 
 # DockBuilder API 在 imgui.internal 命名空间
@@ -249,6 +251,27 @@ class UIManager:
         ProjectManager.save_project_as(path)
 
     @classmethod
+    def _on_export_project(cls) -> None:
+        """导出 → 打开目标文件夹选择对话框（非阻塞；选中目录下创建 <项目名>/）。"""
+        from Application.Editor.ProjectManager import ProjectManager
+        if not ProjectManager.get_project_path():
+            print("[Export] Save the project first — File ▸ Save Project As...")
+            return
+        start = os.path.dirname(ProjectManager.get_project_path())
+        FileDialog.open_export_dir(
+            callback=lambda p: cls._do_export_project(p),
+            start_dir=start,
+        )
+
+    @classmethod
+    def _do_export_project(cls, target_dir: str) -> None:
+        """FileDialog 回调：执行自包含工程导出（项目 + 场景 + 资源，路径全部相对化）。"""
+        if not target_dir:
+            return
+        from Application.Editor.ProjectManager import ProjectManager
+        ProjectManager.export_project_bundle(target_dir)
+
+    @classmethod
     def _on_exit(cls) -> None:
         """退出应用 — 通过 WindowCloseEvent 走与关闭窗口相同的逻辑。"""
         from Application.Core.Events.WindowEvent import WindowCloseEvent
@@ -286,6 +309,9 @@ class UIManager:
                     imgui.end_disabled()
                 if imgui.menu_item("Save Project As...", "Ctrl+Shift+S", False, True)[0]:
                     cls._on_save_as_project()
+                imgui.separator()
+                if imgui.menu_item("Export...", "", False, True)[0]:
+                    cls._on_export_project()
                 imgui.separator()
                 if imgui.menu_item("Exit", "Alt+F4", False, True)[0]:
                     cls._on_exit()

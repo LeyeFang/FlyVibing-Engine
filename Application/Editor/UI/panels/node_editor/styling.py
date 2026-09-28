@@ -57,54 +57,86 @@ _LINK_COLOR_FALLBACK: tuple[float, float, float] = (0.55, 0.55, 0.55)
 # ═══════════════════════════════════════════════════════════════
 # Add 菜单分类数据
 # ═══════════════════════════════════════════════════════════════
-
+#
+# 组织约定:
+#   - 顶级页按建图顺序排列: 事件 → 流控 → 值 → 计算 → 时间 → 场景 → 调试 → IO
+#   - 页内条目 ≤ 3 直接平铺; 更多则按语义分组 (组头仅作视觉分区, 不可点击)
+#   - 菜单项标签与节点卡片标题一致 (NodeTypeDef.label), 点选后所见即所得
+#   - 所有可创建节点都应在此可达; 仅"兼容保留"的旧节点不出现:
+#     MathAdd / MathSubtract / MathMultiply / MathDivide /
+#     MathRandomUniform / MathRandomGaussian (旧版数学, 由 ScalarMath / Random 覆盖)
+#     EntityAddMesh / EntityAddCamera (由 Component 节点覆盖)
+#
 # 每个分类: (标题, [子项 ...])
 #   子项 = ("标签", "类型名")           ← 叶子 → 直接创建节点
-#   子项 = ("标签", [子项 ...])         ← 子菜单 → 展开更深层级
+#   子项 = ("标签", [子项 ...])         ← 分组 → 组内继续展开
 MENU_SECTIONS: list[tuple[str, list]] = [
-    ("Basic", [
-        ("Scale", "Constant"),
-        ("String Constant", "StringConst"),
+    # ── 图入口 (exec 链起点) ────────────────────────────────
+    ("Event", [
+        ("On Game Start", "OnGameStart"),
+        ("On Frame Update", "OnFrameUpdate"),
+        ("On Game Stop", "OnGameStop"),
     ]),
-    ("Math", [
-        ("Variable", [
-            ("Set Variable", "VarSet"),
-            ("Get Variable", "VarGet"),
-            ("Make Vec3", "MakeVec3"),
-            ("Break Vec3", "BreakVec3"),
-        ]),
-        ("Calculate", [
-            ("Scalar Math", "ScalarMath"),
-            ("Compare", "Compare"),
-            ("Random", [            # Random 子菜单
-                ("Set Seed", "RandomSetSeed"),
-                ("Random", "Random"),
-            ]),
-            ("Vec Math", "VecMath"),
-        ]),
-    ]),
-    ("Time", [
-        ("Get Time", "TimeGetElapsed"),
-        ("Get Delta Time", "TimeGetDelta"),
-        ("Delay", "TimeDelay"),
-        ("Time Trigger", "TimeTrigger"),
-        ("Get Date", "TimeGetDate"),
-        ("New Timer", "NewTimer"),
-        ("Set Timer", "SetTimer"),
-    ]),
+
+    # ── 执行流控制 ──────────────────────────────────────────
     ("Flow", [
         ("Sequence", "Sequence"),
         ("Branch", "Branch"),
     ]),
+
+    # ── 基础值 (纯数据常量, 无 exec 引脚) ───────────────────
+    ("Basic", [
+        ("Number", "Constant"),
+        ("String Constant", "StringConst"),
+    ]),
+
+    # ── 变量读写 ────────────────────────────────────────────
+    ("Variable", [
+        ("Set Variable", "VarSet"),
+        ("Get Variable", "VarGet"),
+    ]),
+
+    # ── 数学计算 ────────────────────────────────────────────
+    ("Math", [
+        ("Calculate", [
+            ("Scalar Math", "ScalarMath"),
+            ("Compare", "Compare"),
+        ]),
+        ("Vector", [
+            ("Make Vec3", "MakeVec3"),
+            ("Break Vec3", "BreakVec3"),
+            ("Vec Math", "VecMath"),
+        ]),
+        ("Random", [
+            ("Random", "Random"),
+            ("Set Seed", "RandomSetSeed"),
+        ]),
+    ]),
+
+    # ── 时间 / 定时 ─────────────────────────────────────────
+    ("Time", [
+        ("Query", [
+            ("Get Time", "TimeGetElapsed"),
+            ("Get Delta Time", "TimeGetDelta"),
+            ("Get Date", "TimeGetDate"),
+        ]),
+        ("Control", [
+            ("Delay", "TimeDelay"),
+            ("Time Trigger", "TimeTrigger"),
+        ]),
+        ("Timer", [
+            ("New Timer", "NewTimer"),
+            ("Set Timer", "SetTimer"),
+        ]),
+    ]),
+
+    # ── 场景 / 实体 / 组件 ──────────────────────────────────
     ("Scene", [
         ("Entity", [
             ("Spawn Entity", "EntitySpawn"),
             ("Get Entity", "EntityGet"),
             ("Destroy Entity", "EntityDestroy"),
-        ]),
-        ("Game", [
-            ("Set Main Camera", "CameraSetMain"),
-            ("Exit Game", "ExitGame"),
+            ("Set Render Visible", "EntitySetRenderVisible"),
         ]),
         ("Component", [
             ("Add Component", "ComponentAdd"),
@@ -112,15 +144,32 @@ MENU_SECTIONS: list[tuple[str, list]] = [
             ("Get Component", "GetComponent"),
             ("Remove Component", "ComponentRemove"),
         ]),
+        ("Game", [
+            ("Set Main Camera", "CameraSetMain"),
+            ("Exit Game", "ExitGame"),
+        ]),
     ]),
+
+    # ── 调试输出 ────────────────────────────────────────────
     ("Debug", [
         ("Print", "Print"),
         ("Print String", "PrintString"),
     ]),
+
+    # ── 设备 / 文件输出 ─────────────────────────────────────
     ("IO", [
-        ("Serial Send", "SerialSend"),
-        ("Parallel Send", "ParallelSend"),
-        ("Path", "PathVar"),
-        ("Write Text File", "TextFileWrite"),
-    ]),
+        ("Serial", [
+            ("Serial Send", "SerialSend"),
+            ("Parallel Send", "ParallelSend"),
+        ]),
+        ("File", [
+            ("Path", "PathVar"),
+            ("Write Text File", "TextFileWrite"),
+        ]),        ("Gtec", [
+            ("Init Gtec Device", "InitGtecDevice"),
+            ("Start Gtec Record", "StartGtecRecord"),
+            ("Stop Gtec Record", "StopGtecRecord"),
+            ("Kill Gtec Device", "KillGtecDevice"),
+            ("Get Gtec Data", "GetGtecData"),
+        ]),    ]),
 ]

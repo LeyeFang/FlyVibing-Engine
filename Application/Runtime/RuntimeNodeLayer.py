@@ -26,8 +26,8 @@ from Application.Core.Events.Event import Event
 from Application.Core.Events.EngineEvent import LayerLifecycleEvent
 from Application.Core.Renderer.RenderCommand import SetViewProjectionCommand
 from Application.Core.Scene.SceneManager import SceneManager
-from Application.Editor.UI.controllers.node_editor import _TYPES
-from Application.Editor.UI.controllers.node_editor.evaluator_engine import (
+from Application.Core.NodeGraph import _TYPES
+from Application.Core.NodeGraph.evaluator_engine import (
     GraphEvaluator,
     ExecutionContext,
 )
@@ -42,6 +42,8 @@ class RuntimeNodeLayer(Layer):
     _evaluator: GraphEvaluator | None = None
     _context: ExecutionContext | None = None
     _pending_start: bool = False  # 延迟 OnGameStart 到逻辑线程
+    # ── 宿主注入: 上下文钩子 (PIE 由 SimulationController 设置; 独立运行留空) ──
+    _on_stop_request = None       # callable | None — ExitGame 停止请求 → 宿主处理
 
     @classmethod
     def set_canvas(cls, canvas) -> None:
@@ -57,6 +59,25 @@ class RuntimeNodeLayer(Layer):
         导出模式: 从 .scene 文件反序列化
         """
         cls._scene = scene
+
+    @classmethod
+    def set_context_hooks(cls, on_stop_request=None) -> None:
+        """注册宿主上下文钩子 (None = 清除)。
+
+        on_stop_request: ExitGame 停止请求回调 —
+                         PIE 传 SimulationController.stop; 独立运行留空
+                         (留空时由本层在帧末以中性方式结束 GameRuntime)。
+        """
+        cls._on_stop_request = on_stop_request
+
+    @classmethod
+    def _consume_stop_request(cls) -> None:
+        """ExitGame 停止请求兜底: 宿主未注册回调时用运行时中立方式结束 GameRuntime。"""
+        if cls._context is None:
+            return
+        if cls._context.stop_requested and cls._context.on_stop_request is None:
+            from Application.Runtime.GameRuntime import GameRuntime
+            GameRuntime.run_state = False
 
     # ════════════════════════════════════════════════════════════
     # Layer 生命周期
@@ -78,6 +99,9 @@ class RuntimeNodeLayer(Layer):
         cls._evaluator = GraphEvaluator(cls._canvas, _TYPES)
         cls._context = ExecutionContext()
         cls._context.scene = cls._engine.scene     # ★ 注入 SceneManager 实例
+        # ★ 宿主注入: 模板场景 (EntitySpawn) + 停止回调 (ExitGame)
+        cls._context.template_scene = cls._scene
+        cls._context.on_stop_request = cls._on_stop_request
         cls._frame = 0
 
         # ── 延迟 OnGameStart 到逻辑线程的第一次 OnUpdate ──
@@ -111,6 +135,8 @@ class RuntimeNodeLayer(Layer):
             cls._pending_start = False
             cls._evaluator.trigger("OnGameStart", cls._context)
             print("[RuntimeNodeLayer] Graph execution started")
+            # ★ ExitGame 等节点请求停止 (宿主未注册回调时的兜底)
+            cls._consume_stop_request()
             # 首帧后立即同步摄像机
             cls._sync_camera_to_renderer()
             return
@@ -122,6 +148,9 @@ class RuntimeNodeLayer(Layer):
                 cls._context.delta_time = cls._engine.get_delta_time()
                 cls._context.elapsed_time = cls._engine.get_elapsed_time()
             cls._evaluator.trigger("OnFrameUpdate", cls._context)
+
+            # ★ ExitGame 等节点请求停止 (宿主未注册回调时的兜底)
+            cls._consume_stop_request()
 
             # ★ 每帧同步场景摄像机矩阵到渲染器
             cls._sync_camera_to_renderer()

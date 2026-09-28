@@ -106,7 +106,7 @@ TimeTrigger behavior: fires when ctx.elapsed_time >= threshold. Re-armable: incr
 | Constant    | —         | Result (float) | value: float       |
 | StringConst | —         | Value (string) | value: string      |
 
-Constant is displayed as "Scale" in the UI. StringConst outputs a raw string (no float coercion).
+Constant is labeled "Number" in the UI. StringConst outputs a raw string (no float coercion).
 
 #### Variable Nodes
 | type_name | input pins                    | output pins             | props                          |
@@ -166,6 +166,23 @@ ParallelSend always sends uint8 (1-255, 0 reserved for auto-reset after 5ms).
 PathVar outputs a directory or file path selected via OS file browser. browse_mode=directory uses select_folder, browse_mode=file uses open_file (.txt/.csv/.log/.json).
 TextFileWrite writes str(value) + delimiter to {file_path}/{file_name}.txt. FileName auto-appends .txt suffix. Directory created if missing. write_mode="w" overwrites, "a" appends. Delimiter appended after each write: none="", space=" ", newline="\\n", tab="\\t", comma=",".
 FilePath is always handled by widget (Browse button); pin connection overrides widget value.
+
+#### Gtec Nodes (g.HIamp EEG acquisition — IO ▸ Gtec)
+| type_name       | input pins | output pins | props |
+|-----------------|------------|-------------|-------|
+| InitGtecDevice  | exec_in    | exec_out    | device: HIAMP, device_name, serial (""=auto), template: 64ch/128ch/144ch, sampling_rate: 256/512/600/1200/2400/4800/9600/19200/38400, notch: off/50/60, filter_type: none/highpass/lowpass/bandpass, low_cut, high_cut (0=unset, ignored if not applicable), export_format: npz/csv, save_dir ("."=cwd), buffer_seconds |
+| StartGtecRecord | exec_in    | exec_out    | device_name |
+| StopGtecRecord  | exec_in    | exec_out    | device_name, save_scope: session/buffer |
+| KillGtecDevice  | exec_in    | exec_out    | device_name |
+| GetGtecData     | (none, pure data node) | Data (variant ndarray channels×samples), Channels (int), Samples (int), Fs (float) | device_name |
+
+Gtec rules (CRITICAL):
+1. InitGtecDevice and KillGtecDevice MUST appear as a pair (validator enforces; editor deletion cascades). Kill binds by device_name; empty name + single Init = auto-bind.
+2. Trigger is always enabled (16 digital lines combined into one extra channel) — not configurable.
+3. Online filters: cutoff 0 = unset → not applied; fields not matching filter_type are ignored (e.g. low_cut with lowpass). Device filters are discrete presets — unmatched requests are skipped with a log.
+4. Window buffer: buffer_seconds × sampling_rate → (channels, N) float32 sliding window; old data is overwritten. GetGtecData returns a non-destructive copy (unfilled region = 0) plus Channels / Samples(valid) / Fs. Array size depends only on Init config.
+5. StopGtecRecord saves to Init's save_dir (default "." = cwd): scope=session → everything since Start; scope=buffer → window only. File formats: npz or csv + sidecar .json metadata.
+6. Dry-run (MCP validate_graph, max_frames>0): deterministic stub backend — no hardware, no file writes, no threads; reproducible.
 
 ---
 

@@ -39,6 +39,10 @@ _reg(NodeTypeDef(
     "Find entity by name",
 ))
 
+# ── v1 兼容节点 (菜单中不出现 — 由 Component 节点覆盖) ──
+#    EntityAddMesh / EntityAddCamera: Add Component / Set Component
+#    的组件下拉已覆盖同样功能, 仅保留供旧图加载执行。
+
 _reg(NodeTypeDef(
     "EntityAddMesh", "Add Mesh Component", "Entity", ENTITY_COLOR,
     [
@@ -60,6 +64,8 @@ _reg(NodeTypeDef(
     ],
     "Add camera component to entity",
 ))
+
+# ── v1 但菜单保留 (Scene ▸ Entity): MI 实验图在用, 暂无 v2 替代 ──
 
 _reg(NodeTypeDef(
     "EntitySetRenderVisible", "Set Render Visible", "Entity", ENTITY_COLOR,

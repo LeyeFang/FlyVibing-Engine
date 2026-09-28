@@ -24,10 +24,13 @@ from Application.Editor.UI.BasePanel import BasePanel
 from Application.Editor.UI.PanelStyle import ERROR_RED
 from Application.Editor.UI.FileDialog import FileDialog
 
-from Application.Editor.UI.controllers.node_editor import (
+from Application.Core.NodeGraph import (
     NodeCanvas,
     _TYPES,
     _gen_id,
+)
+from Application.Core.NodeGraph.graph_constraints import (
+    gtec_cascade_deletes,
 )
 from .styling import (
     _col,
@@ -502,8 +505,17 @@ class NodeEditorPanel(BasePanel):
             _sel_links = ne.get_selected_links()
             _del_node_count = 0
             _del_link_count = 0
-            for sn in _sel_nodes:
-                nid = sn.id()
+
+            # ── Gtec Init ⇄ Kill 强制配对: 删除级联 ──
+            _sel_nids = [sn.id() for sn in _sel_nodes if sn.id() in canvas.nodes]
+            _expand = gtec_cascade_deletes(canvas, _sel_nids)
+            for _extra in sorted(_expand - set(_sel_nids)):
+                _inst = canvas.nodes.get(_extra)
+                if _inst is not None:
+                    print(f"[Delete] Cascade (Gtec Init/Kill pairing): "
+                          f"{_inst.node_type} (id={_extra})")
+
+            for nid in sorted(_expand):
                 if nid in canvas.nodes:
                     print(f"[Delete] Node: {canvas.nodes[nid].node_type} (id={nid})")
                     canvas.remove_node(nid)
@@ -843,6 +855,8 @@ class NodeEditorPanel(BasePanel):
             "ComponentAdd", "SetComponent", "GetComponent", "ComponentRemove",
             "ParallelSend", "SerialSend", "PathVar", "TextFileWrite",
             "TimeGetDate",
+            "InitGtecDevice", "StartGtecRecord", "StopGtecRecord",
+            "KillGtecDevice", "GetGtecData",
         }
         for lyr in sorted(layer_nodes.keys()):
             current_y: float = 80.0

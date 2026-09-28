@@ -122,7 +122,7 @@ class VulkanResourceManager:
     # 资源注册
     # ════════════════════════════════════════════════════════════
 
-    def register_entity(self,
+    def register_entity(self, entity_id: int) -> None:
         """注册可渲染实体到 GPU — 级联注册 Mesh/Shader/Texture，创建 DescriptorSet。
 
         Args:
@@ -160,7 +160,7 @@ class VulkanResourceManager:
             descriptor_set=descriptor_set,
         )
 
-    def register_mesh(self,
+    def register_mesh(self, mesh: Mesh, mesh_id: int) -> None:
         """上传网格数据到 GPU — 创建 VertexBuffer + IndexBuffer。
 
         交错顶点格式 (每顶点 8 个 float, 32 bytes):
@@ -210,7 +210,7 @@ class VulkanResourceManager:
             ref_count=1,
         )
 
-    def register_shader(self,
+    def register_shader(self, shader: Shader, shader_id: int) -> None:
         """编译 GLSL → SPIR-V → 创建 ShaderModule + Pipeline。
 
         若着色器已注册，仅增加引用计数。
@@ -255,7 +255,7 @@ class VulkanResourceManager:
             ref_count=1,
         )
 
-    def register_texture(self,
+    def register_texture(self, texture: Texture, texture_id: int) -> None:
         """上传纹理数据到 GPU — 创建 Image + ImageView + Sampler。
 
         使用 staging buffer 将像素数据传输到 DEVICE_LOCAL 纹理内存。
@@ -327,7 +327,7 @@ class VulkanResourceManager:
     # 资源卸载
     # ════════════════════════════════════════════════════════════
 
-    def unregister_entity(self,
+    def unregister_entity(self, entity_id: int) -> None:
         """从 GPU 卸载实体 — 释放 DescriptorSet，递减关联资源引用计数。"""
         if entity_id not in self.registered_entities:
             return
@@ -339,15 +339,15 @@ class VulkanResourceManager:
         self._decref_texture(entity.texture_id)
         del self.registered_entities[entity_id]
 
-    def unregister_mesh(self,
+    def unregister_mesh(self, mesh_id: int) -> None:
         """递减网格引用计数。"""
         self._decref_mesh(mesh_id)
 
-    def unregister_shader(self,
+    def unregister_shader(self, shader_id: int) -> None:
         """递减着色器引用计数。"""
         self._decref_shader(shader_id)
 
-    def unregister_texture(self,
+    def unregister_texture(self, texture_id: int) -> None:
         """递减纹理引用计数。"""
         self._decref_texture(texture_id)
 
@@ -355,7 +355,7 @@ class VulkanResourceManager:
     # 引用计数辅助
     # ════════════════════════════════════════════════════════════
 
-    def _decref_mesh(self,
+    def _decref_mesh(self, mesh_id: int) -> None:
         """递减网格引用计数，归零时释放 vertex/index buffer + memory。"""
         if mesh_id not in self.registered_meshes:
             return
@@ -368,7 +368,7 @@ class VulkanResourceManager:
                 VulkanCore.destroy_buffer(data.index_buffer, data.index_memory)
             del self.registered_meshes[mesh_id]
 
-    def _decref_shader(self,
+    def _decref_shader(self, shader_id: int) -> None:
         """递减着色器引用计数，归零时释放 Pipeline / ShaderModule / Layout。"""
         if shader_id not in self.registered_shaders:
             return
@@ -388,7 +388,7 @@ class VulkanResourceManager:
                 vk.vkDestroyShaderModule(dev, data.vs_module, None)
             del self.registered_shaders[shader_id]
 
-    def _decref_texture(self,
+    def _decref_texture(self, texture_id: int) -> None:
         """递减纹理引用计数，归零时释放 Image / ImageView / Sampler / Memory。"""
         if texture_id not in self.registered_textures:
             return

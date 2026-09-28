@@ -7,8 +7,17 @@ dist/
 *.egg-info
 Application/Editor/Config
 .editor_cache.json
+.txt
 
 # Virtual environments
 .venv
 .venv-*
 .vscode
+
+# Runtime packaging / game export (P2+)
+Resource/runtime/
+!Resource/wheels/requirements.export.txt
+!Resource/wheels/requirements.runtime.txt
+Test/TestProject/*/dist/
+Test/TestProject/*/output/
+Test/TestProject/EmptyGame

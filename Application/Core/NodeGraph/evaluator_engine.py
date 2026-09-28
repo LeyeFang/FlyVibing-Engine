@@ -40,6 +40,30 @@ class ExecutionContext:
         # ── 干跑 / 测试钩子 ──
         self.dry_run: bool = False
         self.log: callable | None = None
+        # ── 宿主注入 (运行时中立 — 不反向依赖 Editor/宿主) ──
+        self.template_scene = None                # EntitySpawn 模板场景 (宿主注入)
+        self.on_stop_request: callable | None = None  # ExitGame 停止请求 → 宿主处理
+        self._stop_requested: bool = False
+
+    # ── 停止请求 (ExitGame 等节点使用) ───────────────────────
+
+    def request_stop(self) -> None:
+        """请求停止游戏 — 运行时中立。
+
+        优先交给宿主回调 (PIE: SimulationController.stop); 宿主未注册回调时，
+        由 RuntimeNodeLayer 在帧末用中性方式结束 GameRuntime。
+        """
+        self._stop_requested = True
+        if self.on_stop_request is not None:
+            try:
+                self.on_stop_request()
+            except Exception as e:
+                print(f"[ExecutionContext] on_stop_request failed: {e}")
+
+    @property
+    def stop_requested(self) -> bool:
+        """是否已请求停止 (宿主未注册回调时由 RuntimeNodeLayer 消费)。"""
+        return self._stop_requested
 
     # ── Timer API ────────────────────────────────────────────
 

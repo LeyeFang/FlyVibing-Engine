@@ -120,7 +120,7 @@ class ProjectManager:
             from Application.Editor.UI.UIManager import UIManager
             panel = UIManager.find("Node Editor")
             if panel is not None:
-                from Application.Editor.UI.controllers.node_editor.canvas import NodeCanvas
+                from Application.Core.NodeGraph.canvas import NodeCanvas
                 panel._canvas = NodeCanvas()
                 panel._canvas.create_default_nodes()
                 panel._canvas_initialized = True
@@ -181,6 +181,9 @@ class ProjectManager:
             return False
         if not path.endswith(".myproj"):
             path += ".myproj"
+        # ★ 换根前先把存量相对路径固化为绝对路径 —
+        #   相对路径的语义是"相对于当前 .myproj 目录", 换根后会指向错误位置
+        cls._denormalize_paths_to_absolute()
         cls._project_path = os.path.abspath(path)
         cls._project_name = os.path.splitext(os.path.basename(path))[0]
         cls._data["name"] = cls._project_name
@@ -190,6 +193,375 @@ class ProjectManager:
         cls._update_window_title()
         print(f"[Project] Saved As: {cls._project_path}")
         return True
+
+    @classmethod
+    def get_project_path(cls) -> str:
+        """返回当前 .myproj 绝对路径（未保存时为空串）。"""
+        return cls._project_path
+
+    # ════════════════════════════════════════════════════════════
+    # 自包含导出 (Export Project Bundle)
+    # ════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _sanitize_name(name: str, fallback: str = "Untitled") -> str:
+        """文件名/目录名安全化（保留中英文与常见符号，替换路径分隔符等）。"""
+        safe = "".join(
+            c if (c.isalnum() or c in "._- ") else "_" for c in (name or "")
+        ).strip()
+        return safe or fallback
+
+    @staticmethod
+    def _unique_name(name: str, used: set) -> str:
+        """批内同名去重: a.mat → a.mat, a_2.mat, ..."""
+        if name not in used:
+            used.add(name)
+            return name
+        stem, ext = os.path.splitext(name)
+        i = 2
+        while f"{stem}_{i}{ext}" in used:
+            i += 1
+        unique = f"{stem}_{i}{ext}"
+        used.add(unique)
+        return unique
+
+    @classmethod
+    def export_project_bundle(cls, target_parent_dir: str, include_player: bool = True) -> dict | None:
+        """导出自包含工程包 — 项目文件 + 全部场景 + 用户资源，路径全部相对化。
+
+        include_player=True（默认, File ▸ Export 使用）时额外附游戏层:
+          game.json + Application/ 引擎副本 + Resource/ 内置资源
+          + runtime/ 预装 Python 环境 + wheelhouse/ 离线重建材料 + run_game.cmd 启动器
+          → 双击即玩（详见 Doc/Dev/runtime_packaging_protocol.md）。
+
+        输出结构::
+
+            <target_parent>/<ProjectName>/
+                <ProjectName>.myproj        # scenes/resources/startup 全部相对路径
+                scenes/<Name>.scene          # 全部场景（活跃场景先同步，节点图随场景）
+                assets/<category>/<file>     # materials / prefabs / ...（builtin:// 不复制）
+                export_manifest.json         # 导出清单（来源 / 时间 / 文件 / 告警）
+
+        行为约定:
+          - 不修改当前工程的任何状态与磁盘文件（纯快照）
+          - 未保存过的工程不可导出（先 Save Project As）
+          - 目标目录已存在且非空时：仅当它是本工具的旧导出（含 manifest）才允许覆盖，
+            否则拒绝，防止误写用户目录；不会写入当前工程目录本身
+          - 工程目录外的资源会被复制进导出包 → 导出物可整体拷贝/迁移
+
+        Returns: 摘要 dict {dir, project, scenes, assets, bytes, warnings} | None
+        """
+        import copy as _copy
+        import shutil as _shutil
+        from datetime import datetime as _dt
+
+        from Application.Editor.EditorHost import EditorHost
+
+        if not cls._project_path:
+            print("[Export] Project is not saved yet — use File ▸ Save Project As... first")
+            return None
+        if not target_parent_dir or not os.path.isdir(target_parent_dir):
+            print(f"[Export] Parent folder not found: {target_parent_dir}")
+            return None
+
+        # ★ 只做内存同步（最新编辑 → Scene / 节点图），不写盘
+        cls._save_scene_if_needed()
+
+        name = cls.get_project_name()
+        safe = cls._sanitize_name(name)
+        out_dir = os.path.abspath(os.path.join(target_parent_dir, safe))
+        cur_dir = os.path.dirname(os.path.abspath(cls._project_path))
+        if os.path.normcase(out_dir) == os.path.normcase(cur_dir):
+            print("[Export] Target equals the current project folder — choose another location")
+            return None
+
+        manifest_path = os.path.join(out_dir, "export_manifest.json")
+        if os.path.isdir(out_dir) and os.listdir(out_dir) and not os.path.isfile(manifest_path):
+            print(f"[Export] Target folder is not empty (not a previous export): {out_dir}")
+            return None
+
+        # ★ 覆盖行为: 目标是旧导出（manifest 有效）→ 干净重建，
+        #    防止上次导出的残留（改名场景 / 旧轮子 / 旧引擎文件）混入新包。
+        #    例外: 保留 output/（实验数据）不动。
+        if os.path.isdir(out_dir) and os.path.isfile(manifest_path):
+            for entry in os.listdir(out_dir):
+                if entry == "output":
+                    print("[Export]   preserving output/ (experiment data)")
+                    continue
+                p = os.path.join(out_dir, entry)
+                try:
+                    if os.path.isdir(p):
+                        _shutil.rmtree(p)
+                    else:
+                        os.remove(p)
+                except OSError as e:
+                    print(f"[Export]   WARNING: stale cleanup failed: {p} ({e})")
+
+        os.makedirs(out_dir, exist_ok=True)
+        # 先写占位清单：作为覆盖保护标记，同时保证中断后重试不被拒绝
+        cls._write_json(manifest_path, {
+            "type": "project_bundle",
+            "version": "0.1.0",
+            "name": name,
+            "status": "in_progress",
+            "created_iso": _dt.now().isoformat(timespec="seconds"),
+        })
+
+        warnings: list[str] = []
+        files: list[str] = []
+        total_bytes = 0
+
+        # ── 1. 场景 ──
+        scenes_rel: list[str] = []
+        scene_keys: list[tuple[str, str]] = []   # (源 scene._file_path 键, 导出相对路径)
+        used_scene_names: set = set()
+        for sname, scene_obj in EditorHost._scenes.items():
+            fname = cls._unique_name(cls._sanitize_name(sname) + ".scene", used_scene_names)
+            dst = os.path.join(out_dir, "scenes", fname)
+            try:
+                scene_obj.save_to_file(dst)
+            except Exception as e:
+                warnings.append(f"scene '{sname}' save failed: {e}")
+                continue
+            rel = f"scenes/{fname}"
+            scenes_rel.append(rel)
+            files.append(rel)
+            total_bytes += os.path.getsize(dst) if os.path.isfile(dst) else 0
+            src = getattr(scene_obj, "_file_path", "") or ""
+            scene_keys.append((cls._path_key(src), rel))
+
+        # ── 2. 资源（全部类别；builtin:// 保留不复制） ──
+        res_out: dict[str, list] = {}
+        res = cls._data.get("resources", {})
+        id_keys = {"materials": "material_id", "prefabs": "prefab_id"}
+        copied = 0
+        for category in ("materials", "shaders", "textures", "meshes", "prefabs"):
+            res_out[category] = []
+            used_asset_names: set = set()
+            for entry in res.get(category, []):
+                rel_path, rid = cls._parse_resource_entry(entry)
+                if not rel_path:
+                    continue
+                item: dict = {"path": rel_path}
+                id_key = id_keys.get(category)
+                if id_key and rid is not None:
+                    item[id_key] = rid
+                if rel_path.startswith("builtin://"):
+                    res_out[category].append(item)
+                    continue
+                abs_path = cls._resolve_path(rel_path)
+                if not (abs_path and os.path.isfile(abs_path)):
+                    warnings.append(f"{category}: file missing, dropped from bundle: {rel_path}")
+                    continue
+                fname = cls._unique_name(os.path.basename(abs_path), used_asset_names)
+                dst_rel = f"assets/{category}/{fname}"
+                dst = os.path.join(out_dir, dst_rel)
+                try:
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    _shutil.copy2(abs_path, dst)
+                except OSError as e:
+                    warnings.append(f"{category}: copy failed ({e}): {abs_path}")
+                    continue
+                item["path"] = dst_rel
+                res_out[category].append(item)
+                files.append(dst_rel)
+                total_bytes += os.path.getsize(dst)
+                copied += 1
+
+        # ── 3. 启动场景映射（按真实文件路径 → 导出相对路径） ──
+        startup = cls._data.get("startup_scene", "")
+        startup_key = cls._path_key(cls._resolve_path(startup)) if startup else ""
+        startup_rel = ""
+        for src_key, rel in scene_keys:
+            if startup_key and src_key and src_key == startup_key:
+                startup_rel = rel
+                break
+        if not startup_rel and scenes_rel:
+            startup_rel = scenes_rel[0]
+            if startup:
+                warnings.append(
+                    f"startup scene '{startup}' not found among project scenes → using '{startup_rel}'"
+                )
+
+        # ── 4. 项目文件（路径重写副本，不改动当前工程数据） ──
+        data = _copy.deepcopy(cls._data)
+        data["name"] = name
+        data["scenes"] = scenes_rel
+        data["startup_scene"] = startup_rel
+        data.setdefault("resources", {})
+        for category, items in res_out.items():
+            data["resources"][category] = items
+        proj_file = f"{safe}.myproj"
+        cls._write_json(os.path.join(out_dir, proj_file), data)
+        total_bytes += os.path.getsize(os.path.join(out_dir, proj_file))
+
+        # ── 5. 游戏层（include_player）: 清单 + 冻结引擎 + Python 环境 + 启动器 ──
+        game_info: dict | None = None
+        if include_player:
+            engine_root = cls._get_engine_root()
+
+            # 5a. game.json（播放器清单）
+            cls._write_json(os.path.join(out_dir, "game.json"), {
+                "format": "mge.game/1",
+                "title": name,
+                "project": proj_file,
+                "startup_scene": startup_rel,
+                "window": {"mode": "auto"},
+                "output_dir": "output",
+                "engine": {
+                    "version": data.get("version", ""),
+                    "exported_iso": _dt.now().isoformat(timespec="seconds"),
+                },
+            })
+
+            # 5b. 冻结引擎副本（Resource 不含 wheels/ 与 runtime/ — 另放顶层）
+            app_files, app_bytes = cls._copy_tree_for_export(
+                os.path.join(engine_root, "Application"),
+                os.path.join(out_dir, "Application"), warnings,
+            )
+            res_files, res_bytes = cls._copy_tree_for_export(
+                os.path.join(engine_root, "Resource"),
+                os.path.join(out_dir, "Resource"), warnings,
+                exclude_dirs={"wheels", "runtime"},
+            )
+
+            # 5b-2. Utils 工具（node_graph_validator — 播放器 --dry-run 依赖）
+            utils_files, utils_bytes = cls._copy_tree_for_export(
+                os.path.join(engine_root, "Utils"),
+                os.path.join(out_dir, "Utils"), warnings,
+            )
+
+            # 5c. Python 运行时镜像（预装环境, 双轨制主轨）
+            runtime_info = {"included": False, "files": 0, "bytes": 0}
+            runtime_src = os.path.join(engine_root, "Resource", "runtime")
+            if os.path.isdir(runtime_src):
+                rf, rb = cls._copy_tree_for_export(
+                    runtime_src, os.path.join(out_dir, "runtime"), warnings)
+                runtime_info = {"included": True, "files": rf, "bytes": rb}
+            else:
+                warnings.append(
+                    "runtime image missing (Resource/runtime) — run "
+                    "Utils/Runtime/prepare_runtime.py first; exported game "
+                    "will not be standalone"
+                )
+
+            # 5d. wheelhouse（离线重建材料, 双轨制备轨）
+            wh_files, wh_bytes = 0, 0
+            wheels_src = os.path.join(engine_root, "Resource", "wheels")
+            if os.path.isdir(wheels_src):
+                wh_files, wh_bytes = cls._copy_tree_for_export(
+                    wheels_src, os.path.join(out_dir, "wheelhouse"), warnings)
+
+            # 5e. 启动器（ASCII only — 避免代码页问题）
+            launcher = "\r\n".join([
+                "@echo off",
+                "setlocal",
+                'cd /d "%~dp0"',
+                'set "PYTHONNOUSERSITE=1"',
+                'set "PYTHONDONTWRITEBYTECODE=1"',
+                'set "PYTHON_GIL=0"',
+                'set "PYEXE=runtime\\python3.14t.exe"',
+                'if not exist "%PYEXE%" set "PYEXE=runtime\\python.exe"',
+                'if not exist "%PYEXE%" (',
+                "    echo [ERROR] runtime interpreter missing - re-export after preparing the runtime image",
+                "    pause",
+                "    exit /b 1",
+                ")",
+                '"%PYEXE%" -Xgil=0 "Application\\PlayerEntry.py" "game.json" %*',
+                "if errorlevel 1 pause",
+                "endlocal",
+            ]) + "\r\n"
+            with open(os.path.join(out_dir, "run_game.cmd"), "w",
+                      encoding="ascii", newline="") as fh:
+                fh.write(launcher)
+
+            game_info = {
+                "game_json": "game.json",
+                "launcher": "run_game.cmd",
+                "runtime": runtime_info,
+                "application_files": app_files,
+                "resource_files": res_files,
+                "utils_files": utils_files,
+                "wheelhouse_files": wh_files,
+                "engine_bytes": app_bytes + res_bytes + utils_bytes,
+                "wheelhouse_bytes": wh_bytes,
+            }
+            print(
+                f"[Export]   game layer: App {app_files}f / Resource {res_files}f / "
+                f"Utils {utils_files}f / "
+                f"runtime {'yes' if runtime_info['included'] else 'MISSING'} / "
+                f"wheelhouse {wh_files}f"
+            )
+
+        # ── 6. 清单（覆盖占位版本） ──
+        cls._write_json(manifest_path, {
+            "type": "project_bundle",
+            "version": "0.1.0",
+            "name": name,
+            "created_iso": _dt.now().isoformat(timespec="seconds"),
+            "source_project": cls._project_path,
+            "engine_root": cls._get_engine_root(),
+            "project_file": proj_file,
+            "scenes": scenes_rel,
+            "assets_copied": copied,
+            "files": ["export_manifest.json", proj_file] + files,
+            "game": game_info,
+            "warnings": warnings,
+        })
+
+        summary = {
+            "dir": out_dir,
+            "project": proj_file,
+            "scenes": len(scenes_rel),
+            "assets": copied,
+            "bytes": total_bytes,
+            "game": game_info,
+            "warnings": warnings,
+        }
+        print(f"[Export] Bundle exported → {out_dir}")
+        print(f"[Export]   project: {proj_file} | scenes: {len(scenes_rel)} | "
+              f"assets: {copied} | {total_bytes / 1024:.1f} KB")
+        for w in warnings:
+            print(f"[Export]   WARNING: {w}")
+        return summary
+
+    @staticmethod
+    def _copy_tree_for_export(src: str, dst: str, warnings: list[str],
+                              exclude_dirs: set | None = None) -> tuple[int, int]:
+        """复制目录树用于游戏层（排除 __pycache__ 与指定目录名）。
+
+        Returns:
+            (文件数, 字节数) — 复制失败时报 warning 并返回 (0, 0)
+        """
+        import shutil as _shutil
+
+        skip = {"__pycache__"} | (set(exclude_dirs) if exclude_dirs else set())
+
+        def _ignore(_dir, names):
+            return [n for n in names if n in skip]
+
+        try:
+            _shutil.copytree(src, dst, ignore=_ignore, dirs_exist_ok=True)
+        except OSError as e:
+            warnings.append(f"copy failed: {src} → {e}")
+            return 0, 0
+        files = 0
+        total = 0
+        for dp, _dn, fn in os.walk(dst):
+            for f in fn:
+                files += 1
+                try:
+                    total += os.path.getsize(os.path.join(dp, f))
+                except OSError:
+                    pass
+        return files, total
+
+    @staticmethod
+    def _write_json(path: str, data: dict) -> None:
+        """写 JSON 文件（自动建目录）。"""
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
 
     @classmethod
     def is_open(cls) -> bool:
@@ -233,43 +605,13 @@ class ProjectManager:
 
     @classmethod
     def register_material(cls, file_path: str, material_id: int | None = None) -> None:
-        """将 .mat 文件路径及运行时 ID 注册到项目资源列表（自动去重）。"""
-        rel = cls._to_relative(file_path)
-        if not rel:
-            return
-        mats: list = cls._data.setdefault("resources", {}).setdefault("materials", [])
-        for entry in mats:
-            existing = entry if isinstance(entry, dict) else {"path": entry}
-            if existing.get("path") == rel:
-                if material_id is not None:
-                    if isinstance(entry, str):
-                        mats.remove(entry)
-                        mats.append({"path": rel, "material_id": material_id})
-                    else:
-                        entry["material_id"] = material_id
-                return
-        entry: dict = {"path": rel}
-        if material_id is not None:
-            entry["material_id"] = material_id
-        mats.append(entry)
+        """将 .mat 文件路径及运行时 ID 注册到项目资源列表（按真实路径去重）。"""
+        cls._register_resource("materials", file_path, "material_id", material_id)
 
     @classmethod
     def register_prefab(cls, file_path: str, prefab_id: int | None = None) -> None:
-        """将 .prefab 文件路径及运行时 ID 注册到项目资源列表（自动去重）。"""
-        rel = cls._to_relative(file_path)
-        if not rel:
-            return
-        prefabs: list = cls._data.setdefault("resources", {}).setdefault("prefabs", [])
-        for entry in prefabs:
-            if entry.get("path") == rel:
-                if prefab_id is not None:
-                    entry["prefab_id"] = prefab_id
-                return
-        entry: dict = {"path": rel}
-        if prefab_id is not None:
-            entry["prefab_id"] = prefab_id
-        prefabs.append(entry)
-        cls._mark_dirty()
+        """将 .prefab 文件路径及运行时 ID 注册到项目资源列表（按真实路径去重）。"""
+        cls._register_resource("prefabs", file_path, "prefab_id", prefab_id)
 
     @classmethod
     def register_scene(cls, scene_name: str) -> None:
@@ -327,6 +669,7 @@ class ProjectManager:
 
         # ★ 2. 保存所有场景到各自文件
         #    直接使用 Scene.entities 中已有的数据 (非活跃场景在切换时已同步)
+        saved_entries: list[tuple[object, str]] = []   # (scene_obj, rel_path)
         for sname, scene_obj in EditorHost._scenes.items():
             scene_path = getattr(scene_obj, '_file_path', None)
             if scene_path:
@@ -337,6 +680,7 @@ class ProjectManager:
                     rel = cls._to_relative(scene_path)
                     if rel:
                         scene_list.append(rel)
+                        saved_entries.append((scene_obj, rel))
                     continue
                 except Exception as e:
                     print(f"[Project] Failed to save scene '{sname}' to {scene_path}: {e}")
@@ -353,22 +697,34 @@ class ProjectManager:
                 rel = cls._to_relative(auto_path)
                 if rel:
                     scene_list.append(rel)
+                    saved_entries.append((scene_obj, rel))
                 print(f"[Project] Auto-saved scene '{sname}' → {rel}")
             except Exception as e:
                 print(f"[Project] Failed to auto-save scene '{sname}': {e}")
 
         cls._data["scenes"] = scene_list
 
-        # ★ 3. 维护 startup_scene 的有效性
+        # ★ 3. 维护 startup_scene 的有效性 (先按真实文件路径重映射, 再回退首个场景)
         startup = cls._data.get("startup_scene", "")
+        if startup:
+            startup_key = cls._path_key(cls._resolve_path(startup))
+            for scene_obj, rel in saved_entries:
+                sp = getattr(scene_obj, '_file_path', '') or ''
+                if startup_key and cls._path_key(sp) == startup_key and rel != startup:
+                    print(f"[Project] startup_scene remapped: '{startup}' → '{rel}'")
+                    startup = rel
+                    break
         if not startup and scene_list:
-            cls._data["startup_scene"] = scene_list[0]
+            startup = scene_list[0]
         elif startup and startup not in scene_list and scene_list:
             print(f"[Project] startup_scene '{startup}' no longer exists, using '{scene_list[0]}'")
-            cls._data["startup_scene"] = scene_list[0]
+            startup = scene_list[0]
+        cls._data["startup_scene"] = startup
 
         # ── 收集用户 prefab ──
         cls._sync_prefabs_to_data()
+        # ── 资源路径规范化: 旧绝对路径/旧相对写法 → 相对当前项目目录 ──
+        cls._canonicalize_resources()
 
         os.makedirs(os.path.dirname(cls._project_path), exist_ok=True)
         with open(cls._project_path, "w", encoding="utf-8") as fh:
@@ -414,6 +770,126 @@ class ProjectManager:
     def _mark_dirty(cls) -> None:
         """标记 project 有未保存的更改。"""
         cls._is_saved = False
+
+    # ════════════════════════════════════════════════════════════
+    # Resource 路径规范化 (注册 / 换根 / 保存)
+    # ════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _path_key(path: str) -> str:
+        """路径比较键 — 统一大小写/分隔符, 用于跨写法去重。"""
+        return os.path.normcase(os.path.normpath(path)) if path else ""
+
+    @classmethod
+    def _register_resource(
+        cls,
+        category: str,
+        file_path: str,
+        id_key: str,
+        resource_id: int | None,
+    ) -> None:
+        """注册一条资源记录。
+
+        - 相对路径先绝对化 → 再规范化为 builtin:// 或相对当前项目目录
+        - 按"真实绝对路径"去重：旧条目（绝对路径 / 旧相对路径写法）就地更新而非重复追加
+        """
+        if not file_path:
+            return
+        abs_path = file_path if os.path.isabs(file_path) else os.path.abspath(file_path)
+        rel = cls._to_relative(abs_path)
+        if not rel:
+            return
+
+        entries: list = cls._data.setdefault("resources", {}).setdefault(category, [])
+        key = cls._path_key(abs_path)
+        for idx, entry in enumerate(entries):
+            existing = entry if isinstance(entry, dict) else {"path": entry}
+            old_path = existing.get("path", "")
+            old_abs = cls._resolve_path(old_path) if old_path else ""
+            if (old_abs and cls._path_key(old_abs) == key) or old_path == rel:
+                merged: dict = {"path": rel}
+                rid = resource_id if resource_id is not None else existing.get(id_key)
+                if rid is not None:
+                    merged[id_key] = rid
+                entries[idx] = merged
+                cls._mark_dirty()
+                return
+
+        new_entry: dict = {"path": rel}
+        if resource_id is not None:
+            new_entry[id_key] = resource_id
+        entries.append(new_entry)
+        cls._mark_dirty()
+
+    @classmethod
+    def _denormalize_paths_to_absolute(cls) -> None:
+        """将存量路径固化为绝对路径 — 必须在切换项目根 (Save As) 之前调用。
+
+        存储中的相对路径语义是"相对于当前 .myproj 所在目录"；项目根一旦切换，
+        旧相对路径将指向错误位置，因此先解析为绝对路径再换根。
+        """
+        if not cls._project_path:
+            return
+        res = cls._data.get("resources", {})
+        for category in ("materials", "shaders", "textures", "meshes", "prefabs"):
+            entries = res.get(category, [])
+            for i, entry in enumerate(entries):
+                if isinstance(entry, dict):
+                    p = entry.get("path", "")
+                    if p and not p.startswith("builtin://") and not os.path.isabs(p):
+                        entry["path"] = cls._resolve_path(p)
+                elif isinstance(entry, str) and entry and not entry.startswith("builtin://") \
+                        and not os.path.isabs(entry):
+                    entries[i] = cls._resolve_path(entry)
+        scenes = cls._data.get("scenes", [])
+        for i, sp in enumerate(scenes):
+            if sp and not os.path.isabs(sp):
+                scenes[i] = cls._resolve_path(sp)
+        startup = cls._data.get("startup_scene", "")
+        if startup and not os.path.isabs(startup):
+            cls._data["startup_scene"] = cls._resolve_path(startup)
+
+    @classmethod
+    def _canonicalize_resources(cls) -> None:
+        """保存前重建 resources 路径 — 真实文件统一为 builtin:// 或相对当前项目目录。
+
+        - 旧条目里的绝对路径 / 旧项目根的相对路径 → 按当前项目根重算
+        - 同一真实文件的多条记录 (abs 与 rel 混写) 合并为一条, 保留 id
+        - 找不到的文件保留原写法 (不静默丢弃), builtin:// 原样保留
+        """
+        if not cls._project_path:
+            return
+        res = cls._data.setdefault("resources", {})
+        id_keys = {"materials": "material_id", "prefabs": "prefab_id"}
+        for category in ("materials", "shaders", "textures", "meshes", "prefabs"):
+            merged: list = []
+            seen: dict[str, int] = {}
+            for entry in res.get(category, []):
+                rel_path, rid = cls._parse_resource_entry(entry)
+                if not rel_path:
+                    continue
+                if rel_path.startswith("builtin://"):
+                    new_rel, key = rel_path, rel_path.lower()
+                else:
+                    abs_path = cls._resolve_path(rel_path)
+                    if abs_path and os.path.isfile(abs_path):
+                        new_rel = cls._to_relative(abs_path)
+                        key = cls._path_key(abs_path)
+                    else:
+                        new_rel = rel_path
+                        key = cls._path_key(abs_path or rel_path)
+                id_key = id_keys.get(category)
+                if key in seen:
+                    idx = seen[key]
+                    if id_key and rid is not None:
+                        merged[idx][id_key] = rid
+                    continue
+                seen[key] = len(merged)
+                item: dict = {"path": new_rel}
+                if id_key and rid is not None:
+                    item[id_key] = rid
+                merged.append(item)
+            res[category] = merged
 
     @classmethod
     def _to_relative(cls, abs_path: str) -> str:
@@ -596,6 +1072,8 @@ class ProjectManager:
                 continue
             try:
                 scene = Scene.load_from_file(abs_path)
+                # ★ 记住来源文件 — 后续 Project 保存/另存不会重复落盘到 scenes/ 自动目录
+                scene._file_path = abs_path
                 # ★ 重映射 material_id
                 if id_map:
                     cls._remap_scene_materials(scene, id_map)

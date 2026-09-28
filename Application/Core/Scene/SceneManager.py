@@ -96,10 +96,13 @@ class SceneManager:
             cls._create_default_cube(inst)
 
         # ── 首次 Init 时自动注册内置 Component ──
+        # ★ 必须经由本引擎自己的 inst 注册（独立播放器无 EditorHost 实例,
+        #   走 cls.RegisterComponent → _current() 会拿到 None → 崩溃;
+        #   注册结果写入全局 _component_registry, 两种途径等价）
         if not cls._component_registry:
-            cls.RegisterComponent("Camera", Camera)
-            cls.RegisterComponent("MeshRenderer", MeshRenderer)
-            cls.RegisterComponent("Transform", Transform)
+            inst.comp_mgr.register("Camera", Camera)
+            inst.comp_mgr.register("MeshRenderer", MeshRenderer)
+            inst.comp_mgr.register("Transform", Transform)
 
     @classmethod
     def _current(cls) -> 'SceneManager':

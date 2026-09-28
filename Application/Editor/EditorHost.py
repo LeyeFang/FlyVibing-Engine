@@ -15,6 +15,7 @@ EditorHost — 编辑器宿主（Engine 子类）。
 from __future__ import annotations
 
 import ctypes
+import os
 from typing import TYPE_CHECKING
 
 from Application.Core.Engine import Engine, FrameSync
@@ -168,7 +169,7 @@ class EditorHost(Engine):
         通过 Serializable 协议反序列化，确保画布和 Scene 在内存中完全独立。
         """
         scene = cls._active_scene
-        from Application.Editor.UI.controllers.node_editor.canvas import NodeCanvas
+        from Application.Core.NodeGraph.canvas import NodeCanvas
         from Application.Editor.UI.UIManager import UIManager
         panel = UIManager.find("Node Editor")
         if panel is None:
@@ -198,6 +199,8 @@ class EditorHost(Engine):
         cls.scene.SyncToScene(scene)
         cls._sync_node_graph_to_scene()
         scene.save_to_file(path)
+        # ★ 记住落点 — 后续 Project 保存将回写同一文件 (而非再复制一份)
+        scene._file_path = os.path.abspath(path)
         return True
 
     @classmethod
@@ -224,6 +227,7 @@ class EditorHost(Engine):
         """从 .scene 文件加载场景并设为活跃。"""
         from Application.Core.Scene.Scene import Scene
         scene = Scene.load_from_file(path)
+        scene._file_path = os.path.abspath(path)
         cls._scenes[scene.name] = scene
         cls._active_scene = scene
         # ★ 加载后: Scene → esper + node graph → panel

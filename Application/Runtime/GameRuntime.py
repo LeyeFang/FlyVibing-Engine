@@ -15,7 +15,8 @@ GameRuntime — 游戏运行时（Engine 子类）。
 
 from __future__ import annotations
 
-from typing import Union
+from dataclasses import dataclass
+from typing import Callable, Union
 
 from Application.Core.Engine import Engine, RendererType, WindowType
 from Application.Core.Events.EngineEvent import EngineLifecycleEvent
@@ -23,8 +24,36 @@ from Application.Core.Window.Window import Window
 from Application.Core.Renderer.Renderer import Renderer
 
 
+@dataclass
+class RuntimeHostBridge:
+    """宿主（编辑器 PIE / 独立播放器）向运行时注入的可选回调。
+
+    运行时据此保持对宿主零反向依赖；独立运行时不注入（全部为 None）:
+      - frame_sync:            共享帧同步对象（PIE 与编辑器同步; 独立运行 None）
+      - sync_scene_from_host:  启动前把宿主场景状态同步进运行时（PIE; 独立运行 None）
+      - protected_entity_ids:  停止时保留的实体集合（编辑器拥有的摄像机等; None = 全部清理）
+    """
+
+    frame_sync: object | None = None
+    sync_scene_from_host: Callable[[], None] | None = None
+    protected_entity_ids: Callable[[], set] | None = None
+
+
 class GameRuntime(Engine):
     """游戏运行时 — 可被编辑器管理（PIE）或独立运行（导出）。"""
+
+    # ── 宿主桥接（PIE/编辑器注入; 独立运行保持 None — 零反向依赖）──
+    _host_bridge: 'RuntimeHostBridge | None' = None
+
+    @classmethod
+    def set_host_bridge(cls, bridge: 'RuntimeHostBridge') -> None:
+        """注入宿主桥接（编辑器 PIE 启动前调用）。"""
+        cls._host_bridge = bridge
+
+    @classmethod
+    def clear_host_bridge(cls) -> None:
+        """清除宿主桥接（PIE 停止后调用）。"""
+        cls._host_bridge = None
 
     # ════════════════════════════════════════════════════════════
     # 工厂方法
@@ -57,18 +86,26 @@ class GameRuntime(Engine):
         """非阻塞启动 (PIE 模式)。"""
         cls._state()['_logic_thread_enabled'] = True
         cls.init(window_type=window_type, renderer_type=renderer_type)
-        # ── 从 Editor 同步场景状态到 Runtime ──
-        cls._sync_scene_from_editor()
+        # ── 宿主桥接（PIE）: 启动前同步宿主场景 + 共享帧同步 ──
+        #    独立运行无桥接 → 全部跳过（对 Editor 零反向依赖）
+        bridge = cls._host_bridge
+        if bridge is not None and bridge.sync_scene_from_host is not None:
+            try:
+                bridge.sync_scene_from_host()
+            except Exception as e:
+                print(f"[GameRuntime] host sync_scene_from_host failed: {e}")
         # ── Overlay 模式: 透明背景由 OverlayInputLayer.OnAttach 设置 ──
         # (OnAttach 在渲染线程创建渲染器后、首帧前调用，保证确定性)
         # ── 帧同步: PIE 作为 slave, 等待 Editor 每帧完成后再渲染 ──
-        from Application.Editor.EditorHost import EditorHost
-        if EditorHost._frame_sync is not None:
-            cls._frame_sync = EditorHost._frame_sync  # 共享同一个 FrameSync
+        if bridge is not None and bridge.frame_sync is not None:
+            cls._frame_sync = bridge.frame_sync  # 共享同一个 FrameSync
             cls._is_frame_sync_master = False
         # ── 启动设备 I/O 线程 ──
         from Application.Functions.SerialParallelDevice import start as spd_start
         spd_start()
+        # ── 清理上次运行可能残留的 EEG 会话（异常退出保护）──
+        from Application.Functions.EEGDevice import close_all as gtec_close_all
+        gtec_close_all()
         EngineLifecycleEvent.Pack(stage="start", message="Started in PIE mode", engine=cls)
         return cls
 
@@ -90,69 +127,25 @@ class GameRuntime(Engine):
     # ════════════════════════════════════════════════════════════
 
     @classmethod
-    def _sync_scene_from_editor(cls) -> None:
-        """从 Editor 同步 game_type + 摄像机 + 渲染实体到 Runtime。"""
-        from Application.Editor.EditorHost import EditorHost
-        import esper
-        from Application.Core.Scene.BasicComponents import MeshRenderer
-        editor_scene = EditorHost.scene
-        if editor_scene is None:
-            return
-        cls.scene.game_type = editor_scene.game_type
-        # ★ 同步默认摄像机 ID（Editor Init 创建的，Runtime 复用）
-        cls.scene.main_camera_id = editor_scene.main_camera_id
-        cls.scene.main_camera_2d_id = editor_scene.main_camera_2d_id
-        cls.scene.main_camera_overlay_id = editor_scene.main_camera_overlay_id
-        # ★ 将摄像机实体注册到 Runtime 的 entities 追踪表
-        for cam_id in (editor_scene.main_camera_id,
-                       editor_scene.main_camera_2d_id,
-                       editor_scene.main_camera_overlay_id):
-            if cam_id is not None:
-                cls.scene.entities[str(cam_id)] = 1
-                cls.scene._entity_names[cam_id] = editor_scene._entity_names.get(cam_id, f"Camera_{cam_id}")
-        # ★ 收集模板实体名称（EntitySpawn 用，不应被 EntityGet 找到）
-        _template_names: set[str] = set()
-        try:
-            from Application.Runtime.RuntimeNodeLayer import RuntimeNodeLayer
-            if RuntimeNodeLayer._scene is not None:
-                for ed in RuntimeNodeLayer._scene.entities.values():
-                    _template_names.add(ed.name)
-        except Exception:
-            pass
-        # ★ 同步 MeshRenderer 实体到 Runtime（PIE 渲染需要）
-        #    跳过模板实体 — 它们只是数据模板，真正的渲染实体由 EntitySpawn 创建
-        mesh_count = 0
-        skipped_templates = 0
-        for eid, _ in esper.get_component(MeshRenderer):
-            if str(eid) not in cls.scene.entities:
-                name = editor_scene._entity_names.get(eid, f"Entity_{eid}")
-                if name in _template_names:
-                    skipped_templates += 1
-                    continue  # 模板实体：只做数据参考，不参与运行时渲染
-                cls.scene.entities[str(eid)] = 1
-                cls.scene._entity_names[eid] = name
-                mesh_count += 1
-        # ★ 根据 game_type 选择活跃摄像机
-        cls.scene.cam_mgr._apply(cls.scene)
-        print(f"[GameRuntime] Synced from editor: game_type={editor_scene.game_type.value}, "
-              f"camera_id={cls.scene.scene_camera_id}, mesh_entities={mesh_count}"
-              f"{f' (skipped {skipped_templates} templates)' if skipped_templates else ''}")
-
-    @classmethod
     def stop(cls) -> None:
         """请求停止 Runtime 并清理状态，允许再次 start()。"""
         # ── 停止设备 I/O 线程 ──
         from Application.Functions.SerialParallelDevice import stop as spd_stop
         spd_stop()
-        # ── 清理 Runtime 实体（跳过共享的 Editor 摄像机）──
+        # ── 清理 Runtime 实体（保留宿主保护实体）──
         if cls.scene is not None:
-            # ★ 不删除 Editor 拥有的实体（摄像机等）
-            from Application.Editor.EditorHost import EditorHost
-            editor_eids = set(EditorHost.scene.entities.keys()) if EditorHost.scene else set()
+            # ★ 保护实体由宿主注入（编辑器摄像机等）; 独立运行默认空集 → 全部清理
+            protected: set[str] = set()
+            bridge = cls._host_bridge
+            if bridge is not None and bridge.protected_entity_ids is not None:
+                try:
+                    protected = {str(x) for x in bridge.protected_entity_ids()}
+                except Exception as e:
+                    print(f"[GameRuntime] host protected_entity_ids failed: {e}")
             # ★ 使用 SceneManager.DeleteEntity 递归删除子实体，
             #    避免 esper.delete_entity 裸删导致子实体泄露
             for eid_str in list(cls.scene.entities.keys()):
-                if eid_str in editor_eids:
+                if eid_str in protected:
                     continue
                 cls.scene.DeleteEntity(int(eid_str))
             cls.scene.entities.clear()
@@ -184,6 +177,13 @@ class GameRuntime(Engine):
         # ── 脱离帧同步 ──
         cls._frame_sync = None
         cls._is_frame_sync_master = False
+        # ── 最后的安全网: 关闭所有仍存活的 EEG 会话（不保存）──
+        #    图内 StopGtecRecord/KillGtecDevice 已在 OnGameStop 链路执行完毕;
+        #    此处兜底处理图里没有 Kill 节点 / 异常路径的情况。
+        from Application.Functions.EEGDevice import close_all as gtec_close_all
+        _closed = gtec_close_all()
+        if _closed:
+            print(f"[GameRuntime] Gtec safety: closed {_closed} leftover session(s)")
 
     @classmethod
     def is_running(cls) -> bool:

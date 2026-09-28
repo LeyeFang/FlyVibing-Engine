@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from Application.Editor.UI.controllers.node_editor.component_registry import (
+from Application.Core.NodeGraph.component_registry import (
     get_properties,
 )
 

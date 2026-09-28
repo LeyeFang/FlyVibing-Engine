@@ -395,6 +395,23 @@ class FileDialog:
         cls._active_type = "directory"
 
     @classmethod
+    def open_export_dir(
+        cls,
+        callback: Callable[[str], None],
+        start_dir: str | None = None,
+    ) -> None:
+        """打开"导出目标文件夹"选择对话框。
+
+        选中目录作为导出父目录 — 导出时会在其下创建 <项目名>/ 子目录。
+        """
+        d = start_dir if (start_dir and os.path.isdir(start_dir)) else _DialogMemory.get_dir("export")
+        cls._active_dialog = pfd.select_folder(
+            "Export To Folder (a project subfolder will be created)", d, pfd.opt.none,
+        )
+        cls._callback = callback
+        cls._active_type = "export"
+
+    @classmethod
     def open_text(
         cls,
         callback: Callable[[str], None],

@@ -1,14 +1,15 @@
 """
 Application.Editor.UI.controllers — 编辑器控制器层。
 
-导出所有控制器和节点编辑器核心类型。
+导出所有控制器和节点图运行时类型。
 
-使用惰性导入: 仅 node_editor 子包在 import 时立即加载 (供验证器等轻量使用)，
-其余控制器按需加载，避免在无 numpy/OpenGL 环境下导入失败。
+使用惰性导入: 仅节点图运行时 (Application.Core.NodeGraph) 在 import 时立即加载
+(供验证器等轻量使用)，其余控制器按需加载，避免在无 numpy/OpenGL 环境下导入失败。
 """
 
 # ── 这些总是安全的 (纯 Python, 无渲染/硬件依赖) ──
-from Application.Editor.UI.controllers.node_editor import NodeCanvas, _TYPES
+# 节点图运行时已迁至 Core — 编辑器侧只保留 UI 交互
+from Application.Core.NodeGraph import NodeCanvas, _TYPES
 
 
 def __getattr__(name: str):

@@ -71,7 +71,7 @@
 | 类 | 窗口名称 | 依赖的 Controller | 职责 |
 |----|---------|-------------------|------|
 | `ScenePanel` | `"Scene"` | `SimulationController`、`SceneBrowserController`、`ResourceBrowserController` | 场景层级 + 运行控制 + 资源浏览 |
-| `NodeEditorPanel` | `"Node Editor"` | `node_editor/` (canvas + evaluators) | 节点画布（Runtime 生命周期节点编辑） |
+| `NodeEditorPanel` | `"Node Editor"` | `Application/Core/NodeGraph` (canvas + evaluators) | 节点画布（Runtime 生命周期节点编辑） |
 | `ToolbarPanel` | `"##Toolbar"` | `SimulationController` | 精简播放控制条 |
 | `MenuBarPanel` | — | — | 保留文件但未注册，视未来需求启用 |
 
@@ -84,7 +84,7 @@
 | `SimulationController` | 模拟状态机 | `play()` / `pause()` / `resume()` / `stop()` / `get_state()` / `is_running()` |
 | `SceneBrowserController` | 实体列表 & 选择 & 检视 | `get_renderable_entities()` / `select()` / `get_selected()` / `get_summary()` |
 | `ResourceBrowserController` | 已加载资源分类查询 | `get_meshes()` / `get_shaders()` / `get_textures()` / `get_materials()` |
-| `node_editor/` (子包) | 节点编辑器数据层 | `NodeCanvas` (节点/连线 CRUD)、`_TYPES` (类型注册表)、`GraphEvaluator` (执行引擎) |
+| `Application/Core/NodeGraph/` | 节点图运行时（独立于编辑器） | `NodeCanvas` (节点/连线 CRUD)、`_TYPES` (类型注册表)、`GraphEvaluator` (执行引擎)、evaluators |
 
 ---
 

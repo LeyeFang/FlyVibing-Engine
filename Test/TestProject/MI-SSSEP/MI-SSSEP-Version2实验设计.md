@@ -4,12 +4,15 @@
 
 MI-SSSEP 的精简修改版。基于 MI-SSSEP 场景，仅修改节点图。沿用在 MI-SSSEP 原 Scene 的模板 entity。
 
+**修订 (2026-09-20)**: 新增第 9 个 SSSEP 条件 —— **无刺激 (SSSEP 停振) + MI**, 提供 pure-MI 基准;
+该条件 SSSEP 码固定为 **10**, MI 编码与其余条件一致。
+
 ## 与原始 MI-SSSEP 的差异
 
 | 方面 | MI-SSSEP (原版) | MI-SSSEP-Version2 (精简版) |
 |------|----------------|---------------------------|
-| SSSEP 条件数 | 14 (11-24) | 8 (11,12,13,15,17,19,21,23) |
-| SSSEP 选择方式 | Random(11, 24) 直接取值 | Random(1, 8) 索引映射 |
+| SSSEP 条件数 | 14 (11-24) | 9 (11,12,13,15,17,19,21,23 + 10=无刺激) |
+| SSSEP 选择方式 | Random(11, 24) 直接取值 | Random(1, 9) 索引映射 (第 9 类=无刺激) |
 | Trigger 编码 | `(MI << 6) \| SSSEP` | `(MI << 5) \| SSSEP` |
 | MI 基值 (Left) | 64 | 32 |
 | MI 基值 (Right) | 128 | 64 |
@@ -17,11 +20,11 @@ MI-SSSEP 的精简修改版。基于 MI-SSSEP 场景，仅修改节点图。沿�
 | SSSEP 计算时机 | Phase 0 内实时计算 | OnGameStart + 每 trial 结束时预计算 |
 | Phase 0 cue 触发 | 无 | **打 1 次条件 trigger (MI<<5 \| SSSEP)** |
 | Phase 2 脉冲内容 | ParallelSend(trigger 编码) | **ParallelSend(sss_code 仅编码 SSSEP)** |
-| Trigger 种类 | 42 | **32 (8×3 + 8)** |
+| Trigger 种类 | 42 | **36 (9×3 + 9)** |
 
 ## 实验条件
 
-### SSSEP 条件 (8 类)
+### SSSEP 条件 (9 类)
 
 | 索引 | SSSEP 值 | 串口信号 |
 |------|---------|---------|
@@ -33,8 +36,13 @@ MI-SSSEP 的精简修改版。基于 MI-SSSEP 场景，仅修改节点图。沿�
 | 6 | 19 | 19 |
 | 7 | 21 | 21 |
 | 8 | 23 | 23 |
+| 9 | 10 | 10 (无刺激) |
 
 选取规则: 从 13 开始隔一个抽一个。即：11, 12, 13 (连续3个), 然后 15, 17, 19, 21, 23 (步长2)。
+
+**无刺激条件 (索引 9 → sss_code = 10)**: 不进行 SSSEP 刺激的 MI 基准 (pure-MI baseline)。
+10 低于刺激器固件指令范围 (11–24), 固件对未知指令直接忽略, 因此无任何振动输出。
+trial 时序、cue 显示、Phase 0 条件 trigger 机制与其余 8 类完全一致; 每 session (60 trial) 期望 ~6-7 个无刺激 trial。
 
 ### MI 条件 (3 类, 不变)
 
@@ -62,15 +70,18 @@ Trigger = (MI_code << 5) | SSSEP_code
 | Right (2) | 15 | 00 10 01111 | 79 |
 | None (3) | 11 | 00 11 01011 | 107 |
 | None (3) | 23 | 00 11 10111 | 119 |
+| Left (1) | 10 (无刺激) | 00 01 01010 | 42 |
+| Right (2) | 10 (无刺激) | 00 10 01010 | 74 |
+| None (3) | 10 (无刺激) | 00 11 01010 | 106 |
 
-共 3 × 8 = **24 种** cue 触发编码。
+共 3 × 9 = **27 种** cue 触发编码。
 
-## Trigger 种类汇总 (共 32 种)
+## Trigger 种类汇总 (共 36 种)
 
 | 阶段 | 发送内容 | 种类数 | 说明 |
 |------|---------|--------|------|
-| Phase 0 (cue 出现) | `MI<<5 \| SSSEP` | 8×3 = 24 | Left/Right/Null cue 各 8 种 SSSEP |
-| Phase 2 (task cue 脉冲) | `SSSEP` (11-23) | 8 | 仅编码 SSSEP 条件 |
+| Phase 0 (cue 出现) | `MI<<5 \| SSSEP` | 9×3 = 27 | Left/Right/Null cue 各 9 种 SSSEP (含无刺激 10) |
+| Phase 2 (task cue 脉冲) | `SSSEP` (10-23) | 9 | 仅编码 SSSEP 条件 (无刺激 = 10) |
 
 ## Trial 流程
 
@@ -91,6 +102,9 @@ Trigger = (MI_code << 5) | SSSEP_code
   0s               2s                  6s              10s
 ```
 
+> 无刺激条件 (sss_code=10): 流程与时序完全相同; Phase 2 的 80 个脉冲照常发送 (值为 10),
+> 刺激器固件忽略该码 → 无振动, 仅作为 MI 任务时段的标记。
+
 ### Phase 0 条件 trigger (新增)
 
 - **时机**: cue 出现的瞬间 (0s)
@@ -103,10 +117,11 @@ Trigger = (MI_code << 5) | SSSEP_code
 - **首次计算**: OnGameStart 链末尾 (第 1 个 trial 使用)
 - **后续计算**: 每个 trial 的 Phase 10 末尾 (为下一个 trial 准备)
 
-预计算流程:
-1. Random(1, 8) → sss_idx
-2. 如果 sss_idx ≤ 3: sss_code = sss_idx + 10
-3. 否则: sss_code = sss_idx × 2 + 7
+预计算流程 (Random 节点 246: min=1, max=9):
+1. sss_idx = Random(1, 9)
+2. 如果 sss_idx ≤ 3: sss_code = sss_idx + 10 → 11, 12, 13
+3. 否则如果 sss_idx ≤ 8: sss_code = sss_idx × 2 + 7 → 15, 17, 19, 21, 23
+4. 否则 (sss_idx = 9): sss_code = 10 → 无刺激
 
 ### 脉冲时序 (Phase 2, 2-6s)
 
@@ -114,11 +129,12 @@ Trigger = (MI_code << 5) | SSSEP_code
 - 持续: 4 秒
 - 次数: 80 次
 - 每次发送:
-  - **Parallel port (0x3FF8)**: **SSSEP 频率码 (11,12,13,15,17,19,21,23)** — 仅编码 SSSEP
-  - **Serial port (COM3, 9600)**: SSSEP 频率码
+  - **Parallel port (0x3FF8)**: **SSSEP 频率码 (11,12,13,15,17,19,21,23; 无刺激 = 10)** — 仅编码 SSSEP
+  - **Serial port (COM3, 9600)**: SSSEP 频率码 (无刺激条件发 10, 刺激器固件忽略 → 无输出)
 - ★ 变更: 原版 80 脉冲发送 `trigger 编码 (MI<<5|SSSEP)`, 现改为仅发送 `sss_code`
+- ★ 无刺激 trial: 80 个脉冲照发 (值 = 10), 保持标记结构与时序一致; 刺激器不产生振动
 
-## 实验参数 (不变)
+## 实验参数
 
 | 参数 | 值 |
 |------|-----|
@@ -126,8 +142,8 @@ Trigger = (MI_code << 5) | SSSEP_code
 | 总 trial 数 | 60 |
 | 单个 trial 时长 | 10 秒 |
 | MI 条件数 | 3 (Left/Right/None) |
-| SSSEP 条件数 | 8 (11,12,13,15,17,19,21,23) |
-| Trigger 编码数 | 32 (Phase 0: 24 + Phase 2: 8) |
+| SSSEP 条件数 | 9 (11,12,13,15,17,19,21,23 + 10=无刺激) |
+| Trigger 编码数 | 36 (Phase 0: 27 + Phase 2: 9) |
 | SSSEP 脉冲频率 | 20 Hz |
 | 每 trial 脉冲数 | 80 |
 | 全程注视点 | Cross |
@@ -156,3 +172,11 @@ Trigger = (MI_code << 5) | SSSEP_code
    - 发送 `trigger_val = MI<<5 | sss_code` — cue 出现时打 1 次
 7. **Phase 2 脉冲变更**: 80 个脉冲的 ParallelSend 改为发送 `sss_code` (仅编码 SSSEP)
    - 原发送 `trigger_val` 的连线 (10366→10370) 改为 `sss_code` (10374→10370)
+8. **无刺激 (pure-MI 基线) 条件** (2026-09-20 新增):
+   - Random 246: `max 8 → 9`; 第 9 类 → `sss_code = 10`
+   - 两个预计算块 (OnGameStart / trial 末) 新增 `idx ≤ 8` 判定链:
+     旧 `Branch.False` 出口改接新 `Compare(≤8) → Branch`;
+     True → 原映射 `idx×2+7`, False → 常量 10
+     (节点 363–367 / 368–372, 新连线 707–720)
+   - 旧连线 `344.False → 348.exec_in` (link 671) 与 `355.False → 359.exec_in` (link 687) 被替代
+   - Phase 0 cue trigger 与 Phase 2 脉冲机制不变: 无刺激 trial 发送 `(MI<<5)|10` (= 42/74/106) 及 80 个 `10`

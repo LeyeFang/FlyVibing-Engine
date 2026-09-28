@@ -46,7 +46,7 @@ from Application.Core.Scene.SceneManager import SceneManager
 from Application.Editor.EditorHost import EditorHost
 from Application.Editor.UI.UIManager import UIManager
 from Application.Editor.UI.panels import NodeEditorPanel
-from Application.Editor.UI.controllers.node_editor import (
+from Application.Core.NodeGraph import (
     _TYPES, NodeCanvas,
 )
 from Application.Editor.UI.controllers.SimulationController import (

@@ -60,7 +60,7 @@ def _extract_graph_data(scene_data: dict) -> dict:
 
 def validate_static(scene_data: dict) -> list[str]:
     """L1: 静态结构校验 — 返回错误列表 (空列表 = 通过)。"""
-    from Application.Editor.UI.controllers.node_editor.node_types import _TYPES
+    from Application.Core.NodeGraph.node_types import _TYPES
 
     errors: list[str] = []
     graph = _extract_graph_data(scene_data)
@@ -185,6 +185,12 @@ def validate_static(scene_data: dict) -> list[str]:
                     f"Node {nid_str}<{node_type}>: required pin '{rpin}' is not connected"
                 )
 
+    # 6. Gtec Init/Kill 强制配对 (与编辑器删除级联同一规则)
+    from Application.Core.NodeGraph.graph_constraints import (
+        gtec_pairing_errors,
+    )
+    errors.extend(gtec_pairing_errors(nodes))
+
     return errors
 
 
@@ -251,9 +257,9 @@ def dry_run_simulation(
     """
     import time as _time_mod
 
-    from Application.Editor.UI.controllers.node_editor.node_types import _TYPES
-    from Application.Editor.UI.controllers.node_editor.canvas import NodeCanvas
-    from Application.Editor.UI.controllers.node_editor.evaluator_engine import (
+    from Application.Core.NodeGraph.node_types import _TYPES
+    from Application.Core.NodeGraph.canvas import NodeCanvas
+    from Application.Core.NodeGraph.evaluator_engine import (
         GraphEvaluator,
         ExecutionContext,
     )

@@ -83,6 +83,67 @@ class SimulationController:
                 pass
             scene.entities[eid] = EntityData(name=name, components=comps, parent_id=parent_id)
 
+    # ── 宿主桥接实现 (供 GameRuntime 回呼; 运行时侧无 Editor 依赖) ──
+
+    @staticmethod
+    def _sync_scene_to_runtime() -> None:
+        """PIE 启动前: 从编辑器同步 game_type + 摄像机 + 渲染实体到 Runtime。
+
+        (原 GameRuntime._sync_scene_from_editor — 解耦后归属编辑器侧,
+         由 GameRuntime.set_host_bridge 在启动时回调)
+        """
+        import esper
+        from Application.Core.Scene.BasicComponents import MeshRenderer
+        from Application.Runtime.GameRuntime import GameRuntime
+        from Application.Runtime.RuntimeNodeLayer import RuntimeNodeLayer
+
+        editor_scene = EditorHost.scene
+        if editor_scene is None:
+            return
+        rt = GameRuntime.scene
+        rt.game_type = editor_scene.game_type
+        # ★ 同步默认摄像机 ID（Editor Init 创建的，Runtime 复用）
+        rt.main_camera_id = editor_scene.main_camera_id
+        rt.main_camera_2d_id = editor_scene.main_camera_2d_id
+        rt.main_camera_overlay_id = editor_scene.main_camera_overlay_id
+        # ★ 将摄像机实体注册到 Runtime 的 entities 追踪表
+        for cam_id in (editor_scene.main_camera_id,
+                       editor_scene.main_camera_2d_id,
+                       editor_scene.main_camera_overlay_id):
+            if cam_id is not None:
+                rt.entities[str(cam_id)] = 1
+                rt._entity_names[cam_id] = editor_scene._entity_names.get(cam_id, f"Camera_{cam_id}")
+        # ★ 收集模板实体名称（EntitySpawn 用，不应被 EntityGet 找到）
+        _template_names: set[str] = set()
+        if RuntimeNodeLayer._scene is not None:
+            for ed in RuntimeNodeLayer._scene.entities.values():
+                _template_names.add(ed.name)
+        # ★ 同步 MeshRenderer 实体到 Runtime（PIE 渲染需要）
+        #    跳过模板实体 — 它们只是数据模板，真正的渲染实体由 EntitySpawn 创建
+        mesh_count = 0
+        skipped_templates = 0
+        for eid, _ in esper.get_component(MeshRenderer):
+            if str(eid) not in rt.entities:
+                name = editor_scene._entity_names.get(eid, f"Entity_{eid}")
+                if name in _template_names:
+                    skipped_templates += 1
+                    continue  # 模板实体：只做数据参考，不参与运行时渲染
+                rt.entities[str(eid)] = 1
+                rt._entity_names[eid] = name
+                mesh_count += 1
+        # ★ 根据 game_type 选择活跃摄像机
+        rt.cam_mgr._apply(rt)
+        print(f"[Simulation] Synced from editor: game_type={editor_scene.game_type.value}, "
+              f"camera_id={rt.scene_camera_id}, mesh_entities={mesh_count}"
+              f"{f' (skipped {skipped_templates} templates)' if skipped_templates else ''}")
+
+    @staticmethod
+    def _protected_runtime_entities() -> set[str]:
+        """停止 Runtime 时保留的实体（编辑器拥有的摄像机等）。"""
+        if EditorHost.scene is None:
+            return set()
+        return set(EditorHost.scene.entities.keys())
+
     # ── 状态变更 ────────────────────────────────────────────
 
     @classmethod
@@ -107,7 +168,7 @@ class SimulationController:
             return
         cls._pending_start = False
 
-        from Application.Runtime.GameRuntime import GameRuntime
+        from Application.Runtime.GameRuntime import GameRuntime, RuntimeHostBridge
 
         # 防止重复启动
         if cls._state != SimulationState.STOPPED:
@@ -159,6 +220,14 @@ class SimulationController:
             RuntimeWindow._topmost = False
             RuntimeWindow._click_through = False
 
+        # ── 注册运行时宿主桥接 + 上下文钩子 (运行时对 Editor 零反向依赖) ──
+        RuntimeNodeLayer.set_context_hooks(on_stop_request=cls.stop)
+        GameRuntime.set_host_bridge(RuntimeHostBridge(
+            frame_sync=EditorHost._frame_sync,
+            sync_scene_from_host=cls._sync_scene_to_runtime,
+            protected_entity_ids=cls._protected_runtime_entities,
+        ))
+
         # ── 统一后端: PIE 使用与编辑器相同的窗口/渲染器类型 ──
         #     若 EditorHost 未初始化 (如测试环境), 回退到 GLFW + OpenGL
         GameRuntime.start(
@@ -205,6 +274,7 @@ class SimulationController:
 
         from Application.Runtime.GameRuntime import GameRuntime
         GameRuntime.stop()
+        GameRuntime.clear_host_bridge()
         cls._state = SimulationState.STOPPED
         EngineLifecycleEvent.Pack(
             stage="simulation", message="Runtime stopped", engine=EditorHost

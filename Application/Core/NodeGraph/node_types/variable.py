@@ -29,7 +29,7 @@ _reg(NodeTypeDef(
 ))
 
 _reg(NodeTypeDef(
-    "Constant", "Scale", "Basic", BASIC_COLOR,
+    "Constant", "Number", "Basic", BASIC_COLOR,
     [
         PinDef(_gen_id(), "Result", "data", "output", "float"),
     ],

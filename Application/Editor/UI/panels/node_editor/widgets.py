@@ -12,7 +12,7 @@ from typing import Callable
 
 from imgui_bundle import imgui
 
-from Application.Editor.UI.controllers.node_editor.component_registry import (
+from Application.Core.NodeGraph.component_registry import (
     get_properties,
     get_registered_component_names,
 )
@@ -674,7 +674,7 @@ def _draw_var_get_widgets(nid: int, inst, canvas) -> None:
     imgui.pop_item_width()
 
 
-# ── Constant (Scale) ───────────────────────────────────────
+# ── Constant (Number) ──────────────────────────────────────
 
 @register("Constant")
 def _draw_constant_widgets(nid: int, inst, _canvas) -> None:
@@ -966,3 +966,248 @@ def _draw_vec_math_widgets(nid: int, inst, _canvas) -> None:
     imgui.same_line()
     imgui.text_disabled("Op")
     imgui.pop_item_width()
+
+
+# ═══════════════════════════════════════════════════════════════
+# Gtec 节点 (IO ▸ Gtec)
+# ═══════════════════════════════════════════════════════════════
+
+def _collect_gtec_device_names(canvas, exclude_nid: int | None = None) -> list[str]:
+    """收集画布上所有 InitGtecDevice 会话名（device_name 或 gtec#<nid> 回退），去重排序。"""
+    names: set[str] = set()
+    for nid, inst in canvas.nodes.items():
+        if nid == exclude_nid or inst.node_type != "InitGtecDevice":
+            continue
+        n = str(inst.props.get("device_name", "")).strip() or f"gtec#{nid}"
+        names.add(n)
+    return sorted(names)
+
+
+def _default_gtec_device_name(canvas, nid: int) -> str:
+    """首个 Init 默认 HIAMP，其后 HIAMP2、HIAMP3…（保证画布内唯一）。"""
+    used = {
+        str(inst.props.get("device_name", "")).strip()
+        for n2, inst in canvas.nodes.items()
+        if n2 != nid and inst.node_type == "InitGtecDevice"
+    }
+    base = "HIAMP"
+    if base not in used:
+        return base
+    k = 2
+    while f"{base}{k}" in used:
+        k += 1
+    return f"{base}{k}"
+
+
+def _draw_gtec_device_combo(label: str, nid: int, inst, canvas) -> None:
+    """设备会话选择下拉框 — 列出 InitGtecDevice 注册的会话。
+
+    空名称 + 唯一会话 → 自动绑定；已绑定但未注册时给出提示。
+    """
+    existing = _collect_gtec_device_names(canvas, exclude_nid=nid)
+    current = str(inst.props.get("device_name", "")).strip()
+    if not current and len(existing) == 1:
+        inst.props["device_name"] = existing[0]
+        current = existing[0]
+
+    items = existing if existing else ["(no Init Gtec Device)"]
+    idx = existing.index(current) if current in existing else 0
+    changed, new_idx = _ne_combo(f"##gtec_dev_{label}_{nid}", idx, items)
+    if changed and existing:
+        inst.props["device_name"] = existing[new_idx]
+
+    if current and current not in existing:
+        imgui.same_line()
+        imgui.text_disabled("(not registered)")
+
+
+@register("InitGtecDevice")
+def _draw_init_gtec_widgets(nid: int, inst, canvas) -> None:
+    """InitGtecDevice — 设备 / 模板 / 滤波 / 采样率 / 导出 / 缓冲配置。"""
+    from Application.Functions.EEGDevice import DEVICE_CHOICES, SUPPORTED_RATES, TEMPLATE_CHOICES
+
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(100)
+
+    # ── 会话名（默认唯一） ──
+    if not str(inst.props.get("device_name", "")).strip():
+        inst.props["device_name"] = _default_gtec_device_name(canvas, nid)
+    name = str(inst.props.get("device_name", ""))
+    changed, new_name = imgui.input_text(f"Name##gtec_name_{nid}", name)
+    if changed:
+        inst.props["device_name"] = new_name.strip()
+
+    # ── 设备族 + 序列号 ──
+    dev = inst.props.get("device", "HIAMP")
+    dev_idx = DEVICE_CHOICES.index(dev) if dev in DEVICE_CHOICES else 0
+    changed, new_idx = _ne_combo(f"##gtec_dev_{nid}", dev_idx, list(DEVICE_CHOICES))
+    if changed:
+        inst.props["device"] = DEVICE_CHOICES[new_idx]
+    imgui.same_line()
+    imgui.text_disabled("Device")
+
+    serial = str(inst.props.get("serial", ""))
+    changed, new_serial = imgui.input_text(
+        f"##gtec_serial_{nid}", serial,
+    )
+    if changed:
+        inst.props["serial"] = new_serial.strip()
+    if not serial:
+        imgui.same_line()
+        imgui.text_disabled("(serial: auto)")
+
+    # ── 模板 + 采样率 ──
+    templates = list(TEMPLATE_CHOICES)
+    tpl = inst.props.get("template", "64ch")
+    tpl_idx = templates.index(tpl) if tpl in templates else 0
+    changed, new_idx = _ne_combo(f"##gtec_tpl_{nid}", tpl_idx, templates)
+    if changed:
+        inst.props["template"] = templates[new_idx]
+    imgui.same_line()
+    imgui.text_disabled("Template")
+
+    rates = [str(r) for r in SUPPORTED_RATES]
+    rate = str(int(inst.props.get("sampling_rate", 512)))
+    rate_idx = rates.index(rate) if rate in rates else rates.index("512")
+    changed, new_idx = _ne_combo(f"##gtec_rate_{nid}", rate_idx, [f"{r} Hz" for r in rates])
+    if changed:
+        inst.props["sampling_rate"] = int(rates[new_idx])
+    imgui.same_line()
+    imgui.text_disabled("Rate")
+
+    # ── 在线滤波: 陷波 + 类型 + 截止频率 ──
+    notch_labels = ["Notch Off", "Notch 50Hz", "Notch 60Hz"]
+    notch_keys = ["off", "50", "60"]
+    notch = str(inst.props.get("notch", "off"))
+    notch_idx = notch_keys.index(notch) if notch in notch_keys else 0
+    changed, new_idx = _ne_combo(f"##gtec_notch_{nid}", notch_idx, notch_labels)
+    if changed:
+        inst.props["notch"] = notch_keys[new_idx]
+
+    ftype_labels = ["Filter None", "High-pass", "Low-pass", "Band-pass"]
+    ftype_keys = ["none", "highpass", "lowpass", "bandpass"]
+    ftype = str(inst.props.get("filter_type", "none"))
+    ftype_idx = ftype_keys.index(ftype) if ftype in ftype_keys else 0
+    changed, new_idx = _ne_combo(f"##gtec_ftype_{nid}", ftype_idx, ftype_labels)
+    if changed:
+        inst.props["filter_type"] = ftype_keys[new_idx]
+
+    # 截止频率: 0 = 未填(不生效); 按滤波器类型灰显不适用的输入
+    low_enabled = ftype in ("highpass", "bandpass")
+    high_enabled = ftype in ("lowpass", "bandpass")
+    low = float(inst.props.get("low_cut", 0.0))
+    high = float(inst.props.get("high_cut", 0.0))
+
+    imgui.push_item_width(62)
+    if not low_enabled:
+        imgui.begin_disabled()
+    changed, nv = imgui.input_float(f"Low##gtec_low_{nid}", low, format="%.3f")
+    if changed:
+        inst.props["low_cut"] = max(0.0, nv)
+    if not low_enabled:
+        imgui.end_disabled()
+    imgui.same_line()
+    if not high_enabled:
+        imgui.begin_disabled()
+    changed, nv = imgui.input_float(f"High##gtec_high_{nid}", high, format="%.3f")
+    if changed:
+        inst.props["high_cut"] = max(0.0, nv)
+    if not high_enabled:
+        imgui.end_disabled()
+    imgui.same_line()
+    imgui.text_disabled("Hz (0=off)")
+    imgui.pop_item_width()
+
+    # ── Trigger: 固定开启 + combine（只读展示） ──
+    imgui.text_disabled("Trigger: ON (16 lines combined)")
+
+    # ── 导出格式 + 保存目录 ──
+    fmt_labels = ["NPZ (.npz + .json)", "CSV (.csv + .json)"]
+    fmt_keys = ["npz", "csv"]
+    fmt = str(inst.props.get("export_format", "npz"))
+    fmt_idx = fmt_keys.index(fmt) if fmt in fmt_keys else 0
+    changed, new_idx = _ne_combo(f"##gtec_fmt_{nid}", fmt_idx, fmt_labels)
+    if changed:
+        inst.props["export_format"] = fmt_keys[new_idx]
+
+    if imgui.button(f"Browse Dir...##gtec_dir_btn_{nid}"):
+        from Application.Editor.UI.FileDialog import FileDialog
+        FileDialog.open_directory(
+            lambda p, i=inst: i.props.__setitem__("save_dir", p),
+            start_dir=str(inst.props.get("save_dir", "")),
+        )
+    imgui.same_line()
+    sd = str(inst.props.get("save_dir", "")).strip()
+    if sd:
+        display = sd if len(sd) <= 30 else "..." + sd[-27:]
+        imgui.text_disabled(display)
+    else:
+        imgui.text_disabled("(default: .)")
+
+    # ── 窗口缓冲秒数 ──
+    imgui.push_item_width(62)
+    buf = float(inst.props.get("buffer_seconds", 10.0))
+    changed, nv = imgui.input_float(f"Buffer##gtec_buf_{nid}", buf, format="%.1f")
+    if changed:
+        inst.props["buffer_seconds"] = max(0.1, min(600.0, nv))
+    imgui.pop_item_width()
+    imgui.same_line()
+    try:
+        tpl_key = str(inst.props.get("template", "64ch"))
+        ch = TEMPLATE_CHOICES.get(tpl_key, 64)
+        r = int(inst.props.get("sampling_rate", 512))
+        cap = int(round(float(inst.props.get("buffer_seconds", 10.0)) * r))
+        imgui.text_disabled(f"s = {cap} x {ch}ch")
+    except Exception:
+        imgui.text_disabled("s")
+
+    imgui.pop_item_width()
+
+
+@register("StartGtecRecord")
+def _draw_start_gtec_widgets(nid: int, inst, canvas) -> None:
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(110)
+    _draw_gtec_device_combo("start", nid, inst, canvas)
+    imgui.same_line()
+    imgui.text_disabled("Device")
+    imgui.pop_item_width()
+
+
+@register("StopGtecRecord")
+def _draw_stop_gtec_widgets(nid: int, inst, canvas) -> None:
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(110)
+    _draw_gtec_device_combo("stop", nid, inst, canvas)
+    imgui.same_line()
+    imgui.text_disabled("Device")
+
+    scope_labels = ["Save: Session", "Save: Window"]
+    scope_keys = ["session", "buffer"]
+    scope = str(inst.props.get("save_scope", "session"))
+    scope_idx = scope_keys.index(scope) if scope in scope_keys else 0
+    changed, new_idx = _ne_combo(f"##gtec_scope_{nid}", scope_idx, scope_labels)
+    if changed:
+        inst.props["save_scope"] = scope_keys[new_idx]
+    imgui.pop_item_width()
+
+
+@register("KillGtecDevice")
+def _draw_kill_gtec_widgets(nid: int, inst, canvas) -> None:
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(110)
+    _draw_gtec_device_combo("kill", nid, inst, canvas)
+    imgui.same_line()
+    imgui.text_disabled("Device")
+    imgui.pop_item_width()
+
+
+@register("GetGtecData")
+def _draw_get_gtec_widgets(nid: int, inst, canvas) -> None:
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(110)
+    _draw_gtec_device_combo("get", nid, inst, canvas)
+    imgui.same_line()
+    imgui.text_disabled("Device")
+    imgui.pop_item_width()
+

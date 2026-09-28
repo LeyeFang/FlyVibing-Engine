@@ -267,7 +267,7 @@ class VulkanCore:
         """结束场景渲染通道 (必须在 ImGui 渲染之前调用)。"""
         vk.vkCmdEndRenderPass(self.cmd_buffer)
 
-    def end_frame(self,
+    def end_frame(self, image_index: int) -> None:
         """结束一帧 — 结束命令缓冲、提交、呈现。"""
         vk.vkEndCommandBuffer(self.cmd_buffer)
 
@@ -411,7 +411,7 @@ class VulkanCore:
             self.device, 'vkQueuePresentKHR'
         )
 
-    def _create_surface(self,
+    def _create_surface(self, window_handle) -> None:
         """创建窗口表面 — 使用 Win32 原生接口 (绕过 GLFW 绑定的兼容问题)。"""
         import glfw
         import ctypes
@@ -424,7 +424,7 @@ class VulkanCore:
         )
         self.surface = self._vkCreateWin32SurfaceKHR(self.instance, surface_info, None)
 
-    def _create_swapchain(self,
+    def _create_swapchain(self, window_size: tuple[int, int]) -> None:
         """创建交换链 + 图像视图。
 
         Args:
@@ -666,7 +666,7 @@ class VulkanCore:
         imgui.backends.vulkan_create_fonts_texture()
         self._imgui_initialized = True
 
-    def render_imgui(self,
+    def render_imgui(self, draw_data, image_index: int) -> None:
         """在命令缓冲中渲染 ImGui (必须在 end_scene_pass 之后调用)。
         
         Args:
@@ -745,7 +745,7 @@ class VulkanCore:
         vk.vkBindBufferMemory(self.device, buf, mem, 0)
         return buf, mem
 
-    def destroy_buffer(self,
+    def destroy_buffer(self, buf, mem) -> None:
         """销毁 VkBuffer 并释放关联的 VkDeviceMemory。"""
         if buf is not None:
             vk.vkDestroyBuffer(self.device, buf, None)
@@ -792,7 +792,7 @@ class VulkanCore:
         vk.vkBindImageMemory(self.device, image, mem, 0)
         return image, mem
 
-    def create_image_view(self,
+    def create_image_view(self, image, fmt: int) -> object:
         """为 VkImage 创建默认 2D ImageView。"""
         view_info = vk.VkImageViewCreateInfo(
             sType=vk.VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -878,7 +878,7 @@ class VulkanCore:
             "未找到 glslc 编译器。请安装 Vulkan SDK 或将 glslc 添加到 PATH。"
         )
 
-    def compile_glsl_to_spirv(self,
+    def compile_glsl_to_spirv(self, glsl_source: str, stage_name: str) -> bytes:
         """将 GLSL 源码编译为 SPIR-V 字节码。
 
         Args:
@@ -921,7 +921,7 @@ class VulkanCore:
                 except OSError:
                     pass
 
-    def create_shader_module(self,
+    def create_shader_module(self, spirv_code: bytes) -> object:
         """从 SPIR-V 字节码创建 VkShaderModule。"""
         module_info = vk.VkShaderModuleCreateInfo(
             sType=vk.VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,

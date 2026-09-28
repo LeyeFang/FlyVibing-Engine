@@ -59,9 +59,13 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
                     ctx.set_pin(inst_pin_id, EntityRef(eid=fake_eid))
         return
 
-    # ── 1. 从 Scene.entities 查找模板定义 ──
+    # ── 1. 从 Scene.entities 查找模板定义 (模板场景由宿主注入 ctx.template_scene) ──
     from Application.Core.Scene.Scene import Scene
-    scene = _get_active_scene()
+    scene = _get_active_scene(ctx)
+    if scene is None and template_name:
+        print(f"[EntitySpawn] WARNING: no template scene injected — "
+              f"cannot resolve template '{template_name}' "
+              f"(host must set ctx.template_scene)")
     entity_def = None
     template_old_eid: int | None = None
     if scene is not None and template_name:
@@ -97,27 +101,13 @@ def _eval_entity_spawn(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
     print(f"[EntitySpawn] '{instance_name}' (eid={eid}, {tpl_info})")
 
 
-def _get_active_scene():
-    """获取当前活跃的 Scene 对象。
+def _get_active_scene(ctx: ExecutionContext):
+    """模板场景来源 — 由宿主注入 (ctx.template_scene)，运行时无反向依赖。
 
-    优先级:
-      1. RuntimeNodeLayer._scene (PIE / 导出模式注入)
-      2. EditorHost.get_active_scene() (编辑器侧回退)
+    PIE: SimulationController 经 RuntimeNodeLayer.set_scene 注入编辑器场景深拷贝；
+    独立运行: player 注入游戏场景；未注入 → None (EntitySpawn 退化为无模板实体)。
     """
-    # ── Runtime 注入 ──
-    try:
-        from Application.Runtime.RuntimeNodeLayer import RuntimeNodeLayer
-        if RuntimeNodeLayer._scene is not None:
-            return RuntimeNodeLayer._scene
-    except Exception:
-        pass
-
-    # ── Editor 回退 ──
-    try:
-        from Application.Editor.EditorHost import EditorHost
-        return EditorHost.get_active_scene()
-    except Exception:
-        return None
+    return getattr(ctx, "template_scene", None)
 
 
 def _instantiate_components(eid: int, entity_def, ctx: ExecutionContext) -> None:

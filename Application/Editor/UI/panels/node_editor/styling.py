@@ -165,11 +165,6 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ("File", [
             ("Path", "PathVar"),
             ("Write Text File", "TextFileWrite"),
-        ]),        ("Gtec", [
-            ("Init Gtec Device", "InitGtecDevice"),
-            ("Start Gtec Record", "StartGtecRecord"),
-            ("Stop Gtec Record", "StopGtecRecord"),
-            ("Kill Gtec Device", "KillGtecDevice"),
-            ("Get Gtec Data", "GetGtecData"),
-        ]),    ]),
+        ]),
+    ]),
 ]

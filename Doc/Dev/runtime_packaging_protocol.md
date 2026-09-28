@@ -49,6 +49,24 @@
 - **工作目录**：始终 = 包根（builtin 资源是 CWD 相对路径）；播放器不 chdir。
 - **收尾**：run 返回后调 `SerialParallelDevice.stop()` + `EEGDevice.close_all()` 安全网。
 
+### 3.1 运行时线程纪律（PIE / 播放器通用，2026-09-28 锁定）
+
+`GameRuntime` 启动即双线程并发（free-threading 无 GIL）：
+
+- **渲染线程** `Engine._render_loop`：`run_ready` 放行后逐个 `layer.OnAttach()` → 渲染帧；
+- **逻辑线程** `Engine._logic_loop`：每帧对全部 layer 调 `OnUpdate()` —— **与 OnAttach 并发**。
+
+因此 Layer 类初始化（classmethod 共享类状态）必须满足：
+
+1. `OnUpdate` 会读取的字段必须有**类级默认值**（例：`RuntimeNodeLayer._frame = 0`）；
+2. **"就绪标记"最后赋值** —— 把它当作 `OnUpdate` 守卫的可见性开关
+   （例：`RuntimeNodeLayer._evaluator` 在 `_context` / `_frame` / `_pending_start` 全部备齐后才赋值，
+   `OnUpdate` 只有越过 `_evaluator is None` 守卫才执行帧逻辑）。
+
+坑（2026-09-28 实证）：旧序先赋 `_evaluator` 后再赋 `_frame` → PIE 启动瞬间逻辑线程
+`AttributeError: type object 'RuntimeNodeLayer' has no attribute '_frame'`（线程静默死亡，无异常上抛）。
+回归守卫：`Test/Application/Runtime/test_runtime_node_layer_race.py`（无头 + 可控阻塞点，确定性）。
+
 ---
 
 ## 4. 导出包结构（v1）

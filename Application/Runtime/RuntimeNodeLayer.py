@@ -42,6 +42,8 @@ class RuntimeNodeLayer(Layer):
     _evaluator: GraphEvaluator | None = None
     _context: ExecutionContext | None = None
     _pending_start: bool = False  # 延迟 OnGameStart 到逻辑线程
+    _frame: int = 0               # 逻辑帧计数 — 必须有类默认值:
+                                  # OnAttach(渲染线程) 与 OnUpdate(逻辑线程) 并发 (free-threading 无 GIL)
     # ── 宿主注入: 上下文钩子 (PIE 由 SimulationController 设置; 独立运行留空) ──
     _on_stop_request = None       # callable | None — ExitGame 停止请求 → 宿主处理
 
@@ -96,7 +98,6 @@ class RuntimeNodeLayer(Layer):
         if cls._evaluator is not None:
             return
 
-        cls._evaluator = GraphEvaluator(cls._canvas, _TYPES)
         cls._context = ExecutionContext()
         cls._context.scene = cls._engine.scene     # ★ 注入 SceneManager 实例
         # ★ 宿主注入: 模板场景 (EntitySpawn) + 停止回调 (ExitGame)
@@ -105,10 +106,19 @@ class RuntimeNodeLayer(Layer):
         cls._frame = 0
 
         # ── 延迟 OnGameStart 到逻辑线程的第一次 OnUpdate ──
-        # (避免渲染线程操作 esper 与世界切换冲突)
+        # (避免渲染线程操作 esper / 世界切换冲突)
         cls._context.elapsed_time = 0.0
         cls._context.delta_time = 0.0
         cls._pending_start = True
+
+        # ★ _evaluator 最后赋值 — 它是 OnUpdate 的"可见性开关":
+        #   OnAttach 在渲染线程执行，逻辑线程的 OnUpdate 循环与其并发
+        #   (Engine._render_loop: run_ready 放行后两线程同时起步)。
+        #   OnUpdate 只有越过 `_evaluator is None` 守卫后才执行帧逻辑，
+        #   因此必须先备齐 _context / _frame / _pending_start，最后再赋值 _evaluator。
+        #   顺序错误 → 逻辑线程读到半初始化状态 → _frame AttributeError (free-threading 无 GIL)。
+        #   回归测试: Test/Application/Runtime/test_runtime_node_layer_race.py
+        cls._evaluator = GraphEvaluator(cls._canvas, _TYPES)
 
         # ★ 首帧推送摄像机矩阵 — 确保渲染器第一帧就有合法的 view/proj
         cls._sync_camera_to_renderer()

@@ -282,15 +282,16 @@ class SceneBrowserController:
     def remove_component(cls, entity_id: int, component_type: str) -> bool:
         """从实体移除指定类型的组件。
 
-        MeshRenderer 移除时同时注销 GPU 渲染资源。
+        走组件注册表（与 Add 同源）; MeshRenderer 移除时同步注销 GPU 渲染资源;
+        Transform 为实体必需（不可移除）。
         """
-        _COMP_MAP = {
-            'Camera': Camera,
-            'MeshRenderer': MeshRenderer,
-        }
-        comp_cls = _COMP_MAP.get(component_type)
+        comp_cls = cls.get_available_components().get(component_type)
         if comp_cls is None:
             print(f"[SceneBrowser] Unknown component type: {component_type}")
+            return False
+        from Application.Core.Scene.BasicComponents import Transform
+        if comp_cls is Transform:
+            print("[SceneBrowser] Transform is required and cannot be removed")
             return False
 
         try:

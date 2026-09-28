@@ -15,8 +15,8 @@
 | `node_editor_protocol.md` | `Application/Core/NodeGraph/**`（运行时）+ `Application/Editor/UI/panels/node_editor/**`（编辑器交互）+ `Utils/NodeEditor/**` | 新增/修改节点类型、求值器、图约束、图校验、MCP 文档 |
 | `device_io_protocol.md` | `Application/Functions/**`（SerialParallelDevice / EEGDevice） | 设备集成、真实/空跑双后端、线程与数据落盘 |
 | `project_export_protocol.md` | `Application/Editor/ProjectManager.py` + EditorHost 场景 I/O + UI/UIManager 主菜单 + UI/FileDialog | 项目保存/另存/导出、资源路径、主菜单 File 项、迁移与打包 |
-| `runtime_packaging_protocol.md` | `Application/PlayerEntry.py` + `Application/Runtime/PlayerBootstrap.py` + `Application/Core/Project/**` + `Utils/Runtime/**` + 导出游戏层 | 播放器/独立运行、Python 环境打包、wheelhouse、run_game.cmd、gtec fork 轮子策略 |
-| `editor_live_protocol.md` | `Application/Editor/Services/LiveCommandServer.py` + `Utils/Editor/**` | 实时命令总线（agent 热注入）、新增 op、MCP 注册与故障排查 |
+| `runtime_packaging_protocol.md` | `Application/PlayerEntry.py` + `Application/Runtime/PlayerBootstrap.py` + `Application/Core/Project/**` + `Utils/Runtime/**` + 导出游戏层 | 播放器/独立运行、Python 环境打包、wheelhouse、run_game.cmd、gtec fork 轮子策略、运行时线程纪律（§3.1） |
+| `editor_live_protocol.md` | `Application/Editor/Services/LiveCommandServer.py` + `Utils/Editor/**` | 实时命令总线（agent 热注入）、实体/组件/场景/资源编辑 ops（v3 §4.1）、新增 op、容器补全跟进（§10）、MCP 注册与故障排查 |
 
 职责边界（与代码一致，不得跨层）：
 - UI 层只负责**编辑 props 和渲染**；业务逻辑在 evaluators；设备/IO 在 `Application/Functions`。

@@ -38,6 +38,7 @@ from Application.Core.Events.WindowEvent import WindowCloseEvent
 from Application.Core.Input.InputState import InputState, _set_default_input_state
 from Application.Core.Window.Window import Window
 from Application.Core.Renderer.Renderer import Renderer
+from Application.Core.Renderer.FrameCaptureSlot import FrameCaptureSlot
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Resource.ResourceManager import ResourceManager
 
@@ -601,6 +602,8 @@ class Engine:
             layer.OnRender()
         # ── 帧结束 ──
         renderer.EndFrame()
+        # ── 帧末抓帧（MCP frame.request）: 必须在 SwapBuffer 前读回后缓冲 ──
+        cls._maybe_capture()
         # ── 交换缓冲区 (OpenGL/ZenGL 需要; Vulkan 由 SwapChain 管理) ──
         if cls.renderer_type in (RendererType.OpenGL, RendererType.ZenGL):
             window.SwapBuffer()
@@ -610,6 +613,61 @@ class Engine:
         # ── 帧同步: master 唤醒 slave (Editor → PIE) ──
         if cls._frame_sync is not None and cls._is_frame_sync_master:
             cls._frame_sync.master_tick()
+
+    # ════════════════════════════════════════════════════════════
+    # 帧抓取（MCP 实时通道 — frame.request / frame.fetch）
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _capture_slot(cls) -> FrameCaptureSlot:
+        """获取本引擎实例的抓帧信箱（懒创建; EditorHost / GameRuntime 各自独立）。"""
+        st = cls._state()
+        slot = st.get("_capture_slot")
+        if slot is None:
+            slot = FrameCaptureSlot()
+            st["_capture_slot"] = slot
+        return slot
+
+    @classmethod
+    def request_capture(cls) -> dict:
+        """请求抓取“下一渲染帧”（编辑器主线程调用; 立即返回, 不阻塞）。"""
+        return cls._capture_slot().request()
+
+    @classmethod
+    def fetch_capture(cls, generation: int | None = None) -> dict:
+        """读取抓帧结果（编辑器主线程调用）。状态语义见 FrameCaptureSlot.fetch。"""
+        return cls._capture_slot().fetch(generation)
+
+    @classmethod
+    def _maybe_capture(cls) -> None:
+        """渲染线程帧末抓帧 — 调用点必须在 SwapBuffer 之前（读回的是后缓冲）。
+
+        只在有请求时工作; 只做 glReadPixels 裸读回（编码/压缩由 MCP 侧处理）。
+        """
+        slot = cls._state().get("_capture_slot")
+        if slot is None:
+            return
+        gen = slot.take_pending()
+        if gen is None:
+            return
+        try:
+            import numpy as np
+            from OpenGL import GL as gl
+
+            renderer = cls.renderer
+            width = int(renderer.viewport_width)
+            height = int(renderer.viewport_height)
+            if width <= 0 or height <= 0:
+                slot.publish_error(gen, f"invalid viewport size {width}x{height}")
+                return
+            # 确保读默认帧缓冲的后缓冲（渲染管线可能最后停留在某个 FBO 上）
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+            gl.glReadBuffer(gl.GL_BACK)
+            pixels = np.empty((height, width, 4), dtype=np.uint8)
+            gl.glReadPixels(0, 0, width, height, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, pixels)
+            slot.publish(gen, width, height, pixels.tobytes())
+        except Exception as e:  # noqa: BLE001
+            slot.publish_error(gen, f"{type(e).__name__}: {e}")
 
     # ════════════════════════════════════════════════════════════
     # 全局访问入口

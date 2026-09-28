@@ -21,3 +21,6 @@ Resource/runtime/
 
 # Test 目录整体脱离版本控制（本机开发保留；2026-09-28 用户要求）
 Test/
+
+# Editor Live MCP 抓帧临时目录（运行时生成；server 启动时自动清空）
+Utils/Editor/tmp/

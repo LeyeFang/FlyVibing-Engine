@@ -43,11 +43,20 @@ class EditorPlugin(Plugin):
 
     def on_load(self, engine: 'Engine') -> None:
         """编辑器插件加载（主线程）。"""
-        pass  # lifecycle logged via event system
+        # ── 实时命令总线（agent MCP 热注入; 仅本机回环 127.0.0.1）──
+        try:
+            from Application.Editor.Services.LiveCommandServer import LiveCommandServer
+            LiveCommandServer.start()
+        except Exception as e:  # noqa: BLE001
+            print(f"[Live] command server failed to start: {e}")
 
     def on_unload(self) -> None:
         """编辑器插件卸载（主线程）。"""
-        pass  # lifecycle logged via event system
+        try:
+            from Application.Editor.Services.LiveCommandServer import LiveCommandServer
+            LiveCommandServer.stop()
+        except Exception:  # noqa: BLE001
+            pass
 
     # ════════════════════════════════════════════════════════════
     # Layer 暴露

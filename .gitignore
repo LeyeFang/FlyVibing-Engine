@@ -18,6 +18,6 @@ Application/Editor/Config
 Resource/runtime/
 !Resource/wheels/requirements.export.txt
 !Resource/wheels/requirements.runtime.txt
-Test/TestProject/*/dist/
-Test/TestProject/*/output/
-Test/TestProject/EmptyGame
+
+# Test 目录整体脱离版本控制（本机开发保留；2026-09-28 用户要求）
+Test/

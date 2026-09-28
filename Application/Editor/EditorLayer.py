@@ -30,6 +30,7 @@ from Application.Editor.Gizmos.OutlinerID import OutlinerID
 from Application.Editor.Gizmos.TransformGizmo import TransformGizmo, GizmoMode
 from Application.Editor.Gizmos.ViewGizmo import ViewGizmo
 from Application.Editor.UI.controllers.SelectionController import SelectionController
+from Application.Editor.Services.LiveCommandServer import LiveCommandServer
 
 
 # ★ 先导入 Controller（触发 auto-register 到 ControllerRegistry），再导入 Panel
@@ -84,6 +85,9 @@ class EditorLayer(Layer):
 
     @classmethod
     def OnUpdate(cls):
+        # ── 消费实时命令总线（agent 热注入; 先于 PIE start/stop 消费, 同帧生效）──
+        LiveCommandServer.pump()
+
         # ── 首次 OnUpdate: 主线程安全同步窗口标题 ──
         if not getattr(cls, '_title_synced', False):
             cls._title_synced = True

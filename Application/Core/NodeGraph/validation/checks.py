@@ -202,6 +202,19 @@ def static_check_graph(scene_data: dict) -> list[dict]:
     except Exception as e:  # noqa: BLE001 — 约束模块失败不应让整个检查崩溃
         entries.append(_entry("error", "gtec_pairing", f"gtec pairing check failed: {e}"))
 
+    # 7. SigGen Init/Kill 强制配对（与 Gtec 同一规则）
+    try:
+        from ..graph_constraints import siggen_pairing_errors
+
+        for msg in siggen_pairing_errors(nodes):
+            node_id = None
+            m = _NODE_ID_RE.match(msg)
+            if m:
+                node_id = int(m.group(1))
+            entries.append(_entry("error", "siggen_pairing", msg, node_id))
+    except Exception as e:  # noqa: BLE001 — 约束模块失败不应让整个检查崩溃
+        entries.append(_entry("error", "siggen_pairing", f"siggen pairing check failed: {e}"))
+
     return entries
 
 

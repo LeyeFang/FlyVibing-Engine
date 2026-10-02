@@ -42,6 +42,7 @@ from .evaluators import (  # noqa: F401
     action,
     io,
     gtec,
+    siggen,
 )
 
 __all__ = [

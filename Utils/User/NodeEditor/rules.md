@@ -153,6 +153,24 @@ Gtec 规则 (MUST):
    不触硬件、不落盘、不起线程，干跑可复现。
 7. device_name 为空 = 运行时注册表仅一个会话时自动绑定；多会话时必须显式指定。
 
+### SigGen (虚拟信号发生器 — IO ▸ SigGen)
+| type_name | input | output | props |
+|-----------|-------|--------|-------|
+| InitSigGenDevice | exec_in | exec_out | device_name, channels: 1..256, sampling_rate: 1..38400, frequency (Hz, ≤0=未填→10), freq_step (Hz/ch, ≥0), amplitude_uv (≥0), noise_uv (0=纯正弦), seed, export_format: npz/csv, save_dir ("." = cwd), buffer_seconds |
+| StartSigGenRecord | exec_in | exec_out | device_name |
+| StopSigGenRecord | exec_in | exec_out | device_name, save_scope: session/buffer |
+| KillSigGenDevice | exec_in | exec_out | device_name |
+| GetSigGenData | — (pure data node) | Data(variant ndarray channels×samples), Channels(int), Samples(int), Fs(float) | device_name |
+
+SigGen 规则 (MUST):
+1. **InitSigGenDevice 与 KillSigGenDevice 强制成对出现** — 与 Gtec 同一配对规则
+   (validate_graph 静态检查 + 编辑器删除级联; 绑定规则同 Gtec)。
+2. 纯软件正弦源: 通道 i 频率 = frequency + i·freq_step Hz, 幅度 µV float32,
+   noise_uv>0 时按 seed 叠加确定性高斯噪声 — 任意机器可跑, 无硬件依赖。
+3. 窗口缓冲 / GetSigGenData / Stop 保存语义与 Gtec 完全一致 (§Gtec 规则 4/5/6)。
+   区别: 真实模式 (非干跑) 会真正写出 npz/csv + .json 到 save_dir; 干跑不落盘。
+4. Gtec 与 SigGen 共用同一设备会话注册表 — device_name 跨族必须唯一。
+
 ### Game
 | type_name | input | output | notes |
 |-----------|-------|--------|-------|

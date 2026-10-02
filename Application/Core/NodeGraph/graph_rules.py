@@ -184,6 +184,21 @@ Gtec rules (CRITICAL):
 5. StopGtecRecord saves to Init's save_dir (default "." = cwd): scope=session → everything since Start; scope=buffer → window only. File formats: npz or csv + sidecar .json metadata.
 6. Dry-run (MCP validate_graph, max_frames>0): deterministic stub backend — no hardware, no file writes, no threads; reproducible.
 
+#### SigGen Nodes (Virtual Signal Generator — IO ▸ SigGen)
+| type_name       | input pins | output pins | props |
+|-----------------|------------|-------------|-------|
+| InitSigGenDevice | exec_in | exec_out | device_name, channels (1..256), sampling_rate (1..38400), frequency (Hz; ≤0 = unset → 10), freq_step (Hz per channel; 0 = same freq), amplitude_uv, noise_uv (0 = clean sine), seed, export_format: npz/csv, save_dir ("."=cwd), buffer_seconds |
+| StartSigGenRecord | exec_in | exec_out | device_name |
+| StopSigGenRecord | exec_in | exec_out | device_name, save_scope: session/buffer |
+| KillSigGenDevice | exec_in | exec_out | device_name |
+| GetSigGenData   | (none, pure data node) | Data (variant ndarray channels×samples), Channels (int), Samples (int), Fs (float) | device_name |
+
+SigGen rules (CRITICAL):
+1. InitSigGenDevice and KillSigGenDevice MUST appear as a pair (validator + editor deletion cascade; binding identical to Gtec).
+2. Pure software sine source — runs on any machine (no hardware). Channel i frequency = f0 + i·step Hz; amplitude in µV float32; optional deterministic Gaussian noise via seed.
+3. Buffer / Get / Stop-save semantics identical to Gtec rules 4–6. REAL runs (not dry-run) actually write npz/csv + .json sidecar into save_dir; dry-run writes nothing.
+4. Gtec and SigGen share one device session registry — device_name must be unique across families.
+
 ---
 
 ### COMMON PATTERNS

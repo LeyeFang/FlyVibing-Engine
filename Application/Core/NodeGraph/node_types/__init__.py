@@ -44,6 +44,7 @@ COMPONENT_COLOR  = (0.314, 0.710, 0.710)
 IO_COLOR         = (0.878, 0.620, 0.314)
 BASIC_COLOR      = (0.580, 0.580, 0.620)
 GTEC_COLOR       = (0.850, 0.330, 0.620)
+SIGGEN_COLOR     = (0.350, 0.780, 0.850)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -61,3 +62,4 @@ from . import variable   # noqa: E402, F401
 from . import debug      # noqa: E402, F401
 from . import io         # noqa: E402, F401
 from . import gtec       # noqa: E402, F401
+from . import siggen     # noqa: E402, F401

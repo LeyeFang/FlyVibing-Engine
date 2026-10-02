@@ -377,7 +377,7 @@ class RecordingSession:
             nbytes = int(block.size) * 4
             if self._record_bytes + nbytes > MAX_RECORD_BYTES:
                 self._record_full = True
-                print(f"[Gtec] WARNING: session '{self.name}' full-recording memory cap "
+                print(f"[Device] WARNING: session '{self.name}' full-recording memory cap "
                       f"({MAX_RECORD_BYTES / 1024**3:.1f} GiB) reached — only window buffer updates")
                 return
             self._blocks.append(np.array(block, dtype=np.float32, copy=True))
@@ -550,7 +550,7 @@ def close_all() -> int:
         try:
             s.kill()
         except Exception as e:  # pragma: no cover - 保护性
-            print(f"[Gtec] close_all: kill '{s.name}' failed: {e}")
+            print(f"[Device] close_all: kill '{s.name}' failed: {e}")
     return len(sessions)
 
 
@@ -608,8 +608,8 @@ def _write_recording(session: RecordingSession, data: np.ndarray, base: str, sco
             json.dump(meta, fh, indent=2, ensure_ascii=False)
         paths.append(json_path)
 
-        print(f"[Gtec] saved {data.shape[0]} samples x {data.shape[1]} ch "
+        print(f"[Device] saved {data.shape[0]} samples x {data.shape[1]} ch "
               f"({data.shape[0] / max(1, session.cfg.sampling_rate):.2f}s) → {data_path}")
     except OSError as e:
-        print(f"[Gtec] ERROR: save failed: {e}")
+        print(f"[Device] ERROR: save failed: {e}")
     return paths

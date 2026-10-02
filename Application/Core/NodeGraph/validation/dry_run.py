@@ -5,7 +5,7 @@
   - 无 print 副作用 — 全部事件走向结构化日志 (收集器)
   - 确定性: 固定 dt (默认 1/60) + 固定随机种子 (默认 0, 重置 evaluators.math 全局 RNG)
   - 取消支持: cancel_event 帧间检查
-  - 会话隔离: 干跑中的 Gtec 会话统一 "dryrun#" 前缀, 结束后自动清理
+  - 会话隔离: 干跑中的设备会话 (Gtec/SigGen 等) 统一 "dryrun#" 前缀, 结束后自动清理
   - 进度回调: progress_cb(frame, frames)
 """
 

@@ -185,11 +185,13 @@ def validate_static(scene_data: dict) -> list[str]:
                     f"Node {nid_str}<{node_type}>: required pin '{rpin}' is not connected"
                 )
 
-    # 6. Gtec Init/Kill 强制配对 (与编辑器删除级联同一规则)
+    # 6. 设备 Init/Kill 强制配对 (Gtec + SigGen; 与编辑器删除级联同一规则)
     from Application.Core.NodeGraph.graph_constraints import (
         gtec_pairing_errors,
+        siggen_pairing_errors,
     )
     errors.extend(gtec_pairing_errors(nodes))
+    errors.extend(siggen_pairing_errors(nodes))
 
     return errors
 

@@ -30,7 +30,7 @@ from Application.Core.NodeGraph import (
     _gen_id,
 )
 from Application.Core.NodeGraph.graph_constraints import (
-    gtec_cascade_deletes,
+    device_cascade_deletes,
 )
 from .styling import (
     _col,
@@ -520,13 +520,13 @@ class NodeEditorPanel(BasePanel):
             _del_node_count = 0
             _del_link_count = 0
 
-            # ── Gtec Init ⇄ Kill 强制配对: 删除级联 ──
+            # ── 设备 Init ⇄ Kill 强制配对: 删除级联 (Gtec/SigGen) ──
             _sel_nids = [sn.id() for sn in _sel_nodes if sn.id() in canvas.nodes]
-            _expand = gtec_cascade_deletes(canvas, _sel_nids)
+            _expand = device_cascade_deletes(canvas, _sel_nids)
             for _extra in sorted(_expand - set(_sel_nids)):
                 _inst = canvas.nodes.get(_extra)
                 if _inst is not None:
-                    print(f"[Delete] Cascade (Gtec Init/Kill pairing): "
+                    print(f"[Delete] Cascade (device Init/Kill pairing): "
                           f"{_inst.node_type} (id={_extra})")
 
             for nid in sorted(_expand):
@@ -1098,6 +1098,8 @@ class NodeEditorPanel(BasePanel):
             "TimeGetDate",
             "InitGtecDevice", "StartGtecRecord", "StopGtecRecord",
             "KillGtecDevice", "GetGtecData",
+            "InitSigGenDevice", "StartSigGenRecord", "StopSigGenRecord",
+            "KillSigGenDevice", "GetSigGenData",
         }
         for lyr in sorted(layer_nodes.keys()):
             current_y: float = 80.0

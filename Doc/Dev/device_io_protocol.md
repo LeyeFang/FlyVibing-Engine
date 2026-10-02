@@ -10,7 +10,7 @@
 | 模块 | 架构 | 要点 |
 |---|---|---|
 | `Functions/SerialParallelDevice/` | 全局单例 + I/O 线程 + 队列 | `api.py`（start/stop/send/write_parallel）、`io_thread.py`、`state.py`、`test_hooks.py`；无驱动优雅降级；5ms 自动复位 |
-| `Functions/EEGDevice/` | 会话注册表 + 后端协议 + 环形缓冲 | `Device.py`（后端无关：配置/缓冲/会话/落盘）、`Gtec.py`（真实 pygds）、`GtecStub.py`（空跑）、`__init__.py`（门面） |
+| `Functions/EEGDevice/` | 会话注册表 + 后端协议 + 环形缓冲 | `Device.py`（后端无关：配置/缓冲/会话/落盘）、`Gtec.py`（真实 pygds）、`GtecStub.py`（空跑）、`SigGen.py`（虚拟信号发生器 — 纯软件正弦源）、`eCon.py`（预留）、`__init__.py`（门面路由） |
 
 共同约束：
 - **不得反向依赖 Engine / Editor**；被求值器（`Application/Core/NodeGraph/evaluators/*`）调用。
@@ -30,6 +30,8 @@
 - 选择方式：求值器按 `ctx.dry_run` 选择后端（`EEGDevice.init_session(..., dry_run=...)`）；
   **真实模式绝不回退 stub**（防实验数据污染），干跑才走 stub。
 - 新增设备时同步实现两套后端 + 在 `Doc/Dev/README.md` §3 的验收命令下跑通。
+  **纯软件设备例外**（如 `SigGen` — 虚拟信号发生器）：单一后端 + 构造参数 `dry_run` 控制
+  `is_stub`/落盘（干跑不落盘、真实落盘），同样走会话/缓冲/导出全通路。
 
 ---
 
@@ -96,6 +98,7 @@
 
 ```powershell
 .venv-py314t\Scripts\python.exe Test/Application/Functions/test_gtec_device.py        # 设备层 + 干跑 + 约束 (48 checks)
+.venv-py314t\Scripts\python.exe Test/Application/Functions/test_siggen_device.py      # 虚拟信号发生器 (配置/会话/落盘/干跑/配对)
 .venv-py314t\Scripts\python.exe Test/Application/Functions/test_serial_parallel_device.py
 ```
 

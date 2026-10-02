@@ -1,9 +1,10 @@
 """
-EEGDevice — g.tec EEG 设备层门面 (真实 / 空跑双后端)。
+EEGDevice — 设备层门面 (真实 / 空跑双后端; 含虚拟信号发生器)。
 
-节点求值器只调用本模块的公开 API; 后端选择:
-  - dry_run=True  → GtecStubBackend (确定性合成数据; MCP 干跑验证走此路径)
-  - dry_run=False → GtecHiampBackend (pygds; 需 GDS 服务 + 空闲设备)
+节点求值器只调用本模块的公开 API; 后端路由:
+  - device=VIRTUAL → VirtualSigGenBackend (纯软件正弦源; dry_run 控制落盘)
+  - dry_run=True   → GtecStubBackend (确定性合成数据; MCP 干跑验证走此路径)
+  - dry_run=False  → GtecHiampBackend (pygds; 需 GDS 服务 + 空闲设备)
 
 公开 API:
     init_session(name, cfg, dry_run)          → (session | None, detail)
@@ -43,9 +44,11 @@ from .Device import (
     resolve_session,
     unregister_session,
 )
+from .SigGen import SigGenConfig
 
 __all__ = [
     "GtecConfig",
+    "SigGenConfig",
     "RecordingSession",
     "SaveResult",
     "DeviceBackend",
@@ -72,7 +75,12 @@ __all__ = [
 # 内部
 # ═══════════════════════════════════════════════════════════════
 
-def _make_backend(dry_run: bool) -> DeviceBackend:
+def _make_backend(cfg, dry_run: bool) -> DeviceBackend:
+    """按配置的设备族路由后端 (VIRTUAL → 虚拟信号发生器; 其余 → Gtec 真实/空跑)。"""
+    if getattr(cfg, "device", "HIAMP") == "VIRTUAL":
+        from .SigGen import VirtualSigGenBackend
+
+        return VirtualSigGenBackend(dry_run=dry_run)
     if dry_run:
         from .GtecStub import GtecStubBackend
 
@@ -97,10 +105,10 @@ def init_session(name: str, cfg: GtecConfig, dry_run: bool = False):
         try:
             old.kill()
         except Exception as e:
-            print(f"[Gtec] replacing session '{name}': kill old failed: {e}")
+            print(f"[Device] replacing session '{name}': kill old failed: {e}")
         unregister_session(name)
 
-    backend = _make_backend(dry_run)
+    backend = _make_backend(cfg, dry_run)
     session = RecordingSession(name, cfg, backend)
     try:
         backend.configure(cfg)

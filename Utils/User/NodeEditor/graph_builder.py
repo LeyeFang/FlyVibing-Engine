@@ -304,6 +304,47 @@ class GraphBuilder:
         return self.node("GetGtecData", ["Data", "Channels", "Samples", "Fs"],
                          {"device_name": name})
 
+    # ── SigGen (虚拟信号发生器) — IO ▸ SigGen ─────────────
+
+    def siggen_init(self, name: str = "SIGGEN", *, channels: int = 8,
+                    rate: int = 512, frequency: float = 10.0,
+                    freq_step: float = 2.0, amplitude: float = 50.0,
+                    noise: float = 0.0, seed: int = 0,
+                    export: str = "npz", save_dir: str = ".",
+                    buffer_seconds: float = 10.0) -> int:
+        """InitSigGenDevice — 虚拟信号发生器 (纯软件正弦源)。
+
+        MUST 与 siggen_kill(name) 成对出现 (validate_graph 强制检查)。
+        通道 i 频率 = frequency + i·freq_step; noise>0 时按 seed 叠加确定性噪声。
+        """
+        return self.node("InitSigGenDevice", ["exec_in", "exec_out"], {
+            "device": "VIRTUAL", "device_name": name, "channels": channels,
+            "sampling_rate": rate, "frequency": frequency, "freq_step": freq_step,
+            "amplitude_uv": amplitude, "noise_uv": noise, "seed": seed,
+            "export_format": export, "save_dir": save_dir,
+            "buffer_seconds": buffer_seconds,
+        })
+
+    def siggen_start(self, name: str = "SIGGEN") -> int:
+        """StartSigGenRecord — 开始采集（写入窗口缓冲）。"""
+        return self.node("StartSigGenRecord", ["exec_in", "exec_out"],
+                         {"device_name": name})
+
+    def siggen_stop(self, name: str = "SIGGEN", scope: str = "session") -> int:
+        """StopSigGenRecord — 停止采集并保存 (scope: session=全量 / buffer=窗口)。"""
+        return self.node("StopSigGenRecord", ["exec_in", "exec_out"],
+                         {"device_name": name, "save_scope": scope})
+
+    def siggen_kill(self, name: str = "SIGGEN") -> int:
+        """KillSigGenDevice — 停止 + 释放设备（不保存）。MUST 与 siggen_init 成对。"""
+        return self.node("KillSigGenDevice", ["exec_in", "exec_out"],
+                         {"device_name": name})
+
+    def siggen_get(self, name: str = "SIGGEN") -> int:
+        """GetSigGenData — 非销毁读取窗口缓冲（纯数据节点）。"""
+        return self.node("GetSigGenData", ["Data", "Channels", "Samples", "Fs"],
+                         {"device_name": name})
+
     # ── 输出 ──────────────────────────────────────────────
 
     def build(self, rules: str = "") -> dict:

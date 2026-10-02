@@ -40,4 +40,4 @@ assert len(d["nodes"]) >= 6, f"Expected >=6 nodes, got {len(d['nodes'])}"
 assert len(d["links"]) >= 2, f"Expected >=2 links, got {len(d['links'])}"
 print(f"  build: {len(d['nodes'])} nodes, {len(d['links'])} links")
 
-print("\n✅ All GraphBuilder smoke tests passed")
+print("\n[OK] All GraphBuilder smoke tests passed")

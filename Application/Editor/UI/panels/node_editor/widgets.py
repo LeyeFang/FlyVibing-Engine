@@ -1050,26 +1050,68 @@ def _draw_init_siggen_widgets(nid: int, inst, _canvas) -> None:
     imgui.dummy(imgui.ImVec2(0, 2))
 
 
-def _device_name_field(nid: int, inst, key: str) -> None:
-    """通用 device_name 文本框（Start/Stop/Kill/Get 设备节点共用）。"""
+def _device_name_field(nid: int, inst, key: str, canvas=None) -> None:
+    """通用设备引用控件: 池下拉 + 设备动态下拉（Start/Stop/Kill/Get 设备节点共用）。
+
+    设备列表 = 所选池在画布上的成员（Init 节点会话键, 与校验器同一套键规则）;
+    "(Auto)" = 空名 → 运行时池内唯一设备自动绑定。
+    当前值不在列表时保留一项 "(unlisted)", 避免静默丢失配置。
+    """
+    from Application.Core.NodeGraph.graph_constraints import device_inventory
+
+    inv = device_inventory(canvas) if canvas is not None \
+        else {"pools": {}, "global": [], "inits": {}, "assignments": {}}
+    pool_names = ["global"] + sorted(inv["pools"].keys())
+    cur_pool = str(inst.props.get("pool", "")).strip()
+    if cur_pool and cur_pool not in pool_names:
+        pool_names.append(cur_pool)
+    cur_pool = cur_pool or "global"
+    try:
+        pool_idx = pool_names.index(cur_pool)
+    except ValueError:
+        pool_idx = 0
+
     imgui.dummy(imgui.ImVec2(0, 2))
-    imgui.push_item_width(110)
-    changed, v = imgui.input_text(f"##dev_name_{key}_{nid}",
-                                  str(inst.props.get("device_name", "")))
+    imgui.push_item_width(92)
+    changed, new_idx = _ne_combo(f"##pool_{key}_{nid}", pool_idx, pool_names)
     if changed:
-        inst.props["device_name"] = v
+        inst.props["pool"] = pool_names[new_idx]
+        cur_pool = pool_names[new_idx]
+    imgui.same_line()
+    imgui.text_disabled("Pool")
+    imgui.pop_item_width()
+
+    if cur_pool == "global" or cur_pool not in inv["pools"]:
+        members = list(inv.get("global", []))
+    else:
+        members = list(inv["pools"][cur_pool].get("members", []))
+    members = sorted(members)
+
+    cur = str(inst.props.get("device_name", "")).strip()
+    values = [""] + members
+    labels = ["(Auto)"] + members
+    if cur and cur not in members:
+        values.append(cur)
+        labels.append(cur + " (unlisted)")
+
+    imgui.push_item_width(120)
+    changed, sel = _ne_combo(f"##dev_{key}_{nid}", values.index(cur), labels)
+    if changed and sel < len(values):
+        inst.props["device_name"] = values[sel]
+    imgui.same_line()
+    imgui.text_disabled("Device")
     imgui.pop_item_width()
     imgui.dummy(imgui.ImVec2(0, 2))
 
 
 @register("StartSigGenRecord")
 def _draw_start_siggen_widgets(nid: int, inst, _canvas) -> None:
-    _device_name_field(nid, inst, "sgstart")
+    _device_name_field(nid, inst, "sgstart", _canvas)
 
 
 @register("StopSigGenRecord")
 def _draw_stop_siggen_widgets(nid: int, inst, _canvas) -> None:
-    _device_name_field(nid, inst, "sgstop")
+    _device_name_field(nid, inst, "sgstop", _canvas)
     imgui.push_item_width(90)
     scope_keys = ["session", "buffer"]
     scope = str(inst.props.get("save_scope", "session"))
@@ -1084,12 +1126,12 @@ def _draw_stop_siggen_widgets(nid: int, inst, _canvas) -> None:
 
 @register("KillSigGenDevice")
 def _draw_kill_siggen_widgets(nid: int, inst, _canvas) -> None:
-    _device_name_field(nid, inst, "sgkill")
+    _device_name_field(nid, inst, "sgkill", _canvas)
 
 
 @register("GetSigGenData")
 def _draw_get_siggen_widgets(nid: int, inst, _canvas) -> None:
-    _device_name_field(nid, inst, "sgget")
+    _device_name_field(nid, inst, "sgget", _canvas)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1193,12 +1235,12 @@ def _draw_init_gtec_widgets(nid: int, inst, _canvas) -> None:
 
 @register("StartGtecRecord")
 def _draw_start_gtec_widgets(nid: int, inst, _canvas) -> None:
-    _device_name_field(nid, inst, "gtstart")
+    _device_name_field(nid, inst, "gtstart", _canvas)
 
 
 @register("StopGtecRecord")
 def _draw_stop_gtec_widgets(nid: int, inst, _canvas) -> None:
-    _device_name_field(nid, inst, "gtstop")
+    _device_name_field(nid, inst, "gtstop", _canvas)
     imgui.push_item_width(90)
     scope_keys = ["session", "buffer"]
     scope = str(inst.props.get("save_scope", "session"))
@@ -1213,9 +1255,372 @@ def _draw_stop_gtec_widgets(nid: int, inst, _canvas) -> None:
 
 @register("KillGtecDevice")
 def _draw_kill_gtec_widgets(nid: int, inst, _canvas) -> None:
-    _device_name_field(nid, inst, "gtkill")
+    _device_name_field(nid, inst, "gtkill", _canvas)
 
 
 @register("GetGtecData")
 def _draw_get_gtec_widgets(nid: int, inst, _canvas) -> None:
-    _device_name_field(nid, inst, "gtget")
+    _device_name_field(nid, inst, "gtget", _canvas)
+
+
+# ══════════════════════════════════════════════════════════════
+# Device Pool (IO ▸ Pool) — Create / Add / Kill
+# ══════════════════════════════════════════════════════════════
+
+@register("CreateDevicePool")
+def _draw_create_pool_widgets(nid: int, inst, _canvas) -> None:
+    """池名输入（空 → 回退池键 pool#<nid>, 与校验器一致）。"""
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(130)
+    changed, v = imgui.input_text(f"##pool_name_{nid}",
+                                  str(inst.props.get("pool_name", "")))
+    if changed:
+        inst.props["pool_name"] = v
+    imgui.same_line()
+    imgui.text_disabled("Pool Name")
+    imgui.pop_item_width()
+    imgui.dummy(imgui.ImVec2(0, 2))
+
+
+def _draw_pool_picker(nid: int, inst, key: str, canvas, allow_auto: bool) -> None:
+    """已注册(画布)池下拉; allow_auto → 首项 "(Auto)" (空名 + 唯一 Create 自动绑定)。"""
+    from Application.Core.NodeGraph.graph_constraints import device_inventory
+
+    inv = device_inventory(canvas)
+    names = sorted(inv["pools"].keys())
+    cur = str(inst.props.get("pool_name", "")).strip()
+    values = ([""] if allow_auto else []) + names
+    labels = (["(Auto)"] if allow_auto else []) + names
+    if cur and cur not in names:
+        values.append(cur)
+        labels.append(cur + " (unlisted)")
+    if not values:
+        values, labels = [""], ["(no pools)"]
+    try:
+        sel = values.index(cur)
+    except ValueError:
+        sel = 0
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(130)
+    changed, new_idx = _ne_combo(f"##pool_sel_{key}_{nid}", sel, labels)
+    if changed:
+        inst.props["pool_name"] = values[new_idx]
+    imgui.same_line()
+    imgui.text_disabled("Pool")
+    imgui.pop_item_width()
+    imgui.dummy(imgui.ImVec2(0, 2))
+
+
+@register("AddToDevicePool")
+def _draw_add_pool_widgets(nid: int, inst, _canvas) -> None:
+    """池选择 + 来源设备展示（device pin 上游 Init 的会话键）。"""
+    from Application.Core.NodeGraph.graph_constraints import device_inventory
+
+    _draw_pool_picker(nid, inst, "add", _canvas, allow_auto=False)
+    inv = device_inventory(_canvas)
+    src_nid = next((k for k, a in inv["assignments"].items() if a["add"] == nid), None)
+    src = inv["inits"].get(src_nid, "") if src_nid is not None else ""
+    imgui.text_disabled(f"  ← {src}" if src else "  ← (device pin not linked)")
+
+
+@register("KillDevicePool")
+def _draw_kill_pool_widgets(nid: int, inst, _canvas) -> None:
+    _draw_pool_picker(nid, inst, "kill", _canvas, allow_auto=True)
+
+
+# ══════════════════════════════════════════════════════════════
+# Epoch Dataset (epoch 数据集) — Append / Count / Clear / Save / Load
+# ══════════════════════════════════════════════════════════════
+
+def _draw_epochs_picker(nid: int, inst, key: str, canvas, allow_auto: bool,
+                        prop: str = "epochs_name") -> None:
+    """数据集下拉（画布 Append/Load 源）; allow_auto → 首项 "(Auto)"（唯一源自动绑定）。"""
+    from Application.Core.NodeGraph.graph_constraints import epoch_source_keys
+
+    sources = epoch_source_keys(canvas.nodes) if canvas is not None else {}
+    names = sorted(sources.keys())
+    cur = str(inst.props.get(prop, "")).strip()
+    values = ([""] if allow_auto else []) + names
+    labels = (["(Auto)"] if allow_auto else []) + names
+    if cur and cur not in names:
+        values.append(cur)
+        labels.append(cur + " (unlisted)")
+    if not values:
+        values, labels = [""], ["(no datasets)"]
+    try:
+        sel = values.index(cur)
+    except ValueError:
+        sel = 0
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(130)
+    changed, new_idx = _ne_combo(f"##epochs_sel_{key}_{nid}", sel, labels)
+    if changed:
+        inst.props[prop] = values[new_idx]
+    imgui.same_line()
+    imgui.text_disabled("Dataset")
+    imgui.pop_item_width()
+    imgui.dummy(imgui.ImVec2(0, 2))
+
+
+@register("EpochAppend")
+def _draw_epoch_append_widgets(nid: int, inst, _canvas) -> None:
+    """名称输入 + 实时条数提示（注册表直读, 锁保护）。"""
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(130)
+    changed, v = imgui.input_text(f"##epochs_name_{nid}",
+                                  str(inst.props.get("epochs_name", "")))
+    if changed:
+        inst.props["epochs_name"] = v
+    imgui.same_line()
+    imgui.text_disabled("Epochs")
+    imgui.pop_item_width()
+    name = str(inst.props.get("epochs_name", "")).strip()
+    hint = "  (set a name to capture)"
+    if name:
+        try:
+            from Application.Functions.BCIAlgorithm import epoch_stats
+
+            stats, _why = epoch_stats(name)
+            hint = (f"  {stats['count']} epoch(s), {stats['classes']} class(es)"
+                    if stats else "  (not captured yet)")
+        except Exception:  # noqa: BLE001
+            pass
+    imgui.text_disabled(hint)
+    imgui.dummy(imgui.ImVec2(0, 2))
+
+
+@register("EpochCount")
+def _draw_epoch_count_widgets(nid: int, inst, _canvas) -> None:
+    _draw_epochs_picker(nid, inst, "cnt", _canvas, allow_auto=True)
+
+
+@register("EpochClear")
+def _draw_epoch_clear_widgets(nid: int, inst, _canvas) -> None:
+    _draw_epochs_picker(nid, inst, "clr", _canvas, allow_auto=True)
+
+
+@register("EpochSave")
+def _draw_epoch_save_widgets(nid: int, inst, _canvas) -> None:
+    _draw_epochs_picker(nid, inst, "sav", _canvas, allow_auto=True)
+    imgui.push_item_width(150)
+    changed, v = imgui.input_text(f"##epochs_dir_{nid}",
+                                  str(inst.props.get("save_dir", ".")))
+    if changed:
+        inst.props["save_dir"] = v
+    imgui.same_line()
+    imgui.text_disabled("Save Dir")
+    imgui.pop_item_width()
+
+
+@register("EpochLoad")
+def _draw_epoch_load_widgets(nid: int, inst, _canvas) -> None:
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(130)
+    changed, v = imgui.input_text(f"##epochs_name_{nid}",
+                                  str(inst.props.get("epochs_name", "")))
+    if changed:
+        inst.props["epochs_name"] = v
+    imgui.same_line()
+    imgui.text_disabled("Epochs")
+    imgui.pop_item_width()
+    imgui.push_item_width(220)
+    changed, v = imgui.input_text(f"##epochs_file_{nid}",
+                                  str(inst.props.get("file_path", "")))
+    if changed:
+        inst.props["file_path"] = v
+    imgui.same_line()
+    imgui.text_disabled("NPZ Path")
+    imgui.pop_item_width()
+    modes = ["replace", "append"]
+    cur = str(inst.props.get("mode", "replace"))
+    idx = modes.index(cur) if cur in modes else 0
+    changed, ni = _ne_combo(f"##epochs_mode_{nid}", idx, ["Replace", "Append"])
+    if changed:
+        inst.props["mode"] = modes[ni]
+    imgui.same_line()
+    imgui.text_disabled("Mode")
+    imgui.dummy(imgui.ImVec2(0, 2))
+
+
+# ══════════════════════════════════════════════════════════════
+# BCI Algorithm (FBCSP / CCA) — Init / Train / Test
+# ══════════════════════════════════════════════════════════════
+
+def _draw_band_editor(nid: int, inst) -> None:
+    """bands 动态组编辑器（打包 props["bands"]: [[lo,hi], ...]; 空 = 普通 CSP）。"""
+    bands = inst.props.get("bands")
+    if not isinstance(bands, list):
+        bands = [[4.0, 8.0], [8.0, 13.0], [13.0, 30.0]]
+        inst.props["bands"] = bands
+    imgui.text_disabled(f"  Bands ({len(bands)}) - 0 = plain CSP")
+    remove_idx = None
+    for i, band in enumerate(list(bands)):
+        if not isinstance(band, list) or len(band) < 2:
+            band = [4.0, 8.0]
+            bands[i] = band
+        try:
+            lo, hi = float(band[0]), float(band[1])
+        except (TypeError, ValueError):
+            lo, hi = 4.0, 8.0
+        imgui.push_item_width(58)
+        changed, v = imgui.input_float(f"##bd_lo_{nid}_{i}", lo, format="%.1f")
+        if changed and 0.1 <= v < 500.0:
+            band[0] = round(float(v), 2)
+        imgui.same_line()
+        imgui.text_disabled("-")
+        imgui.same_line()
+        changed, v = imgui.input_float(f"##bd_hi_{nid}_{i}", hi, format="%.1f")
+        if changed and 0.1 < v <= 500.0:
+            band[1] = round(float(v), 2)
+        imgui.same_line()
+        if imgui.small_button(f"-##bd_rm_{nid}_{i}"):
+            remove_idx = i
+        imgui.pop_item_width()
+    if remove_idx is not None and 0 <= remove_idx < len(bands):
+        bands.pop(remove_idx)
+    if len(bands) < 16 and imgui.small_button(f"+##bd_add_{nid}"):
+        bands.append([8.0, 13.0])
+    imgui.same_line()
+    imgui.text_disabled("+ Add Band")
+
+
+def _draw_freq_editor(nid: int, inst) -> None:
+    """freqs 动态组编辑器（>= 2 不限上限; props["freqs"]: [f, ...]）。"""
+    freqs = inst.props.get("freqs")
+    if not isinstance(freqs, list):
+        freqs = [10.0, 12.0, 15.0]
+        inst.props["freqs"] = freqs
+    imgui.text_disabled(f"  Frequencies ({len(freqs)}) - at least 2")
+    remove_idx = None
+    for i, f in enumerate(list(freqs)):
+        try:
+            v0 = float(f)
+        except (TypeError, ValueError):
+            v0 = 10.0
+        imgui.push_item_width(70)
+        changed, v = imgui.input_float(f"##fq_{nid}_{i}", v0, format="%.1f")
+        if changed and 0.1 <= v <= 500.0:
+            freqs[i] = round(float(v), 2)
+        imgui.same_line()
+        if imgui.small_button(f"-##fq_rm_{nid}_{i}"):
+            remove_idx = i
+        imgui.pop_item_width()
+    if remove_idx is not None and len(freqs) > 2:
+        freqs.pop(remove_idx)
+    if imgui.small_button(f"+##fq_add_{nid}"):
+        freqs.append(12.0)
+    imgui.same_line()
+    imgui.text_disabled("+ Add Freq")
+
+
+def _draw_model_picker(nid: int, inst, key: str, canvas, kind: str) -> None:
+    """模型下拉: kind="specs"（InitFBCSP 源） / "models"（TrainFBCSP 源）。"""
+    from Application.Core.NodeGraph.graph_constraints import model_source_keys
+
+    src: dict = {}
+    if canvas is not None:
+        adapted = {nid_: {"node_type": o.node_type, "props": o.props}
+                   for nid_, o in canvas.nodes.items()}
+        src = model_source_keys(adapted).get(kind, {})
+    names = sorted(src.keys())
+    cur = str(inst.props.get("model_name", "")).strip()
+    values = [""] + names
+    labels = ["(Auto)"] + names
+    if cur and cur not in names:
+        values.append(cur)
+        labels.append(cur + " (unlisted)")
+    try:
+        sel = values.index(cur)
+    except ValueError:
+        sel = 0
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(130)
+    changed, ni = _ne_combo(f"##model_sel_{key}_{nid}", sel, labels)
+    if changed:
+        inst.props["model_name"] = values[ni]
+    imgui.same_line()
+    imgui.text_disabled("Model")
+    imgui.pop_item_width()
+    imgui.dummy(imgui.ImVec2(0, 2))
+
+
+@register("InitFBCSP")
+def _draw_init_fbcsp_widgets(nid: int, inst, _canvas) -> None:
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(110)
+    changed, v = imgui.input_text(f"##fb_name_{nid}",
+                                  str(inst.props.get("model_name", "")))
+    if changed:
+        inst.props["model_name"] = v
+    imgui.same_line()
+    imgui.text_disabled("Model")
+    imgui.pop_item_width()
+    imgui.push_item_width(60)
+    changed, v = imgui.input_int(f"##fb_m_{nid}",
+                                 int(inst.props.get("n_components", 2)))
+    if changed:
+        inst.props["n_components"] = max(1, min(8, int(v)))
+    imgui.same_line()
+    imgui.text_disabled("CSP pairs")
+    imgui.pop_item_width()
+    cls_keys = ["LDA", "SVM"]
+    cur = str(inst.props.get("classifier", "LDA")).upper()
+    idx = cls_keys.index(cur) if cur in cls_keys else 0
+    changed, ni = _ne_combo(f"##fb_clf_{nid}", idx, cls_keys)
+    if changed:
+        inst.props["classifier"] = cls_keys[ni]
+    imgui.same_line()
+    imgui.text_disabled("Classifier")
+    _draw_band_editor(nid, inst)
+
+
+@register("TrainFBCSP")
+def _draw_train_fbcsp_widgets(nid: int, inst, _canvas) -> None:
+    _draw_model_picker(nid, inst, "tr", _canvas, "specs")
+    _draw_epochs_picker(nid, inst, "trds", _canvas, allow_auto=True,
+                        prop="dataset_name")
+    modes = ["train", "load"]
+    cur = str(inst.props.get("mode", "train")).lower()
+    idx = modes.index(cur) if cur in modes else 0
+    changed, ni = _ne_combo(f"##tr_mode_{nid}", idx, ["Train", "Load"])
+    if changed:
+        inst.props["mode"] = modes[ni]
+    imgui.same_line()
+    imgui.text_disabled("Mode")
+    if modes[idx] == "load":
+        imgui.push_item_width(200)
+        changed, v = imgui.input_text(f"##tr_path_{nid}",
+                                      str(inst.props.get("model_path", "")))
+        if changed:
+            inst.props["model_path"] = v
+        imgui.same_line()
+        imgui.text_disabled("Model NPZ")
+        imgui.pop_item_width()
+    else:
+        imgui.push_item_width(150)
+        changed, v = imgui.input_text(f"##tr_save_{nid}",
+                                      str(inst.props.get("save_path", "")))
+        if changed:
+            inst.props["save_path"] = v
+        imgui.same_line()
+        imgui.text_disabled("Save NPZ (opt)")
+        imgui.pop_item_width()
+    imgui.text_disabled("  blocks exec until done - keep on a frame chain")
+
+
+@register("TestFBCSP")
+def _draw_test_fbcsp_widgets(nid: int, inst, _canvas) -> None:
+    _draw_model_picker(nid, inst, "te", _canvas, "models")
+
+
+@register("TestCCA")
+def _draw_test_cca_widgets(nid: int, inst, _canvas) -> None:
+    _draw_freq_editor(nid, inst)
+    imgui.push_item_width(50)
+    changed, v = imgui.input_int(f"##cca_h_{nid}",
+                                 int(inst.props.get("n_harmonics", 3)))
+    if changed:
+        inst.props["n_harmonics"] = max(1, min(8, int(v)))
+    imgui.same_line()
+    imgui.text_disabled("Harmonics")
+    imgui.pop_item_width()

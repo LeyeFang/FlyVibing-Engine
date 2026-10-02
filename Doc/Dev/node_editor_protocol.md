@@ -25,7 +25,7 @@
 | MCP 参考文档 | `Utils/User/NodeEditor/rules.md` | 构图 agent 必读；节点表 / 连线规则 / 模式 |
 | MCP 工具 | `Utils/User/NodeEditor/mcp_server.py` | get_rules / get_scene_entities / build_graph / apply_graph（`validate_graph` 已弃用 → 引擎内服务, 见 `graph_validation_protocol.md`） |
 | 校验器 | `Utils/User/NodeEditor/node_graph_validator.py` | L1 静态 + L2 干跑（**MCP 空跑核心**） |
-| 构图器 | `Utils/User/NodeEditor/graph_builder.py` | 程序化构图 + `validate()`；节点 helper（含 gtec_*） |
+| 构图器 | `Utils/User/NodeEditor/graph_builder.py` | 程序化构图 + `validate()`；节点 helper（gtec_* / siggen_* / pool_*） |
 
 > 旧路径 `Application/Editor/UI/controllers/node_editor/` 仅保留包级 re-export shim（弃用）；
 > 新代码一律使用上表路径。
@@ -98,10 +98,14 @@ if ctx.dry_run:
 
 ## 5. 图约束（graph_constraints.py 模式）
 
-- 业务规则示例：Gtec `InitGtecDevice ⇄ KillGtecDevice` 强制成对。
+- 业务规则示例：Gtec `InitGtecDevice ⇄ KillGtecDevice` 强制成对；设备池 `CreateDevicePool ⇄
+  KillDevicePool` 同样成对（外加 `device` pin 连线校验与单池成员制，见 `validation/checks.py` §8/§9）。
 - 两部分配套实现：
-  - `gtec_cascade_deletes(canvas, ids)`：编辑器删除时扩展为级联删除集合（UI 调用）。
-  - `gtec_pairing_errors(nodes_dict)`：静态校验错误列表（`node_graph_validator.validate_static` 第 6 步调用）。
+  - `*_cascade_deletes(canvas, ids)`：编辑器删除时扩展为级联删除集合（UI 调用；
+    `device_cascade_deletes` = Gtec ∥ SigGen ∥ Pool 并集）。
+  - `*_pairing_errors(nodes_dict)`：静态校验错误列表（`node_graph_validator.validate_static` 调用；
+    另有 `pool_reference_errors` 校验池引用）。
+- 键规则单点化：`device_session_key` / `pool_key` 由评估器 / 校验器 / UI 三处共用，禁止另写变体。
 - 绑定规则写进模块 docstring，并与 `rules.md` 同步（agent 依据它构图）。
 - 规则函数必须**纯数据、无 imgui**，便于被 UI / 校验器 / 测试三处复用。
 

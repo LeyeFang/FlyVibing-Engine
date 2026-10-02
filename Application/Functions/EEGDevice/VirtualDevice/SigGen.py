@@ -22,7 +22,7 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from .Device import DeviceBackend, MAX_BUFFER_SAMPLES
+from ..Device import DeviceBackend, MAX_BUFFER_SAMPLES
 
 # 合成块大小 (samples) — 限制单次生成内存
 _SYNTH_CHUNK = 4096

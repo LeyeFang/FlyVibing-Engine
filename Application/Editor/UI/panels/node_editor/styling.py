@@ -48,6 +48,7 @@ LINK_COLORS: dict[str, tuple[float, float, float]] = {
     "vec3":       (0.65, 0.42, 0.92),  # 淡紫 — 向量/结构体
     "string":     (0.88, 0.62, 0.31),  # 暖橙 — 文本
     "entity_ref": (0.88, 0.75, 0.31),  # 琥珀 — 对象引用
+    "device":     (0.93, 0.80, 0.30),  # 金黄 — 设备引用 (Init.device → AddToDevicePool)
     "variant":    (0.65, 0.65, 0.65),  # 浅灰 — 动态类型
 }
 
@@ -179,6 +180,36 @@ MENU_SECTIONS: list[tuple[str, list]] = [
             ("Stop SigGen Record", "StopSigGenRecord"),
             ("Kill SigGen Device", "KillSigGenDevice"),
             ("Get SigGen Data", "GetSigGenData"),
+        ]),
+        ("Pool", [
+            ("Create Device Pool", "CreateDevicePool"),
+            ("Add To Device Pool", "AddToDevicePool"),
+            ("Kill Device Pool", "KillDevicePool"),
+        ]),
+    ]),
+
+    # ── epoch 数据集（BCI 算法域）──────────────────────────
+    ("Epoch", [
+        ("Capture", [
+            ("Append Epoch", "EpochAppend"),
+            ("Count Epochs", "EpochCount"),
+            ("Clear Epochs", "EpochClear"),
+        ]),
+        ("Persistence", [
+            ("Save Epoch Dataset", "EpochSave"),
+            ("Load Epoch Dataset", "EpochLoad"),
+        ]),
+    ]),
+
+    # ── BCI 算法（FBCSP / CCA）────────────────────────────
+    ("Algorithm", [
+        ("FBCSP", [
+            ("Init FBCSP", "InitFBCSP"),
+            ("Train FBCSP", "TrainFBCSP"),
+            ("Test FBCSP", "TestFBCSP"),
+        ]),
+        ("SSVEP", [
+            ("Test CCA", "TestCCA"),
         ]),
     ]),
 ]

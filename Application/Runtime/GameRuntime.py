@@ -106,6 +106,12 @@ class GameRuntime(Engine):
         # ── 清理上次运行可能残留的 EEG 会话（异常退出保护）──
         from Application.Functions.EEGDevice import close_all as gtec_close_all
         gtec_close_all()
+        # ── 清理上次运行可能残留的 epoch 数据集（同一安全网）──
+        try:
+            from Application.Functions.BCIAlgorithm import reset_all as epoch_reset
+            epoch_reset()
+        except Exception:
+            pass
         EngineLifecycleEvent.Pack(stage="start", message="Started in PIE mode", engine=cls)
         return cls
 
@@ -184,6 +190,14 @@ class GameRuntime(Engine):
         _closed = gtec_close_all()
         if _closed:
             print(f"[GameRuntime] Gtec safety: closed {_closed} leftover session(s)")
+        # ── epoch 数据集安全网（同一兜底语义）──
+        try:
+            from Application.Functions.BCIAlgorithm import reset_all as epoch_reset
+            _n = epoch_reset()
+            if _n:
+                print(f"[GameRuntime] Epoch safety: cleared {_n} leftover dataset(s)")
+        except Exception:
+            pass
 
     @classmethod
     def is_running(cls) -> bool:

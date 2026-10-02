@@ -43,6 +43,9 @@ from .evaluators import (  # noqa: F401
     io,
     gtec,
     siggen,
+    device_pool,
+    epoch,
+    bci_algorithm,
 )
 
 __all__ = [

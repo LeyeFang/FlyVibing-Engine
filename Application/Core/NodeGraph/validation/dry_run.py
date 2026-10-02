@@ -56,15 +56,28 @@ def _seed_rng(seed: int) -> None:
 
 
 def _cleanup_dry_sessions() -> list[str]:
-    """清理干跑命名空间下的残留设备会话（真实会话不受影响）。"""
+    """清理干跑命名空间下的残留设备会话与设备池（真实会话/池不受影响）。"""
     removed: list[str] = []
     try:
-        from Application.Functions.EEGDevice import kill_device, list_sessions
+        from Application.Functions.EEGDevice import (
+            destroy_pool,
+            kill_device,
+            list_pools,
+            list_sessions,
+        )
 
         for name in list_sessions():
             if name.startswith(DRY_RUN_SESSION_PREFIX):
                 kill_device(name)
                 removed.append(name)
+        for p in list_pools():
+            pname = str(p.get("name", ""))
+            if pname.startswith(DRY_RUN_SESSION_PREFIX):
+                destroy_pool(pname)
+        # epoch 数据集 (BCIAlgorithm) — 与设备层同一 dryrun# 命名空间
+        from Application.Functions.BCIAlgorithm import clear_matching
+
+        clear_matching(DRY_RUN_SESSION_PREFIX)
     except Exception:  # noqa: BLE001 — 设备层不可用时忽略
         pass
     return removed

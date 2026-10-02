@@ -85,9 +85,13 @@
 
 ## 7. 数据结构联动（引用型 props）
 
-- 引用其它节点的 props（变量名 / Timer 名 / Gtec 设备名）用**画布扫描 + 下拉框**模式：
-  `_collect_var_names`、`_collect_timer_names`、`_collect_gtec_device_names`（widgets.py）。
-- 绑定目标消失时的行为要明确：Timer 回退 `global`；Gtec 显示 `(not registered)` 提示
+- 引用其它节点的 props（变量名 / Timer 名 / 设备 / 设备池 / epoch 数据集 / BCI 模型）用**画布扫描 + 下拉框**模式：
+  `_collect_var_names`、`_collect_timer_names`（widgets.py）。
+- 设备引用节点（Start/Stop/Kill/Get）= **池 + 设备二级下拉**（`_device_name_field`）：
+  数据源 `graph_constraints.device_inventory`（画布 Init 节点 × 池分配，与校验器同一套键规则）；
+  `(Auto)` = 空名 → 运行时池内唯一设备自动绑定；当前值不在列表保留 `(unlisted)` 项。
+- 设备池节点：Create = 池名输入框；Add / Kill = `_draw_pool_picker`（Add 禁 Auto、Kill 允许）。
+- 绑定目标消失时的行为要明确：Timer 回退 `global`；设备引用显示 `(unlisted)` 保留配置
   （不阻断编辑，运行时由求值器报错）。
 
 ---

@@ -34,6 +34,8 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 4. One output pin can fan out to multiple input pins (both exec and data)
 5. An input pin can only receive from ONE output pin
 6. Event nodes (OnGameStart/OnFrameUpdate/OnGameStop) have NO input exec pins — they are graph roots
+7. device pins connect device→device: Init*Device.device (output) → AddToDevicePool.device (input). These are NOT exec/data pins.
+8. A device output pin feeds AT MOST ONE AddToDevicePool (a device belongs to one pool — exclusive membership). Devices never added to a pool stay in the implicit "global" pool.
 
 ### Execution Model
 - OnGameStart: fires ONCE when the game begins. Use for initialization (set variables, spawn entities).
@@ -170,11 +172,11 @@ FilePath is always handled by widget (Browse button); pin connection overrides w
 #### Gtec Nodes (g.HIamp EEG acquisition — IO ▸ Gtec)
 | type_name       | input pins | output pins | props |
 |-----------------|------------|-------------|-------|
-| InitGtecDevice  | exec_in    | exec_out    | device: HIAMP, device_name, serial (""=auto), template: 64ch/128ch/144ch, sampling_rate: 256/512/600/1200/2400/4800/9600/19200/38400, notch: off/50/60, filter_type: none/highpass/lowpass/bandpass, low_cut, high_cut (0=unset, ignored if not applicable), export_format: npz/csv, save_dir ("."=cwd), buffer_seconds |
-| StartGtecRecord | exec_in    | exec_out    | device_name |
-| StopGtecRecord  | exec_in    | exec_out    | device_name, save_scope: session/buffer |
-| KillGtecDevice  | exec_in    | exec_out    | device_name |
-| GetGtecData     | (none, pure data node) | Data (variant ndarray channels×samples), Channels (int), Samples (int), Fs (float) | device_name |
+| InitGtecDevice  | exec_in    | exec_out, device(device) | device: HIAMP, device_name, serial (""=auto), template: 64ch/128ch/144ch, sampling_rate: 256/512/600/1200/2400/4800/9600/19200/38400, notch: off/50/60, filter_type: none/highpass/lowpass/bandpass, low_cut, high_cut (0=unset, ignored if not applicable), export_format: npz/csv, save_dir ("."=cwd), buffer_seconds |
+| StartGtecRecord | exec_in    | exec_out    | device_name, pool: global/<pool_name> |
+| StopGtecRecord  | exec_in    | exec_out    | device_name, pool, save_scope: session/buffer |
+| KillGtecDevice  | exec_in    | exec_out    | device_name, pool |
+| GetGtecData     | (none, pure data node) | Data (variant ndarray channels×samples), Channels (int), Samples (int), Fs (float) | device_name, pool |
 
 Gtec rules (CRITICAL):
 1. InitGtecDevice and KillGtecDevice MUST appear as a pair (validator enforces; editor deletion cascades). Kill binds by device_name; empty name + single Init = auto-bind.
@@ -187,17 +189,77 @@ Gtec rules (CRITICAL):
 #### SigGen Nodes (Virtual Signal Generator — IO ▸ SigGen)
 | type_name       | input pins | output pins | props |
 |-----------------|------------|-------------|-------|
-| InitSigGenDevice | exec_in | exec_out | device_name, channels (1..256), sampling_rate (1..38400), frequency (Hz; ≤0 = unset → 10), freq_step (Hz per channel; 0 = same freq), amplitude_uv, noise_uv (0 = clean sine), seed, export_format: npz/csv, save_dir ("."=cwd), buffer_seconds |
-| StartSigGenRecord | exec_in | exec_out | device_name |
-| StopSigGenRecord | exec_in | exec_out | device_name, save_scope: session/buffer |
-| KillSigGenDevice | exec_in | exec_out | device_name |
-| GetSigGenData   | (none, pure data node) | Data (variant ndarray channels×samples), Channels (int), Samples (int), Fs (float) | device_name |
+| InitSigGenDevice | exec_in | exec_out, device(device) | device_name, channels (1..256), sampling_rate (1..38400), frequency (Hz; ≤0 = unset → 10), freq_step (Hz per channel; 0 = same freq), amplitude_uv, noise_uv (0 = clean sine), seed, export_format: npz/csv, save_dir ("."=cwd), buffer_seconds |
+| StartSigGenRecord | exec_in | exec_out | device_name, pool: global/<pool_name> |
+| StopSigGenRecord | exec_in | exec_out | device_name, pool, save_scope: session/buffer |
+| KillSigGenDevice | exec_in | exec_out | device_name, pool |
+| GetSigGenData   | (none, pure data node) | Data (variant ndarray channels×samples), Channels (int), Samples (int), Fs (float) | device_name, pool |
 
 SigGen rules (CRITICAL):
 1. InitSigGenDevice and KillSigGenDevice MUST appear as a pair (validator + editor deletion cascade; binding identical to Gtec).
 2. Pure software sine source — runs on any machine (no hardware). Channel i frequency = f0 + i·step Hz; amplitude in µV float32; optional deterministic Gaussian noise via seed.
 3. Buffer / Get / Stop-save semantics identical to Gtec rules 4–6. REAL runs (not dry-run) actually write npz/csv + .json sidecar into save_dir; dry-run writes nothing.
 4. Gtec and SigGen share one device session registry — device_name must be unique across families.
+
+#### Device Pool Nodes (IO ▸ Pool)
+| type_name        | input pins               | output pins | props |
+|------------------|--------------------------|-------------|-------|
+| CreateDevicePool | exec_in                  | exec_out    | pool_name ("" → fallback key pool#<nid>) |
+| AddToDevicePool  | exec_in, device (device) | exec_out    | pool_name (must match a CreateDevicePool) |
+| KillDevicePool   | exec_in                  | exec_out    | pool_name ("" + single Create = auto-bind) |
+
+Device pool rules (CRITICAL):
+1. CreateDevicePool ⇄ KillDevicePool MUST appear as a pair (validator + editor deletion cascade; binding by pool_name, like devices).
+2. AddToDevicePool.device pin MUST be linked from an Init*Device.device output, and the Add node MUST run on the SAME exec chain, right after that Init (ctx pin values live for one trigger only).
+3. A device belongs to exactly ONE pool (exclusive). Re-executing Add with another pool MOVES the device (runtime logs it).
+4. Devices not added to any pool stay in the implicit "global" pool; "global" cannot be created or destroyed.
+5. Device reference nodes (Start/Stop/Kill/Get) select pool (default "global"); with device_name empty they auto-bind the SOLE device of the selected pool (pool may hold multiple devices → then set device_name).
+6. KillDevicePool unregisters the pool only — member devices keep running (each owns its Kill*Device node). Members fall back to "global".
+7. Dry-run (validate_graph): pools share the "dryrun#" namespace with sessions and are cleaned up after the run.
+
+#### Pattern 7: Device + Pool (e.g. SigGen solo or multi-device hyper-scanning prep)
+```
+OnGameStart → CreateDevicePool(pool_name="eeg") → InitSigGenDevice(device_name="SG1")
+  → AddToDevicePool(pool_name="eeg", device←InitSigGenDevice.device)
+  → StartSigGenRecord(pool="eeg", device_name="")
+OnFrameUpdate → GetSigGenData(pool="eeg", device_name="") → ...
+OnGameStop → StopSigGenRecord(pool="eeg") → KillSigGenDevice(pool="eeg", device_name="SG1")
+  → KillDevicePool(pool_name="eeg")
+```
+Key: the Add node sits immediately after its Init in the same chain; acquisition/reference nodes pick the pool and leave device_name empty (auto-bind). With several devices in one pool, set device_name explicitly on Start/Stop/Kill/Get.
+
+#### Epoch Dataset Nodes (Epoch — neuroengineering convention)
+| type_name   | input pins | output pins | props |
+|-------------|------------|-------------|-------|
+| EpochAppend | exec_in, Data (variant), Samples (int), Fs (float), Label (float) | exec_out | epochs_name ("" → fallback key epochs#<nid>) |
+| EpochCount  | (none, pure data node) | Count (int), Classes (int), Channels (int), Fs (float) | epochs_name |
+| EpochClear  | exec_in | exec_out | epochs_name |
+| EpochSave   | exec_in | exec_out | epochs_name, save_dir ("."=cwd) |
+| EpochLoad   | exec_in | exec_out | epochs_name, file_path (npz), mode: replace/append |
+
+Epoch dataset rules (CRITICAL):
+1. One epoch = one trial segment (channels × samples); appends stack along dim0 → dataset ≈ (epochs, channels, samples). EpochAppend trims to the Samples pin (valid length from Get*Data); Data and Label pins MUST be connected (validator enforces).
+2. All epochs in one dataset share channels count and fs — fixed by the first append (mismatch → error logged, epoch skipped). Samples=0 appends are skipped with a log.
+3. NO Create/Kill pairing (pure in-memory container — unlike devices/pools). Reference nodes (Count/Clear/Save) bind by epochs_name; empty name + exactly one source (Append/Load) on canvas = auto-bind; otherwise static error.
+4. Collect-then-train pattern: append during a trial loop → EpochCount.Count → Compare → Branch gates training; EpochSave for persistence; EpochLoad is the offline-dataset entry (mode replace/append).
+5. EpochSave writes npz: X padded (epochs, ch, max_len) + lengths + y + fs. Real runs only — dry-run computes the target path and writes nothing; EpochLoad reads files deterministically (works in dry-run).
+6. Dry-run: datasets share the "dryrun#" namespace and are purged after validation; GameRuntime/PlayerBootstrap reset datasets as a runtime safety net.
+
+#### BCI Algorithm Nodes (Algorithm — FBCSP / CCA)
+| type_name   | input pins | output pins | props |
+|-------------|------------|-------------|-------|
+| InitFBCSP   | exec_in | exec_out | model_name ("" → model#<nid>), n_components (1..8), classifier: LDA/SVM, bands: [[lo,hi], ...] (packed list; empty = plain CSP) |
+| TrainFBCSP  | exec_in | exec_out | model_name, dataset_name, mode: train/load, model_path (load), save_path (opt) |
+| TestFBCSP   | Data (variant), Samples (int) | Label (int), Confidence (float) | model_name |
+| TestCCA     | Data (variant), Samples (int), Fs (float) | Label (int idx), Score (float), Freq (float) | freqs: [f, ...] (>=2, no upper limit), n_harmonics (1..8) |
+
+BCI algorithm rules (CRITICAL):
+1. InitFBCSP registers a spec (hyperparams) under model_name; TrainFBCSP(train) binds the spec + an Epoch dataset (both by name; empty + single canvas source = auto-bind) and registers the trained model under the SAME key; TestFBCSP binds a trained model by name.
+2. Training = SYNCHRONIZED WAIT: TrainFBCSP blocks the exec flow while a service thread trains (progress via logs); on completion the SAME exec walk continues downstream exactly once (one-shot, like TimeTrigger). Put it on a repeatedly-triggered chain — an OnGameStart-only chain would stall forever (TimeDelay has the same limitation). Dry-run trains synchronously (deterministic).
+3. Training needs EXACTLY 2 classes in the dataset (first append fixes channels/fs). Classifier math: closed-form LDA or linear SVM (scipy.optimize, deterministic) — no sklearn dependency.
+4. mode=load bypasses training and registers a model from model_path (offline pipeline entry); save_path (train mode) writes the trained model as npz.
+5. TestCCA is training-free: references = sin/cos harmonics of each candidate frequency; Label = argmax canonical correlation (index into freqs), Score = that correlation, Freq = its value. At least 2 frequencies required (no upper limit).
+6. bands/freqs are PACKED lists (UI unpacks into rows with +/-; external MCP sets/replaces the whole list atomically). Models and datasets share the "dryrun#" namespace during validation and are purged afterwards.
 
 ---
 

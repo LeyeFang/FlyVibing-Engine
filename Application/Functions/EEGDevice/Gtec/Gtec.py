@@ -3,7 +3,8 @@ EEGDevice.Gtec — 真实后端: 通过 pygds (g.NEEDaccess Python Client API) �
 
 要点:
   - pygds 只在 configure() 内懒导入 — 模块导入本身零重依赖
-    (pygds 依赖 cffi / pywin32 / matplotlib；引擎 venv 需另行安装, 详见 Doc/Dev)
+    (pygds 依赖 cffi / pywin32 / matplotlib; 运行于 Gtec 自有环境的服务进程内,
+     引擎侧不安装 — 见 Gtec/README.md + ServiceHost/ServiceClient)
   - 依赖 Windows 服务 GDS 运行 + 设备空闲 (未被 g.Recorder / g.SCOPE 占用)
   - pygds 1.24.0 已知 bug: GDS(DEVICE_TYPE_*) 会 UnboundLocalError → 必须传序列号字符串
   - Trigger 固定启用 (16 条数字线合并为 1 个附加通道 — "combine trigger")
@@ -23,7 +24,7 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from .Device import DeviceBackend, GtecConfig
+from ..Device import DeviceBackend, GtecConfig
 
 
 class GtecUnavailable(RuntimeError):
@@ -41,8 +42,8 @@ def _load_pygds():
         return pygds
     except Exception as e:  # ImportError / DLL 加载失败等
         raise GtecUnavailable(
-            "pygds 不可用（{}）。真实采集需在引擎 venv 安装 g.tec 官方 pygds wheel，"
-            "并确保 Windows 服务 GDS 正在运行；详见 Doc/Dev/device_io_protocol.md。".format(e)
+            "pygds 不可用（{}）。真实采集需在 Gtec 自有环境中运行本模块的服务进程"
+            "（见 Gtec/README.md 的启动命令），并确保 Windows 服务 GDS 正在运行。".format(e)
         )
 
 

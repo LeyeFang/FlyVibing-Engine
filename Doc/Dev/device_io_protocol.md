@@ -10,7 +10,7 @@
 | 模块 | 架构 | 要点 |
 |---|---|---|
 | `Functions/SerialParallelDevice/` | 全局单例 + I/O 线程 + 队列 | `api.py`（start/stop/send/write_parallel）、`io_thread.py`、`state.py`、`test_hooks.py`；无驱动优雅降级；5ms 自动复位 |
-| `Functions/EEGDevice/` | 会话注册表 + 后端协议 + 环形缓冲 | `Device.py`（后端无关：配置/缓冲/会话/落盘）、`Gtec.py`（真实 pygds）、`GtecStub.py`（空跑）、`SigGen.py`（虚拟信号发生器 — 纯软件正弦源）、`eCon.py`（预留）、`__init__.py`（门面路由） |
+| `Functions/EEGDevice/` | 会话注册表 + 后端协议 + 环形缓冲 + **品牌服务进程** | `Device.py`（后端无关：配置/缓冲/会话/注册表/落盘）、`ServiceProtocol/ServiceHost/ServiceClient.py`（品牌进程通信，见 §8）、`Gtec/`（品牌目录：真实 pygds + 服务入口; 自有环境）、`VirtualDevice/`（品牌目录：虚拟信号发生器 + 服务入口; 引擎环境）、`eCon/`（品牌目录：念通科技 econEXG 预留）、`__init__.py`（门面路由） |
 
 共同约束：
 - **不得反向依赖 Engine / Editor**；被求值器（`Application/Core/NodeGraph/evaluators/*`）调用。
@@ -27,7 +27,7 @@
   - **确定性**：同一时间轴 → 同一数组（干跑可复现）；
   - 合成总量封顶为窗口容量（避免长时间干跑占内存）；
   - 通过 `on_block` 走**与真实后端相同的数据通路**（环形缓冲/全量录制逻辑一并被验证）。
-- 选择方式：求值器按 `ctx.dry_run` 选择后端（`EEGDevice.init_session(..., dry_run=...)`）；
+- 选择方式：门面 `_make_backend` 路由 —— 干跑（`ctx.dry_run=True`）走进程内确定性后端（GtecStub / Virtual dry，无进程零副作用）；真实模式默认走**品牌服务进程**（独立进程 + 协议通信，见 §8）；逃生门 `MGE_EEG_TRANSPORT=inproc` 退回进程内真实后端。
   **真实模式绝不回退 stub**（防实验数据污染），干跑才走 stub。
 - 新增设备时同步实现两套后端 + 在 `Doc/Dev/README.md` §3 的验收命令下跑通。
   **纯软件设备例外**（如 `SigGen` — 虚拟信号发生器）：单一后端 + 构造参数 `dry_run` 控制
@@ -94,7 +94,55 @@
 
 ---
 
-## 7. 测试
+## 7. 设备池 (Device Pool)
+
+设备池 = 设备的分组 / 生命周期 / (未来) 进程组与同步域锚点（模块级注册表, `Device.py`）。
+
+- 门面 API：`create_pool / destroy_pool / add_to_pool / pool_of / pool_members / list_pools / reset_pools`；
+  隐式 `global` 池始终存在（未入显式池的设备），不可创建/销毁。
+- **排他成员制**：一个设备同一时刻只属一个池；`add_to_pool` 到新池 = 移动（日志记录）；
+  `kill_device` 自动脱池；`destroy_pool` 成员回落 `global`；`close_all` 连池一并清空。
+- 池作用域绑定：`resolve_session(name, pool)` —— `name` 非空按名称解析；空名 + `pool=None`
+  保持旧语义（全注册表唯一会话自动绑定）；空名 + 池 → 池内唯一设备自动绑定（多设备报歧义）。
+- 节点侧（IO ▸ Pool）：`CreateDevicePool ⇄ KillDevicePool` 强制配对（校验 + 编辑器级联，
+  与设备族同一套规则）；`AddToDevicePool` 读 Init `device` pin 的会话键入池 —— **必须与对应
+  Init 排在同一条 exec 链、紧跟其后执行**（pin 值仅一个 trigger 内有效）。
+- 键规则单点定义在 `graph_constraints`（`device_session_key` / `pool_key`），
+  评估器 / 校验器 / UI 下拉三处共用，禁止另写变体。
+- 干跑隔离：池与会话共用 `dryrun#` 命名空间，任务结束由 `validation/dry_run.py` 一并清理。
+- **品牌目录布局（2026-10-03 已落地）**：`Functions/EEGDevice/{Gtec, eCon, VirtualDevice}/` 三个品牌目录
+  —— **一个品牌（一个 API）= 一个独立文件夹 + 独立环境**（Gtec/eCon 自有环境；VirtualDevice 用引擎
+  环境）；品牌 = 独立进程文件应用（后端 + `service.py`，见 §8）。导出**按需包含**：项目未引用某品牌时，
+  其目录（含未来成品环境）不随导出。设备池 = 进程组管理单元（池条目 `meta` 预留进程句柄/启动参数）。
+  延伸规则：`Functions/` 下未来一律按**终端可安装的可选拓展**演进（仅备忘，暂不施工）。
+
+---
+
+## 8. 品牌服务进程（独立进程 + 协议通信）
+
+品牌目录 = 独立进程文件应用：后端实现 + `service.py` 入口 +（未来）随目录携带的环境。
+引擎与品牌之间只经一条协议通信，节点图侧零改动。
+
+| 组件 | 位置 | 职责 |
+|---|---|---|
+| `ServiceProtocol.py` | 共享 | 帧格式 `[4B 大端长度][pickle(protocol=4)]`；3.9+ 兼容（服务可能跑在低版本环境） |
+| `ServiceHost.py` | 服务侧 | 命令循环 hello/init/start/pump/stop/kill/info/shutdown；push 模式采集线程加锁写 socket |
+| `ServiceClient.py` | 引擎侧 | `ServiceBackend`（DeviceBackend 实现）；pump/push 双模式；rid 路由 + 单读者线程 |
+
+- **数据模式**：`pump`（合成后端——块随响应同步返回，与进程内逐位一致，确定性来源）；
+  `push`（真实硬件——start 后采集线程持续推送，引擎接收线程写会话环形缓冲）。
+- **保存仍在引擎侧**：服务只提供数据；npz/csv/元数据落盘逻辑与进程内完全一致。
+- **生命周期**：VirtualDevice 引擎自动拉起（`sys.executable`，引擎环境，动态端口，日志在系统 temp）；
+  Gtec 外部启动（自有环境；`MGE_GTEC_SERVICE=host:port`，默认 127.0.0.1:47810）；
+  客户端断开 → 服务退出（引擎崩溃自动清理）；`kill/close` 发 shutdown 并回收子进程。
+- **连通失败诊断**：报错含启动提示 + 服务日志尾部（自动拉起场景）。
+- 验证：`Test/Application/Functions/test_eeg_service.py`（往返/确定性/端到端保存/逃生门/进程清理 +
+  Gtec 3.9 跨版本握手——不触硬件）。
+- 待办：Gtec 实机联调（自有环境启动服务 + 硬件会话）、PIE E2E 复跑、品牌目录随环境打包（规划见 §7）。
+
+---
+
+## 9. 测试
 
 ```powershell
 .venv-py314t\Scripts\python.exe Test/Application/Functions/test_gtec_device.py        # 设备层 + 干跑 + 约束 (48 checks)
@@ -107,7 +155,7 @@
 
 ---
 
-## 8. 已知坑（实战教训）
+## 10. 已知坑（实战教训）
 
 1. 空跑 pump 时序（§4）—— 顺序错误的症状是"数据全 0 / valid=0"。
 2. 真实模式不得伪造数据（§2）—— 采集失败要显式报错，宁缺毋假。
@@ -116,3 +164,7 @@
 4. 自由线程下忘加锁 → 概率性数据错乱，且很难复现；所有跨线程结构一律加锁。
 5. 设备释放要幂等：`close_all` / `kill` 允许重复调用（异常保护包裹）。
 6. 不要在 import 期做设备探测（`probe_environment` 只做只读探测且吞异常，供日志用）。
+7. 服务命令顺序：`shutdown` 必须在任意状态可用（未 init 也允许）——否则 init 失败的收尾路径卡死；
+   `kill` 无会话时宽容返回（幂等）。服务进程客户端断开即退出（不驻留）。
+8. 控制台编码：GBK 环境**管道输出**（如 `| Select-Object`）遇非 GBK 字符（`↔` 等）会 UnicodeEncodeError
+   —— 测试脚本打印只用 GBK 覆盖的符号（`──` `×` `→` 可用，箭头互指用 `<->`）。

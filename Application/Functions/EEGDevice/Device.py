@@ -2,10 +2,13 @@
 EEGDevice.Device — g.tec EEG 设备集成核心（后端无关，不依赖 pygds）。
 
 职责分离:
-  Device.py       配置模型 / 环形缓冲 / 会话 / 注册表 / 落盘     ← 本文件（后端无关）
-  Gtec.py         真实后端 — pygds 驱动 g.HIamp（懒导入，无 pygds 时抛出清晰错误）
-  GtecStub.py     空跑后端 — 确定性合成数据（MCP 干跑验证、无硬件环境）
-  eCon.py         （预留）eConEXG 后端
+  Device.py          配置模型 / 环形缓冲 / 会话 / 注册表 / 落盘         ← 本文件（后端无关）
+  ServiceProtocol.py 品牌服务 ↔ 引擎 通信协议（stdlib; 3.9+ 兼容）
+  ServiceHost.py     服务进程侧宿主（品牌 service.py 复用）
+  ServiceClient.py   引擎侧服务后端（真实模式默认路由; 进程 + 协议通信）
+  Gtec/              品牌目录: g.HIamp 后端 + 服务入口（自有环境, 外部启动, push 模式）
+  VirtualDevice/     品牌目录: 虚拟信号发生器 + 服务入口（引擎环境, 自动拉起, pump 模式）
+  eCon/              品牌目录: 念通科技 econEXG（预留占位）
 
 关键约定（与节点编辑器 / MCP 干跑验证对齐）:
   - 缓冲数组形状 (channels, capacity) float32、单位 µV；快照按时间顺序返回，
@@ -508,6 +511,7 @@ def register_session(session: RecordingSession) -> None:
 def unregister_session(name: str) -> None:
     with _REG_LOCK:
         _REGISTRY.pop(name, None)
+    _dequeue_session(name)
 
 
 def get_session(name: str) -> Optional[RecordingSession]:
@@ -515,25 +519,49 @@ def get_session(name: str) -> Optional[RecordingSession]:
         return _REGISTRY.get(name)
 
 
-def resolve_session(name: str) -> tuple[Optional[RecordingSession], str]:
-    """按名称解析会话；空名称且仅有一个会话时自动绑定。
+def resolve_session(name: str, pool: Optional[str] = None) -> tuple[Optional[RecordingSession], str]:
+    """按名称解析会话；空名称时自动绑定（可限定设备池作用域）。
+
+    pool 语义（仅空名称时生效；显式名称优先）:
+      - pool=None      → 全注册表：唯一会话自动绑定（旧行为）
+      - pool="global"  → 仅在 global 池（未入显式池）的设备内绑定
+      - pool="<name>"  → 仅在该池成员内绑定（池不存在 → 明确报错）
 
     Returns: (session | None, 失败原因)
     """
     name = (name or "").strip()
-    with _REG_LOCK:
-        if name:
+    if name:
+        with _REG_LOCK:
             s = _REGISTRY.get(name)
             if s is None:
                 known = ", ".join(_REGISTRY) or "(none)"
                 return None, f"device '{name}' not registered (known: {known})"
             return s, ""
-        if len(_REGISTRY) == 1:
-            return next(iter(_REGISTRY.values())), ""
-        if not _REGISTRY:
-            return None, "no Gtec device registered — add/execute an InitGtecDevice node first"
-        known = ", ".join(_REGISTRY)
-        return None, f"multiple Gtec devices registered ({known}) — set device_name to select one"
+    if pool is None:
+        with _REG_LOCK:
+            if len(_REGISTRY) == 1:
+                return next(iter(_REGISTRY.values())), ""
+            if not _REGISTRY:
+                return None, "no device registered — add/execute an Init*Device node first"
+            known = ", ".join(_REGISTRY)
+        return None, f"multiple devices registered ({known}) — set device_name to select one"
+
+    pool = (pool or "").strip() or GLOBAL_POOL
+    if pool != GLOBAL_POOL:
+        with _POOL_LOCK:
+            exists = pool in _POOL_REGISTRY
+        if not exists:
+            return None, (f"pool '{pool}' not created — add/execute a CreateDevicePool "
+                          f"node first")
+    members = pool_members(pool)
+    if len(members) == 1:
+        return get_session(members[0]), ""
+    if not members:
+        where = ("no devices in global (all devices are pooled)" if pool == GLOBAL_POOL
+                 else f"pool '{pool}' has no active devices")
+        return None, f"nothing to bind: {where} — init a device or add it to the pool"
+    return None, (f"multiple devices in pool '{pool}' ({', '.join(members)}) — "
+                  f"set device_name to select one")
 
 
 def list_sessions() -> list[str]:
@@ -542,16 +570,149 @@ def list_sessions() -> list[str]:
 
 
 def close_all() -> int:
-    """关闭所有会话（不保存）— Runtime 停止/异常保护用。返回关闭数量。"""
+    """关闭所有会话（不保存）＋ 清空所有设备池 — Runtime 停止/异常保护用。返回关闭数量。"""
     with _REG_LOCK:
         sessions = list(_REGISTRY.values())
         _REGISTRY.clear()
+    reset_pools()
     for s in sessions:
         try:
             s.kill()
         except Exception as e:  # pragma: no cover - 保护性
             print(f"[Device] close_all: kill '{s.name}' failed: {e}")
     return len(sessions)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 设备池注册表（模块级）— 分组 / 生命周期 / (未来) 进程组与同步域锚点
+# ═══════════════════════════════════════════════════════════════
+
+GLOBAL_POOL = "global"      # 隐式默认池: 所有未显式加入池的设备
+
+_POOL_REGISTRY: dict[str, dict] = {}   # name → {"members": set[str], "meta": dict}
+_POOL_LOCK = threading.Lock()
+
+
+def create_pool(name: str, meta: Optional[dict] = None) -> tuple[bool, str]:
+    """注册一个设备池（幂等 — 已存在视为成功）。
+
+    meta: 预留扩展位（未来: 进程句柄 / 启动参数 / 同步域配置）。
+    """
+    name = (name or "").strip()
+    if not name:
+        return False, "pool name must not be empty"
+    if name == GLOBAL_POOL:
+        return False, f"'{GLOBAL_POOL}' is the implicit default pool and cannot be created"
+    with _POOL_LOCK:
+        entry = _POOL_REGISTRY.get(name)
+        if entry is not None:
+            if meta:
+                entry["meta"].update(meta)
+            return True, f"pool '{name}' already registered ({len(entry['members'])} member(s))"
+        _POOL_REGISTRY[name] = {"members": set(), "meta": dict(meta or {})}
+    return True, f"pool '{name}' created"
+
+
+def destroy_pool(name: str) -> tuple[bool, str]:
+    """注销一个设备池。成员回落 global（设备自身生命周期不受影响）。"""
+    name = (name or "").strip()
+    if not name or name == GLOBAL_POOL:
+        return False, f"cannot destroy '{name or '?'}'"
+    with _POOL_LOCK:
+        entry = _POOL_REGISTRY.pop(name, None)
+    if entry is None:
+        return False, f"pool '{name}' not registered"
+    return True, f"pool '{name}' destroyed ({len(entry['members'])} member(s) → global)"
+
+
+def add_to_pool(pool: str, session_name: str) -> tuple[bool, str]:
+    """把会话加入设备池（幂等；已在其他池 → 移动）。pool='global' 即移出所有显式池。
+
+    排他成员制: 一个设备同一时刻只属于一个池。
+    """
+    pool = (pool or "").strip() or GLOBAL_POOL
+    session_name = (session_name or "").strip()
+    if not session_name:
+        return False, "empty session name"
+    if get_session(session_name) is None:
+        return False, f"device '{session_name}' not registered — init it first"
+    if pool != GLOBAL_POOL:
+        with _POOL_LOCK:
+            if pool not in _POOL_REGISTRY:
+                known = ", ".join(_POOL_REGISTRY) or "(none)"
+                return False, f"pool '{pool}' not created (known: {known})"
+    moved_from = ""
+    with _POOL_LOCK:
+        for pname, entry in _POOL_REGISTRY.items():
+            if session_name in entry["members"]:
+                if pname == pool:
+                    return True, f"'{session_name}' already in pool '{pool}'"
+                entry["members"].discard(session_name)
+                moved_from = pname
+                break
+        if pool != GLOBAL_POOL:
+            _POOL_REGISTRY[pool]["members"].add(session_name)
+    why = f" (moved from '{moved_from}')" if moved_from else ""
+    if pool == GLOBAL_POOL:
+        return True, f"'{session_name}' → global{why}"
+    return True, f"'{session_name}' → pool '{pool}'{why}"
+
+
+def pool_of(session_name: str) -> str:
+    """会话所属池名；不在任何显式池 → GLOBAL_POOL。"""
+    with _POOL_LOCK:
+        for pname, entry in _POOL_REGISTRY.items():
+            if session_name in entry["members"]:
+                return pname
+    return GLOBAL_POOL
+
+
+def pool_members(pool: str = GLOBAL_POOL) -> list[str]:
+    """池内成员（仅注册表中仍存在的会话）；global → 所有未入显式池的会话。"""
+    pool = (pool or "").strip() or GLOBAL_POOL
+    with _REG_LOCK:
+        live = set(_REGISTRY)
+    with _POOL_LOCK:
+        if pool == GLOBAL_POOL:
+            pooled: set[str] = set()
+            for entry in _POOL_REGISTRY.values():
+                pooled |= entry["members"]
+            return sorted(live - pooled)
+        entry = _POOL_REGISTRY.get(pool)
+        if entry is None:
+            return []
+        return sorted(entry["members"] & live)
+
+
+def list_pools() -> list[dict]:
+    """所有池概览（含 global）。Returns: [{"name", "members": [...], "meta": {...}}, ...]"""
+    with _REG_LOCK:
+        live = set(_REGISTRY)
+    out: list[dict] = []
+    pooled: set[str] = set()
+    with _POOL_LOCK:
+        for pname, entry in _POOL_REGISTRY.items():
+            out.append({"name": pname,
+                        "members": sorted(entry["members"] & live),
+                        "meta": dict(entry["meta"])})
+            pooled |= entry["members"]
+    out.append({"name": GLOBAL_POOL, "members": sorted(live - pooled), "meta": {}})
+    return out
+
+
+def reset_pools() -> int:
+    """清空所有显式池（成员全部回落 global）。返回移除的池数量。"""
+    with _POOL_LOCK:
+        n = len(_POOL_REGISTRY)
+        _POOL_REGISTRY.clear()
+    return n
+
+
+def _dequeue_session(session_name: str) -> None:
+    """从所有池移除会话（kill / unregister 时调用）。"""
+    with _POOL_LOCK:
+        for entry in _POOL_REGISTRY.values():
+            entry["members"].discard(session_name)
 
 
 # ═══════════════════════════════════════════════════════════════

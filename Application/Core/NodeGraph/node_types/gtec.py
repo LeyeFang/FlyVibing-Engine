@@ -21,8 +21,10 @@ _reg(NodeTypeDef(
     [
         PinDef(_gen_id(), "exec_in", "exec", "input"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
+        # device pin: 接 AddToDevicePool.device (可选; 不接 → 设备留在 global 池)
+        PinDef(_gen_id(), "device", "data", "output", "device", True),
     ],
-    "Open + configure g.HIamp (template / rate / filters / buffer)",
+    "Open + configure g.HIamp; device pin → AddToDevicePool (default: global)",
 ))
 
 # ── StartGtecRecord — 开始采集 ─────────────────────────────

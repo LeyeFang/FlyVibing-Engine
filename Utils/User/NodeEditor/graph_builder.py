@@ -275,7 +275,7 @@ class GraphBuilder:
         notch: "off"/"50"/"60"; filter_type: none/highpass/lowpass/bandpass
         (截止频率 0 = 未填不生效; 与类型不匹配的字段被忽略)。
         """
-        return self.node("InitGtecDevice", ["exec_in", "exec_out"], {
+        return self.node("InitGtecDevice", ["exec_in", "exec_out", "device"], {
             "device": "HIAMP", "device_name": name, "serial": serial,
             "template": template, "sampling_rate": rate,
             "notch": notch, "filter_type": filter_type,
@@ -284,25 +284,26 @@ class GraphBuilder:
             "buffer_seconds": buffer_seconds,
         })
 
-    def gtec_start(self, name: str = "HIAMP") -> int:
-        """StartGtecRecord — 开始采集（写入窗口缓冲）。"""
+    def gtec_start(self, name: str = "HIAMP", pool: str = "") -> int:
+        """StartGtecRecord — 开始采集（写入窗口缓冲）。pool: 池作用域（""=旧语义）。"""
         return self.node("StartGtecRecord", ["exec_in", "exec_out"],
-                         {"device_name": name})
+                         {"device_name": name, "pool": pool})
 
-    def gtec_stop(self, name: str = "HIAMP", scope: str = "session") -> int:
+    def gtec_stop(self, name: str = "HIAMP", scope: str = "session",
+                  pool: str = "") -> int:
         """StopGtecRecord — 停止采集并保存 (scope: session=全量 / buffer=窗口)。"""
         return self.node("StopGtecRecord", ["exec_in", "exec_out"],
-                         {"device_name": name, "save_scope": scope})
+                         {"device_name": name, "save_scope": scope, "pool": pool})
 
-    def gtec_kill(self, name: str = "HIAMP") -> int:
+    def gtec_kill(self, name: str = "HIAMP", pool: str = "") -> int:
         """KillGtecDevice — 停止 + 释放设备（不保存）。MUST 与 gtec_init 成对。"""
         return self.node("KillGtecDevice", ["exec_in", "exec_out"],
-                         {"device_name": name})
+                         {"device_name": name, "pool": pool})
 
-    def gtec_get(self, name: str = "HIAMP") -> int:
+    def gtec_get(self, name: str = "HIAMP", pool: str = "") -> int:
         """GetGtecData — 非销毁读取窗口缓冲（纯数据节点）。"""
         return self.node("GetGtecData", ["Data", "Channels", "Samples", "Fs"],
-                         {"device_name": name})
+                         {"device_name": name, "pool": pool})
 
     # ── SigGen (虚拟信号发生器) — IO ▸ SigGen ─────────────
 
@@ -317,7 +318,7 @@ class GraphBuilder:
         MUST 与 siggen_kill(name) 成对出现 (validate_graph 强制检查)。
         通道 i 频率 = frequency + i·freq_step; noise>0 时按 seed 叠加确定性噪声。
         """
-        return self.node("InitSigGenDevice", ["exec_in", "exec_out"], {
+        return self.node("InitSigGenDevice", ["exec_in", "exec_out", "device"], {
             "device": "VIRTUAL", "device_name": name, "channels": channels,
             "sampling_rate": rate, "frequency": frequency, "freq_step": freq_step,
             "amplitude_uv": amplitude, "noise_uv": noise, "seed": seed,
@@ -325,25 +326,111 @@ class GraphBuilder:
             "buffer_seconds": buffer_seconds,
         })
 
-    def siggen_start(self, name: str = "SIGGEN") -> int:
-        """StartSigGenRecord — 开始采集（写入窗口缓冲）。"""
+    def siggen_start(self, name: str = "SIGGEN", pool: str = "") -> int:
+        """StartSigGenRecord — 开始采集（写入窗口缓冲）。pool: 池作用域（""=旧语义）。"""
         return self.node("StartSigGenRecord", ["exec_in", "exec_out"],
-                         {"device_name": name})
+                         {"device_name": name, "pool": pool})
 
-    def siggen_stop(self, name: str = "SIGGEN", scope: str = "session") -> int:
+    def siggen_stop(self, name: str = "SIGGEN", scope: str = "session",
+                    pool: str = "") -> int:
         """StopSigGenRecord — 停止采集并保存 (scope: session=全量 / buffer=窗口)。"""
         return self.node("StopSigGenRecord", ["exec_in", "exec_out"],
-                         {"device_name": name, "save_scope": scope})
+                         {"device_name": name, "save_scope": scope, "pool": pool})
 
-    def siggen_kill(self, name: str = "SIGGEN") -> int:
+    def siggen_kill(self, name: str = "SIGGEN", pool: str = "") -> int:
         """KillSigGenDevice — 停止 + 释放设备（不保存）。MUST 与 siggen_init 成对。"""
         return self.node("KillSigGenDevice", ["exec_in", "exec_out"],
-                         {"device_name": name})
+                         {"device_name": name, "pool": pool})
 
-    def siggen_get(self, name: str = "SIGGEN") -> int:
+    def siggen_get(self, name: str = "SIGGEN", pool: str = "") -> int:
         """GetSigGenData — 非销毁读取窗口缓冲（纯数据节点）。"""
         return self.node("GetSigGenData", ["Data", "Channels", "Samples", "Fs"],
-                         {"device_name": name})
+                         {"device_name": name, "pool": pool})
+
+    # ── Device Pool (设备池) — IO ▸ Pool ──────────────────
+
+    def pool_create(self, name: str = "") -> int:
+        """CreateDevicePool — 注册设备池。MUST 与 pool_kill(name) 成对。"""
+        return self.node("CreateDevicePool", ["exec_in", "exec_out"],
+                         {"pool_name": name})
+
+    def pool_add(self, init_id: int, pool: str) -> int:
+        """AddToDevicePool — 把 init_id 的 device pin 加入池。
+
+        注意: 调用方需把返回的 Add 节点 chain 到 init 之后 (同一 exec 链)。
+        """
+        a = self.node("AddToDevicePool", ["exec_in", "exec_out", "device"],
+                      {"pool_name": pool})
+        self.link(init_id, "device", a, "device")
+        return a
+
+    def pool_kill(self, name: str = "") -> int:
+        """KillDevicePool — 注销池 (成员回落 global)。MUST 与 pool_create 成对。"""
+        return self.node("KillDevicePool", ["exec_in", "exec_out"],
+                         {"pool_name": name})
+
+    # ── Epoch Dataset (epoch 数据集) ──────────────────────
+
+    def epoch_append(self, name: str = "EPOCHS") -> int:
+        """EpochAppend — 追加一条 epoch (Data/Samples/Fs/Label 四线从 Get*Data 直连)。"""
+        return self.node("EpochAppend",
+                         ["exec_in", "exec_out", "Data", "Samples", "Fs", "Label"],
+                         {"epochs_name": name})
+
+    def epoch_count(self, name: str = "EPOCHS") -> int:
+        """EpochCount — 数据集统计 (纯数据节点; Count 可接 Compare/Branch 门控)。"""
+        return self.node("EpochCount", ["Count", "Classes", "Channels", "Fs"],
+                         {"epochs_name": name})
+
+    def epoch_clear(self, name: str = "EPOCHS") -> int:
+        """EpochClear — 清空数据集。"""
+        return self.node("EpochClear", ["exec_in", "exec_out"],
+                         {"epochs_name": name})
+
+    def epoch_save(self, name: str = "EPOCHS", save_dir: str = ".") -> int:
+        """EpochSave — 落盘 npz (pad + lengths)。"""
+        return self.node("EpochSave", ["exec_in", "exec_out"],
+                         {"epochs_name": name, "save_dir": save_dir})
+
+    def epoch_load(self, name: str = "EPOCHS", file_path: str = "",
+                   mode: str = "replace") -> int:
+        """EpochLoad — 从 npz 载入 (离线数据集入口; mode: replace/append)。"""
+        return self.node("EpochLoad", ["exec_in", "exec_out"],
+                         {"epochs_name": name, "file_path": file_path,
+                          "mode": mode})
+
+    # ── BCI 算法 (FBCSP / CCA) ────────────────────────────
+
+    def fbscp_init(self, name: str = "FBCSP", n_components: int = 2,
+                   classifier: str = "LDA", bands=None) -> int:
+        """InitFBCSP — 注册超参集 (bands=[] → 普通 CSP)。"""
+        props = {"model_name": name, "n_components": n_components,
+                 "classifier": classifier}
+        props["bands"] = ([[4.0, 8.0], [8.0, 13.0], [13.0, 30.0]]
+                          if bands is None else [list(b) for b in bands])
+        return self.node("InitFBCSP", ["exec_in", "exec_out"], props)
+
+    def fbscp_train(self, name: str = "FBCSP", dataset: str = "EPOCHS",
+                    mode: str = "train", model_path: str = "",
+                    save_path: str = "") -> int:
+        """TrainFBCSP — 训练/加载 (同步等待; 须挂可重复触发链)。"""
+        return self.node("TrainFBCSP", ["exec_in", "exec_out"],
+                         {"model_name": name, "dataset_name": dataset,
+                          "mode": mode, "model_path": model_path,
+                          "save_path": save_path})
+
+    def fbscp_test(self, name: str = "FBCSP") -> int:
+        """TestFBCSP — 数据进标签出 (纯数据节点)。"""
+        return self.node("TestFBCSP",
+                         ["Data", "Samples", "Label", "Confidence"],
+                         {"model_name": name})
+
+    def cca_test(self, freqs=None, harmonics: int = 3) -> int:
+        """TestCCA — SSVEP 免训练判别 (freqs >= 2)。"""
+        return self.node("TestCCA",
+                         ["Data", "Samples", "Fs", "Label", "Score", "Freq"],
+                         {"freqs": list(freqs or [10.0, 12.0, 15.0]),
+                          "n_harmonics": harmonics})
 
     # ── 输出 ──────────────────────────────────────────────
 

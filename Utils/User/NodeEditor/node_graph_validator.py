@@ -187,11 +187,25 @@ def validate_static(scene_data: dict) -> list[str]:
 
     # 6. 设备 Init/Kill 强制配对 (Gtec + SigGen; 与编辑器删除级联同一规则)
     from Application.Core.NodeGraph.graph_constraints import (
+        bci_reference_errors,
+        epoch_reference_errors,
         gtec_pairing_errors,
+        pool_pairing_errors,
+        pool_reference_errors,
         siggen_pairing_errors,
     )
     errors.extend(gtec_pairing_errors(nodes))
     errors.extend(siggen_pairing_errors(nodes))
+
+    # 7. 设备池: Create/Kill 配对 + 池引用校验
+    errors.extend(pool_pairing_errors(nodes))
+    errors.extend(pool_reference_errors(nodes))
+
+    # 8. Epoch 数据集: 引用校验（BCIAlgorithm）
+    errors.extend(epoch_reference_errors(nodes))
+
+    # 9. BCI 算法: 模型/数据集引用（BCIAlgorithm）
+    errors.extend(bci_reference_errors(nodes))
 
     return errors
 

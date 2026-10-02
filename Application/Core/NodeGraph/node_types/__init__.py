@@ -45,6 +45,9 @@ IO_COLOR         = (0.878, 0.620, 0.314)
 BASIC_COLOR      = (0.580, 0.580, 0.620)
 GTEC_COLOR       = (0.850, 0.330, 0.620)
 SIGGEN_COLOR     = (0.350, 0.780, 0.850)
+POOL_COLOR       = (0.930, 0.780, 0.220)
+EPOCH_COLOR      = (0.290, 0.680, 0.600)
+ALGO_COLOR       = (0.600, 0.360, 0.720)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -63,3 +66,6 @@ from . import debug      # noqa: E402, F401
 from . import io         # noqa: E402, F401
 from . import gtec       # noqa: E402, F401
 from . import siggen     # noqa: E402, F401
+from . import device_pool  # noqa: E402, F401
+from . import epoch      # noqa: E402, F401
+from . import bci_algorithm  # noqa: E402, F401

@@ -202,15 +202,26 @@ class NodeCanvas(DataContract):
         global _next_id
         canvas = NodeCanvas()
 
+        # ── 先恢复 ID 生成器下界（版本兼容补 pin 时生成的 ID 不得与文件内 ID 冲突）──
+        data_model._next_id = max(data_model._next_id, int(data.get("next_id", 1)))
+
         # ── 恢复节点 ──
         for nid_str, nd in data.get("nodes", {}).items():
             nid = int(nid_str)
+            ntype = nd["node_type"]
+            pins = {k: int(v) for k, v in nd.get("pin_ids", {}).items()}
+            tdef = _TYPES.get(ntype)
+            if tdef is not None:
+                # 向后兼容: 为新版节点类型新增的 pin 补生成实例 ID (如 Init*.device)
+                for p in tdef.pins:
+                    if p.name not in pins:
+                        pins[p.name] = _gen_id()
             canvas._nodes[nid] = NodeInstance(
                 id=nid,
-                node_type=nd["node_type"],
+                node_type=ntype,
                 pos=tuple(nd.get("pos", (0.0, 0.0))),
                 props=nd.get("props", {}),
-                pin_ids={k: int(v) for k, v in nd.get("pin_ids", {}).items()},
+                pin_ids=pins,
             )
 
         # ── 恢复连线 ──
@@ -222,8 +233,7 @@ class NodeCanvas(DataContract):
                 to_pin=int(ld["to_pin"]),
             )
 
-        # ── 恢复 ID 生成器 ──
-        data_model._next_id = max(data_model._next_id, data.get("next_id", 1))
+        # ── 恢复 ID 生成器: 已在开头完成（须先于补 pin 生成）──
 
         return canvas
 

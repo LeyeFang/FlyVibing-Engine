@@ -370,4 +370,10 @@ def run(source: str, max_frames: int = 0) -> int:
             print(f"[Player] Gtec safety: closed {_closed} leftover session(s)")
     except Exception:
         pass
+    try:
+        from Application.Functions.BCIAlgorithm import reset_all as epoch_reset
+
+        epoch_reset()
+    except Exception:
+        pass
     return 0

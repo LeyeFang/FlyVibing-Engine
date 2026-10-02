@@ -449,7 +449,9 @@ class NodeEditorPanel(BasePanel):
         imgui.dummy(imgui.ImVec2(0, 6))
 
         for pin in pins:
-            pin_id = inst.pin_ids[pin.name]
+            pin_id = inst.pin_ids.get(pin.name)
+            if pin_id is None:
+                continue  # 版本兼容 pin 尚未补齐（加载时 heal; 防御性跳过）
             kind = ne.PinKind.input if pin.direction == "input" else ne.PinKind.output
             ne.begin_pin(ne.PinId(pin_id), kind)
             if pin.direction == "output":

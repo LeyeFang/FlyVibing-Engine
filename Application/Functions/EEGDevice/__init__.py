@@ -1,19 +1,30 @@
 """
-EEGDevice — 设备层门面 (真实 / 空跑双后端; 含虚拟信号发生器)。
+EEGDevice — 设备层门面 (品牌目录化: Gtec / VirtualDevice / eCon; 进程 + 协议通信)。
 
-节点求值器只调用本模块的公开 API; 后端路由:
-  - device=VIRTUAL → VirtualSigGenBackend (纯软件正弦源; dry_run 控制落盘)
-  - dry_run=True   → GtecStubBackend (确定性合成数据; MCP 干跑验证走此路径)
-  - dry_run=False  → GtecHiampBackend (pygds; 需 GDS 服务 + 空闲设备)
+品牌目录 (Functions/EEGDevice/): 品牌 = 独立进程文件应用 (后端 + 服务入口 + 环境)。
+节点求值器只调用本模块的公开 API; 后端路由 (_make_backend):
+  - 干跑 (dry_run=True)  → 进程内确定性后端 (GtecStub / Virtual dry) — 零进程零副作用
+  - 真实 (dry_run=False) → 品牌服务模式 (默认):
+        device=VIRTUAL → VirtualDevice 服务 (引擎自动拉起; pump 模式, 确定性)
+        其余           → Gtec 服务连接 (外部启动; push 模式; MGE_GTEC_SERVICE)
+  - 逃生门: MGE_EEG_TRANSPORT=inproc → 进程内真实后端 (开发/调试)
 
 公开 API:
     init_session(name, cfg, dry_run)          → (session | None, detail)
-    start_record(name, elapsed_s)             → (ok, detail)
-    stop_record(name, scope, elapsed_s)       → (ok, detail)
-    kill_device(name)                         → (ok, detail)
-    get_data(name, elapsed_s)                 → (result | None, detail)
+    start_record(name, elapsed_s, pool)       → (ok, detail)
+    stop_record(name, scope, elapsed_s, pool) → (ok, detail)
+    kill_device(name, pool)                   → (ok, detail)
+    get_data(name, elapsed_s, pool)           → (result | None, detail)
     close_all()                               → int        (Runtime 停止保护)
     list_sessions()                           → list[str]
+
+设备池 API:
+    create_pool(name, meta)                   → (ok, detail)   幂等注册
+    destroy_pool(name)                        → (ok, detail)   成员回落 global
+    add_to_pool(pool, session)                → (ok, detail)   排他成员制 (换池=移动)
+    pool_of(session) / pool_members(pool)     → str / list[str]
+    list_pools()                              → list[dict]     (含隐式 global)
+    reset_pools()                             → int
 
 说明:
   - 名称解析: 空名称 + 唯一会话 → 自动绑定; 否则要求显式名称
@@ -23,11 +34,13 @@ EEGDevice — 设备层门面 (真实 / 空跑双后端; 含虚拟信号发生�
 
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 from .Device import (
     DEVICE_CHOICES,
     EXPORT_FORMATS,
+    GLOBAL_POOL,
     MAX_BUFFER_SAMPLES,
     MAX_RECORD_BYTES,
     SUPPORTED_RATES,
@@ -36,15 +49,22 @@ from .Device import (
     GtecConfig,
     RecordingSession,
     SaveResult,
+    add_to_pool,
     channel_names_for,
     close_all,
+    create_pool,
+    destroy_pool,
     get_session,
+    list_pools,
     list_sessions,
+    pool_members,
+    pool_of,
     register_session,
+    reset_pools,
     resolve_session,
     unregister_session,
 )
-from .SigGen import SigGenConfig
+from .VirtualDevice import SigGenConfig
 
 __all__ = [
     "GtecConfig",
@@ -68,6 +88,14 @@ __all__ = [
     "list_sessions",
     "resolve_session",
     "get_session",
+    "GLOBAL_POOL",
+    "create_pool",
+    "destroy_pool",
+    "add_to_pool",
+    "pool_of",
+    "pool_members",
+    "list_pools",
+    "reset_pools",
 ]
 
 
@@ -76,18 +104,37 @@ __all__ = [
 # ═══════════════════════════════════════════════════════════════
 
 def _make_backend(cfg, dry_run: bool) -> DeviceBackend:
-    """按配置的设备族路由后端 (VIRTUAL → 虚拟信号发生器; 其余 → Gtec 真实/空跑)。"""
-    if getattr(cfg, "device", "HIAMP") == "VIRTUAL":
-        from .SigGen import VirtualSigGenBackend
+    """按设备族 + 运行模式路由后端。
 
-        return VirtualSigGenBackend(dry_run=dry_run)
+    干跑: 进程内确定性合成 (stub / virtual dry) — 无进程、零副作用, 干跑可复现。
+    真实: 默认品牌服务模式 (独立进程 + 协议通信);
+          环境变量 MGE_EEG_TRANSPORT=inproc 时退回进程内后端 (开发/调试逃生门)。
+    """
+    device = getattr(cfg, "device", "HIAMP")
+
     if dry_run:
-        from .GtecStub import GtecStubBackend
+        if device == "VIRTUAL":
+            from .VirtualDevice import VirtualSigGenBackend
+
+            return VirtualSigGenBackend(dry_run=True)
+        from .Gtec import GtecStubBackend
 
         return GtecStubBackend()
-    from .Gtec import GtecHiampBackend
 
-    return GtecHiampBackend()
+    if os.environ.get("MGE_EEG_TRANSPORT", "").strip().lower() == "inproc":
+        if device == "VIRTUAL":
+            from .VirtualDevice import VirtualSigGenBackend
+
+            return VirtualSigGenBackend(dry_run=False)
+        from .Gtec import GtecHiampBackend
+
+        return GtecHiampBackend()
+
+    from .ServiceClient import ServiceBackend
+
+    if device == "VIRTUAL":
+        return ServiceBackend.spawn_virtual()
+    return ServiceBackend.connect_gtec()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -126,9 +173,9 @@ def init_session(name: str, cfg: GtecConfig, dry_run: bool = False):
     return session, f"'{name}' ready [{mode}] {cfg.summary()}{note}"
 
 
-def start_record(name: str, elapsed_s: float = 0.0):
-    """开始采集（重复调用无害）。Returns: (ok, detail)。"""
-    session, why = resolve_session(name)
+def start_record(name: str, elapsed_s: float = 0.0, pool: Optional[str] = None):
+    """开始采集（重复调用无害）。pool: 空名称时的池作用域（None=全注册表）。"""
+    session, why = resolve_session(name, pool=pool)
     if session is None:
         return False, why
     if session.state == "recording":
@@ -140,9 +187,10 @@ def start_record(name: str, elapsed_s: float = 0.0):
     return True, f"'{session.name}' recording started"
 
 
-def stop_record(name: str, save_scope: str = "session", elapsed_s: float = 0.0):
-    """停止采集并按配置目录保存数据。Returns: (ok, detail)。"""
-    session, why = resolve_session(name)
+def stop_record(name: str, save_scope: str = "session", elapsed_s: float = 0.0,
+                pool: Optional[str] = None):
+    """停止采集并按配置目录保存数据。pool: 空名称时的池作用域（None=全注册表）。"""
+    session, why = resolve_session(name, pool=pool)
     if session is None:
         return False, why
     if session.state != "recording":
@@ -163,9 +211,9 @@ def stop_record(name: str, save_scope: str = "session", elapsed_s: float = 0.0):
     return True, detail
 
 
-def kill_device(name: str):
-    """停止并释放设备（不保存数据）。Returns: (ok, detail)。"""
-    session, why = resolve_session(name)
+def kill_device(name: str, pool: Optional[str] = None):
+    """停止并释放设备（不保存数据）。pool: 空名称时的池作用域（None=全注册表）。"""
+    session, why = resolve_session(name, pool=pool)
     if session is None:
         return False, why
     try:
@@ -177,9 +225,9 @@ def kill_device(name: str):
     return True, f"'{session.name}' device closed (data discarded)"
 
 
-def get_data(name: str, elapsed_s: float = 0.0):
-    """非销毁读取窗口缓冲副本。Returns: (result | None, detail)。"""
-    session, why = resolve_session(name)
+def get_data(name: str, elapsed_s: float = 0.0, pool: Optional[str] = None):
+    """非销毁读取窗口缓冲副本。pool: 空名称时的池作用域（None=全注册表）。"""
+    session, why = resolve_session(name, pool=pool)
     if session is None:
         return None, why
     try:

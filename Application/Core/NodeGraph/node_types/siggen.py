@@ -21,8 +21,10 @@ _reg(NodeTypeDef(
     [
         PinDef(_gen_id(), "exec_in", "exec", "input"),
         PinDef(_gen_id(), "exec_out", "exec", "output"),
+        # device pin: 接 AddToDevicePool.device (可选; 不接 → 设备留在 global 池)
+        PinDef(_gen_id(), "device", "data", "output", "device", True),
     ],
-    "Create virtual sine source (channels / rate / f0 / step / amp / noise)",
+    "Create virtual sine source; device pin → AddToDevicePool (default: global)",
 ))
 
 # ── StartSigGenRecord — 开始采集 ───────────────────────────

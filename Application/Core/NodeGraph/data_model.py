@@ -30,12 +30,17 @@ def _gen_id() -> int:
 
 @dataclass
 class PinDef:
-    """引脚定义（类型模板用）"""
+    """引脚定义（类型模板用）
+
+    optional: 版本兼容标记 — 后续新增的 pin 置 True，旧场景（缺少该 pin 实例 ID）
+              在校验中不报 "missing_pin"，加载时由 NodeCanvas.from_dict 自动补齐。
+    """
     id: int
     name: str
     kind: str          # "exec" | "data"
     direction: str     # "input" | "output"
     data_type: str = "exec"
+    optional: bool = False
 
 
 @dataclass

@@ -21,26 +21,28 @@ echo [1/4] Project dir: %PROJECT_DIR%
 :: -- 2. Install mcp packages --
 echo [2/4] Installing MCP Python package...
 
-:: Detect venv Python (only .venv-py314t is the canonical venv)
-if exist "%PROJECT_DIR%\.venv-py314t\Scripts\python.exe" (
-    set "PYTHON=%PROJECT_DIR%\.venv-py314t\Scripts\python.exe"
-) else (
-    echo [ERROR] Virtual environment not found: .venv-py314t\
-    echo Please run Utils\Dev\setup_env.bat first.
+:: Python dispatch (自包含): dev venv first, then bundled runtime (installed build)
+set "PYTHON="
+if exist "%PROJECT_DIR%\.venv-py314t\Scripts\python.exe" set "PYTHON=%PROJECT_DIR%\.venv-py314t\Scripts\python.exe"
+if not defined PYTHON if exist "%PROJECT_DIR%\Resource\runtime\python3.14t.exe" set "PYTHON=%PROJECT_DIR%\Resource\runtime\python3.14t.exe"
+if not defined PYTHON if exist "%PROJECT_DIR%\Resource\runtime\python.exe" set "PYTHON=%PROJECT_DIR%\Resource\runtime\python.exe"
+if not defined PYTHON (
+    echo [ERROR] No Python found (.venv-py314t or Resource\runtime\).
+    echo   Dev setup: run Utils\Dev\setup_env.bat
     pause & exit /b 1
 )
 
 echo   Using: %PYTHON%
 
-:: Step 2: install mcp via uv (reproducible, respects lockfile constraints)
-echo   Step 2: uv pip install mcp...
-uv pip install --python "%PYTHON%" mcp
+:: Step 2: install mcp（已装则 pip 直接跳过; 不依赖 uv — 安装版可离线）
+echo   Step 2: pip install mcp...
+"%PYTHON%" -m pip install mcp
 if %ERRORLEVEL% NEQ 0 (
     echo   [WARNING] 'mcp' install failed, trying 'fastmcp'...
-    uv pip install --python "%PYTHON%" fastmcp
+    "%PYTHON%" -m pip install fastmcp
     if %ERRORLEVEL% NEQ 0 (
         echo   [WARNING] Both 'mcp' and 'fastmcp' install failed.
-        echo   You can install manually: uv pip install --python "%PYTHON%" mcp
+        echo   You can install manually: "%PYTHON%" -m pip install mcp
         echo   Continuing anyway...
     )
 )

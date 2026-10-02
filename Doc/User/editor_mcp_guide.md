@@ -21,9 +21,16 @@
 ## 2. 准备工作
 
 1. 启动编辑器：运行 `startup.bat`（控制台出现 `[Live] Editor command server on 127.0.0.1:8977` 即就绪）；
-2. **首次使用**（或工具更新后）需重载一次 VS Code 窗口，或在 Command Palette 执行
-   `MCP: List Servers → engine-editor-live → 重启`；
-3. 打开 Copilot 聊天，直接对话。
+2. **注册助手服务（仅一次）**：在助手工作区的 `.vscode/mcp.json` 写入
+
+   ```json
+   { "servers": { "engine-editor-live": { "type": "stdio", "command": "engine-editor-mcp" } } }
+   ```
+
+   - **安装版**：`engine-editor-mcp` 是安装目录内的命令（安装时勾选 PATH 任务即可直接使用；未勾选则写绝对路径 `<安装目录>\engine-editor-mcp.cmd`）。**无需任何外部 Python 环境——Python 由引擎自带运行时提供**；
+   - **源码仓库（开发）**：`.venv-py314t\Scripts\python.exe Utils\User\EditorMcp\install_mcp.py` 自动注册。
+3. **首次注册或工具更新后**：重载一次 VS Code 窗口（或 Command Palette → `MCP: List Servers → engine-editor-live → 重启`）；
+4. 打开 Copilot 聊天，直接对话。
 
 ---
 

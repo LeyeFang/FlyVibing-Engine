@@ -2,9 +2,12 @@
 r"""
 Engine Editor Live MCP — 一键安装（跨平台）。
 
-用法:
+用法（dev 仓库）:
   .venv-py314t\\Scripts\\python.exe Utils/User/EditorMcp/install_mcp.py
   .venv-py314t\\Scripts\\python.exe Utils/User/EditorMcp/install_mcp.py --uninstall
+
+用法（安装版 / 零外部 Python）:
+  Resource\\runtime\\python3.14t.exe Utils\\User\\EditorMcp\\install_mcp.py
 
 注册到工作区 .vscode/mcp.json（名称: engine-editor-live）。
 安装后需重载 VS Code 窗口（或 MCP: List Servers → 重启）才能被 agent 看到。
@@ -19,9 +22,19 @@ SERVER_NAME = "engine-editor-live"
 
 
 def _python_command() -> str:
-    """优先用项目 venv 的 python（mcp 包在其中），否则回退 PATH 的 python。"""
+    """解释器调度（自包含优先）: dev venv → 内置 runtime → 当前解释器。
+
+    安装版（无 venv）用内置 runtime（含全量依赖, 零外部 Python 负担）;
+    dev 检出用 .venv-py314t；绝不留下 PATH 级 python 依赖。
+    """
     venv_py = os.path.join(PROJECT_DIR, ".venv-py314t", "Scripts", "python.exe")
-    return venv_py if os.path.isfile(venv_py) else "python"
+    if os.path.isfile(venv_py):
+        return venv_py
+    for exe in ("python3.14t.exe", "python.exe"):
+        rt = os.path.join(PROJECT_DIR, "Resource", "runtime", exe)
+        if os.path.isfile(rt):
+            return rt
+    return sys.executable
 
 
 def _mcp_path() -> str:

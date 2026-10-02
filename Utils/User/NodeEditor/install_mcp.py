@@ -2,14 +2,30 @@
 """
 Node Graph Editor MCP — 一键安装 (跨平台)。
 
-用法:
+用法（dev 仓库）:
   python Utils/User/NodeEditor/install_mcp.py
   python Utils/User/NodeEditor/install_mcp.py --uninstall
+
+用法（安装版 / 零外部 Python）:
+  Resource\\runtime\\python3.14t.exe Utils\\User\\NodeEditor\\install_mcp.py
 """
 
 import json, os, subprocess, sys
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+
+def _python_command() -> str:
+    """解释器调度（自包含优先）: dev venv → 内置 runtime → 当前解释器。"""
+    venv_py = os.path.join(PROJECT_DIR, ".venv-py314t", "Scripts", "python.exe")
+    if os.path.isfile(venv_py):
+        return venv_py
+    for exe in ("python3.14t.exe", "python.exe"):
+        rt = os.path.join(PROJECT_DIR, "Resource", "runtime", exe)
+        if os.path.isfile(rt):
+            return rt
+    return sys.executable
+
 
 MCP_SERVER_CONFIG = {
     "type": "stdio",
@@ -47,27 +63,25 @@ def install():
     print("=" * 50)
     print(f"  Project: {PROJECT_DIR}")
 
-    # 1. Install mcp package
-    print("\n[1/3] Installing mcp Python package...")
+    # 1. Ensure mcp package (安装版 runtime 已预装 → 直接跳过; 否则 pip 补齐)
+    print("\n[1/3] Checking mcp Python package...")
     try:
-        subprocess.run([sys.executable, "-m", "pip", "install", "mcp", "--quiet"],
-                       check=True)
-        print("  ✓ mcp installed")
-    except subprocess.CalledProcessError:
-        print("  ⚠ mcp install failed, trying fastmcp...")
+        import mcp  # noqa: F401
+        print("  ✓ mcp already available")
+    except ImportError:
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "fastmcp", "--quiet"],
+            subprocess.run([sys.executable, "-m", "pip", "install", "mcp", "--quiet"],
                            check=True)
-            print("  ✓ fastmcp installed")
+            print("  ✓ mcp installed")
         except subprocess.CalledProcessError:
-            print("  ✗ Failed to install mcp/fastmcp")
-            return 1
+            print("  ⚠ mcp install failed (offline?) — continuing, pip later if needed")
 
-    # 2. Generate config
+    # 2. Generate config（command = 自包含调度后的解释器）
     print("\n[2/3] Generating MCP config...")
     mcp_path = get_mcp_path()
     config = read_mcp_config(mcp_path)
     config.setdefault("servers", {})
+    MCP_SERVER_CONFIG["command"] = _python_command()
     config["servers"]["node-graph-editor"] = MCP_SERVER_CONFIG
     write_mcp_config(mcp_path, config)
     print(f"  ✓ Config written to: {mcp_path}")

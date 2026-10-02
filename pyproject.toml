@@ -1,5 +1,5 @@
 [project]
-name = "your-project"
+name = "FlyExpEngine"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
@@ -36,4 +36,3 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 exclude = ["*"]
-    

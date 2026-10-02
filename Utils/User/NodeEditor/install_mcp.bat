@@ -8,7 +8,7 @@ echo ============================================
 echo.
 
 :: -- 1. Project root --
-set "PROJECT_DIR=%~dp0..\.."
+set "PROJECT_DIR=%~dp0..\..\.."
 pushd "%PROJECT_DIR%" 2>nul || (
     echo [ERROR] Cannot locate project root
     pause & exit /b 1
@@ -26,7 +26,7 @@ if exist "%PROJECT_DIR%\.venv-py314t\Scripts\python.exe" (
     set "PYTHON=%PROJECT_DIR%\.venv-py314t\Scripts\python.exe"
 ) else (
     echo [ERROR] Virtual environment not found: .venv-py314t\
-    echo Please run Utils\setup.bat or Utils\generate_venv.bat first.
+    echo Please run Utils\Dev\setup_env.bat first.
     pause & exit /b 1
 )
 
@@ -54,9 +54,9 @@ if not exist "%PROJECT_DIR%\.vscode" mkdir "%PROJECT_DIR%\.vscode"
 
 if exist "%WORKSPACE_MCP%" (
     echo   Existing config found, merging...
-    %PYTHON% -c "import json, sys; d=json.load(open(sys.argv[1],'r',encoding='utf-8')); d.setdefault('servers',{}); d['servers']['node-graph-editor']={'type':'stdio','command':sys.argv[3],'args':[sys.argv[4],sys.argv[5]],'cwd':sys.argv[2]}; json.dump(d,open(sys.argv[1],'w',encoding='utf-8'),indent=2,ensure_ascii=False); print('OK')" "%WORKSPACE_MCP%" "%PROJECT_DIR%" "%PYTHON%" "-m" "Utils.NodeEditor.mcp_server"
+    %PYTHON% -c "import json, sys; d=json.load(open(sys.argv[1],'r',encoding='utf-8')); d.setdefault('servers',{}); d['servers']['node-graph-editor']={'type':'stdio','command':sys.argv[3],'args':[sys.argv[4],sys.argv[5]],'cwd':sys.argv[2]}; json.dump(d,open(sys.argv[1],'w',encoding='utf-8'),indent=2,ensure_ascii=False); print('OK')" "%WORKSPACE_MCP%" "%PROJECT_DIR%" "%PYTHON%" "-m" "Utils.User.NodeEditor.mcp_server"
 ) else (
-    %PYTHON% -c "import json, sys; d={'servers':{'node-graph-editor':{'type':'stdio','command':sys.argv[2],'args':[sys.argv[3],sys.argv[4]],'cwd':sys.argv[1]}}}; json.dump(d,open(sys.argv[5],'w',encoding='utf-8'),indent=2,ensure_ascii=False); print('OK')" "%PROJECT_DIR%" "%PYTHON%" "-m" "Utils.NodeEditor.mcp_server" "%WORKSPACE_MCP%"
+    %PYTHON% -c "import json, sys; d={'servers':{'node-graph-editor':{'type':'stdio','command':sys.argv[2],'args':[sys.argv[3],sys.argv[4]],'cwd':sys.argv[1]}}}; json.dump(d,open(sys.argv[5],'w',encoding='utf-8'),indent=2,ensure_ascii=False); print('OK')" "%PROJECT_DIR%" "%PYTHON%" "-m" "Utils.User.NodeEditor.mcp_server" "%WORKSPACE_MCP%"
 )
 
 if %ERRORLEVEL% NEQ 0 (
@@ -67,7 +67,7 @@ if %ERRORLEVEL% NEQ 0 (
 :: -- 4. Verify --
 echo [4/4] Verifying...
 
-if exist "%PROJECT_DIR%\Utils\NodeEditor\mcp_server.py" (
+if exist "%PROJECT_DIR%\Utils\User\NodeEditor\mcp_server.py" (
     echo   [OK] mcp_server.py found
 ) else (
     echo   [ERROR] mcp_server.py not found

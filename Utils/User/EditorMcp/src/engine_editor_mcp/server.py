@@ -5,6 +5,9 @@ Tools:
   - editor_run_pie / editor_stop_pie / editor_sim_state  → PIE 启停与状态
   - editor_switch_2d / editor_set_scene_type             → 场景类型按钮语义（影响 PIE 摄像机）
   - editor_camera_get / editor_camera_set                → 场景摄像机读写（3d / 2d / overlay）
+  - editor_graph_validate(_report/_cancel)               → 节点图干跑校验（引擎内服务: 静态+模拟）
+  - editor_graph_export / editor_graph_import            → 节点图 JSON 导入导出（含 _rules 文档）
+  - editor_project_open                                  → 打开 .myproj 工程（资源+场景全加载）
   - editor_capture                                       → 抓帧（editor / pie 窗口）→ PNG + 图片返回
   - editor_quit                                          → 请求关闭编辑器引擎
 
@@ -12,11 +15,13 @@ Tools:
     MCP(stdio) → 本工具 → 本机回环 TCP 127.0.0.1:8977
     → 编辑器 LiveCommandServer → 主线程 pump 执行（复用编辑器按钮同款 API）。
     帧图像 = NDJSON 回执行 + 二进制尾随帧（binary_bytes=N ⇒ 行后紧跟 N 字节 RGBA8）。
-    PNG 编码在本进程完成（不阻塞引擎）; 抓帧文件: Utils/Editor/tmp/frames/（启动时清空）。
+    PNG 编码在本进程完成（不阻塞引擎）; 抓帧文件: <临时目录>/engine_editor_mcp/frames
+    （MGE_MCP_FRAMES_DIR 可覆盖; 仅入口进程启动时清空）。
 编辑器未运行时工具返回明确错误（先启动 startup.bat）。
 
-启动方式:
-    python -m Utils.Editor.mcp_server     （由 .vscode/mcp.json 配置自动拉起）
+启动方式（独立包, 三方工作区可直接引用）:
+    python -m engine_editor_mcp                 （或安装后 console script: engine-editor-mcp）
+    dev 仓库内等价入口: python -m Utils.User.EditorMcp.mcp_server  （薄 shim, 同一源码）
 """
 
 import io
@@ -24,34 +29,47 @@ import json
 import os
 import shutil
 import socket
-import sys
+import tempfile
 import time
 
-# ── 确保项目根在 sys.path ──
-_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
+from mcp.server.fastmcp import FastMCP, Image
 
-from mcp.server.fastmcp import FastMCP, Image  # noqa: E402
+# 供 dev shim（Utils/User/EditorMcp/mcp_server.py）与外部集成（E2E 脚本）复用的符号
+__all__ = [
+    "mcp",
+    "FRAMES_DIR",
+    "DEFAULT_PORT",
+    "_send",
+    "_send_raw",
+    "_port",
+    "_capture_png",
+    "_encode_and_save",
+    "_wipe_frames_dir",
+    "main",
+]
 
-mcp = FastMCP("Engine Editor Live", version="0.2.0")
+mcp = FastMCP("Engine Editor Live", version="0.3.0")
 
 DEFAULT_PORT = 8977
 _ENV_PORT = "MGE_EDITOR_MCP_PORT"
+_ENV_FRAMES_DIR = "MGE_MCP_FRAMES_DIR"
 _next_id = [0]
 
-# ── 抓帧临时目录（策略: 每次 MCP server 启动清空, 防累积 — 用户 2026-09-28 指定）──
-_EDITOR_DIR = os.path.dirname(os.path.abspath(__file__))
-FRAMES_DIR = os.path.join(_EDITOR_DIR, "tmp", "frames")
+# ── 抓帧临时目录（独立包形态 — 默认用户临时目录; MGE_MCP_FRAMES_DIR 可覆盖）──
+# 策略: 每次 server 启动清空, 防累积（仅入口进程执行, import 不清空）。
+_FRAMES_ROOT = os.environ.get(_ENV_FRAMES_DIR) or os.path.join(
+    tempfile.gettempdir(), "engine_editor_mcp"
+)
+FRAMES_DIR = os.path.join(_FRAMES_ROOT, "frames")
 
 
 def _wipe_frames_dir() -> None:
-    """清空抓帧临时目录（server 启动时调用 — 仅 `python -m` 入口执行）。
+    """清空抓帧目录（server 启动时调用 — 仅入口进程执行）。
 
     注意: 不在 import 时清空 — 避免开发/E2E 脚本 import 本模块时误删已有帧文件;
-    只有 VS Code 拉起 server 的入口进程（__main__）才执行清空。
+    只有拉起 server 的入口进程（`python -m engine_editor_mcp` / console script）才执行清空。
     """
-    shutil.rmtree(os.path.join(_EDITOR_DIR, "tmp"), ignore_errors=True)
+    shutil.rmtree(_FRAMES_ROOT, ignore_errors=True)
     os.makedirs(FRAMES_DIR, exist_ok=True)
 
 
@@ -271,6 +289,144 @@ def editor_graph_link(from_node: int, from_pin: str, to_node: int, to_pin: str) 
 def editor_graph_set_props(node_id: int, props: dict) -> dict:
     """更新节点属性（等同内联控件改属性）。"""
     return _send("graph.set_props", {"node": node_id, "props": props})
+
+
+# ════════════════════════════════════════════════════════════════
+# v4: 图校验（引擎内服务） / 图导入导出 / 工程打开
+# ════════════════════════════════════════════════════════════════
+
+_LOG_CAP = 500
+
+
+def _trim_report(report: dict) -> dict:
+    """报告瘦身（MCP 回传用）: log 超过 _LOG_CAP 条则截断 + 标记。"""
+    if not isinstance(report, dict):
+        return report
+    log = report.get("log")
+    if isinstance(log, list) and len(log) > _LOG_CAP:
+        report = dict(report)
+        report["log_total"] = len(log)
+        report["log_truncated"] = True
+        report["log"] = log[:_LOG_CAP]
+    return report
+
+
+@mcp.tool()
+def editor_graph_validate(
+    source: str = "canvas",
+    graph: dict | None = None,
+    frames: int = 360,
+    verbose: bool = True,
+    seed: int = 0,
+    save_path: str | None = None,
+    timeout_s: float = 120.0,
+) -> dict:
+    """干跑校验节点图（引擎内服务: 静态检查 + fake-time 模拟, 需要引擎运行中）。
+
+    Args:
+        source: "canvas"（当前编辑器画布快照, 默认）| "graph"（直接传 graph dict, agent 生成图先验）
+        graph:  仅 source="graph" 时必填
+        frames: 模拟帧数（默认 360 = 6s @60fps）
+        seed:   随机种子（确定性干跑, 默认 0）
+        save_path: 可选 — 报告落盘路径（.json / .txt）
+
+    Returns:
+        {found, report: {ok, state, counts, static, runtime, log: [...], graph}, saved_path?}
+        或 {"error": ...}（引擎未运行）
+    """
+    args: dict = {"source": source, "frames": frames, "verbose": verbose, "seed": seed}
+    if graph is not None:
+        args["graph"] = graph
+    started = _send("graph.validate.start", args)
+    if "error" in started:
+        return started
+    task_id = started.get("task_id")
+    if not started.get("started"):
+        return {**started, "note": "任务已在运行 — 先 editor_graph_validate_cancel() 或等待完成"}
+
+    deadline = time.monotonic() + float(timeout_s)
+    while time.monotonic() < deadline:
+        st = _send("graph.validate.state", {"task_id": task_id})
+        if "error" in st:
+            return st
+        if st.get("state") != "running":
+            break
+        time.sleep(0.1)
+    else:
+        return {
+            "state": "running",
+            "task_id": task_id,
+            "note": f"超出 {timeout_s}s 仍在运行 — 稍后用 editor_graph_validate_report(task_id={task_id}) 取回",
+        }
+
+    rargs: dict = {"task_id": task_id}
+    if save_path:
+        rargs["save_path"] = save_path
+    result = _send("graph.validate.report", rargs)
+    if "error" in result:
+        return result
+    result["report"] = _trim_report(result.get("report") or {})
+    return result
+
+
+@mcp.tool()
+def editor_graph_validate_report(task_id: int | None = None, save_path: str | None = None) -> dict:
+    """取回已完成的校验报告（task_id 省略 → 最新一份; save_path 落盘 .json/.txt）。"""
+    args: dict = {}
+    if task_id is not None:
+        args["task_id"] = task_id
+    if save_path:
+        args["save_path"] = save_path
+    result = _send("graph.validate.report", args)
+    if "error" in result:
+        return result
+    result["report"] = _trim_report(result.get("report") or {})
+    return result
+
+
+@mcp.tool()
+def editor_graph_validate_cancel(task_id: int | None = None) -> dict:
+    """取消正在运行的校验任务（帧间生效）。"""
+    args: dict = {}
+    if task_id is not None:
+        args["task_id"] = task_id
+    return _send("graph.validate.cancel", args)
+
+
+@mcp.tool()
+def editor_graph_export(path: str | None = None, include_rules: bool = True) -> dict:
+    """导出当前画布节点图 JSON（含 _rules 规则文档; path 给了同时落盘 .json）。
+
+    Returns: {nodes, links, saved_path, graph: {...}}
+    """
+    args: dict = {"include_rules": include_rules}
+    if path:
+        args["path"] = path
+    return _send("graph.export", args, timeout=30.0)
+
+
+@mcp.tool()
+def editor_graph_import(graph: dict | None = None, path: str | None = None, validate_first: bool = True) -> dict:
+    """导入节点图替换当前画布（先静态检查, 有 error 拒绝; 强制导入传 validate_first=False）。
+
+    Args:
+        graph: graph dict（优先） 或 path: .json 文件
+    """
+    args: dict = {"validate_first": validate_first}
+    if graph is not None:
+        args["graph"] = graph
+    if path:
+        args["path"] = path
+    return _send("graph.import", args, timeout=30.0)
+
+
+@mcp.tool()
+def editor_project_open(path: str) -> dict:
+    """打开 .myproj 工程（等同 File ▸ Open Project — 资源+场景全加载, 启动场景激活）。
+
+    Returns: {opened, name, path, scenes, active}
+    """
+    return _send("project.open", {"path": path}, timeout=60.0)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -520,7 +676,7 @@ def editor_resource_material_get(material_id: int | None = None, name: str | Non
 
 @mcp.tool()
 def editor_capture(target: str = "editor", timeout_s: float = 6.0):
-    """抓取窗口帧图像 → PNG 存 Utils/Editor/tmp/frames/ 并返回画面。
+    """抓取窗口帧图像 → PNG 存 <临时目录>/engine_editor_mcp/frames/ 并返回画面。
 
     引擎侧只做 glReadPixels（渲染线程帧末）; PNG 编码在本进程（不阻塞引擎）。
 
@@ -547,6 +703,11 @@ def editor_quit() -> dict:
     return _send("editor.quit")
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """入口（`python -m engine_editor_mcp` / console script）: 清空抓帧目录 → 启动 stdio 服务器。"""
     _wipe_frames_dir()
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

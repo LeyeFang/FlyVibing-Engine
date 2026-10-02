@@ -27,14 +27,40 @@ from Application.Functions.EEGDevice import stop_record as _gtec_stop
 
 # ── 辅助 ─────────────────────────────────────────────────────
 
-def _ref_name(inst) -> str:
-    """Start/Stop/Kill/Get 的会话引用名（空 = 让注册表自动绑定唯一会话）。"""
-    return str(inst.props.get("device_name", "")).strip()
+_DRY_PREFIX = "dryrun#"
 
 
-def _init_name(node_id: int, inst) -> str:
-    """Init 的会话键 — 未命名时回退 gtec#<node_id>（与画布/校验器一致）。"""
-    return _ref_name(inst) or f"gtec#{node_id}"
+def _ref_name(inst, ctx=None) -> str:
+    """Start/Stop/Kill/Get 的会话引用名（空 = 让注册表自动绑定唯一会话）。
+
+    干跑 (ctx.dry_run) 命名空间: 有名字 → 加 dryrun# 前缀;
+    空名字 → 优先在 dryrun# 前缀会话内自动绑定（避免与真实会话混淆）。
+    """
+    raw = str(inst.props.get("device_name", "")).strip()
+    if ctx is None or not getattr(ctx, "dry_run", False):
+        return raw
+    if raw:
+        return _DRY_PREFIX + raw
+    try:
+        from Application.Functions.EEGDevice import list_sessions
+
+        dry = [n for n in list_sessions() if n.startswith(_DRY_PREFIX)]
+        if len(dry) == 1:
+            return dry[0]
+    except Exception:  # noqa: BLE001 — 设备层不可用时退回自动绑定语义
+        pass
+    return ""
+
+
+def _init_name(node_id: int, inst, ctx) -> str:
+    """Init 的会话键 — 未命名时回退 gtec#<node_id>（与画布/校验器一致）。
+
+    干跑时整体加 dryrun# 前缀（会话隔离, 结束后由校验服务清理）。
+    """
+    name = str(inst.props.get("device_name", "")).strip() or f"gtec#{node_id}"
+    if getattr(ctx, "dry_run", False):
+        return _DRY_PREFIX + name
+    return name
 
 
 def _write_out(node_id: int, pin_name: str, value: Any,
@@ -58,7 +84,7 @@ def _eval_init_gtec(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> N
     """
     inst = g._canvas.nodes[node_id]
     cfg = GtecConfig.from_props(inst.props)
-    name = _init_name(node_id, inst)
+    name = _init_name(node_id, inst, ctx)
     session, detail = _gtec_init(name, cfg, dry_run=ctx.dry_run)
     if session is None:
         ctx.emit_log(node_id, "InitGtecDevice", "error", detail)
@@ -70,7 +96,7 @@ def _eval_init_gtec(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> N
 def _eval_start_gtec(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     """StartGtecRecord — 开始采集（重复调用无害）。"""
     inst = g._canvas.nodes[node_id]
-    ok, detail = _gtec_start(_ref_name(inst), elapsed_s=ctx.elapsed_time)
+    ok, detail = _gtec_start(_ref_name(inst, ctx), elapsed_s=ctx.elapsed_time)
     ctx.emit_log(node_id, "StartGtecRecord", "record_start" if ok else "error", detail)
 
 
@@ -78,14 +104,14 @@ def _eval_stop_gtec(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> N
     """StopGtecRecord — 停止采集并保存（session = 全量, buffer = 当前窗口）。"""
     inst = g._canvas.nodes[node_id]
     scope = str(inst.props.get("save_scope", "session"))
-    ok, detail = _gtec_stop(_ref_name(inst), save_scope=scope, elapsed_s=ctx.elapsed_time)
+    ok, detail = _gtec_stop(_ref_name(inst, ctx), save_scope=scope, elapsed_s=ctx.elapsed_time)
     ctx.emit_log(node_id, "StopGtecRecord", "record_stop" if ok else "error", detail)
 
 
 def _eval_kill_gtec(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     """KillGtecDevice — 停止 + 释放设备（不保存）。"""
     inst = g._canvas.nodes[node_id]
-    ok, detail = _gtec_kill(_ref_name(inst))
+    ok, detail = _gtec_kill(_ref_name(inst, ctx))
     ctx.emit_log(node_id, "KillGtecDevice", "device_kill" if ok else "error", detail)
 
 
@@ -95,7 +121,7 @@ def _eval_get_gtec(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> No
     输出: Data (channels × capacity 的 float32 副本), Channels, Samples(有效), Fs。
     """
     inst = g._canvas.nodes[node_id]
-    name = _ref_name(inst)
+    name = _ref_name(inst, ctx)
     result, why = _gtec_get_data(name, elapsed_s=ctx.elapsed_time)
     if result is None:
         ctx.emit_log(node_id, "GetGtecData", "error", why)

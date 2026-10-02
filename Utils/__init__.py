@@ -1,1 +1,4 @@
-# Utils.NodeEditor — Node Graph Editor tools & MCP server
+# Utils — 仓库工具层（按受众分层, 与 Doc/ 一致）
+#
+#   Dev/  — 引擎开发与打包工具链（环境脚本/锁/轮子/运行时/安装器）
+#   User/ — 引擎使用侧工具（播放器启动器 / 编辑器 MCP / 节点图 MCP）

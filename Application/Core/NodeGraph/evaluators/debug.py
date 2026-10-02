@@ -16,7 +16,11 @@ def _eval_print(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     if inst_pin_id is None:
         return
     value = g._read_input(inst_pin_id, ctx)
-    print(f"[Node:Print] {value}")
+    if getattr(ctx, "log", None) is not None:
+        # 干跑/校验: 收集到结构化日志（不污染 stdout）
+        ctx.emit_log(node_id, "Print", "print", str(value))
+    else:
+        print(f"[Node:Print] {value}")
 
 register_evaluator("Print", _eval_print)
 
@@ -27,6 +31,9 @@ def _eval_print_string(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
     if inst is None:
         return
     message = inst.props.get("message", "")
-    print(f"[PrintString] {message}")
+    if getattr(ctx, "log", None) is not None:
+        ctx.emit_log(node_id, "PrintString", "print", message)
+    else:
+        print(f"[PrintString] {message}")
 
 register_evaluator("PrintString", _eval_print_string)

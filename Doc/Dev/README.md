@@ -12,16 +12,17 @@
 | 文档 | 对应代码域 | 何时必须读 |
 |---|---|---|
 | `ui_protocol.md` | `Application/Editor/UI/**`（Panel / Widget / 样式 / 菜单 / FileDialog） | 改编辑器 UI、加内联控件、调 Add 菜单、改删除交互 |
-| `node_editor_protocol.md` | `Application/Core/NodeGraph/**`（运行时）+ `Application/Editor/UI/panels/node_editor/**`（编辑器交互）+ `Utils/NodeEditor/**` | 新增/修改节点类型、求值器、图约束、图校验、MCP 文档 |
+| `node_editor_protocol.md` | `Application/Core/NodeGraph/**`（运行时）+ `Application/Editor/UI/panels/node_editor/**`（编辑器交互）+ `Utils/User/NodeEditor/**` | 新增/修改节点类型、求值器、图约束、图校验、MCP 文档 |
 | `device_io_protocol.md` | `Application/Functions/**`（SerialParallelDevice / EEGDevice） | 设备集成、真实/空跑双后端、线程与数据落盘 |
 | `project_export_protocol.md` | `Application/Editor/ProjectManager.py` + EditorHost 场景 I/O + UI/UIManager 主菜单 + UI/FileDialog | 项目保存/另存/导出、资源路径、主菜单 File 项、迁移与打包 |
-| `runtime_packaging_protocol.md` | `Application/PlayerEntry.py` + `Application/Runtime/PlayerBootstrap.py` + `Application/Core/Project/**` + `Utils/Runtime/**` + 导出游戏层 | 播放器/独立运行、Python 环境打包、wheelhouse、run_game.cmd、gtec fork 轮子策略、运行时线程纪律（§3.1） |
-| `editor_live_protocol.md` | `Application/Editor/Services/LiveCommandServer.py` + `Utils/Editor/**` | 实时命令总线（agent 热注入）、实体/组件/场景/资源编辑 ops（v3 §4.1）、新增 op、容器补全跟进（§10）、MCP 注册与故障排查 |
+| `runtime_packaging_protocol.md` | `Application/PlayerEntry.py` + `Application/Runtime/PlayerBootstrap.py` + `Application/Core/Project/**` + `Utils/Dev/**`（打包流水线） | 播放器/独立运行、Python 环境打包、wheelhouse、run_game.cmd、gtec fork 轮子策略、运行时线程纪律（§3.1） |
+| `editor_live_protocol.md` | `Application/Editor/Services/LiveCommandServer.py` + `Utils/User/EditorMcp/**` | 实时命令总线（agent 热注入）、实体/组件/场景/资源编辑 ops（v3 §4.1）、校验/导入导出/工程 ops（v4 §4.2）、新增 op、容器补全跟进（§10）、MCP 注册与故障排查 |
+| `graph_validation_protocol.md` | `Application/Core/NodeGraph/validation/**` + Node Editor 面板 Validate + `graph.validate.*` / `graph.export/import` ops | 改校验规则/干跑语义/报告格式、改 Validate UI 或图导入导出 |
 
 职责边界（与代码一致，不得跨层）：
 - UI 层只负责**编辑 props 和渲染**；业务逻辑在 evaluators；设备/IO 在 `Application/Functions`。
 - evaluators 不得 `import imgui`；设备层不得反向依赖 Engine / Editor。
-- MCP 工具（`Utils/NodeEditor`）只做构建/校验/应用图，不引入 UI 依赖。
+- MCP 工具（`Utils/User/NodeEditor`）只做构建/应用图（图校验已内化为引擎服务 — 见 `graph_validation_protocol.md`），不引入 UI 依赖。
 
 ---
 
@@ -34,13 +35,13 @@
 3. **Pylance 零错误**（IDE 诊断必须干净）。
 4. **MCP 空跑验证**（**所有节点/图相关改动必须通过**，见 §3）。
 5. **相关测试脚本通过**：`Test/` 下对应脚本（如设备层 → `Test/Application/Functions/test_gtec_device.py`）。
-6. **文档同步**：本目录 + `Utils/NodeEditor/rules.md` + `graph_rules.py`（若涉及节点）。
+6. **文档同步**：本目录 + `Utils/User/NodeEditor/rules.md` + `graph_rules.py`（若涉及节点）。
 
 ---
 
 ## 3. MCP 空跑验证（硬性验收条件）
 
-工具链：`Utils/NodeEditor/`（MCP servers: `mcp_server.py` 构建/应用、`mcp_server_ref.py` 参考、`mcp_server_validate.py` 校验）。
+工具链：`Utils/User/NodeEditor/`（`mcp_server.py` 构建/应用图 + `rules.md` 规则）；图校验已内化为引擎服务（见 `graph_validation_protocol.md`），agent 侧实时校验经 `Utils/User/EditorMcp` MCP（v4 `graph.validate.*`）。
 
 - 校验入口：`validate_graph(graph, max_frames>0)` → `node_graph_validator.dry_run_simulation()`。
   干跑将 `ctx.dry_run=True`，从 `OnGameStart` → N 帧 `OnFrameUpdate` → `OnGameStop` 全链路执行。
@@ -55,9 +56,9 @@
 # 单元测试（设备层示例，48 项断言：stub 会话 + 干跑全链路 + 约束）
 .venv-py314t\Scripts\python.exe Test/Application/Functions/test_gtec_device.py
 # 图工具冒烟
-.venv-py314t\Scripts\python.exe Utils/NodeEditor/test_smoke.py
+.venv-py314t\Scripts\python.exe Utils/User/NodeEditor/test_smoke.py
 # 场景干跑（示例）
-.venv-py314t\Scripts\python.exe -m Utils.NodeEditor.node_graph_validator Test\TestProject\MI-SSSEP\scenes\MI.scene --frames 120
+.venv-py314t\Scripts\python.exe -m Utils.User.NodeEditor.node_graph_validator Test\TestProject\MI-SSSEP\scenes\MI.scene --frames 120
 ```
 
 ---

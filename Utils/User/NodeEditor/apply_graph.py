@@ -3,21 +3,21 @@ apply_graph — 将节点图注入 scene 文件的 CLI 工具。
 
 用法:
   # 从 JSON 文件注入
-  python Utils/NodeEditor/apply_graph.py --scene MI.scene --graph graph.json
+  python Utils/User/NodeEditor/apply_graph.py --scene MI.scene --graph graph.json
 
   # stdin 模式
-  cat graph.json | python Utils/NodeEditor/apply_graph.py --scene MI.scene --stdin
+  cat graph.json | python Utils/User/NodeEditor/apply_graph.py --scene MI.scene --stdin
 
   # 注入 + 验证
-  python Utils/NodeEditor/apply_graph.py --scene MI.scene --graph graph.json --validate --frames 37000
+  python Utils/User/NodeEditor/apply_graph.py --scene MI.scene --graph graph.json --validate --frames 37000
 
   # 从 GraphBuilder 脚本注入
-  python -c "from Utils.NodeEditor.graph_builder import GraphBuilder; ... ; g.save('MI.scene')"
+  python -c "from Utils.User.NodeEditor.graph_builder import GraphBuilder; ... ; g.save('MI.scene')"
 """
 
 import argparse, json, os, sys
 
-_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
@@ -60,7 +60,7 @@ def main():
 
     # ── 验证 ──
     if args.validate:
-        from Utils.NodeEditor.node_graph_validator import (
+        from Utils.User.NodeEditor.node_graph_validator import (
             validate_static, dry_run_simulation,
         )
         errors = validate_static(graph)

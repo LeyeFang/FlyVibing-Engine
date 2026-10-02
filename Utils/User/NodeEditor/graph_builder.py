@@ -332,7 +332,7 @@ class GraphBuilder:
                  verbose: bool = False) -> ValidationReport:
         """调用 validator 进行验证。"""
         try:
-            from Utils.NodeEditor.node_graph_validator import (
+            from Utils.User.NodeEditor.node_graph_validator import (
                 validate_static, dry_run_simulation,
             )
             graph = self.build()

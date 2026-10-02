@@ -1,7 +1,7 @@
 # 节点编辑器业务逻辑开发协议
 
 > 适用：节点类型定义、求值器（evaluator）、图约束、执行引擎、图文档（agent 消费）、
-> 程序化构图（GraphBuilder）、MCP 校验（Utils/NodeEditor）。
+> 程序化构图（GraphBuilder）、MCP 校验（Utils/User/NodeEditor）。
 > UI 表现层协议见 `ui_protocol.md`；设备/IO 后端协议见 `device_io_protocol.md`。
 >
 > **位置约定（2026-09 迁移）**：运行时本体位于 `Application/Core/NodeGraph/**`
@@ -22,10 +22,10 @@
 | 图约束 | `Application/Core/NodeGraph/graph_constraints.py` | 跨节点联动（删除级联 + 静态校验函数）；纯数据、无 imgui |
 | 场景内嵌文档 | `Application/Core/NodeGraph/graph_rules.py` | `_NODE_GRAPH_RULES`，每次导出 scene 时附带（外部 agent 读） |
 | 编辑器交互层 | `Application/Editor/UI/panels/node_editor/**` | 画布渲染 / Add 菜单 / 内联控件 / 级联删除交互 / 自动布局（imgui） |
-| MCP 参考文档 | `Utils/NodeEditor/rules.md` | 构图 agent 必读；节点表 / 连线规则 / 模式 |
-| MCP 工具 | `Utils/NodeEditor/{mcp_server,mcp_server_ref,mcp_server_validate,mcp_server_build}.py` | build / apply / get_rules / validate |
-| 校验器 | `Utils/NodeEditor/node_graph_validator.py` | L1 静态 + L2 干跑（**MCP 空跑核心**） |
-| 构图器 | `Utils/NodeEditor/graph_builder.py` | 程序化构图 + `validate()`；节点 helper（含 gtec_*） |
+| MCP 参考文档 | `Utils/User/NodeEditor/rules.md` | 构图 agent 必读；节点表 / 连线规则 / 模式 |
+| MCP 工具 | `Utils/User/NodeEditor/mcp_server.py` | get_rules / get_scene_entities / build_graph / apply_graph（`validate_graph` 已弃用 → 引擎内服务, 见 `graph_validation_protocol.md`） |
+| 校验器 | `Utils/User/NodeEditor/node_graph_validator.py` | L1 静态 + L2 干跑（**MCP 空跑核心**） |
+| 构图器 | `Utils/User/NodeEditor/graph_builder.py` | 程序化构图 + `validate()`；节点 helper（含 gtec_*） |
 
 > 旧路径 `Application/Editor/UI/controllers/node_editor/` 仅保留包级 re-export shim（弃用）；
 > 新代码一律使用上表路径。
@@ -66,8 +66,8 @@
    并在 `Application/Core/NodeGraph/__init__.py` 的 `from .evaluators import (...)` 中加模块名。
 8. 删除联动/校验（如涉及跨节点规则）：`graph_constraints.py` 增加纯函数；
    `panel._handle_deletion` 与 `node_graph_validator.validate_static` 各自接入。
-9. 文档：`graph_rules.py`（场景内嵌）+ `Utils/NodeEditor/rules.md`（MCP agent）+
-   `Utils/NodeEditor/graph_builder.py` helper（推荐）。
+9. 文档：`graph_rules.py`（场景内嵌）+ `Utils/User/NodeEditor/rules.md`（MCP agent）+
+   `Utils/User/NodeEditor/graph_builder.py` helper（推荐）。
 10. 测试：无头单元测试或干跑断言（见 §6）；MCP `validate_graph` 必须通过。
 
 > 兼容保留的旧节点：**保留注册但菜单不出现**，在定义文件注释说明替代关系

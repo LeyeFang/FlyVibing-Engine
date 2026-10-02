@@ -1,7 +1,7 @@
 # 运行时打包 / 游戏导出开发协议（Runtime Packaging & Game Export）
 
 > 适用：`Application/PlayerEntry.py`、`Application/Runtime/PlayerBootstrap.py`、
-> `Application/Core/Project/**`（运行时工程加载）、`Utils/Runtime/**`（打包流水线）、
+> `Application/Core/Project/**`（运行时工程加载）、`Utils/Dev/**`（打包流水线）、
 > `ProjectManager.export_project_bundle(include_player=True)`（Export 按钮游戏层）、
 > `run_game.cmd` 启动器与 wheelhouse。
 > 工程导出本体见 `project_export_protocol.md`；节点/设备见 `node_editor_protocol.md` / `device_io_protocol.md`。
@@ -27,10 +27,17 @@
 | `Application/PlayerEntry.py` | 播放器 CLI：`<game.json\|.myproj\|.scene>` + `--dry-run` + `--frames N`（真实运行 N 帧后自动退出，冒烟用） |
 | `Application/Runtime/PlayerBootstrap.py` | 编排：`prepare_offline`（解析+加载场景）→ `activate_resources`（材料+重映射）→ `dry_run`（无头校验）/ `run`（窗口→init→注入→推层→`GameRuntime.run()`）；含 `_AutoExitLayer` |
 | `Application/Core/Project/RuntimeProjectLoader.py` | 运行时 .myproj 加载（编辑器零依赖，语义镜像 `ProjectManager`）；**必须在 `ResourceManager.Init` 之后调用 `load_resources`** |
-| `Utils/Runtime/collect_wheels.py` | `.venv-py314t` 实况 → `requirements.export.txt`(全量) + `requirements.runtime.txt`(游戏子集) → 逐包下载 → `Resource/wheels/` → 覆盖度核对 + `CHECKSUMS.sha256` |
-| `Utils/Runtime/prepare_runtime.py` | uv 3.14t 解释器 → `Resource/runtime/` 镜像 → 按**运行时子集**离线安装 → 瘦身（pdb/test/Doc）→ 冒烟 + 子集断言 |
+| `Utils/Dev/collect_wheels.py` | `.venv-py314t` 实况 → `requirements.export.txt`(全量) + `requirements.runtime.txt`(游戏子集) → 逐包下载 → `Resource/wheels/` → 覆盖度核对 + `CHECKSUMS.sha256` |
+| `Utils/Dev/prepare_runtime.py` | uv 3.14t 解释器 → `Resource/runtime/` 镜像 → 按**运行时子集**离线安装 → 瘦身（pdb/test/Doc）→ 冒烟 + 子集断言 |
 | `ProjectManager.export_project_bundle(..., include_player=True)` | Export 按钮入口：工程包 + 游戏层（game.json/引擎副本/runtime/wheelhouse/run_game.cmd） |
-| `Utils/Runtime/player.bat` | 开发机播放器启动（用 dev venv；2026-09-28 从引擎根移入） |
+| `Utils/User/player.bat` | 开发机播放器启动（优先内置 runtime 3.14t, 回退 dev venv；2026-09-28 从引擎根移入, 10-02 归入 User 层） |
+
+> **全局策略（2026-10-02 起）**：`Resource/runtime` 与 `Resource/wheels` **不进 git**（拉取轻量）——
+> 镜像由 `Utils/Dev/prepare_runtime.py` 本地生成（源 = uv 托管 3.14t）；wheelhouse 由
+> `Utils/Dev/collect_wheels.py` 从 PyPI 重建（唯一例外: imgui cp314t 引导轮随 git）。
+> **安装器与游戏导出共用同一镜像**：两者均直接拷贝 `Resource/runtime`；启动器
+>（startup.bat / engine-editor-mcp.cmd / run_game.cmd）一律优选 `python3.14t.exe`——
+> runtime 镜像内含 GIL 版 `python.exe`（PBA 3.14 发行版双 exe 布局），与 cp314t 轮子不兼容。
 
 ---
 

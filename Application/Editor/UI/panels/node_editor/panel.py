@@ -127,6 +127,13 @@ class NodeEditorPanel(BasePanel):
         self._import_error: str = ""
         self._export_error: str = ""
         self._last_io_dir: str = str(Path.home())  # 上次 I/O 目录
+        # ── Validate 状态（引擎内校验服务 — 与 MCP 共用同一实例）──
+        self._validate_task_id: int | None = None
+        self._validate_opts: dict = {"frames": 360, "verbose": True, "seed": 0}
+        self._validate_seen_report: int | None = None   # 已取回的 task_id（防重复）
+        self._report: dict | None = None                # 最近一次报告（UI 缓存）
+        self._report_open: bool = False
+        self._report_note: str = ""
 
     # ============================================================
     # 生命周期
@@ -204,6 +211,9 @@ class NodeEditorPanel(BasePanel):
             imgui.open_popup("Export Graph")
 
         imgui.same_line()
+        self._draw_validate_button()
+
+        imgui.same_line()
         if imgui.small_button("Rearrange"):
             self._auto_layout(canvas)
 
@@ -212,6 +222,10 @@ class NodeEditorPanel(BasePanel):
 
         # ── Export 弹出窗口 ──
         self._draw_export_popup(canvas)
+
+        # ── Validate 弹出菜单 / 自动取回报告 / 报告窗口 ──
+        self._draw_validate_popup(canvas)
+        self._draw_report_window()
 
         # ── 画布背景色 & 网格 ──
         s = ne.get_style()
@@ -698,6 +712,233 @@ class NodeEditorPanel(BasePanel):
         self._export_path = ""
         self._export_error = ""
         imgui.close_current_popup()
+
+    # ============================================================
+    # 子步骤: Validate（引擎内校验服务 — 与 MCP graph.validate.* 同源）
+    # ============================================================
+
+    _VALIDATE_MENU = [
+        ("Static only (no dry-run)", {"frames": 0}),
+        ("Dry run 360 frames (6s @60fps)", {"frames": 360}),
+        ("Dry run 600 frames (10s)", {"frames": 600}),
+    ]
+
+    def _validate_service(self):
+        """引擎内校验服务单例（与 MCP 共享任务与报告）。"""
+        from Application.Core.NodeGraph.validation import get_service
+
+        return get_service()
+
+    def _draw_validate_button(self) -> None:
+        """工具栏 Validate 按钮（运行中显示进度; 完成后显示结果徽标 + Report 入口）。"""
+        state = self._validate_service().state()
+        if state.get("state") == "running":
+            pct = int(float(state.get("progress", 0.0)) * 100)
+            imgui.small_button(f"Validating… {pct}%")
+            return
+        if imgui.small_button("Validate"):
+            imgui.open_popup("Validate Options")
+        if self._report is not None:
+            counts = self._report.get("counts") or {}
+            errs = int(counts.get("errors", 0) or 0)
+            warns = int(counts.get("warnings", 0) or 0)
+            imgui.same_line()
+            if self._report.get("ok"):
+                imgui.text_colored(imgui.ImVec4(0.35, 0.85, 0.45, 1.0), f"OK ({warns}w)")
+            else:
+                imgui.text_colored(imgui.ImVec4(*ERROR_RED, 1.0), f"{errs}E/{warns}W")
+            imgui.same_line()
+            if imgui.small_button("Report"):
+                self._report_open = True
+
+    def _draw_validate_popup(self, canvas: NodeCanvas) -> None:
+        """Validate 选项菜单 + 每帧轮询任务完成（自动取回报告并弹窗）。"""
+        self._poll_validate()
+
+        if not imgui.begin_popup("Validate Options"):
+            return
+        imgui.text("Dry-run validation of current graph:")
+        imgui.separator()
+        for label, preset in self._VALIDATE_MENU:
+            if imgui.menu_item(label, "", False, True)[0]:
+                opts = dict(self._validate_opts)
+                opts.update(preset)
+                self._start_validate(canvas, opts)
+        imgui.separator()
+        running = self._validate_service().state().get("state") == "running"
+        if imgui.menu_item("Cancel running task", "", False, running)[0]:
+            self._validate_service().cancel()
+        imgui.end_popup()
+
+    def _poll_validate(self) -> None:
+        """任务完成后取回报告（UI 与 MCP 启动的任务都会被捕获）。"""
+        svc = self._validate_service()
+        state = svc.state()
+        tid = state.get("task_id")
+        if tid is None or state.get("state") == "running":
+            return
+        if self._validate_seen_report == tid:
+            return
+        report = svc.report(tid)
+        if report is None:
+            return
+        self._validate_seen_report = int(tid)
+        self._report = report
+        self._report_open = True
+        counts = report.get("counts") or {}
+        tag = "OK" if report.get("ok") else f"{counts.get('errors', 0)} errors"
+        print(f"[Validate] task#{tid} → {tag} ({counts})")
+
+    def _start_validate(self, canvas: NodeCanvas, opts: dict) -> None:
+        """发起校验（当前画布快照 → 服务 worker）。"""
+        svc = self._validate_service()
+        graph = canvas.to_dict()
+        result = svc.start(graph, opts)
+        if result.get("started"):
+            self._validate_task_id = int(result.get("task_id"))
+            self._validate_opts = dict(opts)
+            self._report_note = ""
+            print(f"[Validate] started task#{self._validate_task_id} opts={opts} "
+                  f"({len(canvas.nodes)} nodes, {len(canvas.links)} links)")
+        else:
+            self._report_note = str(result.get("note") or "a validation task is already running")
+            print(f"[Validate] start rejected: {self._report_note}")
+
+    def _focus_node(self, nid: int) -> None:
+        """报告条目点击 → 选中并居中到对应节点（API 缺失时静默降级）。"""
+        if self._editor_context is None:
+            return
+        ne = node_ed
+        try:
+            ne.set_current_editor(self._editor_context)
+            node_id = ne.NodeId(nid)
+            ne.select_node(node_id)
+            try:
+                ne.center_node_on_screen(node_id)
+            except Exception:  # noqa: BLE001
+                try:
+                    ne.navigate_to_selection()
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception as e:  # noqa: BLE001
+            print(f"[Validate] focus node {nid} failed: {e}")
+
+    def _report_text(self) -> str:
+        """报告 → 纯文本（剪贴板 / 导出用）。"""
+        r = self._report or {}
+        lines = [f"Validation task#{r.get('task_id')} state={r.get('state')} ok={r.get('ok')}"]
+        for ent in (r.get("static") or {}).get("errors") or []:
+            lines.append(f"  [static][error] {ent.get('message')}")
+        for ent in (r.get("static") or {}).get("warnings") or []:
+            lines.append(f"  [static][warn]  {ent.get('message')}")
+        for err in (r.get("runtime") or {}).get("errors") or []:
+            lines.append(f"  [runtime][error] {err}")
+        for ent in r.get("log") or []:
+            lines.append(
+                f"  f{ent.get('frame')} #{ent.get('node_id')}<{ent.get('node_type')}> "
+                f"{ent.get('action')} | {ent.get('detail')}"
+            )
+        return "\n".join(lines)
+
+    def _save_report(self, path: str) -> None:
+        """报告落盘（.json）。"""
+        if not path or self._report is None:
+            return
+        try:
+            if not path.lower().endswith(".json"):
+                path += ".json"
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(self._report, fh, indent=2, ensure_ascii=False)
+            self._last_io_dir = os.path.dirname(path)
+            print(f"[Validate] report exported: {path}")
+        except Exception as e:  # noqa: BLE001
+            print(f"[Validate] report export failed: {e}")
+
+    def _draw_report_window(self) -> None:
+        """验证报告窗口（非 modal; 条目可点击跳转节点）。"""
+        if not self._report_open or self._report is None:
+            return
+        report = self._report
+        imgui.set_next_window_size(imgui.ImVec2(560, 430), imgui.Cond_.first_use_ever)
+        visible, still_open = imgui.begin("Validation Report", self._report_open)
+        if still_open is not None:
+            self._report_open = bool(still_open)
+        if visible:
+            graph = report.get("graph") or {}
+            timing = report.get("timing") or {}
+            counts = report.get("counts") or {}
+            runtime = report.get("runtime") or {}
+            state = report.get("state")
+            if report.get("ok"):
+                imgui.text_colored(
+                    imgui.ImVec4(0.35, 0.85, 0.45, 1.0),
+                    f"PASSED — {graph.get('nodes')} nodes, {graph.get('links')} links, "
+                    f"{timing.get('duration_ms')} ms",
+                )
+            else:
+                label = "CANCELLED" if state == "cancelled" else "FAILED"
+                imgui.text_colored(
+                    imgui.ImVec4(*ERROR_RED, 1.0),
+                    f"{label} — {counts.get('errors', 0)} error(s), "
+                    f"{counts.get('warnings', 0)} warning(s)",
+                )
+            imgui.text_disabled(
+                f"task#{report.get('task_id')}  hash={graph.get('hash')}  "
+                f"frames={runtime.get('frames_simulated')}  "
+                f"events={runtime.get('total_events')}"
+            )
+            if self._report_note:
+                imgui.text_colored(imgui.ImVec4(0.90, 0.70, 0.30, 1.00), self._report_note)
+
+            imgui.separator()
+
+            def _section(title: str, entries: list, color) -> None:
+                if not entries:
+                    return
+                imgui.text_colored(color, f"{title} ({len(entries)})")
+                for ent in entries:
+                    if isinstance(ent, dict):
+                        msg = str(ent.get("message", ent))
+                        nid = ent.get("node_id")
+                    else:
+                        msg, nid = str(ent), None
+                    label = f"  [{nid}] {msg}" if nid is not None else f"  {msg}"
+                    if imgui.selectable(label, False)[0] and nid is not None:
+                        self._focus_node(int(nid))
+                imgui.spacing()
+
+            _red = imgui.ImVec4(*ERROR_RED, 1.00)
+            _yellow = imgui.ImVec4(0.90, 0.75, 0.30, 1.00)
+            _section("Static errors", (report.get("static") or {}).get("errors") or [], _red)
+            _section("Static warnings", (report.get("static") or {}).get("warnings") or [], _yellow)
+            _section("Runtime errors", runtime.get("errors") or [], _red)
+
+            log = report.get("log") or []
+            if log and imgui.collapsing_header(f"Event log ({len(log)})"):
+                shown = log[:300]
+                for ent in shown:
+                    imgui.text_disabled(
+                        f"f{ent.get('frame'):>4} #{ent.get('node_id')}<{ent.get('node_type')}> "
+                        f"{ent.get('action')} | {ent.get('detail')}"
+                    )
+                if len(log) > len(shown):
+                    imgui.text_disabled(f"… ({len(log) - len(shown)} more — Export 获取完整日志)")
+
+            imgui.separator()
+            if imgui.button("Copy summary"):
+                imgui.set_clipboard_text(self._report_text())
+            imgui.same_line()
+            if imgui.button("Export .json"):
+                FileDialog.save_json(
+                    callback=self._save_report,
+                    default_name=f"validation_report_task{report.get('task_id')}.json",
+                    start_dir=self._last_io_dir,
+                )
+            imgui.same_line()
+            if imgui.button("Close"):
+                self._report_open = False
+        imgui.end()
 
     # ============================================================
     # 子步骤: Import / Export 弹出窗口（END）

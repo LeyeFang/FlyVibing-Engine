@@ -209,40 +209,43 @@ def dry_run(source: str, frames: int = 0, verbose: bool = False) -> int:
     print(f"[Player] entities    : {len(scene.entities)}")
     print(f"[Player] node_graph  : {'present' if has_graph else 'NONE'}")
 
-    # ── 2. 原始场景 JSON → 静态校验 + 干跑（MCP 链路; 校验器缺失时降级）──
-    try:
-        import Utils.NodeEditor.node_graph_validator as validator  # 延迟导入（仅干跑需要）
-    except ModuleNotFoundError:
-        validator = None
+    # ── 2. 原始场景 JSON → 静态校验 + 干跑（引擎内校验服务 — 单一事实源）──
+    with open(session.scene_path, "r", encoding="utf-8") as fh:
+        scene_json = json.load(fh)
 
-    if validator is None:
-        print("[Player] NOTE: node_graph_validator not available — graph validation skipped")
+    from Application.Core.NodeGraph.validation import run_validation, static_check_graph
+
+    static_entries = static_check_graph(scene_json)
+    static_errors = [e for e in static_entries if e["level"] == "error"]
+    static_warnings = [e for e in static_entries if e["level"] == "warning"]
+    if static_errors:
+        failures += len(static_errors)
+        print(f"[Player] Static validation: {len(static_errors)} error(s)")
+        for e in static_errors:
+            print(f"  ✗ {e['message']}")
     else:
-        with open(session.scene_path, "r", encoding="utf-8") as fh:
-            scene_json = json.load(fh)
+        print("[Player] Static validation: PASSED")
+    if static_warnings:
+        print(f"[Player] Static validation: {len(static_warnings)} warning(s)")
+        for e in static_warnings:
+            print(f"  ⚠ {e['message']}")
 
-        static_errors = validator.validate_static(scene_json)
-        if static_errors:
-            failures += len(static_errors)
-            print(f"[Player] Static validation: {len(static_errors)} error(s)")
-            for e in static_errors:
+    if frames > 0:
+        report = run_validation(scene_json, {"frames": frames, "verbose": verbose})
+        errors = report["runtime"]["errors"]
+        if report["static"]["errors"]:
+            print("[Player] Dry-run: skipped (static errors)")
+        elif errors:
+            failures += len(errors)
+            print(f"[Player] Dry-run: {len(errors)} error(s)")
+            for e in errors:
                 print(f"  ✗ {e}")
         else:
-            print("[Player] Static validation: PASSED")
-
-        if frames > 0:
-            result = validator.dry_run_simulation(scene_json, max_frames=frames, verbose=verbose)
-            errors = result.get("errors") or []
-            if errors:
-                failures += len(errors)
-                print(f"[Player] Dry-run: {len(errors)} error(s)")
-                for e in errors:
-                    print(f"  ✗ {e}")
-            else:
-                print(
-                    f"[Player] Dry-run: {result.get('frames_simulated', 0)} frames, "
-                    f"{result.get('total_events', 0)} side-effect events"
-                )
+            rt = report["runtime"]
+            print(
+                f"[Player] Dry-run: {rt['frames_simulated']} frames, "
+                f"{rt['total_events']} side-effect events"
+            )
 
     print("=" * 60)
     if failures == 0:

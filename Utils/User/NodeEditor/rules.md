@@ -223,13 +223,13 @@ ScalarMath.Result → VarSet("trigger_val", mode=pin)
 
 ```bash
 # Static check
-python Utils/Validators/node_graph_validator.py <scene_path>
+python Utils/User/NodeEditor/node_graph_validator.py <scene_path>
 
 # Static + dry-run N frames
-python Utils/Validators/node_graph_validator.py <scene_path> --frames N
+python Utils/User/NodeEditor/node_graph_validator.py <scene_path> --frames N
 
 # Programmatic
-from Utils.NodeEditor.graph_builder import GraphBuilder
+from Utils.User.NodeEditor.graph_builder import GraphBuilder
 g = GraphBuilder()
 # ...build graph...
 report = g.validate(max_frames=37000)

@@ -219,6 +219,13 @@ class LiveCommandServer:
             "graph.add": cls._op_graph_add,
             "graph.link": cls._op_graph_link,
             "graph.set_props": cls._op_graph_set_props,
+            "graph.export": cls._op_graph_export,
+            "graph.import": cls._op_graph_import,
+            "graph.validate.start": cls._op_graph_validate_start,
+            "graph.validate.state": cls._op_graph_validate_state,
+            "graph.validate.report": cls._op_graph_validate_report,
+            "graph.validate.cancel": cls._op_graph_validate_cancel,
+            "project.open": cls._op_project_open,
             "frame.request": cls._op_frame_request,
             "frame.fetch": cls._op_frame_fetch,
             # ── v3: 实体 / 选中 / 组件 / 场景 / 资源 ──
@@ -459,6 +466,175 @@ class LiveCommandServer:
             _resolve(args.get("to"), "to"),
         ))
         return {"link_id": lid}
+
+    # ── v4: 图校验（引擎内服务） / 图导入导出 / 工程 ──
+
+    @staticmethod
+    def _op_graph_validate_start(args: dict) -> dict:
+        """启动节点图校验任务（静态 + 干跑, worker 线程; 立即返回 task_id）。
+
+        args:
+          source: "canvas"（当前画布快照, 默认）| "graph"（直接传 graph dict）
+          graph:  仅 source="graph" 时必填
+          frames / verbose / seed: 干跑选项（默认 360 帧 / true / 0）
+        """
+        from Application.Core.NodeGraph.validation import get_service
+
+        source = str(args.get("source") or "canvas")
+        if source == "canvas":
+            graph = _node_canvas().to_dict()
+        elif source == "graph":
+            graph = args.get("graph")
+            if not isinstance(graph, dict) or "nodes" not in graph:
+                raise ValueError("graph must be a dict with 'nodes' (or use source='canvas')")
+        else:
+            raise ValueError(f"unknown source: {source!r} (expected 'canvas' or 'graph')")
+
+        options = {
+            "frames": args.get("frames"),
+            "verbose": args.get("verbose"),
+            "seed": args.get("seed"),
+        }
+        result = get_service().start(graph, options)
+        result["source"] = source
+        return result
+
+    @staticmethod
+    def _op_graph_validate_state(args: dict) -> dict:
+        """校验任务状态（task_id 省略 → 最新任务）。"""
+        from Application.Core.NodeGraph.validation import get_service
+
+        return get_service().state(args.get("task_id"))
+
+    @staticmethod
+    def _op_graph_validate_report(args: dict) -> dict:
+        """取回校验报告（task_id 省略 → 最新; save_path 可落盘 .json/.txt）。"""
+        from Application.Core.NodeGraph.validation import get_service
+
+        service = get_service()
+        task_id = args.get("task_id")
+        report = service.report(task_id)
+        if report is None:
+            latest = service.latest_task_id()
+            if task_id is not None and latest is not None:
+                raise ValueError(f"no report for task {task_id} (latest task: {latest})")
+            raise ValueError("no validation report yet — run graph.validate.start first")
+        result: dict = {"found": True, "report": report}
+        save_path = args.get("save_path")
+        if save_path:
+            result["saved_path"] = _save_validation_report(report, str(save_path))
+        return result
+
+    @staticmethod
+    def _op_graph_validate_cancel(args: dict) -> dict:
+        """取消当前校验任务（帧间生效）。"""
+        from Application.Core.NodeGraph.validation import get_service
+
+        return get_service().cancel(args.get("task_id"))
+
+    @staticmethod
+    def _op_graph_export(args: dict) -> dict:
+        """导出当前画布为 graph JSON（含 _rules 文档; 可落盘 path）。
+
+        args: path(可选, 落盘; 自动补 .json), include_rules(默认 true), inline(默认 true — 返回完整 JSON)
+        """
+        canvas = _node_canvas()
+        data = canvas.to_dict()
+        if args.get("include_rules") is False:
+            data.pop("_rules", None)
+        saved_path = ""
+        if args.get("path"):
+            saved_path = str(args["path"])
+            if not saved_path.lower().endswith(".json"):
+                saved_path += ".json"
+            os.makedirs(os.path.dirname(os.path.abspath(saved_path)), exist_ok=True)
+            with open(saved_path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, indent=2, ensure_ascii=False)
+            print(f"[Live] graph exported: {len(canvas.nodes)} nodes → {saved_path}")
+        result: dict = {
+            "nodes": len(canvas.nodes),
+            "links": len(canvas.links),
+            "saved_path": saved_path,
+        }
+        if args.get("inline", True):
+            result["graph"] = data
+        return result
+
+    @staticmethod
+    def _op_graph_import(args: dict) -> dict:
+        """导入 graph JSON 替换当前画布（validate_first 默认开 — 静态 error 时拒绝）。
+
+        args: graph(dict) 或 path(.json 文件), validate_first(默认 true)
+        """
+        path = args.get("path")
+        graph = args.get("graph")
+        if graph is None:
+            if not path:
+                raise ValueError("either 'graph' or 'path' is required")
+            file_path = str(path)
+            if not os.path.isfile(file_path):
+                raise ValueError(f"file not found: {file_path}")
+            with open(file_path, "r", encoding="utf-8") as fh:
+                graph = json.load(fh)
+        if not isinstance(graph, dict) or "nodes" not in graph:
+            raise ValueError("graph must be a dict with 'nodes'")
+
+        if bool(args.get("validate_first", True)):
+            from Application.Core.NodeGraph.validation import static_check_graph
+
+            entries = static_check_graph(graph)
+            errors = [e for e in entries if e["level"] == "error"]
+            if errors:
+                return {
+                    "imported": False,
+                    "reason": "static validation failed — fix errors or pass validate_first=false",
+                    "static_errors": errors,
+                }
+
+        from Application.Core.NodeGraph.canvas import NodeCanvas
+
+        new_canvas = NodeCanvas.from_dict(graph)
+        canvas = _node_canvas()
+        canvas.clear()
+        for nid, inst in new_canvas.nodes.items():
+            canvas._nodes[nid] = inst
+        for lid, lk in new_canvas.links.items():
+            canvas._links[lid] = lk
+        print(f"[Live] graph imported: {len(canvas.nodes)} nodes, {len(canvas.links)} links")
+        return {"imported": True, "nodes": len(canvas.nodes), "links": len(canvas.links)}
+
+    @staticmethod
+    def _op_project_open(args: dict) -> dict:
+        """打开 .myproj 工程（等同 File ▸ Open Project — 资源 + 场景全加载, 启动场景激活）。
+
+        args: path(.myproj)
+        """
+        from Application.Editor.ProjectManager import ProjectManager
+        from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
+
+        path = str(args.get("path") or "")
+        if not path:
+            raise ValueError("path is required (.myproj)")
+        if not os.path.isfile(path):
+            raise ValueError(f"project file not found: {path}")
+
+        previous_name = ProjectManager.get_project_name() if ProjectManager.is_open() else ""
+        previous_saved = ProjectManager.is_saved() if ProjectManager.is_open() else True
+
+        ok = bool(ProjectManager.open_project(path))
+        if not ok:
+            raise RuntimeError(f"failed to open project: {path}")
+
+        result: dict = {
+            "opened": True,
+            "name": ProjectManager.get_project_name(),
+            "path": ProjectManager.get_project_path(),
+            "scenes": SceneBrowserController.get_scene_names(),
+            "active": SceneBrowserController.get_active_scene_name(),
+        }
+        if previous_name and not previous_saved:
+            result["warning"] = f"previous project '{previous_name}' had unsaved changes"
+        return result
 
     @staticmethod
     def _op_frame_request(args: dict) -> dict:
@@ -1241,3 +1417,49 @@ def _apply_transform_fields(entity_id: int, spec: dict, *, use_local: bool, rela
         setter(entity_id, tuple(float(v) for v in value), use_local=use_local)
         applied.append(key)
     return applied
+
+
+def _save_validation_report(report: dict, path: str) -> str:
+    """校验报告落盘（.txt → 人类可读; 其它 → JSON）。返回实际写入路径。"""
+    saved = path if path.lower().endswith((".json", ".txt")) else path + ".json"
+    os.makedirs(os.path.dirname(os.path.abspath(saved)), exist_ok=True)
+    if saved.lower().endswith(".txt"):
+        lines = [
+            "Node Graph Validation Report",
+            "=" * 60,
+            f"task_id : {report.get('task_id')}",
+            f"state   : {report.get('state')}   ok: {report.get('ok')}",
+            f"graph   : {report.get('graph', {}).get('nodes')} nodes, "
+            f"{report.get('graph', {}).get('links')} links, hash={report.get('graph', {}).get('hash')}",
+            f"options : {report.get('options')}",
+            f"timing  : {report.get('timing', {}).get('duration_ms')} ms",
+            "",
+        ]
+        static = report.get("static") or {}
+        for label, key in (("STATIC ERRORS", "errors"), ("STATIC WARNINGS", "warnings")):
+            entries = static.get(key) or []
+            lines.append(f"── {label} ({len(entries)}) ──")
+            for e in entries:
+                nid = e.get("node_id")
+                where = f" [node {nid}]" if nid is not None else ""
+                lines.append(f"  ✗{where} {e.get('message')}")
+            lines.append("")
+        runtime = report.get("runtime") or {}
+        lines.append(f"── RUNTIME ({runtime.get('frames_simulated', 0)} frames, "
+                     f"{runtime.get('total_events', 0)} events) ──")
+        for err in runtime.get("errors") or []:
+            lines.append(f"  ✗ {err}")
+        lines.append("")
+        log = report.get("log") or []
+        lines.append(f"── EVENT LOG ({len(log)}) ──")
+        for ent in log:
+            lines.append(
+                f"  f{ent.get('frame'):>4}  #{ent.get('node_id')}<{ent.get('node_type')}> "
+                f"{ent.get('action')} | {ent.get('detail')}"
+            )
+        with open(saved, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+    else:
+        with open(saved, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, indent=2, ensure_ascii=False)
+    return saved

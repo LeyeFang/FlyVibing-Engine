@@ -2,7 +2,7 @@
 EEGDevice.GtecStub — 空跑后端: 不触硬件、不落盘的确定性数据源。
 
 用途:
-  - MCP 干跑验证 (Utils/NodeEditor 的 validate_graph → dry_run_simulation,
+  - MCP 干跑验证 (Utils/User/NodeEditor 的 validate_graph → dry_run_simulation,
     ctx.dry_run=True 时节点求值器选用此后端)
   - 无设备环境下跑通完整 Gtec 节点链路 (Init → Start → Get → Stop → Kill)
 

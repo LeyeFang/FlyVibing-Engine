@@ -5,19 +5,19 @@ Exposes 5 tools:
   - get_rules          → 返回节点类型参考文档
   - get_scene_entities → 读取 scene 文件的实体列表
   - build_graph        → 从实验 spec JSON 构建节点图
-  - validate_graph     → 验证节点图 (静态 + 干跑)
+  - validate_graph     → [已弃用] 校验已内化为引擎服务（见函数说明）
   - apply_graph        → 注入节点图到 scene 文件
 
 启动方式:
-  python Utils/NodeEditor/mcp_server.py
-  fastmcp run Utils/NodeEditor/mcp_server.py
+  python Utils/User/NodeEditor/mcp_server.py
+  fastmcp run Utils/User/NodeEditor/mcp_server.py
 """
 
 import json, os, sys
 from typing import Any
 
 # ── 确保项目根在 sys.path ──
-_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
@@ -107,7 +107,7 @@ def build_graph(scene_path: str, experiment_spec: dict) -> dict:
     Returns:
         {graph: {...}, node_count: N, link_count: M} 或 {error: "..."}
     """
-    from Utils.NodeEditor.graph_builder import GraphBuilder
+    from Utils.User.NodeEditor.graph_builder import GraphBuilder
 
     g = GraphBuilder()
     GS, FU, GP = g.event_nodes()
@@ -313,46 +313,23 @@ def build_graph(scene_path: str, experiment_spec: dict) -> dict:
 
 @mcp.tool()
 def validate_graph(graph: dict, max_frames: int = 0, verbose: bool = False) -> dict:
-    """验证节点图 (静态检查 + 可选干跑)。
+    """[已弃用 — 校验已内化为引擎服务] 请改用 engine-editor-live 服务器的 editor_graph_validate。
 
-    Args:
-        graph: 节点图 dict (build_graph 的输出)
-        max_frames: 干跑帧数 (0 = 仅静态检查)
-        verbose: 详细输出
-
-    Returns:
-        {passed: bool, static_errors: [...], dry_run: {...} | null}
+    验证链路变更 (2026-10-02):
+      - 校验在引擎内执行（静态检查 + 干跑, 单一事实源）;
+      - 引擎运行中: editor_graph_validate(source="graph", graph=..., frames=...);
+      - 无头/CI:   PlayerEntry --dry-run 或 Test/Application/NodeGraph/test_graph_validation.py;
+      - 也可先 editor_graph_import 导入编辑器画布, 再用面板 Validate 按钮。
     """
-    from Utils.NodeEditor.node_graph_validator import (
-        validate_static, dry_run_simulation,
-    )
-
-    errors = validate_static(graph)
-    static_errors = [{"message": e} for e in errors]
-
-    dry_run_result = None
-    if max_frames > 0 and not static_errors:
-        try:
-            result = dry_run_simulation(
-                graph, max_frames=max_frames, verbose=verbose)
-            dr_errors = result.get("errors", [])
-            dry_run_result = {
-                "frames_simulated": result.get("frames_simulated", 0),
-                "total_events": result.get("total_events", 0),
-                "events_by_type": result.get("events_by_type", {}),
-                "errors": dr_errors,
-            }
-            passed = len(dr_errors) == 0
-        except Exception as e:
-            dry_run_result = {"errors": [str(e)]}
-            passed = False
-    else:
-        passed = len(static_errors) == 0
-
     return {
-        "passed": passed,
-        "static_errors": static_errors,
-        "dry_run": dry_run_result,
+        "passed": False,
+        "deprecated": True,
+        "message": (
+            "validate_graph 已内化为引擎内服务 — 请启动引擎后使用 editor_graph_validate"
+            "（source='graph', graph=..., frames=...）获取静态+干跑报告; 无头环境用 PlayerEntry --dry-run。"
+        ),
+        "static_errors": [],
+        "dry_run": None,
     }
 
 

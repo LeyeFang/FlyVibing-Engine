@@ -1,7 +1,7 @@
 # 编辑器实时命令总线 / MCP 热注入协议（Editor Live）
 
 > 适用：`Application/Editor/Services/LiveCommandServer.py`（编辑器侧总线）、
-> `Utils/Editor/**`（agent 侧 MCP 服务器与安装）、`Application/Editor/EditorLayer.py`（pump 接入点）、
+> `Utils/User/EditorMcp/**`（agent 侧 MCP 服务器 / 独立包 / 安装）、`Application/Editor/EditorLayer.py`（pump 接入点）、
 > `Application/Editor/EditorPlugin.py`（启停接入点）。
 > 目标：让 agent 像操作 Fusion360 一样**实时操作运行中的编辑器**（热注入，非文件式）。
 
@@ -11,7 +11,7 @@
 
 ```mermaid
 flowchart LR
-    A[Agent / Copilot] -- "MCP stdio" --> B["Utils/Editor/mcp_server.py<br/>(纯 socket 客户端, 不 import Application)"]
+    A[Agent / Copilot] -- "MCP stdio" --> B["Utils/User/EditorMcp/mcp_server.py<br/>(薄 shim → src/engine_editor_mcp, 纯 socket 客户端)"]
     B -- "NDJSON + 二进制尾帧 @ 127.0.0.1:8977" --> C["LiveCommandServer socket 线程<br/>(仅收 JSON → 入队)"]
     C -- "queue.Queue" --> D["主线程 pump<br/>EditorLayer.OnUpdate 每帧"]
     D -- "复用编辑器按钮同款 API" --> E["SimulationController / ViewportController / ..."]
@@ -107,25 +107,48 @@ flowchart LR
 | `resource.find` | `editor_resource_find` | 按名查找（线性扫描; 返回全部匹配） |
 | `resource.material.get` | `editor_resource_material_get` | 材质详情（shader/颜色/纹理槽/uniform 键） |
 
+### 4.2 v4 — 图校验 / 图导入导出 / 工程（7 条, 2026-10-02）
+
+图校验已内化为**引擎服务**（`Application/Core/NodeGraph/validation/`, 协议详见 `graph_validation_protocol.md`）——
+UI / MCP / 程序三入口共用同一服务实例；离线 `validate_graph` 已弃用退场。
+
+| op | MCP 工具 | 语义 |
+|---|---|---|
+| `graph.validate.start` | `editor_graph_validate`（阻塞编排: start→poll→report） | 启动干跑校验; `source`: `"canvas"`(默认)/`"graph"`; `frames`(默认360)/`seed`(默认0) |
+| `graph.validate.state` | （编排内部） | 任务状态 `{task_id, state, phase, progress}` |
+| `graph.validate.report` | `editor_graph_validate_report` | 取回报告（`task_id` 省略=最新; `save_path` 落盘 .json/.txt） |
+| `graph.validate.cancel` | `editor_graph_validate_cancel` | 取消运行中的任务（帧间生效） |
+| `graph.export` | `editor_graph_export` | 导出画布 JSON（含 `_rules`; `path` 落盘） |
+| `graph.import` | `editor_graph_import` | 导入 JSON 替换画布（`validate_first` 默认拒绝静态 error） |
+| `project.open` | `editor_project_open` | 打开 .myproj（资源+场景全加载, 启动场景激活） |
+
+UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 帧；完成后自动弹报告窗口,
+条目点击跳转节点; Copy / Export .json）。UI 与 MCP 任务互见（同一服务实例）。
+
 ## 5. MCP 侧（agent 工具）
 
-- 文件：`Utils/Editor/mcp_server.py`（FastMCP，stdio）；**纯 socket 客户端，不 import Application**（测试守卫生效）；
+- **发布形态（2026-10-02 独立化; 收纳于 `Utils/User/EditorMcp/`）**：源码唯一维护于 `Utils/User/EditorMcp/src/engine_editor_mcp/`（console script `engine-editor-mcp`）；
+  `Utils/User/EditorMcp/mcp_server.py` 为薄 shim（dev/E2E 入口, 同一源码）。**纯 socket 客户端，不 import Application**（测试守卫已扩展到包源码）；
+  三方工作区用法：`pip install` wheel（零依赖构建: `python Utils/User/EditorMcp/build_wheel.py` → 产物 `Utils/User/EditorMcp/dist/`）→
+  `.vscode/mcp.json` 配 `{"command": "python", "args": ["-m", "engine_editor_mcp"]}`（详见 `Utils/User/EditorMcp/README.md`）；
 - **v3 工具**：`entity_*` (8) / `selection_*` (3) / `component_*` (6) / `scene_*` (5) / `resource_*` (3) —— 容器级实时编辑（§4.1）；
+- **v4 工具**：`editor_graph_validate(_report/_cancel)` / `editor_graph_export` / `editor_graph_import` / `editor_project_open` —— 图校验（引擎内服务）+ 导入导出 + 工程打开（§4.2）；
 - 编辑器未运行时返回人话错误：`编辑器未运行（127.0.0.1:8977 无监听）— 请先启动 startup.bat。`
 - **帧图像**（`editor_capture`）：request → 轮询 fetch → numpy 翻转（GL bottom-up → top-down，本进程）→
   Pillow 编码 PNG → ① 落盘 ② 返回 MCP 图像内容块（agent 可直接查看画面 + 说明文本含路径）；
-- 抓帧目录：`Utils/Editor/tmp/frames/frame_{editor|pie}_{时间戳}_g{gen}.png`；
-  **清理策略（用户指定）：MCP server 每次启动清空**（仅 `python -m` 入口执行, import 不清空）；
+- 抓帧目录：`<临时目录>\engine_editor_mcp\frames\frame_{editor|pie}_{时间戳}_g{gen}.png`
+  （默认 `%TEMP%`; 环境变量 `MGE_MCP_FRAMES_DIR` 可覆盖）；**清理策略：入口进程启动时清空**（import 不清空）；
 - venv 依赖：`mcp` 1.10.1（FastMCP Image 内容块）+ `Pillow`（已装）；
-- 注册：`.venv-py314t\Scripts\python.exe Utils/Editor/install_mcp.py` →
+- 注册（dev 仓库）：`.venv-py314t\Scripts\python.exe Utils/User/EditorMcp/install_mcp.py` →
   写入工作区 `.vscode/mcp.json`（名称 `engine-editor-live`，command=venv python）→ **重载 VS Code 生效**；
+- 注册（外部工作区）：手写 mcp.json 指向已安装的独立包（见上方发布形态）；引擎侧无需任何配置；
   卸载：`... install_mcp.py --uninstall`。
 
 ## 6. 新增一个 op 的步骤（扩展清单）
 
 1. `LiveCommandServer._register_ops()` 里注册 `"域.动作": cls._op_xxx`；
 2. 实现 `_op_xxx(args) -> dict`（**主线程**执行；只调编辑器 API/控制器；错误直接 raise，pump 会转成受控错误）；
-3. `Utils/Editor/mcp_server.py` 加一个 `@mcp.tool()` 薄包装（→ `_send("域.动作", args)`）；
+3. `Utils/User/EditorMcp/src/engine_editor_mcp/server.py` 加一个 `@mcp.tool()` 薄包装（→ `_send("域.动作", args)`）；
    图像类 op: handler 返回的 result 里放 `_payload`（bytes）+ `binary_bytes`
    （socket 线程会在行后追加裸负载, 不入 JSON）；
 4. 测试：`Test/Application/Editor/test_live_command_server.py` 加一条往返断言（图像类用 `roundtrip_binary`）；
@@ -145,8 +168,12 @@ flowchart LR
 ## 8. 测试与验收
 
 ```powershell
-# 无头回环测试（46 项断言: 生命周期 / 控制 / 二进制尾随帧 / v3 容器受控错误; 不需要 GUI）
+# 无头回环测试（60 项断言: 生命周期 / 控制 / 二进制尾随帧 / v3 容器 / v4 校验·导入导出受控错误; 不需要 GUI）
 .venv-py314t\Scripts\python.exe Test/Application/Editor/test_live_command_server.py
+# 校验服务专项（29 项: 静态规则 / 干跑 / 任务流 / 忙拒绝 / 取消; 不需要 GUI）
+.venv-py314t\Scripts\python.exe Test/Application/NodeGraph/test_graph_validation.py
+# 实机 E2E-v4（需 startup.bat 运行中）: 打开 MI-SSSEP 工程 → 切场景 → 画布干跑校验 → 导出/回灌
+.venv-py314t\Scripts\python.exe Test/Application/Editor/e2e_mcp_validate_mi_sssep.py
 # 实机 E2E-v2（需 startup.bat 运行中）: graph 搭建 → 2D → PIE → 双窗口抓帧 → 停机
 .venv-py314t\Scripts\python.exe Test/Application/Editor/e2e_mcp_live_check.py
 # 实机 E2E-v3: 实体新建/改名/移形 → 组件增改 → 选中 → 截图 → reparent → 删除
@@ -159,7 +186,7 @@ flowchart LR
 1. `graph.add EntitySpawn(template=DefaultCube)` + `graph.link OnGameStart.exec → exec_in`
    → 控制台出现 `[EntitySpawn] 'DefaultCube' (eid=..., template='DefaultCube')`；
 2. `view.set_mode 2d` → `game_type=2d`，PIE 使用 `DefaultCamera2D`（俯视正交）；
-3. `capture pie` → **画面中央白色方块**（PNG 落盘 `Utils/Editor/tmp/frames/`）；
+3. `capture pie` → **画面中央白色方块**（PNG 落盘 `<临时目录>\engine_editor_mcp\frames\`）；
    `capture editor` → 编辑器全 UI 画面（含 ImGui）；
 4. `camera.get` 返回实体 1 实时属性；`sim.stop` → `Stopped`；`editor.quit` → 正常退出；
 5. v3 容器链路：`entity.add → rename → transform → component.add(MeshRenderer, 默认 Cube) →
@@ -168,13 +195,19 @@ flowchart LR
 6. v3.1 Transform/MeshRenderer（“提示指示”链路）：标量缩放（`scale: 2.0`）✓、相对位移（+[1,0,0] 后 x=1.0）✓、
    `material_name` / `shader`(按名) / `uniform`(uColor=[1,0.5,0] 数据验证) / `texture` 替换 ✓、
    `component.get` 附带 mesh/material 摘要 ✓；提示显隐两次截图（出现 120KB / 隐藏 95KB, 视觉确认消失）。
+7. v4 校验内化（2026-10-02 已通过, `e2e_mcp_validate_mi_sssep.py` 13/13）：`project.open`（Paradigm 的 MI-SSSEP 工程,
+   4 场景）→ `scene.switch MI-SSSEP` → 画布 **141 nodes / 167 links** → 干跑校验 **静态 0E/0W · 运行时 0E ·
+   360 帧 / 15 事件 / 82.5 ms · ok=True** → 报告落盘 `Utils/User/EditorMcp/tmp/validation_mi_sssep.txt` →
+   `graph.export/import` 回灌一致。干跑语义注意: 实体查找（EntityGet）在干跑下查不到真实实体（副作用被跳过）,
+   以 stdout 提示 `[EntityGet] 'x' not found` 但不计 error（图的防御写法不受影响）。
 
 ## 9. 路线（后续阶段）
 
 - ~~阶段 2~~（2026-09-28 大部分落地）：`sim.stop` ✅、图编辑 ops（`graph.add/link/set_props` + `graph.list` ✅；
   `graph.remove` 未做）、`view.screenshot` ✅（`frame.request/fetch` + `editor_capture`，PNG 在 MCP 进程）；
   仍缺：`sim.pause/resume` 暴露、`graph.remove`、帧环形日志（"实时图像=调试日志"）；容器级缺口见 §10。
-- **阶段 3**：事件推送（选中变化 → MCP 通知）、只读开关、多客户端、`validate_only` 空跑。
+- **阶段 3**：事件推送（选中变化 → MCP 通知）、只读开关、多客户端。~~`validate_only` 空跑~~ ——
+  2026-10-02 已落地: 校验内化为引擎服务（v4 `graph.validate.*` + UI Validate 按钮, 见 `graph_validation_protocol.md`）。
 
 ## 10. 容器补全跟进（Follow-ups — 2026-09-28 盘点）
 

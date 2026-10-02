@@ -8,8 +8,11 @@ collect_wheels — 收集 wheelhouse 到 Resource/wheels（离线可重建环境
   3. 核对: 每条需求都有对应 wheel（sdist 单独标注; 缺失则报错）
   4. 生成 CHECKSUMS.sha256
 
+注: Resource/wheels 不进 git（仅保留 requirements 两份 + 自建 imgui 引导轮）——
+本脚本负责在新机器上从 PyPI 重建 wheelhouse。
+
 用法:
-    .venv-py314t\\Scripts\\python.exe Utils/Runtime/collect_wheels.py
+    .venv-py314t\\Scripts\\python.exe Utils/Dev/collect_wheels.py
 """
 
 from __future__ import annotations
@@ -32,7 +35,7 @@ REQUIREMENTS_RUNTIME = os.path.join(WHEELS, "requirements.runtime.txt")
 # 的运行时树扫描, Editor 与 Vulkan 目录除外）。wheelhouse 仍保留全量轮子用于重建。
 _EDITOR_ONLY = [
     "imgui-bundle",           # 编辑器 UI 全家桶
-    # MCP 工具链（Utils/NodeEditor mcp_server 专用）
+    # MCP 工具链（Utils/User/NodeEditor mcp_server 专用）
     "mcp", "starlette", "uvicorn", "sse-starlette",
     "httpx", "httpx-sse", "httpcore", "h11", "anyio",
     "pydantic", "pydantic-core", "pydantic-settings",

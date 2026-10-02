@@ -425,11 +425,17 @@ class ProjectManager:
                 exclude_dirs={"wheels", "runtime"},
             )
 
-            # 5b-2. Utils 工具（node_graph_validator — 播放器 --dry-run 依赖）
+            # 5b-2. Utils 工具（仅 User 层 — Dev 工具链不进游戏包）
             utils_files, utils_bytes = cls._copy_tree_for_export(
-                os.path.join(engine_root, "Utils"),
-                os.path.join(out_dir, "Utils"), warnings,
+                os.path.join(engine_root, "Utils", "User"),
+                os.path.join(out_dir, "Utils", "User"), warnings,
             )
+            _utils_init = os.path.join(engine_root, "Utils", "__init__.py")
+            if os.path.isfile(_utils_init):
+                _dst_init = os.path.join(out_dir, "Utils", "__init__.py")
+                os.makedirs(os.path.dirname(_dst_init), exist_ok=True)
+                _shutil.copy2(_utils_init, _dst_init)
+                utils_files += 1
 
             # 5c. Python 运行时镜像（预装环境, 双轨制主轨）
             runtime_info = {"included": False, "files": 0, "bytes": 0}
@@ -441,7 +447,7 @@ class ProjectManager:
             else:
                 warnings.append(
                     "runtime image missing (Resource/runtime) — run "
-                    "Utils/Runtime/prepare_runtime.py first; exported game "
+                    "Utils/Dev/prepare_runtime.py first; exported game "
                     "will not be standalone"
                 )
 

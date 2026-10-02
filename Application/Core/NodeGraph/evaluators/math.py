@@ -88,6 +88,17 @@ def _get_global_rng() -> random.Random:
     return random  # type: ignore[return-value]
 
 
+def seed_global_rng(seed: int) -> None:
+    """公开辅助 — 以确定种子重置全局 RNG（干跑 / 测试 / 校验服务用）。
+
+    与 RandomSetSeed 节点的差异: 本函数对 seed=0 也安装独立 Random 实例，
+    保证干跑可复现（RandomSetSeed 的 seed=0 语义 = 回退模块级 random）。
+    """
+    global _global_rng, _global_rng_seed
+    _global_rng_seed = int(seed)
+    _global_rng = random.Random(int(seed))
+
+
 def _eval_random_set_seed(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     """RandomSetSeed — 设置全局随机种子。
 

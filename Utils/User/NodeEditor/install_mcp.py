@@ -3,18 +3,18 @@
 Node Graph Editor MCP — 一键安装 (跨平台)。
 
 用法:
-  python Utils/NodeEditor/install_mcp.py
-  python Utils/NodeEditor/install_mcp.py --uninstall
+  python Utils/User/NodeEditor/install_mcp.py
+  python Utils/User/NodeEditor/install_mcp.py --uninstall
 """
 
 import json, os, subprocess, sys
 
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 MCP_SERVER_CONFIG = {
     "type": "stdio",
     "command": "python",
-    "args": ["-m", "Utils.NodeEditor.mcp_server"],
+    "args": ["-m", "Utils.User.NodeEditor.mcp_server"],
     "cwd": PROJECT_DIR,
 }
 
@@ -74,7 +74,7 @@ def install():
 
     # 3. Verify
     print("\n[3/3] Verifying...")
-    server_path = os.path.join(PROJECT_DIR, "Utils", "NodeEditor", "mcp_server.py")
+    server_path = os.path.join(PROJECT_DIR, "Utils", "User", "NodeEditor", "mcp_server.py")
     if os.path.exists(server_path):
         print("  ✓ mcp_server.py found")
     else:
@@ -92,7 +92,7 @@ def install():
             config["servers"]["node-graph-editor"] = {
                 "type": "stdio",
                 "command": "fastmcp",
-                "args": ["run", "Utils/NodeEditor/mcp_server.py"],
+                "args": ["run", "Utils/User/NodeEditor/mcp_server.py"],
                 "cwd": PROJECT_DIR,
             }
             write_mcp_config(mcp_path, config)

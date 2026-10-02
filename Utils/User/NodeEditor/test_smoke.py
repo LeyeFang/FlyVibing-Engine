@@ -1,15 +1,15 @@
 """
 GraphBuilder 冒烟测试 — 验证 API 可用性。
 
-用法: python Utils/NodeEditor/test_smoke.py
+用法: python Utils/User/NodeEditor/test_smoke.py
 """
 
 import sys, os
-_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from Utils.NodeEditor.graph_builder import GraphBuilder
+from Utils.User.NodeEditor.graph_builder import GraphBuilder
 
 g = GraphBuilder()
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""
+r"""
 Engine Editor Live MCP — 一键安装（跨平台）。
 
 用法:
-  .venv-py314t\\Scripts\\python.exe Utils/Editor/install_mcp.py
-  .venv-py314t\\Scripts\\python.exe Utils/Editor/install_mcp.py --uninstall
+  .venv-py314t\\Scripts\\python.exe Utils/User/EditorMcp/install_mcp.py
+  .venv-py314t\\Scripts\\python.exe Utils/User/EditorMcp/install_mcp.py --uninstall
 
 注册到工作区 .vscode/mcp.json（名称: engine-editor-live）。
 安装后需重载 VS Code 窗口（或 MCP: List Servers → 重启）才能被 agent 看到。
@@ -14,7 +14,7 @@ import json
 import os
 import sys
 
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 SERVER_NAME = "engine-editor-live"
 
 
@@ -50,7 +50,7 @@ def install() -> int:
         import mcp  # noqa: F401
         print("  ✓ mcp package importable")
     except ImportError:
-        print("  ✗ mcp 包不可用 — 先运行 Utils/generate_venv.bat（或 pip install mcp）")
+        print("  ✗ mcp 包不可用 — 先运行 Utils/Dev/setup_env.bat（或 pip install mcp）")
         return 1
 
     config_path = _mcp_path()
@@ -59,14 +59,14 @@ def install() -> int:
     config["servers"][SERVER_NAME] = {
         "type": "stdio",
         "command": _python_command(),
-        "args": ["-m", "Utils.Editor.mcp_server"],
+        "args": ["-m", "Utils.User.EditorMcp.mcp_server"],
         "cwd": PROJECT_DIR,
     }
     _write_config(config_path, config)
     print(f"  ✓ 注册 '{SERVER_NAME}' → {config_path}")
-    print(f"    command: {_python_command()} -m Utils.Editor.mcp_server")
+    print(f"    command: {_python_command()} -m Utils.User.EditorMcp.mcp_server")
 
-    server_src = os.path.join(PROJECT_DIR, "Utils", "Editor", "mcp_server.py")
+    server_src = os.path.join(PROJECT_DIR, "Utils", "User", "EditorMcp", "mcp_server.py")
     print(f"  ✓ mcp_server.py: {'found' if os.path.isfile(server_src) else 'MISSING!'}")
     print()
     print("下一步: 重载 VS Code 窗口（或 Command Palette → 'MCP: List Servers' 重启）")

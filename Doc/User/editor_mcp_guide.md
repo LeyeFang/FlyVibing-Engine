@@ -10,7 +10,7 @@
 
 编辑器内置了一条"AI 助手通道"（MCP）。**编辑器运行时**，VS Code 里的 Copilot 助手可以直接：
 
-- 查询/修改场景：实体（新建、改名、移动、父子、显隐）、组件（增加、删除、读写）、节点图（加节点、连线、改属性）、摄像机、场景（列表、切换、新建、保存、加载）、资源（列表、按名查找、材质详情）；
+- 查询/修改场景：实体（新建、改名、移动、父子、显隐）、组件（增加、删除、读写）、节点图（加节点、连线、改属性、**干跑校验**、导入导出）、摄像机、场景（列表、切换、新建、保存、加载）、资源（列表、按名查找、材质详情）、**工程（打开 .myproj）**；
 - 运行控制：启动/停止 PIE（Play In Editor）、切换 2D/3D/Overlay 场景类型；
 - 截取**编辑器窗口或 PIE 运行画面**（助手能直接看到截图内容，也能存成 PNG 文件）。
 
@@ -63,7 +63,7 @@
 |---|---|---|
 | `editor_capture` | 抓取窗口画面（PNG + 直接展示给助手） | `target`: "editor"（编辑器窗口）/ "pie"（运行时窗口，需 PIE 运行中） |
 
-- 图片存放：`Utils/Editor/tmp/frames/`，文件名 `frame_编辑器或pie_时间戳.png`；
+- 图片存放：系统临时目录 `%TEMP%\engine_editor_mcp\frames\`（文件名 `frame_编辑器或pie_时间戳.png`），可用环境变量 `MGE_MCP_FRAMES_DIR` 更改位置；
 - **清理规则**：助手服务每次启动时自动清空该目录（重要截图请另存到你的项目目录）。
 
 ### 3.5 实体
@@ -122,6 +122,21 @@
 |---|---|
 | `editor_quit` | 关闭编辑器（等同点窗口 X） |
 
+### 3.11 图校验 / 导入导出 / 工程
+
+| 命令 | 作用 | 参数 / 说明 |
+|---|---|---|
+| `editor_graph_validate` | **干跑校验当前节点图**（静态检查 + 6 秒模拟运行） | 返回完整报告（错误/警告/事件日志）；需编辑器运行中 |
+| `editor_graph_validate_report` | 取回最近一次校验报告 | 可指定 `task_id`；`save_path` 可落盘 .txt/.json |
+| `editor_graph_validate_cancel` | 取消正在跑的校验 | — |
+| `editor_graph_export` | 导出节点图 JSON 文件 | `path` 落盘位置（含规则文档） |
+| `editor_graph_import` | 导入节点图 JSON 替换当前图 | 导入前自动静态检查，有错会拒绝 |
+| `editor_project_open` | 打开 `.myproj` 工程 | 资源+场景全量加载，自动激活启动场景 |
+
+> 也可以直接在 Node Editor 面板点 **Validate** 按钮：完成后面板自动弹「Validation Report」窗口，
+> 点报告里的条目能直接跳转到对应节点；支持复制摘要 / 导出 JSON。
+> **注意**：图校验现在在引擎内执行 —— 需要编辑器运行中（旧版"离线校验"已停用）。
+
 ---
 
 ## 4. 典型使用场景
@@ -165,6 +180,6 @@
 |---|---|
 | 助手说"编辑器未运行" | 先运行 `startup.bat`；确认编辑器控制台有 `[Live] Editor command server on 127.0.0.1:8977` |
 | 聊天里找不到这些命令（助手不能用） | 重载 VS Code 窗口；或 `MCP: List Servers → engine-editor-live → 重启` |
-| 截图找不到 | 查看 `Utils/Editor/tmp/frames/`；注意该目录会在助手服务启动时自动清空 |
+| 截图找不到 | 查看 `<临时目录>\engine_editor_mcp\frames\`（默认 `%TEMP%`；可用环境变量 `MGE_MCP_FRAMES_DIR` 覆盖）；注意该目录会在助手服务启动时自动清空 |
 | 工具报"PIE is not running" | 截图运行时窗口前先"运行一下" |
 | 端口被占用 | 关闭占用进程，或在启动前的环境变量中设置 `MGE_EDITOR_MCP_PORT`（编辑器与 VS Code 两侧需一致） |

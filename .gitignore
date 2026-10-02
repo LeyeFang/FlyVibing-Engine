@@ -15,12 +15,20 @@ Application/Editor/Config
 .vscode
 
 # Runtime packaging / game export (P2+)
+# 运行时镜像与 wheelhouse 不进 git（拉取轻量; 开发者按 README 用 uv/PyPI 重建）——
+# 例外仅 3 类: requirements 两份 + CHECKSUMS + 自建 imgui cp314t 引导轮（PyPI 无发行）
 Resource/runtime/
+Resource/wheels/*
 !Resource/wheels/requirements.export.txt
 !Resource/wheels/requirements.runtime.txt
+!Resource/wheels/CHECKSUMS.sha256
+!Resource/wheels/imgui_bundle-1.92.5-cp314-cp314t-win_amd64.whl
 
 # Test 目录整体脱离版本控制（本机开发保留；2026-09-28 用户要求）
 Test/
 
-# Editor Live MCP 抓帧临时目录（运行时生成；server 启动时自动清空）
-Utils/Editor/tmp/
+# Editor Live MCP 临时目录（E2E/报告产物；运行时生成）
+Utils/User/EditorMcp/tmp/
+
+# Installer 临时探测目录（pypi probe 等）
+Utils/Dev/Installer/tmp/

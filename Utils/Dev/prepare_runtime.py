@@ -8,7 +8,7 @@ prepare_runtime — 在 Resource/runtime 预制可搬运 Python 环境。
   4. 冒烟自检（核心依赖 import + free-threading 状态）
 
 用法:
-    .venv-py314t\\Scripts\\python.exe Utils/Runtime/prepare_runtime.py
+    .venv-py314t\\Scripts\\python.exe Utils/Dev/prepare_runtime.py
 """
 
 from __future__ import annotations

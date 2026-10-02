@@ -13,6 +13,8 @@ startup.bat                  # 启动编辑器
 
 唯一前提：安装 [uv](https://docs.astral.sh/uv/)（其余自动完成）。
 
+`startup.bat` 自动调度解释器：开发检出优先 `.venv-py314t`（编辑器全量依赖）；安装版（无 venv）回退内置 `Resource/runtime`（游戏子集镜像，启动器优选镜像内 `python3.14t.exe`）。
+
 ### 仓库体积策略（重要）
 
 仓库**不携带** wheelhouse 与 Python 运行时镜像（拉取保持轻量）——开发者按需本地重建：

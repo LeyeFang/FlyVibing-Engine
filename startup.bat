@@ -7,18 +7,20 @@ setlocal
 cd /d "%~dp0"
 
 :: ============================================
-:: Python selection:
-::   1) bundled runtime 3.14t (installed build): Resource\runtime\python3.14t.exe
-::      (python.exe in the runtime image is the GIL build - cannot load cp314t wheels)
-::   2) dev venv                               : .venv-py314t\Scripts\python.exe
+:: Python dispatch (环境调度):
+::   1) dev venv (source checkout): .venv-py314t\Scripts\python.exe
+::      - editor needs the full dev deps (imgui_bundle etc.);
+::        the bundled runtime image is a GAME SUBSET (editor deps excluded!)
+::   2) bundled runtime (installed build, no venv): Resource\runtime\python3.14t.exe
+::      - python.exe in the runtime image is the GIL build (cannot load cp314t wheels)
 :: ============================================
+set "VENV_PYTHON=%~dp0.venv-py314t\Scripts\python.exe"
 set "RUNTIME_PYTHON=%~dp0Resource\runtime\python3.14t.exe"
 if not exist "%RUNTIME_PYTHON%" set "RUNTIME_PYTHON=%~dp0Resource\runtime\python.exe"
-set "VENV_PYTHON=%~dp0.venv-py314t\Scripts\python.exe"
 
 set "PYTHON="
-if exist "%RUNTIME_PYTHON%" set "PYTHON=%RUNTIME_PYTHON%"
-if not defined PYTHON if exist "%VENV_PYTHON%" set "PYTHON=%VENV_PYTHON%"
+if exist "%VENV_PYTHON%" set "PYTHON=%VENV_PYTHON%"
+if not defined PYTHON if exist "%RUNTIME_PYTHON%" set "PYTHON=%RUNTIME_PYTHON%"
 
 if not defined PYTHON (
     echo [ERROR] No Python runtime found.
@@ -40,6 +42,7 @@ set "PYTHONDONTWRITEBYTECODE=1"
 :: ============================================
 :: Run entry point directly (no activate.bat needed - avoids PATH issues)
 :: ============================================
+echo Using Python: %PYTHON%
 echo Starting MyGameEngine...
 "%PYTHON%" -Xgil=0 "%~dp0Application\EntryPoint.py" %*
 

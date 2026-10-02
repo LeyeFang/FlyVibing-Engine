@@ -35,9 +35,11 @@
 > **全局策略（2026-10-02 起）**：`Resource/runtime` 与 `Resource/wheels` **不进 git**（拉取轻量）——
 > 镜像由 `Utils/Dev/prepare_runtime.py` 本地生成（源 = uv 托管 3.14t）；wheelhouse 由
 > `Utils/Dev/collect_wheels.py` 从 PyPI 重建（唯一例外: imgui cp314t 引导轮随 git）。
-> **安装器与游戏导出共用同一镜像**：两者均直接拷贝 `Resource/runtime`；启动器
->（startup.bat / engine-editor-mcp.cmd / run_game.cmd）一律优选 `python3.14t.exe`——
-> runtime 镜像内含 GIL 版 `python.exe`（PBA 3.14 发行版双 exe 布局），与 cp314t 轮子不兼容。
+> **安装器与游戏导出共用同一镜像**：两者均直接拷贝 `Resource/runtime`（镜像为**游戏子集**，
+> 编辑器依赖如 imgui_bundle 被刻意排除）。启动器解释器调度（2026-10-02 修正）：
+> `startup.bat` —— dev 检出优先 `.venv-py314t`（编辑器全量依赖），无 venv（安装版）时回退内置 runtime；
+> 纯产品侧启动器（`engine-editor-mcp.cmd` / `run_game.cmd` / 安装版 `startup.bat`）一律用镜像内
+> `python3.14t.exe`（镜像含 GIL 版 `python.exe`——PBA 3.14 双 exe 布局，与 cp314t 轮子不兼容）。
 
 ---
 

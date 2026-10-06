@@ -4,6 +4,15 @@ from Application.Editor.UI.BasePanel import BasePanel
 from Application.Editor.UI.UIManager import UIManager
 
 
+def toggle_grid_visible() -> bool:
+    """View ▸ Show Grid 的动作 — 与场景测试共用（返回切换后的状态）。
+
+    业务实现唯一在 Grid.set_visible（菜单与 view.set_grid op 同路径）。
+    """
+    from Application.Editor.Gizmos.Grid import Grid
+    return Grid.set_visible(not Grid.visible)
+
+
 class MenuBarPanel(BasePanel):
     """主菜单栏：File / Edit / View / Help"""
 
@@ -57,6 +66,12 @@ class MenuBarPanel(BasePanel):
                     if panel:
                         _, panel.visible = imgui.menu_item(
                             target_name, "", panel.visible, True)
+                imgui.separator()
+                # ── Show Grid — 视口网格开关 (动作单点: toggle_grid_visible) ──
+                from Application.Editor.Gizmos.Grid import Grid
+                clicked, _ = imgui.menu_item("Show Grid", "", Grid.visible, True)
+                if clicked:
+                    toggle_grid_visible()
                 imgui.end_menu()
 
             # ── Help ────────────────────────────────────────

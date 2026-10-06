@@ -1,7 +1,8 @@
 # Node Graph Reference for AI Agents
 
-> 本文档供 AI agent 编写节点图 JSON 时参考。
-> 包含完整的节点类型表、连线规则、执行模型和常见模式。
+> 本文档供 AI agent 编写节点图 JSON 时参考（节点类型表、连线规则、执行模型、常见模式）。
+> **按节读取（省 token）**: MCP `get_rules(section="<标题>")` / CLI `python -m Utils.User.NodeEditor.cli rules "<标题>"`;
+> 无参只回目录（各节标题与规模）; 仅确需全文时才 `section="all"` / `--all`。
 
 ---
 
@@ -137,7 +138,7 @@
 | GetGtecData | — (pure data node) | Data(variant ndarray channels×samples), Channels(int), Samples(int), Fs(float) | device_name |
 
 Gtec 规则 (MUST):
-1. **InitGtecDevice 与 KillGtecDevice 强制成对出现** — validate_graph 静态检查会报错；
+1. **InitGtecDevice 与 KillGtecDevice 强制成对出现** — 引擎校验静态检查会报错；
    编辑器删除任一侧会级联删除另一侧。Kill 与 Init 通过 device_name 绑定
    (Kill 的 device_name 为空且仅 1 个 Init 时自动绑定)。
 2. Trigger 固定启用（16 条数字线合并为 1 个附加通道），无用户配置项。
@@ -164,7 +165,7 @@ Gtec 规则 (MUST):
 
 SigGen 规则 (MUST):
 1. **InitSigGenDevice 与 KillSigGenDevice 强制成对出现** — 与 Gtec 同一配对规则
-   (validate_graph 静态检查 + 编辑器删除级联; 绑定规则同 Gtec)。
+   (引擎校验静态检查 + 编辑器删除级联; 绑定规则同 Gtec)。
 2. 纯软件正弦源: 通道 i 频率 = frequency + i·freq_step Hz, 幅度 µV float32,
    noise_uv>0 时按 seed 叠加确定性高斯噪声 — 任意机器可跑, 无硬件依赖。
 3. 窗口缓冲 / GetSigGenData / Stop 保存语义与 Gtec 完全一致 (§Gtec 规则 4/5/6)。
@@ -175,6 +176,21 @@ SigGen 规则 (MUST):
 | type_name | input | output | notes |
 |-----------|-------|--------|-------|
 | ExitGame | exec_in | — | terminal, no output |
+
+### Media (动态媒体 — GIF/图像)
+| type_name | input | output | props |
+|-----------|-------|--------|-------|
+| ShowMedia | exec_in, Entity(entity_ref) | exec_out | — |
+
+ShowMedia 规则 (MUST):
+1. **编辑器侧编辑只是模板**（实体上 MediaPlayer 组件声明 source 等参数, 编辑器不播放）;
+   播放必须由本节点在图中正确接线才生效（PIE / 独立运行）。
+2. 目标实体: `Get Entity`(Name) → `Entity` ref → `ShowMedia.Entity`
+   （Entity 引脚未连 → 引擎校验报 media_pin_unconnected）。
+3. 驱动频率 = 接线频率: 挂 `OnFrameUpdate` 链 → 逐帧播放（推荐）;
+   挂 OnGameStart → 只推首帧。exec_in 未连仅警告（media_exec_unconnected）。
+4. 同一实体被多个 ShowMedia 驱动 → 引擎帧内自动去重（每帧只推进一次, 不加速）。
+5. 媒体播放状态（帧号/时钟）不序列化; 场景只存 MediaPlayer.source 等模板参数。
 
 ### Debug
 | type_name | input | output | props |
@@ -190,6 +206,41 @@ SigGen 规则 (MUST):
 - User nodes: start from **200**
 - Pin IDs: start from **10000**
 - Link IDs: start from **500**
+
+---
+
+## build_graph Spec
+
+`build_graph`（MCP）/ `build`（CLI）从**实验描述 spec** 自动生成整张图（OnGameStart
+初始化链 + OnFrameUpdate 计时/分支链）:
+
+```json
+{
+  "seed_dir": "Test/.../seed",
+  "seed_prefix": "MI-Seed",
+  "init_delay": 5.0,
+  "trials": 60,
+  "timer": "trial_phase",
+  "phases": [
+    {"time": 0, "type": "cue_pick",
+     "random": {"min": 1, "max": 2},
+     "branches": [
+       {"value": 1, "show": ["L_arrow_body", "L_arrow_head"], "parallel": 11},
+       {"value": 2, "show": ["R_arrow_head", "R_arrow_body"], "parallel": 12}
+     ]},
+    {"time": 2, "show": ["TaskCue"]},
+    {"time": 6, "hide": ["L_arrow_body", "L_arrow_head", "R_arrow_head", "R_arrow_body", "TaskCue"]},
+    {"time": 10, "type": "trial_end"}
+  ],
+  "entities": ["Cross", "LeftCue", "RightCue", "TaskCue"],
+  "pulse": null
+}
+```
+
+- `phases[].type`: `cue_pick`（随机分支 + show + 并行口触发） / `action|show` / `trial_end`（trial 计数 + 复位 timer）;
+- `pulse`（可选）: `{count, interval, timer, parallel_addr, serial_port, encode}` — 50ms 发送循环;
+- `entities[]` 先 spawn 后统一隐藏，由 phases 显隐控制；seed 链固定串在 OnGameStart 上;
+- CLI 等价: `python -m Utils.User.NodeEditor.cli build --spec spec.json --out graph.json`（--out 落盘只回摘要）。
 
 ---
 
@@ -239,18 +290,10 @@ ScalarMath.Result → VarSet("trigger_val", mode=pin)
 
 ## Validation
 
-```bash
-# Static check
-python Utils/User/NodeEditor/node_graph_validator.py <scene_path>
-
-# Static + dry-run N frames
-python Utils/User/NodeEditor/node_graph_validator.py <scene_path> --frames N
-
-# Programmatic
-from Utils.User.NodeEditor.graph_builder import GraphBuilder
-g = GraphBuilder()
-# ...build graph...
-report = g.validate(max_frames=37000)
-print(report.passed, report.dry_run)
-g.save("scenes/MyScene.scene")
-```
+- **引擎运行中（推荐）**: 引擎内校验服务 — Node Editor ▸ Validate 按钮 /
+  `engine_validate_graph`（editor MCP, lite 档）/ `engine-editor-cli validate`（终端;
+  `--source graph` 可先验 agent 生成的图，不用先导入画布）。
+- **无头 / CI**: `PlayerEntry --dry-run` 或 `Test/Application/NodeGraph/test_graph_validation.py`。
+- 旧离线路径说明（2026-10-05）: 本 MCP 的 `validate_graph` 工具已移除；
+  `node_graph_validator.py` / `GraphBuilder.validate()` 仅供旧脚本与单元测试复用，不再是推荐入口 —
+  校验的单一事实源是引擎内服务（`Doc/Dev/graph_validation_protocol.md`）。

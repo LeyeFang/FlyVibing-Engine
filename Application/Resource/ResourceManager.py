@@ -27,11 +27,13 @@ DEFAULT_MODEL_FILE = [
 ]
 DEFAULT_SHADER_NAME = [
     'Basic',
-    'SSVEP'
+    'SSVEP',
+    'Lighting'
 ]
 DEFAULT_SHADER_FILE = [
     ('Basic.vert', 'Basic.frag'),
     ('SSVEP.vert', 'SSVEP.frag'),
+    ('Lighting.vert', 'Lighting.frag'),
 ]
 DEFAULT_TEXTURE_NAME = [
     'Default',
@@ -146,6 +148,34 @@ class ResourceManager:
     ) -> int:
         """便捷方法: 导入纹理文件。等同于 LoadAssets(file_path, texture_name)。"""
         return cls.LoadAssets(file_path, texture_name)
+
+    @classmethod
+    def CreateTextureFromArray(
+        cls,
+        name: str,
+        image_data,
+        file_path: str = ""
+    ) -> int:
+        """程序化/动态纹理 — 从 np (H,W,1|3|4) uint8 数组创建 CPU 纹理并注册。
+
+        与 __load_texture_from_file 同构: loaded_texture[str(id)] = {'name','data','path'}。
+        用途: 媒体解码帧 (GIF/视频逐帧) 的动态纹理基础 (协议 Doc/Dev/media_protocol.md)。
+        """
+        import numpy as _np
+        arr = _np.asarray(image_data, dtype=_np.uint8)
+        if arr.ndim != 3 or arr.shape[2] not in (1, 3, 4):
+            raise ValueError(f"image_data 必须为 (H,W,1|3|4) uint8, 得到 {arr.shape}")
+        h, w, c = arr.shape
+        texture = Texture(image_data=arr, width=w, height=h,
+                          channels=c, file_path=file_path)
+        cls.texture_count += 1
+        current_id = cls.texture_count
+        cls.loaded_texture[f'{current_id}'] = {
+            'name': name,
+            'data': texture,
+            'path': file_path,
+        }
+        return current_id
 
     # ==============================================================
     # 着色器加载 (内部)
@@ -439,6 +469,8 @@ class ResourceManager:
         else:
             new_mat.name = f"{src.name}_copy"
         new_mat._is_saved = False
+        # ★ 克隆体不是内置材质 — 否则会被 _ensure_unique_material 视为模板反复克隆
+        new_mat.builtin_name = None
         cls.material_count += 1
         new_id = cls.material_count
         cls.loaded_material[f"{new_id}"] = new_mat
@@ -666,6 +698,26 @@ class ResourceManager:
         cls.loaded_material[f"{current_id}"] = material
         material.builtin_name = 'Default'
 
+        # ── DefaultLit: Lighting shader 材质 (默认 Cube 使用; 受方向光/环境光影响) ──
+        lighting_sid = None
+        for sid_str, entry in cls.loaded_shader.items():
+            if entry.get('name') == 'Lighting':
+                lighting_sid = int(sid_str)
+                break
+        if lighting_sid is None:
+            return
+        cls.material_count += 1
+        current_id = cls.material_count
+        lit_shader: Shader = cls.loaded_shader[f'{lighting_sid}']['data']
+        lit_material = Material(lighting_sid, lit_shader.uniforms_name_type)
+        lit_material.name = "DefaultLit"
+        lit_material.texture_id_list = [cls.GetDefaultTexture('Default')]
+        lit_material._is_saved = True
+        if 'uShininess' in lit_material.uniforms_data:
+            lit_material.uniforms_data['uShininess'] = 32.0
+        cls.loaded_material[f"{current_id}"] = lit_material
+        lit_material.builtin_name = 'DefaultLit'
+
     @classmethod
     def GetDefaultMaterial(cls) -> int:
         """返回默认材质 ID（所有新建 MeshRenderer 共享）。"""
@@ -673,6 +725,14 @@ class ResourceManager:
             if getattr(mat, 'name', '') == "Default":
                 return int(mid)
         return cls.NewMaterial()  # fallback
+
+    @classmethod
+    def GetBuiltinMaterial(cls, name: str) -> int:
+        """返回指定名称的内置材质 ID; 不存在时回退默认材质。"""
+        for mid, mat in cls.loaded_material.items():
+            if getattr(mat, 'name', '') == name:
+                return int(mid)
+        return cls.GetDefaultMaterial()
 
     @classmethod
     def __load_default_prefab(cls) -> None:
@@ -686,6 +746,7 @@ class ResourceManager:
             'DefaultCamera2D',
             'DefaultCameraOverlay',
             'DefaultCube',
+            'DefaultLight',
         ]
         for pname in default_prefabs:
             fpath = os.path.join(default_prefab_dir, f'{pname}.prefab')

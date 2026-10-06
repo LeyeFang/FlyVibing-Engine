@@ -60,6 +60,8 @@ class SceneManager:
         self._sid_map: dict[int, int] = {}     # scene-local sid → esper eid
         self._eid_to_sid: dict[int, int] = {}  # esper eid → scene-local sid
         self.game_type = GameType.GAME_3D
+        # ── 场景环境光 (RGB 0..1) — 渲染器每帧注入 uAmbient ──
+        self.ambient_color: tuple = (0.18, 0.18, 0.18)
 
         # ★ 组合子管理器
         self.entity_mgr = EntityManager(self)
@@ -94,15 +96,14 @@ class SceneManager:
         if engine_name == "EditorHost" and not inst.entities:
             inst.cam_mgr.create_defaults(inst)
             cls._create_default_cube(inst)
+            cls._create_default_light(inst)
 
-        # ── 首次 Init 时自动注册内置 Component ──
+        # ── 自动注册内置 Component ──
         # ★ 必须经由本引擎自己的 inst 注册（独立播放器无 EditorHost 实例,
         #   走 cls.RegisterComponent → _current() 会拿到 None → 崩溃;
         #   注册结果写入全局 _component_registry, 两种途径等价）
-        if not cls._component_registry:
-            inst.comp_mgr.register("Camera", Camera)
-            inst.comp_mgr.register("MeshRenderer", MeshRenderer)
-            inst.comp_mgr.register("Transform", Transform)
+        # ★ 单一注册源: ComponentRegistry.ensure_defaults() — 新增内置组件只改一处
+        inst.comp_mgr.ensure_defaults()
 
     @classmethod
     def _current(cls) -> 'SceneManager':
@@ -122,6 +123,24 @@ class SceneManager:
 
         for pid_str, pdata in ResourceManager.loaded_prefab.items():
             if pdata.get('name') == 'DefaultCube' and pdata.get('prefab_data') is not None:
+                created = PrefabManager.instantiate_to_scene(pdata['prefab_data'], inst)
+                # ★ 默认 Cube 挂 Lighting 材质 (让默认光源可见; 用户实体仍用默认 "Default" 材质)
+                if created:
+                    try:
+                        lit_id = ResourceManager.GetBuiltinMaterial('DefaultLit')
+                        inst.SetEntityMaterial(created[0], lit_id)
+                    except Exception:
+                        pass
+                return
+
+    @classmethod
+    def _create_default_light(cls, inst: 'SceneManager') -> None:
+        """创建默认 Sun (方向光, DefaultLight.prefab) — 默认场景即带光照。"""
+        from Application.Resource.ResourceManager import ResourceManager
+        from Application.Core.Scene.PrefabManager import PrefabManager
+
+        for pid_str, pdata in ResourceManager.loaded_prefab.items():
+            if pdata.get('name') == 'DefaultLight' and pdata.get('prefab_data') is not None:
                 PrefabManager.instantiate_to_scene(pdata['prefab_data'], inst)
                 return
 
@@ -137,6 +156,18 @@ class SceneManager:
     def CreateScene(self, new_scene_name: str) -> None:
         st = self
         st.scene[new_scene_name] = new_scene_name
+
+    # ============================================================
+    # 环境光 (场景级光照设置 — 渲染器每帧读取)
+    # ============================================================
+
+    def SetAmbientColor(self, r: float, g: float, b: float) -> None:
+        """设置场景环境光 (RGB 0..1) — 下一帧生效。"""
+        self.ambient_color = (float(r), float(g), float(b))
+
+    def GetAmbientColor(self) -> tuple:
+        """返回场景环境光 (RGB)。"""
+        return tuple(self.ambient_color)
 
     # ============================================================
     # GameType
@@ -304,23 +335,34 @@ class SceneManager:
 
     @staticmethod
     def _ensure_unique_material(st: 'SceneManager', entity_id: int, mr) -> None:
-        """若当前 material 被多个 entity 共享，则先 clone 一份给本 entity。
+        """确保修改 material 不污染其他 entity。
 
-        确保修改 material 属性（颜色/纹理/shader）时不会影响其他 entity。
+        两种情形先 clone 一份给本 entity 再改：
+          1. 当前 material 被多个 entity 共享；
+          2. 当前 material 是**内置材质模板**（builtin_name 非空，如 Default/
+             DefaultLit）——即使当前只有本 entity 引用它也不得就地修改，
+             否则会污染未来所有新建实体（live 演示逮到的真实 bug）。
         """
         from Application.Resource.ResourceManager import ResourceManager
         current_mid = mr.material_id
-        # 统计使用该 material 的 entity 数量
-        share_count = 0
-        for eid, other_mr in esper.get_component(MeshRenderer):
-            if other_mr.material_id == current_mid:
-                share_count += 1
-                if share_count > 1:
-                    break
-        if share_count <= 1:
-            return  # 独占，无需 clone
+        is_builtin = False
+        try:
+            mat = ResourceManager.GetMaterial(current_mid)
+            is_builtin = getattr(mat, 'builtin_name', None) is not None
+        except Exception:
+            pass
+        if not is_builtin:
+            # 统计使用该 material 的 entity 数量
+            share_count = 0
+            for eid, other_mr in esper.get_component(MeshRenderer):
+                if other_mr.material_id == current_mid:
+                    share_count += 1
+                    if share_count > 1:
+                        break
+            if share_count <= 1:
+                return  # 独占（非内置），无需 clone
 
-        # 多个 entity 共享 → clone
+        # 内置模板 / 多实体共享 → clone
         new_mid = ResourceManager.CloneMaterial(current_mid)
         mr.material_id = new_mid
         # 重新注册 GPU 资源（新 material 需要新 uniform buffer 等）

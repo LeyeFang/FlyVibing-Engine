@@ -20,6 +20,14 @@ from Application.Resource.ResourceManager import ResourceManager
 from Application.Core.Scene.SceneManager import SceneManager
 
 
+# ★ 逐实体上传时跳过的 uniform — model/view/projection 由渲染器管理,
+#   uLight*/uAmbient/uCameraPos 由光照帧状态注入 (协议: Doc/Dev/shader_protocol.md)
+_MATERIAL_SKIP_UNIFORMS = frozenset({
+    'model', 'view', 'projection',
+    'uAmbient', 'uCameraPos', 'uLightCount', 'uLightDir', 'uLightColor',
+})
+
+
 class OpenGLEntities:
     """PyOpenGL 实体渲染器 — 核心实体绘制管线。"""
 
@@ -40,9 +48,11 @@ class OpenGLEntities:
 
         has_outline = bool(r._outline_selected_ids)
         last_program: int = 0  # ★ 缓存最后使用的 shader program，避免冗余切换
+        lit_programs: set = set()  # ★ 已注入光照帧状态的 program (每帧/每 program 一次)
 
-        # ── 收集可渲染实体 ──
-        visible_entities: list[tuple[int, object]] = []
+        # ── 收集可渲染实体 + 材质 (不透明 / 透明分流) ──
+        opaque_items: list[tuple] = []   # (entity_id, entity, material)
+        alpha_items: list[tuple] = []    # (depth, entity_id, entity, material)
         for entity_id in r._resources._visible_entities:
             entity = r.registered_entities.get(entity_id)
             if entity is None:
@@ -54,12 +64,44 @@ class OpenGLEntities:
                 continue
             if entity.mesh_id not in r.registered_meshes:
                 continue
-            visible_entities.append((entity_id, entity))
+            try:
+                material = ResourceManager.GetMaterial(entity.material_id)
+            except Exception:
+                material = None
+            if material is not None and getattr(material, 'blend', 'opaque') == 'alpha':
+                # ★ 透明: 记录视图空间深度 (行向量约定: v_view = v_world @ view),
+                #   相机看向 -Z → -z 越大 = 越远 → 先画远的 (画家算法)
+                try:
+                    model = r.engine.scene.GetEntityModelMatrix(entity_id)
+                    p = np.asarray(model, dtype=np.float64)[3, :3]
+                    eye_z = float((np.array(
+                        [p[0], p[1], p[2], 1.0]) @ np.asarray(view, dtype=np.float64))[2])
+                except Exception:
+                    eye_z = 0.0
+                alpha_items.append((-eye_z, entity_id, entity, material))
+            else:
+                opaque_items.append((entity_id, entity, material))
 
-        # ★ 按 shader_id → material_id 排序，最大化 GPU 状态复用
-        visible_entities.sort(key=lambda item: (item[1].shader_id, item[1].material_id))
+        # ★ 不透明: 按 shader_id → material_id 排序，最大化 GPU 状态复用
+        opaque_items.sort(key=lambda it: (it[1].shader_id, it[1].material_id))
+        # ★ 透明: 由远到近 (画家算法; 不参与状态复用排序)
+        alpha_items.sort(key=lambda it: it[0], reverse=True)
 
-        for entity_id, entity in visible_entities:
+        # ── 光照帧状态 (面向所有带 Lighting 约定的 shader; 未声明者 no-op) ──
+        light_frame = self._collect_light_frame(view)
+
+        draw_seq = ([('opaque', it) for it in opaque_items]
+                    + [('alpha', it[1:]) for it in alpha_items])
+
+        blend_on = False
+        for phase, (entity_id, entity, material) in draw_seq:
+
+            # ★ 进入透明阶段: 开启混合 + 关闭深度写入 (保留深度测试)
+            if phase == 'alpha' and not blend_on:
+                gl.glEnable(gl.GL_BLEND)
+                gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+                gl.glDepthMask(gl.GL_FALSE)
+                blend_on = True
 
             if has_outline:
                 if entity_id in r._outline_selected_ids:
@@ -78,6 +120,11 @@ class OpenGLEntities:
                     r.registered_shaders, entity.shader_id, 'view', view)
                 OpenGLUtils.set_uniform_mat4(
                     r.registered_shaders, entity.shader_id, 'projection', proj)
+                # ★ 光照帧状态注入 (每 program 每帧一次; 对 Basic/SSVEP 等
+                #   未声明这些 uniform 的 shader 全部 no-op)
+                if program not in lit_programs:
+                    lit_programs.add(program)
+                    self._inject_lighting(entity.shader_id, light_frame)
 
             model = self._renderer.engine.scene.GetEntityModelMatrix(entity_id)
             OpenGLUtils.set_uniform_mat4(
@@ -89,13 +136,9 @@ class OpenGLEntities:
                     gl.glBindTexture(gl.GL_TEXTURE_2D, tex_data.gl_handle)
                     OpenGLUtils.set_uniform_int(
                         r.registered_shaders, entity.shader_id, 'uTexture', 0)
-            try:
-                material = ResourceManager.GetMaterial(entity.material_id)
-            except Exception:
-                material = None
             if material is not None:
                 for u_name, u_value in material.uniforms_data.items():
-                    if u_name in ('model', 'view', 'projection'):
+                    if u_name in _MATERIAL_SKIP_UNIFORMS:
                         continue
                     OpenGLUtils.set_uniform_value(
                         r.registered_shaders, entity.shader_id, u_name, u_value)
@@ -109,6 +152,11 @@ class OpenGLEntities:
             )
             gl.glBindVertexArray(0)
 
+        # ── 恢复透明阶段状态 ──
+        if blend_on:
+            gl.glDepthMask(gl.GL_TRUE)
+            gl.glDisable(gl.GL_BLEND)
+
         # ── 恢复 stencil mask ──
         if has_outline:
             gl.glStencilMask(0xFF)
@@ -116,3 +164,70 @@ class OpenGLEntities:
         # ── 解绑 FBO (回到默认帧缓冲) ──
         if target_fbo:
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+
+    # ════════════════════════════════════════════════════════════
+    # 光照帧状态 (Lighting 约定 — 协议: Doc/Dev/shader_protocol.md)
+    # ════════════════════════════════════════════════════════════
+
+    def _collect_light_frame(self, view: np.ndarray) -> dict:
+        """每帧收集一次场景光照状态 (环境光 + 至多 4 个方向光)。
+
+        - 方向光取实体 Transform 的局部 -Z 前向 → 世界空间传播方向
+        - 颜色 × 强度 合并为 uLightColor
+        """
+        r = self._renderer
+        try:
+            st = r.engine.scene
+        except Exception:  # noqa: BLE001
+            st = None
+        ambient = np.array(
+            getattr(st, 'ambient_color', (0.18, 0.18, 0.18)), dtype=np.float32)
+        # 相机世界坐标 (行向量约定: 相机位 = inv(view) 的平移行)
+        try:
+            cam_pos = np.linalg.inv(
+                np.asarray(view, dtype=np.float64))[3, :3].astype(np.float32)
+        except Exception:  # noqa: BLE001
+            cam_pos = np.zeros(3, dtype=np.float32)
+        dirs = np.zeros((4, 3), dtype=np.float32)
+        colors = np.zeros((4, 3), dtype=np.float32)
+        count = 0
+        if st is not None:
+            try:
+                from Application.Core.Scene.BasicComponents import DirectionalLight
+                for eid, light in st.GetAllEntitiesWithComponent(DirectionalLight):
+                    if count >= 4:
+                        break
+                    try:
+                        model = np.asarray(
+                            st.GetEntityModelMatrix(eid), dtype=np.float64)
+                    except Exception:  # noqa: BLE001
+                        continue
+                    d = -model[2, :3]  # 局部 -Z 前向 → 世界空间光线传播方向
+                    norm = float(np.linalg.norm(d))
+                    d = np.array([0.0, -1.0, 0.0]) if norm < 1e-8 else d / norm
+                    dirs[count] = d.astype(np.float32)
+                    inten = float(getattr(light, 'intensity', 1.0))
+                    colors[count] = np.array([
+                        float(getattr(light, 'color_r', 1.0)) * inten,
+                        float(getattr(light, 'color_g', 1.0)) * inten,
+                        float(getattr(light, 'color_b', 1.0)) * inten,
+                    ], dtype=np.float32)
+                    count += 1
+            except Exception:  # noqa: BLE001 — 组件未注册时保持无光
+                pass
+        return {
+            'ambient': ambient,
+            'camera_pos': cam_pos,
+            'dirs': dirs,
+            'colors': colors,
+            'count': count,
+        }
+
+    def _inject_lighting(self, shader_id: int, frame: dict) -> None:
+        """将光照帧状态写入当前 shader — 未声明的 uniform 自动 no-op。"""
+        sh = self._renderer.registered_shaders
+        OpenGLUtils.set_uniform_vec3(sh, shader_id, 'uAmbient', frame['ambient'])
+        OpenGLUtils.set_uniform_vec3(sh, shader_id, 'uCameraPos', frame['camera_pos'])
+        OpenGLUtils.set_uniform_int(sh, shader_id, 'uLightCount', frame['count'])
+        OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uLightDir', frame['dirs'], 4)
+        OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uLightColor', frame['colors'], 4)

@@ -3,18 +3,21 @@ r"""
 Engine Editor Live MCP — 一键安装（跨平台）。
 
 用法（dev 仓库）:
-  .venv-py314t\\Scripts\\python.exe Utils/User/EditorMcp/install_mcp.py
-  .venv-py314t\\Scripts\\python.exe Utils/User/EditorMcp/install_mcp.py --uninstall
+  .venv-py314t\Scripts\python.exe Utils/User/EditorMcp/install_mcp.py                # 默认 lite 档（5 精简工具, 省 token）
+  .venv-py314t\Scripts\python.exe Utils/User/EditorMcp/install_mcp.py --profile full # 旧 44 工具档
+  .venv-py314t\Scripts\python.exe Utils/User/EditorMcp/install_mcp.py --uninstall
 
 用法（安装版 / 零外部 Python）:
-  Resource\\runtime\\python3.14t.exe Utils\\User\\EditorMcp\\install_mcp.py
+  Resource\runtime\python3.14t.exe Utils\User\EditorMcp\install_mcp.py
 
-注册到工作区 .vscode/mcp.json（名称: engine-editor-live）。
+注册到工作区 .vscode/mcp.json（名称: engine-editor-live）并把 engine-editor Skill
+同步到 <仓库>/.github/skills/engine-editor/（渐进披露; 编辑器内 AI 直接可用）。
 安装后需重载 VS Code 窗口（或 MCP: List Servers → 重启）才能被 agent 看到。
 """
 
 import json
 import os
+import shutil
 import sys
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -54,7 +57,27 @@ def _write_config(path: str, config: dict) -> None:
         json.dump(config, f, indent=2, ensure_ascii=False)
 
 
-def install() -> int:
+def _skill_source() -> str:
+    return os.path.join(PROJECT_DIR, "Utils", "User", "EditorMcp", "src", "engine_editor_mcp", "skills", "engine-editor")
+
+
+def _skill_dest() -> str:
+    return os.path.join(PROJECT_DIR, ".github", "skills", "engine-editor")
+
+
+def _sync_skill() -> None:
+    """把 Skill（含 references）同步到仓库 .github/skills/（渐进披露, agent 按需加载）。"""
+    src, dest = _skill_source(), _skill_dest()
+    if not os.path.isdir(src):
+        print("  ! skill payload missing:", src)
+        return
+    shutil.rmtree(dest, ignore_errors=True)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    shutil.copytree(src, dest)
+    print(f"  ✓ skill 已同步 → {dest}")
+
+
+def install(profile: str = "lite") -> int:
     print("=" * 50)
     print("  Engine Editor Live MCP — Install")
     print("=" * 50)
@@ -72,17 +95,19 @@ def install() -> int:
     config["servers"][SERVER_NAME] = {
         "type": "stdio",
         "command": _python_command(),
-        "args": ["-m", "Utils.User.EditorMcp.mcp_server"],
+        "args": ["-m", "Utils.User.EditorMcp.mcp_server", "--profile", profile],
         "cwd": PROJECT_DIR,
     }
     _write_config(config_path, config)
-    print(f"  ✓ 注册 '{SERVER_NAME}' → {config_path}")
-    print(f"    command: {_python_command()} -m Utils.User.EditorMcp.mcp_server")
+    print(f"  ✓ 注册 '{SERVER_NAME}'（profile={profile}） → {config_path}")
+    print(f"    command: {_python_command()} -m Utils.User.EditorMcp.mcp_server --profile {profile}")
 
     server_src = os.path.join(PROJECT_DIR, "Utils", "User", "EditorMcp", "mcp_server.py")
     print(f"  ✓ mcp_server.py: {'found' if os.path.isfile(server_src) else 'MISSING!'}")
+    _sync_skill()
     print()
     print("下一步: 重载 VS Code 窗口（或 Command Palette → 'MCP: List Servers' 重启）")
+    print("提示: lite 档 = 5 个精简工具（省 token）; 需要旧 44 工具用 --profile full")
     return 0
 
 
@@ -94,8 +119,17 @@ def uninstall() -> int:
         print(f"  ✓ 已移除 '{SERVER_NAME}'")
     else:
         print(f"  - '{SERVER_NAME}' 未注册")
+    dest = _skill_dest()
+    if os.path.isdir(dest):
+        shutil.rmtree(dest, ignore_errors=True)
+        print(f"  ✓ 已移除 skill: {dest}")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(uninstall() if "--uninstall" in sys.argv else install())
+    _profile = "lite"
+    if "--profile" in sys.argv:
+        _i = sys.argv.index("--profile")
+        if _i + 1 < len(sys.argv):
+            _profile = sys.argv[_i + 1]
+    sys.exit(uninstall() if "--uninstall" in sys.argv else install(_profile))

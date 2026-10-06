@@ -37,6 +37,7 @@ from Application.Core.Renderer.OpenGL.OpenGLPickSystem import OpenGLPickSystem
 from Application.Core.Renderer.OpenGL.OpenGLOverlays import OpenGLOverlays
 from Application.Core.Renderer.OpenGL.OpenGLEntities import OpenGLEntities
 from Application.Core.Renderer.OpenGL.OpenGLPostProcess import OpenGLPostProcess
+from Application.Core.Renderer.OpenGL.OpenGLRenderTargets import OpenGLRenderTargets
 
 
 class OpenGLRenderer(Renderer, RenderResourceManger):
@@ -82,10 +83,12 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
         self._entity = OpenGLEntities(self)
         self._overlay = OpenGLOverlays(self)
         self._post = OpenGLPostProcess(self)
+        self._targets = OpenGLRenderTargets(self)
         # ── 本层状态 ──
         self._pre_overlay_callbacks: list[Callable] = []
         self._scene_fbo_override: int = 0
         self._outline_selected_ids: set[int] = set()
+        self._scene_target_id: int = 0   # 0 = 屏幕; >0 = 重定向到 RT
 
     def register_pre_overlay_callback(self, callback: Callable) -> None:
         """注册实体渲染前回调。
@@ -134,6 +137,22 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
         # ── 相机矩阵由逻辑线程通过 SetViewProjectionCommand 推送 ──
         # ── 初始化拾取系统 ──
         instance._pick.init_pick(window_size[0], window_size[1])
+        # ── 后端信息采集（必须在渲染线程 + 上下文有效时; op 只读消费） ──
+        try:
+            from OpenGL import GL as _gl
+
+            def _s(name):
+                v = _gl.glGetString(name)
+                return v.decode("utf-8", "replace") if isinstance(v, bytes) else str(v)
+
+            instance.gl_info = {
+                "vendor": _s(_gl.GL_VENDOR),
+                "renderer": _s(_gl.GL_RENDERER),
+                "version": _s(_gl.GL_VERSION),
+                "glsl": _s(_gl.GL_SHADING_LANGUAGE_VERSION),
+            }
+        except Exception:  # noqa: BLE001 — 信息采集失败不影响渲染
+            instance.gl_info = {}
         # ── 初始化命令队列 ──
         instance._command_queue = CommandQueue()
         return instance
@@ -159,20 +178,34 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
         if proj is None:
             proj = np.identity(4, dtype=np.float32)
         vp_w, vp_h = self.viewport_width, self.viewport_height
-        # ── 1. 清屏 ──
-        self._core.clear_frame()
-        # ── 2. Entity pick + overlay pick ──
-        self._pick._render_entities_pick_pass(view, proj)
-        self._pick._render_overlays_pick_pass(view, proj, vp_w, vp_h)
-        # ── 3. Pre-overlay callbacks (FBO 创建 / stencil 预设) ──
-        for cb in self._pre_overlay_callbacks:
-            cb(view, proj, vp_w, vp_h)
-        # ── 4. 实体渲染 (可能重定向到 Scene FBO) ──
-        self._entity.render_entities(view, proj)
-        # ── 5. 后处理管线 ──
-        self._post._render_post_process(view, proj)
-        # ── 6. 统一 overlay 入口 ──
-        self._render_all_overlays(view, proj)
+        # ── 0. 场景渲染目标 (RT) — 激活时全帧输出重定向 ──
+        rt = self._targets.get(self._scene_target_id)
+        if rt is not None:
+            from OpenGL import GL as gl
+            gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, rt['fbo'])
+            gl.glViewport(0, 0, rt['width'], rt['height'])
+        try:
+            # ── 1. 清屏 ──
+            self._core.clear_frame()
+            # ── 2. Entity pick + overlay pick (RT 激活时跳过 — 拾取面向屏幕) ──
+            if rt is None:
+                self._pick._render_entities_pick_pass(view, proj)
+                self._pick._render_overlays_pick_pass(view, proj, vp_w, vp_h)
+            # ── 3. Pre-overlay callbacks (FBO 创建 / stencil 预设) ──
+            for cb in self._pre_overlay_callbacks:
+                cb(view, proj, vp_w, vp_h)
+            # ── 4. 实体渲染 (可能重定向到 Scene FBO) ──
+            self._entity.render_entities(view, proj)
+            # ── 5. 后处理管线 ──
+            self._post._render_post_process(view, proj)
+            # ── 6. 统一 overlay 入口 ──
+            self._render_all_overlays(view, proj)
+        finally:
+            # ── 7. 恢复屏幕帧缓冲 + 视口 ──
+            if rt is not None:
+                from OpenGL import GL as gl
+                gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+                gl.glViewport(0, 0, self.viewport_width, self.viewport_height)
 
     def EndFrame(self) -> None:
         pass
@@ -191,6 +224,10 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
         self._resources._unregister_all_entities()
         self._resources._unregister_all_overlays()
         self._post.unregister_highlight_effect()
+        # ── 渲染目标: 销毁所有 RT (GL 对象 + 注册表条目) ──
+        for _rt_id in list(self._targets.targets.keys()):
+            self._targets.destroy(_rt_id)
+        self._scene_target_id = 0
         self._pre_overlay_callbacks.clear()
         self._outline_selected_ids.clear()
         self._scene_fbo_override = 0
@@ -242,6 +279,11 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
     def register_texture(self, texture, texture_id: int) -> None:
         self._resources.register_texture(texture, texture_id)
 
+    def update_texture_data(self, texture_id: int, image_data, width: int,
+                            height: int, channels: int) -> None:
+        """动态纹理整帧重传 (媒体播放; 见 TextureUpdateCommand)。"""
+        self._resources.update_texture_data(texture_id, image_data, width, height, channels)
+
     def unregister_mesh(self, mesh_id: int) -> None:
         self._resources.unregister_mesh(mesh_id)
 
@@ -283,6 +325,30 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
 
     def update_highlight_selection(self, selected_ids: set) -> None:
         self._post.update_highlight_selection(selected_ids)
+
+    def update_highlight_config(self, color=None, width=None, xray=None) -> None:
+        """更新轮廓渲染参数（不重建 GPU 资源）— UpdateHighlightConfigCommand 桥接。"""
+        self._post.update_highlight_config(color=color, width=width, xray=xray)
+
+    # ════════════════════════════════════════════════════════════
+    # 桥接: OpenGLRenderTargets (离屏渲染目标 / FBO)
+    # ════════════════════════════════════════════════════════════
+
+    def create_render_target(
+        self, rt_id: int, width: int, height: int, with_depth: bool = True) -> None:
+        """创建渲染目标 — CreateRenderTargetCommand 桥接。"""
+        self._targets.create(rt_id, width, height, with_depth=with_depth)
+
+    def destroy_render_target(self, rt_id: int) -> None:
+        """销毁渲染目标 — DestroyRenderTargetCommand 桥接。"""
+        self._targets.destroy(rt_id)
+
+    def set_scene_target(self, rt_id: int) -> None:
+        """设置场景渲染目标 — SetSceneTargetCommand 桥接 (0 = 屏幕)。"""
+        rt_id = int(rt_id)
+        if rt_id != 0 and rt_id not in self._targets.targets:
+            raise ValueError(f"render target not found: {rt_id}")
+        self._scene_target_id = rt_id
 
     def _init_highlight(self, config) -> None:
         self._post._init_highlight(config)

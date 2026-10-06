@@ -17,6 +17,8 @@ class SimulationController:
 
     _state: SimulationState = SimulationState.STOPPED
     _pending_start: bool = False
+    # 上次 PIE 启动失败原因 (章 T M2: 显式错误态; sim.state 可查) — 成功启动时清空
+    last_error: str = ""
     _pending_stop: bool = False
 
     # ── 状态查询 ────────────────────────────────────────────
@@ -50,14 +52,22 @@ class SimulationController:
 
     @staticmethod
     def _sync_ecs_to_scene(scene, scene_mgr=None) -> None:
-        """将 ECS 世界中的实体同步到 Scene.entities 注册表。"""
+        """将 ECS 世界中的实体同步到 Scene.entities 注册表（PIE 模板来源）。
+
+        白名单组件随模板进入运行时（EntitySpawn 实例化携带）:
+        Transform / Camera / MeshRenderer / MediaPlayer / DirectionalLight。
+        """
         import copy
-        from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
+        from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer, MediaPlayer, DirectionalLight
         from Application.Core.Scene.Scene import EntityData
 
         if scene_mgr is None:
             from Application.Core.Scene.SceneManager import SceneManager
             scene_mgr = SceneManager
+
+        # ★ 场景环境光随模板同步 (光照帧状态来源; 协议: Doc/Dev/shader_protocol.md)
+        scene.ambient_color = tuple(
+            getattr(scene_mgr, 'ambient_color', (0.18, 0.18, 0.18)))
 
         _sys_ids = {
             scene_mgr.get_main_camera_id(),
@@ -79,6 +89,16 @@ class SimulationController:
             try:
                 mr = scene_mgr.GetComponent(eid, MeshRenderer)
                 comps["MeshRenderer"] = copy.deepcopy(mr)
+            except Exception:
+                pass
+            try:
+                mp = scene_mgr.GetComponent(eid, MediaPlayer)
+                comps["MediaPlayer"] = copy.deepcopy(mp)
+            except Exception:
+                pass
+            try:
+                dl = scene_mgr.GetComponent(eid, DirectionalLight)
+                comps["DirectionalLight"] = copy.deepcopy(dl)
             except Exception:
                 pass
             scene.entities[eid] = EntityData(name=name, components=comps, parent_id=parent_id)
@@ -157,6 +177,7 @@ class SimulationController:
         if cls._state != SimulationState.STOPPED:
             return
         cls._pending_start = True
+        cls.last_error = ""
         EngineLifecycleEvent.Pack(
             stage="simulation", message="Play requested (pending)", engine=EditorHost
         )
@@ -230,11 +251,27 @@ class SimulationController:
 
         # ── 统一后端: PIE 使用与编辑器相同的窗口/渲染器类型 ──
         #     若 EditorHost 未初始化 (如测试环境), 回退到 GLFW + OpenGL
-        GameRuntime.start(
-            window_type=EditorHost.window_type or WindowType.GLFW,
-            renderer_type=EditorHost.renderer_type or RendererType.OpenGL
-        )
-        # ★ PIE 启动完成
+        try:
+            # READY 屏障在 GameRuntime.start 内等待 (层挂载/内容注册完成才算启动)
+            GameRuntime.start(
+                window_type=EditorHost.window_type or WindowType.GLFW,
+                renderer_type=EditorHost.renderer_type or RendererType.OpenGL
+            )
+        except Exception as e:
+            # ★ 章 T M2: 显式错误态 — 不再静默"启动但没内容"
+            cls.last_error = f"{type(e).__name__}: {e}"
+            cls._state = SimulationState.STOPPED
+            GameRuntime.clear_host_bridge()
+            EngineLifecycleEvent.Pack(
+                stage="exception",
+                message=f"PIE start FAILED: {cls.last_error}",
+                engine=EditorHost,
+            )
+            import traceback as _tb
+            _tb.print_exc()
+            print(f"[Simulation] PIE start failed — state=Stopped ({cls.last_error})")
+            return
+        # ★ PIE 启动完成 (层已挂载 — READY 屏障已过)
         cls._state = SimulationState.RUNNING
         EngineLifecycleEvent.Pack(
             stage="simulation", message="Runtime started", engine=EditorHost

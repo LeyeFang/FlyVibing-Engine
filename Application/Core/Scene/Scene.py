@@ -97,6 +97,10 @@ class Scene:
     # 游戏类型 — 决定默认摄像机系统和可用节点
     game_type: GameType = GameType.GAME_3D
 
+    # ── 场景光照: 环境光 (RGB, 0..1) — 渲染器每帧注入 uAmbient ──
+    #    协议: Doc/Dev/shader_protocol.md (Lighting 约定)
+    ambient_color: tuple = (0.18, 0.18, 0.18)
+
     # {scene-local entity id: EntityData}  — 稳定 ID, 不随 esper 重分配变化
     entities: dict[int, EntityData] = field(default_factory=dict)
 
@@ -353,6 +357,7 @@ class Scene:
         result: dict = {
             "name": self.name,
             "game_type": self.game_type.value,
+            "ambient_color": list(self.ambient_color),
             "entities": entities_dict,
             "main_camera_entity_id": self.main_camera_entity_id,
             "next_eid": self._next_sid,
@@ -389,6 +394,13 @@ class Scene:
             scene.game_type = GameType(gt_raw)
         except ValueError:
             scene.game_type = GameType.GAME_3D
+
+        # ── 恢复环境光 ──
+        try:
+            amb = data.get("ambient_color", (0.18, 0.18, 0.18))
+            scene.ambient_color = tuple(float(v) for v in amb[:3])
+        except Exception:
+            scene.ambient_color = (0.18, 0.18, 0.18)
 
         for eid_str, ed_data in data.get("entities", {}).items():
             eid = int(eid_str)

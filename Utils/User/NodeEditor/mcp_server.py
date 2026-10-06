@@ -1,20 +1,26 @@
 """
-MCP Server — Node Graph Editor Tools for AI Agents.
+MCP Server — Node Graph 工具（v0.2.0: 精简 4 工具 + 渐进披露, 省 token）。
 
-Exposes 5 tools:
-  - get_rules          → 返回节点类型参考文档
-  - get_scene_entities → 读取 scene 文件的实体列表
-  - build_graph        → 从实验 spec JSON 构建节点图
-  - validate_graph     → [已弃用] 校验已内化为引擎服务（见函数说明）
-  - apply_graph        → 注入节点图到 scene 文件
+Tools:
+  - get_rules(section="")   → 参考文档目录 / 单节 / 全文（默认只回目录 ~1.4k 字符）
+  - get_scene_entities      → 读取 .scene 实体列表
+  - build_graph(spec)       → 实验 spec → 节点图 JSON（spec 见 get_rules("build_graph Spec")）
+  - apply_graph             → 将节点图注入 .scene 文件
+
+CLI（等价的终端通道, 零常驻上下文成本）:
+  python -m Utils.User.NodeEditor.cli rules|entities|build|apply ...
+
+校验: 图校验已内化为引擎服务 — 引擎运行中: engine-editor MCP `engine_validate_graph` /
+`engine-editor-cli validate`; 无头环境: PlayerEntry --dry-run。
+旧 `validate_graph` 工具已于 2026-10-05 移除（曾仅返回弃用指针）。
 
 启动方式:
-  python Utils/User/NodeEditor/mcp_server.py
-  fastmcp run Utils/User/NodeEditor/mcp_server.py
+  python -m Utils.User.NodeEditor.mcp_server
 """
 
-import json, os, sys
-from typing import Any
+import json
+import os
+import sys
 
 # ── 确保项目根在 sys.path ──
 _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -23,7 +29,10 @@ if _project_root not in sys.path:
 
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("Node Graph Editor", version="0.1.0")
+from Utils.User.NodeEditor import rule_sections
+from Utils.User.NodeEditor.spec_builder import build_experiment_graph
+
+mcp = FastMCP("Node Graph Editor", version="0.2.0")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -31,28 +40,29 @@ mcp = FastMCP("Node Graph Editor", version="0.1.0")
 # ═══════════════════════════════════════════════════════════════
 
 @mcp.tool()
-def get_rules() -> str:
-    """获取节点图完整参考文档（节点类型、连接规则、执行模型、常见模式）。
+def get_rules(section: str = "") -> str:
+    """节点图参考（渐进披露, 默认只回目录 — 省 token）。
 
-    Agent 在构建节点图之前必须调用此工具，了解所有可用节点类型及其引脚定义。
+    无参 = 目录（各节标题与规模）; section="<标题>" 取该节（子标题可单独取, 如 "Gtec"）;
+    section="all" = 全文。CLI: python -m Utils.User.NodeEditor.cli rules
     """
-    rules_path = os.path.join(os.path.dirname(__file__), "rules.md")
-    if os.path.exists(rules_path):
-        with open(rules_path, "r", encoding="utf-8") as f:
-            return f.read()
-    return "ERROR: rules.md not found"
+    try:
+        if not section or section.strip().lower() in ("outline", "list"):
+            return rule_sections.outline()
+        if section.strip().lower() in ("all", "full"):
+            return rule_sections.load_rules()
+        body = rule_sections.section(section)
+    except OSError as e:
+        return f"ERROR: rules.md not readable: {e}"
+    if body is None:
+        titles = ", ".join(f'"{t}"' for t in rule_sections.section_titles())
+        return f"unknown section: {section!r} — 可用: {titles}\n（无参调用 get_rules() 看目录）"
+    return body
 
 
 @mcp.tool()
 def get_scene_entities(scene_path: str) -> dict:
-    """读取 .scene 文件，返回实体名列表和 entity ID 映射。
-
-    Args:
-        scene_path: .scene 文件路径 (相对或绝对)
-
-    Returns:
-        {entities: [{id, name, components, parent_id}, ...], total: N}
-    """
+    """读取 .scene 文件 → 实体列表 [{id, name, components, parent_id}]（相对路径基于仓库根）。"""
     if not os.path.isabs(scene_path):
         scene_path = os.path.join(_project_root, scene_path)
     if not os.path.exists(scene_path):
@@ -77,273 +87,17 @@ def get_scene_entities(scene_path: str) -> dict:
 
 
 @mcp.tool()
-def build_graph(scene_path: str, experiment_spec: dict) -> dict:
-    """从实验描述 spec 构建完整节点图 JSON。
+def build_graph(experiment_spec: dict) -> dict:
+    """实验 spec → 节点图 JSON（构建前读 get_rules(section="build_graph Spec")）。
 
-    spec 结构:
-    {
-        "seed_dir": "Test/.../seed",       // 种子保存路径
-        "seed_prefix": "MI-Seed",          // 种子文件名前缀
-        "init_delay": 5.0,                 // 初始延迟 (秒)
-        "trials": 60,                      // trial 总数
-        "timer": "trial_phase",            // 主计时器名
-        "phases": [
-            {"time": 0, "type": "cue_pick",
-             "random": {"min": 1, "max": 2},
-             "branches": [
-                 {"value": 1, "show": ["L_arrow_body","L_arrow_head"], "parallel": 11},
-                 {"value": 2, "show": ["R_arrow_head","R_arrow_body"], "parallel": 12}
-             ]},
-            {"time": 2, "show": ["TaskCue"]},
-            {"time": 6, "hide": ["L_arrow_body","L_arrow_head","R_arrow_head","R_arrow_body","TaskCue"]},
-            {"time": 10, "type": "trial_end"}
-        ],
-        "entities": ["Cross","LeftCue","RightCue","TaskCue"],
-        "pulse": null  // 可选: {count: 80, interval: 0.05, timer: "pulse",
-                        //         parallel_addr: 0x3FF8, serial_port: "COM3",
-                        //         encode: "MI<<6|SSSEP"}  // 可选 trigger 编码
-    }
-
-    Returns:
-        {graph: {...}, node_count: N, link_count: M} 或 {error: "..."}
+    Returns: {graph, node_count, link_count}。v0.2.0: 移除未使用的 scene_path 参数（历史遗留）。
     """
-    from Utils.User.NodeEditor.graph_builder import GraphBuilder
-
-    g = GraphBuilder()
-    GS, FU, GP = g.event_nodes()
-
-    # ── 种子链 ──
-    seed_dir = experiment_spec.get("seed_dir", "Test/Project/seed")
-    seed_prefix = experiment_spec.get("seed_prefix", "Seed")
-    date_format = f"{seed_prefix}-%Y-%m-%d-%H-%M"
-    s = g.seed_chain(seed_dir, date_format)
-    rs, vsd, tfw, pv, td = s
-    g.link(GS, "exec", rs, "exec_in")
-
-    # ── 实体生成 + 初始隐藏 ──
-    template_names = experiment_spec.get("entities", [])
-    if template_names:
-        sp = g.spawn(*template_names)
-        g.chain(tfw, *sp)
-
-    # 收集所有需隐藏的实体名 (从 phases[0].branches 和 phases[6].hide)
-    all_show_entities = set()
-    for phase in experiment_spec.get("phases", []):
-        for en in phase.get("show", []):
-            all_show_entities.add(en)
-        for en in phase.get("hide", []):
-            all_show_entities.add(en)
-        for br in phase.get("branches", []):
-            for en in br.get("show", []):
-                all_show_entities.add(en)
-
-    init_hide_names = sorted(all_show_entities)
-    if init_hide_names:
-        hide_entry, hide_exit = g.hide(*init_hide_names)
-        if template_names:
-            g.link(sp[-1], "exec_out", hide_entry, "exec_in")
-        last_node = hide_exit
-    elif template_names:
-        last_node = sp[-1]
-    else:
-        last_node = tfw
-
-    # ── 变量 ──
-    init_delay = experiment_spec.get("init_delay", 5.0)
-    timer_name = experiment_spec.get("timer", "trial_phase")
-    var_node = g.var_set("trial", 1)
-    g.chain(last_node, var_node)
-    last_node = var_node
-
-    # ── Timer ──
-    nt, st = g.timer(timer_name, -init_delay)
-    g.chain(last_node, nt)
-    last_node = st
-
-    # ── 解析 phases ──
-    phases = experiment_spec.get("phases", [])
-    phase_times = [p["time"] for p in phases]
-    has_pulse = bool(experiment_spec.get("pulse"))
-
-    # Sequence 扇出数
-    num_fanouts = len(phase_times) + (1 if has_pulse else 0)
-    seq_pin_names = ["exec_in"] + [f"out_{i}" for i in range(num_fanouts)]
-    seq = g.node("Sequence", seq_pin_names)
-    g.link(FU, "exec", seq, "exec_in")
-
-    # TimeTrigger
-    tts = g.time_triggers(timer_name, *phase_times)
-    for i, tt in enumerate(tts):
-        g.link(seq, f"out_{i}", tt, "exec_in")
-
-    # Pulse
-    pulse_tt = None
-    pulse_entry = None
-    if has_pulse:
-        p_spec = experiment_spec["pulse"]
-        pulse_count = p_spec.get("count", 80)
-        pulse_interval = p_spec.get("interval", 0.05)
-        pulse_timer = p_spec.get("timer", "pulse")
-        pulse_addr = p_spec.get("parallel_addr", 0x3FF8)
-        pulse_port = p_spec.get("serial_port", "COM3")
-        encode_mode = p_spec.get("encode")
-
-        # pulse timer setup (在 OnGameStart)
-        nt2 = g.node("NewTimer", ["exec_in", "exec_out", "Name"],
-                     {"mode": "manual", "timer_name": pulse_timer})
-        g.chain(last_node, nt2)
-        last_node = nt2
-
-        # pulse TT
-        pulse_tt = g.time_triggers(pulse_timer, 0)[0]
-        g.link(seq, f"out_{len(phase_times)}", pulse_tt, "exec_in")
-
-        # pulse loop: VarGet("pulse_count") → Compare(lt, N) → Branch → send → inc → rearm
-        vg_pc = g.var_get("pulse_count")
-        cmp80 = g.compare("lt")
-        c80 = g.constant(pulse_count)
-        g.link(vg_pc, "Value", cmp80, "A")
-        g.link(c80, "Result", cmp80, "B")
-        br_p = g.branch_on((cmp80, "Result"))
-        g.chain(vg_pc, br_p)
-
-        # send
-        vg_tg = g.var_get("trigger_val")
-        ps = g.parallel_send(pulse_addr, (vg_tg, "Value"))
-        chain_nodes = [ps]
-
-        if pulse_port:
-            vg_ss = g.var_get("sss_code")
-            ss = g.serial_send(pulse_port, 115200, (vg_ss, "Value"))
-            chain_nodes.append(ss)
-
-        # inc counter
-        vg_pc2 = g.var_get("pulse_count")
-        sm_pc = g.scalar_math("sum", (vg_pc2, "Value"), (g.constant(1), "Result"))
-        vs_pc = g.var_set_pin("pulse_count", (sm_pc, "Result"))
-        chain_nodes.extend([vg_pc2, vs_pc])
-
-        # rearm
-        st_arm = g.node("SetTimer", ["exec_in", "exec_out", "Value"],
-                        {"operate": "set_time", "mode": "manual",
-                         "timer_name": pulse_timer, "value": -pulse_interval})
-        chain_nodes.append(st_arm)
-
-        g.chain(*chain_nodes)
-        g.link(pulse_tt, "out_0", vg_pc, "exec_in")
-        g.link(br_p, "True", ps, "exec_in")
-        pulse_entry = vg_pc
-
-    # ── 各 phase ──
-    for i, phase in enumerate(phases):
-        tt = tts[i]
-        ptype = phase.get("type", "action")
-
-        if ptype == "cue_pick":
-            # 随机 + 分支
-            r = phase["random"]
-            rand = g.random_discrete(r["min"], r["max"])
-            branches = phase.get("branches", [])
-
-            prev_br = None
-            prev_false = None
-            for bi, br_data in enumerate(branches):
-                cmp = g.compare("eq")
-                c_val = g.constant(br_data["value"])
-                g.link(rand, "Result", cmp, "A")
-                g.link(c_val, "Result", cmp, "B")
-                br = g.branch_on((cmp, "Result"))
-
-                # show chain
-                show_names = br_data.get("show", [])
-                if show_names:
-                    show_entry, show_exit = g.show(*show_names)
-                else:
-                    show_entry = show_exit = g.node("VarSet",
-                        ["exec_in", "exec_out", "Name", "Value"],
-                        {"mode": "manual", "var_name": "_dummy", "value": 0})
-
-                # parallel send
-                par_val = br_data.get("parallel")
-                if par_val is not None:
-                    ps = g.parallel_send(pulse_addr,
-                        (g.constant(par_val), "Result"))
-                    g.chain(show_exit, ps)
-                    branch_exit = ps
-                else:
-                    branch_exit = show_exit
-
-                if bi == 0:
-                    g.link(tt, "out_0", br, "exec_in")
-                    g.link(br, "True", show_entry, "exec_in")
-                else:
-                    g.link(prev_false, "False", br, "exec_in")
-                    g.link(br, "True", show_entry, "exec_in")
-
-                prev_br = br
-                prev_false = br
-
-        elif ptype == "action" or ptype == "show":
-            show_names = phase.get("show", [])
-            hide_names = phase.get("hide", [])
-            if show_names:
-                entry, _ = g.show(*show_names)
-                g.link(tt, "out_0", entry, "exec_in")
-            if hide_names:
-                entry, _ = g.hide(*hide_names)
-                g.link(tt, "out_0", entry, "exec_in")
-
-        elif ptype == "trial_end":
-            trials = experiment_spec.get("trials", 60)
-            br_ex, exit_n, entry_vg = g.trial_counter("trial", trials)
-            st_rst = g.node("SetTimer", ["exec_in", "exec_out", "Value"],
-                            {"operate": "set_time", "mode": "manual",
-                             "timer_name": timer_name, "value": -0.02})
-            g.link(br_ex, "False", st_rst, "exec_in")
-            g.link(tt, "out_0", entry_vg, "exec_in")
-
-    # ── 构建 ──
-    graph = g.build()
-    return {
-        "graph": graph,
-        "node_count": len(graph["nodes"]),
-        "link_count": len(graph["links"]),
-    }
-
-
-@mcp.tool()
-def validate_graph(graph: dict, max_frames: int = 0, verbose: bool = False) -> dict:
-    """[已弃用 — 校验已内化为引擎服务] 请改用 engine-editor-live 服务器的 editor_graph_validate。
-
-    验证链路变更 (2026-10-02):
-      - 校验在引擎内执行（静态检查 + 干跑, 单一事实源）;
-      - 引擎运行中: editor_graph_validate(source="graph", graph=..., frames=...);
-      - 无头/CI:   PlayerEntry --dry-run 或 Test/Application/NodeGraph/test_graph_validation.py;
-      - 也可先 editor_graph_import 导入编辑器画布, 再用面板 Validate 按钮。
-    """
-    return {
-        "passed": False,
-        "deprecated": True,
-        "message": (
-            "validate_graph 已内化为引擎内服务 — 请启动引擎后使用 editor_graph_validate"
-            "（source='graph', graph=..., frames=...）获取静态+干跑报告; 无头环境用 PlayerEntry --dry-run。"
-        ),
-        "static_errors": [],
-        "dry_run": None,
-    }
+    return build_experiment_graph(experiment_spec)
 
 
 @mcp.tool()
 def apply_graph(scene_path: str, graph: dict) -> dict:
-    """将节点图注入到 .scene 文件。
-
-    Args:
-        scene_path: 目标 .scene 文件路径 (相对或绝对)
-        graph: 节点图 dict
-
-    Returns:
-        {success: bool, path: str, node_count: int, link_count: int}
-    """
+    """将节点图注入 .scene 文件的 node_graph 字段（相对路径基于仓库根）。返回 {success, path, node_count, link_count}。"""
     if not os.path.isabs(scene_path):
         scene_path = os.path.join(_project_root, scene_path)
 

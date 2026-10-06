@@ -4,6 +4,17 @@ import re
 import os
 
 
+# ★ 渲染器保留 uniform — 由渲染管线每帧统一注入，不进材质 uniforms_data
+#   (材质若持有这些名字，逐实体上传会覆盖渲染器注入值 — 协议: Doc/Dev/shader_protocol.md)
+_RESERVED_UNIFORMS = frozenset({
+    "uAmbient",      # 场景环境光 (vec3)
+    "uCameraPos",    # 相机世界坐标 (vec3) — 高光用
+    "uLightCount",   # 方向光数量 (int)
+    "uLightDir",     # 方向光方向数组 (vec3[4]) — 光线传播方向
+    "uLightColor",   # 方向光颜色×强度 数组 (vec3[4])
+})
+
+
 def parse_shader_files(
     vert_path: str,
     frag_path: str,
@@ -62,6 +73,8 @@ def parse_shader_files(
         # 普通 uniform
         for match in uniform_pattern.finditer(src):
             u_type, u_name = match.group(1), match.group(2)
+            if u_name in _RESERVED_UNIFORMS:
+                continue  # 渲染器每帧注入的保留 uniform — 不进材质
             uniforms[u_name] = u_type
         # push_constant block 成员
         for block_match in push_block_pattern.finditer(src):

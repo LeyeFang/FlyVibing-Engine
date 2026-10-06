@@ -8,9 +8,12 @@ Node Graph Editor MCP — 一键安装 (跨平台)。
 
 用法（安装版 / 零外部 Python）:
   Resource\\runtime\\python3.14t.exe Utils\\User\\NodeEditor\\install_mcp.py
+
+注册到工作区 .vscode/mcp.json（node-graph-editor）并把 node-graph Skill
+（渐进披露使用说明）同步到 <仓库>/.github/skills/node-graph/。
 """
 
-import json, os, subprocess, sys
+import json, os, shutil, subprocess, sys
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -43,6 +46,26 @@ def get_mcp_path() -> str:
 
     os.makedirs(os.path.dirname(workspace_mcp), exist_ok=True)
     return workspace_mcp
+
+
+def _skill_source() -> str:
+    return os.path.join(PROJECT_DIR, "Utils", "User", "NodeEditor", "skills", "node-graph")
+
+
+def _skill_dest() -> str:
+    return os.path.join(PROJECT_DIR, ".github", "skills", "node-graph")
+
+
+def _sync_skill() -> None:
+    """同步 node-graph Skill（渐进披露使用说明）到仓库 .github/skills/。"""
+    src, dest = _skill_source(), _skill_dest()
+    if not os.path.isdir(src):
+        print("  ! skill payload missing:", src)
+        return
+    shutil.rmtree(dest, ignore_errors=True)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    shutil.copytree(src, dest)
+    print(f"  ✓ skill synced -> {dest}")
 
 
 def read_mcp_config(path: str) -> dict:
@@ -114,6 +137,9 @@ def install():
             print("  ✗ No MCP module available")
             return 1
 
+    # 4. Sync skill（渐进披露使用说明 → .github/skills/node-graph）
+    _sync_skill()
+
     print("\n" + "=" * 50)
     print("  Install complete!")
     print(f"  Config: {mcp_path}")
@@ -135,6 +161,11 @@ def uninstall():
         print(f"  ✓ Removed from: {mcp_path}")
     else:
         print("  (no config found)")
+
+    skill_dest = _skill_dest()
+    if os.path.isdir(skill_dest):
+        shutil.rmtree(skill_dest, ignore_errors=True)
+        print(f"  ✓ Removed skill: {skill_dest}")
 
     print("=" * 50)
     return 0

@@ -98,6 +98,10 @@ class EditorLayer(Layer):
         SimulationController._try_consume_start()
         SimulationController._try_consume_stop()
 
+        # ── 动态媒体不在编辑器侧推进 ──
+        # 编辑器编辑=模板; PIE 播放由 ShowMedia 节点驱动
+        # （RuntimeNodeLayer → evaluators/media.py; 协议 Doc/Dev/media_protocol.md）
+
         # ── 检测 RuntimeWindow 关闭 (用户点 X) ──
         if SimulationController.is_running():
             from Application.Runtime.GameRuntime import GameRuntime

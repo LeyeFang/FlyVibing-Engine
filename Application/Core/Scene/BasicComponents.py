@@ -64,6 +64,38 @@ class ProjectionType(Enum):
 
 
 @component
+class MediaPlayer(DataclassContract):
+    """媒体播放器 — 动态纹理载体 (协议: Doc/Dev/media_protocol.md)。
+
+    - source : 媒体文件路径 (CWD 相对/绝对; M1=GIF, 视频后续)
+    - 播放参数可经 Inspector/节点/MCP 编辑 (component.set type=MediaPlayer);
+    - 播放时钟/帧号等运行期状态在 MediaSystem (不序列化 — 不进场景文件);
+      编辑器侧编辑只是模板 — PIE/运行时由节点 ShowMedia 驱动播放。
+    """
+    source: str = ""
+    playing: bool = True
+    loop: bool = True
+    speed: float = 1.0
+    fit: str = "stretch"   # stretch / contain / cover (M1 仅 stretch; 见协议)
+
+
+@component
+class DirectionalLight(DataclassContract):
+    """方向光 — 光照方向由实体 Transform 决定 (局部 -Z 前向 = 光线传播方向)。
+
+    设计要点 (协议: Doc/Dev/shader_protocol.md):
+    - 颜色 × 强度 由渲染器每帧合并注入 uLightDir[]/uLightColor[]
+      (至多 4 盏, 按世界查询顺序; 见 rendering_protocol.md §光照);
+    - 仅在使用 Lighting 约定 shader 的材质上可见 — Basic/SSVEP 不受影响;
+    - 无阴影 (roadmap P2); 默认场景含一盏 "Sun" (DefaultLight.prefab)。
+    """
+    color_r: float = 1.0
+    color_g: float = 1.0
+    color_b: float = 1.0
+    intensity: float = 1.0
+
+
+@component
 class Camera(DataclassContract):
     # 投影类型（默认透视投影）
     projection_type: ProjectionType = ProjectionType.PERSPECTIVE
@@ -87,5 +119,7 @@ class Camera(DataclassContract):
 register_contract("Transform", Transform)
 register_contract("MeshRenderer", MeshRenderer)
 register_contract("Camera", Camera)
+register_contract("MediaPlayer", MediaPlayer)
+register_contract("DirectionalLight", DirectionalLight)
 register_contract("Component", Component)
 register_contract("ObjectInfo", ObjectInfo)

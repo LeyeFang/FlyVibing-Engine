@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import esper
 
-from Application.Core.Scene.BasicComponents import Transform, MeshRenderer, Camera
+from Application.Core.Scene.BasicComponents import Transform, MeshRenderer, Camera, MediaPlayer, DirectionalLight
 from Application.Core.Renderer.RenderCommand import (
     EntityRegistrationCommand, EntityRenderVisibleCommand, EntityVisibilityCommand,
 )
@@ -65,3 +65,7 @@ class ComponentRegistry:
             reg["MeshRenderer"] = MeshRenderer
         if "Transform" not in reg:
             reg["Transform"] = Transform
+        if "MediaPlayer" not in reg:
+            reg["MediaPlayer"] = MediaPlayer
+        if "DirectionalLight" not in reg:
+            reg["DirectionalLight"] = DirectionalLight

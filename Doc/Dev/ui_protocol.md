@@ -10,8 +10,9 @@
 | 文件 | 职责 |
 |---|---|
 | `Application/Editor/UI/UIManager.py` | 主菜单栏（File/Edit/View/Help）、DockSpace 布局、状态栏；菜单回调 → FileDialog 非阻塞对话框 |
-| `Application/Editor/UI/panels/node_editor/panel.py` | `NodeEditorPanel`：画布渲染、Add 菜单、连线创建、Delete 删除（含级联）、Rearrange 自动布局、Import/Export |
-| `Application/Editor/UI/panels/node_editor/widgets.py` | 节点内联控件注册表（`@register(node_type)`）；combo/变量名/Timer名/Gtec设备等辅助 |
+| `Application/Editor/UI/panels/MenuBarPanel.py` | 主菜单栏面板；**View 菜单** = 面板开关 + Show Grid（`toggle_grid_visible` 动作单点 → `Grid.set_visible`，与 `view.set_grid` op 同路径） |
+| `Application/Editor/UI/panels/node_editor/panel.py` | `NodeEditorPanel`：画布渲染、Add 菜单、连线创建、Delete 删除（含级联）、Rearrange 自动布局、Import/Export（经 `Application/Core/NodeGraph/graph_io` 与 agent ops 同源） |
+| `Application/Editor/UI/panels/node_editor/widgets/` | 节点内联控件包 — 注册表在 `core.py`（`@register`）；子模块 flow_io / entity_comp / device_siggen / device_gtec / device_pool / epoch / algorithm，**import 即注册**；设备共用助手在 `device_common.py` |
 | `Application/Editor/UI/panels/node_editor/visible_pins.py` | 引脚可见性规则注册表（`@rule(node_type)`） |
 | `Application/Editor/UI/panels/node_editor/styling.py` | `MENU_SECTIONS`（Add 菜单数据）、`LINK_COLORS`（按 data_type 着色）、node style 颜色 |
 | `Application/Editor/UI/FileDialog.py` | 异步文件/目录选择（回调写 props） |
@@ -101,3 +102,7 @@
 - UI 交互测试需要 GL 窗口；鼠标/键盘统一走 `InputPipeline`（见 `Test/Application/Editor/测试需知.md`）。
 - **业务正确性不要依赖 UI 测试**：把逻辑放进 evaluators / 设备层，用 MCP 干跑与无头单元测试覆盖
   （`Test/Application/Functions/test_gtec_device.py` 是范例）。
+- 场景化 UI 回归：`python Test/Application/Editor/ui_scenario.py scenarios/<name>.py`
+  （真实面板 + 输入注入 + PNG 快照，含完整 ImGui 界面；`--preview` 交互预览）。
+- 批量运行 / 档位（core/gui/heavy/live）/ 沙箱与输出契约：`Doc/Dev/test_protocol.md`
+  （`python Utils/Dev/test_runner.py`）。

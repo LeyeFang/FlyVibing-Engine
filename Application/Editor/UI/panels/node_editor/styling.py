@@ -157,6 +157,11 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ("Print String", "PrintString"),
     ]),
 
+    # ── 动态媒体（GIF/图像 — PIE 由 ShowMedia 节点驱动）──────
+    ("Media", [
+        ("Show Media", "ShowMedia"),
+    ]),
+
     # ── 设备 / 文件输出 ─────────────────────────────────────
     ("IO", [
         ("Serial", [

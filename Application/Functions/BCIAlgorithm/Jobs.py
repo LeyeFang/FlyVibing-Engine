@@ -66,10 +66,17 @@ class SyncJob:
         job = cls(name)
 
         def _runner() -> None:
+            from Application.Core.ThreadRegistry import ThreadRegistry
+
+            _reg = f"bci-{name}"
+            ThreadRegistry.register(_reg, owner="SyncJob", expect_hz=0.0,
+                                    note="训练任务; 阻塞等待不推进心跳=正常")
             try:
                 job.finish(fn(job.set_progress))
             except Exception as e:  # noqa: BLE001 — 任务异常转槽（服务线程绝不崩图）
                 job.fail(f"{type(e).__name__}: {e}")
+            finally:
+                ThreadRegistry.unregister(_reg)
 
         threading.Thread(target=_runner, name=f"bci-{name}", daemon=True).start()
         return job

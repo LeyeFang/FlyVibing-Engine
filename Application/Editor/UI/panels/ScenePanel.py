@@ -852,6 +852,17 @@ class ScenePanel(BasePanel):
                     imgui.set_item_default_focus()
             imgui.end_combo()
 
+        # ── Blend (混合模式: opaque / alpha) ──
+        current_blend = info.get('blend', 'opaque')
+        if imgui.begin_combo("Blend##mat_blend", current_blend):
+            for opt in ("opaque", "alpha"):
+                selected = (opt == current_blend)
+                if imgui.selectable(f"{opt}##blend_{opt}", selected)[0]:
+                    self._browser_ctrl.set_material_blend(entity_id, opt)
+                if selected:
+                    imgui.set_item_default_focus()
+            imgui.end_combo()
+
         # ── Basic Shader 颜色 ──
         if info.get('shader_name') == 'Basic':
             self._draw_color_picker(entity_id, info)

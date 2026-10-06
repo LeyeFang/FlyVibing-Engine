@@ -143,9 +143,14 @@ def _build_axis_vertices(
 class Grid:
     """摄像机跟随参考网格 — 仅负责向渲染器注册可绘制对象。"""
 
+    # 视口显示开关 — View 菜单 "Show Grid" / view.set_grid op 共享状态
+    visible: bool = True
+
     @classmethod
     def register_to(cls, renderer: RenderResourceManger) -> None:
-        """向渲染器注册网格的所有可绘制对象。"""
+        """向渲染器注册网格的所有可绘制对象（visible=False 时跳过）。"""
+        if not cls.visible:
+            return
 
         # ── 1. 白色网格线 ──
         # ★ 声明式 uniform: 静态值 (uColor) + 动态源 (uFadeCenter/uFadeRadius)
@@ -224,3 +229,29 @@ class Grid:
             renderer.enqueue(OverlayUnregistrationCommand(key))
         from Application.Editor.EditorHost import EditorHost
         OverlayUnregisteredEvent.Pack('Grid', engine=EditorHost)
+
+    @classmethod
+    def set_visible(cls, visible: bool, renderer=None) -> bool:
+        """显示/隐藏网格 — View 菜单与 view.set_grid op 的唯一入口。
+
+        - 状态保存在类属性: 无渲染器 (UI 场景) 时也可翻转, 仅记录状态;
+        - 有渲染器时: 翻转伴随 enqueue 注册/注销命令
+          (双注销安全 — 后端资源表用 pop(key, None));
+        返回切换后的状态。
+        """
+        visible = bool(visible)
+        if visible == cls.visible:
+            return cls.visible
+        cls.visible = visible
+        if renderer is None:
+            try:
+                from Application.Editor.EditorHost import EditorHost
+                renderer = EditorHost.get_editor_renderer() or None
+            except Exception:
+                renderer = None
+        if renderer is not None:
+            if visible:
+                cls.register_to(renderer)
+            else:
+                cls.unregister_from(renderer)
+        return cls.visible

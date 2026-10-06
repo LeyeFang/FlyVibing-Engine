@@ -1,7 +1,7 @@
 # 节点编辑器业务逻辑开发协议
 
 > 适用：节点类型定义、求值器（evaluator）、图约束、执行引擎、图文档（agent 消费）、
-> 程序化构图（GraphBuilder）、MCP 校验（Utils/User/NodeEditor）。
+> 程序化构图（GraphBuilder）、agent 通道（CLI + MCP, Utils/User/NodeEditor）。
 > UI 表现层协议见 `ui_protocol.md`；设备/IO 后端协议见 `device_io_protocol.md`。
 >
 > **位置约定（2026-09 迁移）**：运行时本体位于 `Application/Core/NodeGraph/**`
@@ -22,10 +22,10 @@
 | 图约束 | `Application/Core/NodeGraph/graph_constraints.py` | 跨节点联动（删除级联 + 静态校验函数）；纯数据、无 imgui |
 | 场景内嵌文档 | `Application/Core/NodeGraph/graph_rules.py` | `_NODE_GRAPH_RULES`，每次导出 scene 时附带（外部 agent 读） |
 | 编辑器交互层 | `Application/Editor/UI/panels/node_editor/**` | 画布渲染 / Add 菜单 / 内联控件 / 级联删除交互 / 自动布局（imgui） |
-| MCP 参考文档 | `Utils/User/NodeEditor/rules.md` | 构图 agent 必读；节点表 / 连线规则 / 模式 |
-| MCP 工具 | `Utils/User/NodeEditor/mcp_server.py` | get_rules / get_scene_entities / build_graph / apply_graph（`validate_graph` 已弃用 → 引擎内服务, 见 `graph_validation_protocol.md`） |
-| 校验器 | `Utils/User/NodeEditor/node_graph_validator.py` | L1 静态 + L2 干跑（**MCP 空跑核心**） |
-| 构图器 | `Utils/User/NodeEditor/graph_builder.py` | 程序化构图 + `validate()`；节点 helper（gtec_* / siggen_* / pool_*） |
+| Agent 参考文档 | `Utils/User/NodeEditor/rules.md` | 构图 agent 参考（**按节读取**: get_rules(section=...) / CLI rules; 无参=目录）；含 build_graph Spec 节 |
+| Agent 通道 | `Utils/User/NodeEditor/mcp_server.py` + `cli.py` | MCP 4 工具（get_rules(分节) / get_scene_entities / build_graph / apply_graph；`validate_graph` 已移除）; CLI: `python -m Utils.User.NodeEditor.cli {rules,entities,build,apply}` |
+| 校验器（旧） | `Utils/User/NodeEditor/node_graph_validator.py` | L1 静态 + L2 干跑 — **已退场**（仅旧脚本/单元测试复用）；校验单一事实源 = 引擎内服务（`graph_validation_protocol.md`） |
+| 构图器 | `Utils/User/NodeEditor/graph_builder.py` | 程序化构图 + `validate()`；节点 helper（gtec_* / siggen_* / pool_* / epoch_* / fbscp_* / cca_* / show_media） |
 
 > 旧路径 `Application/Editor/UI/controllers/node_editor/` 仅保留包级 re-export shim（弃用）；
 > 新代码一律使用上表路径。
@@ -59,7 +59,7 @@
 2. `node_types/__init__.py`：新域文件 `from . import xxx` + 颜色常量。
 3. 菜单：`panels/node_editor/styling.py` `MENU_SECTIONS` 对应分组加 `(label, type_name)`；
    **label 必须等于 NodeTypeDef.label**。
-4. 控件：`panels/node_editor/widgets.py` `@register("TypeName")`；默认值幂等初始化；控件 ID 带 `_{nid}`。
+4. 控件：`panels/node_editor/widgets/`（包；注册表在 `core.py`，按家族分子模块）`@register("TypeName")`；默认值幂等初始化；控件 ID 带 `_{nid}`。UI 侧调校验函数（`epoch_source_keys` 等）一律经 `graph_constraints.nodes_as_dicts(canvas)` 转换。
 5. 自动布局：`panels/node_editor/panel.py` `_WIDGET_NODES` 加入该类型（有内联控件必须加）。
 6. 引脚可见性（可选）：`panels/node_editor/visible_pins.py` `@rule("TypeName")`。
 7. 求值器：`evaluators/<域>.py` 实现 + `register_evaluator()`；
@@ -68,7 +68,7 @@
    `panel._handle_deletion` 与 `node_graph_validator.validate_static` 各自接入。
 9. 文档：`graph_rules.py`（场景内嵌）+ `Utils/User/NodeEditor/rules.md`（MCP agent）+
    `Utils/User/NodeEditor/graph_builder.py` helper（推荐）。
-10. 测试：无头单元测试或干跑断言（见 §6）；MCP `validate_graph` 必须通过。
+10. 测试：无头单元测试或干跑断言（见 §6）；引擎内校验必须通过（`engine_validate_graph` / `PlayerEntry --dry-run` / `test_graph_validation.py`）。
 
 > 兼容保留的旧节点：**保留注册但菜单不出现**，在定义文件注释说明替代关系
 > （例：`math.py` 的 MathAdd 系列、`entity.py` 的 EntityAddMesh/EntityAddCamera）。
@@ -77,7 +77,7 @@
 
 ## 4. Dry-Run（MCP 空跑）契约 — CRITICAL
 
-`validate_graph(max_frames>0)` 会以 `ctx.dry_run=True` 模拟执行整图。求值器必须：
+干跑校验（引擎内服务；无头经 `PlayerEntry --dry-run`）会以 `ctx.dry_run=True` 模拟执行整图。求值器必须：
 
 ```python
 if ctx.dry_run:

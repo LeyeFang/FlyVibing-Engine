@@ -344,6 +344,41 @@ class OpenGLResourceManager:
             texture_unit=-1,
         )
 
+    def update_texture_data(self, texture_id: int, image_data, width: int,
+                            height: int, channels: int) -> None:
+        """动态纹理整帧重传 (媒体播放; 见 TextureUpdateCommand)。
+
+        - 已注册: 绑定原 gl_handle → glTexImage2D 同尺寸重定 + mipmap;
+        - 未注册 (实体尚未上屏): 以当前帧走标准注册路径。
+        """
+        entry = self.registered_textures.get(texture_id)
+        if entry is None:
+            self.register_texture(
+                Texture(image_data=image_data, width=width, height=height,
+                        channels=channels, file_path=""),
+                texture_id,
+            )
+            return
+
+        _CHANNEL_FORMAT = {
+            1: (gl.GL_R8, gl.GL_RED),
+            3: (gl.GL_RGB8, gl.GL_RGB),
+            4: (gl.GL_RGBA8, gl.GL_RGBA),
+        }
+        if channels not in _CHANNEL_FORMAT:
+            raise ValueError(f"不支持的纹理通道数: {channels}")
+        internal_format, data_format = _CHANNEL_FORMAT[channels]
+
+        gl.glBindTexture(gl.GL_TEXTURE_2D, entry.gl_handle)
+        gl.glTexImage2D(
+            gl.GL_TEXTURE_2D, 0, internal_format,
+            width, height, 0,
+            data_format, gl.GL_UNSIGNED_BYTE,
+            image_data.tobytes()
+        )
+        gl.glGenerateMipmap(gl.GL_TEXTURE_2D)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+
     # ════════════════════════════════════════════════════════════
     # Uniform 辅助 — 薄封装，委托到 OpenGLUtils
     # ════════════════════════════════════════════════════════════

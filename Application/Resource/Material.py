@@ -18,6 +18,8 @@ class Material:
     ) -> None:
         self.uniforms_data = {}
         self.shader_id = shader_id
+        # ── 混合模式: "opaque" (不透明, 默认) / "alpha" (透明混合) ──
+        self.blend: str = "opaque"
         for u_name, u_type in uniforms_name_type.items():
             if u_type == 'mat4':
                 self.uniforms_data[u_name] = np.zeros((4, 4), dtype=np.float32)
@@ -50,6 +52,7 @@ class Material:
         data = {
             "name": self.name,
             "shader_id": self.shader_id,
+            "blend": self.blend,
             "texture_ids": self.texture_id_list,
             "uniforms": {
                 k: v.tolist() if hasattr(v, 'tolist') else v
@@ -71,6 +74,7 @@ class Material:
         # 需要 shader 信息来初始化 uniforms — 用空 dict 作为占位，后续 set_new_shader 会填充
         mat = Material(data.get("shader_id", 1), {})
         mat.name = data.get("name", "Untitled")
+        mat.blend = data.get("blend", "opaque")
         mat.texture_id_list = data.get("texture_ids", [])
         for k, v in data.get("uniforms", {}).items():
             mat.uniforms_data[k] = np.array(v, dtype=np.float32)

@@ -13,6 +13,7 @@
   9. Epoch 数据集: Count/Clear/Save 引用校验
   10. Epoch 数据集: EpochAppend 必需数据引脚（Data / Label）
   11. BCI 算法: Init/Train/Test 模型与数据集引用校验 + TestCCA 频率组 ≥2
+  12. 媒体: ShowMedia — Entity 引脚必需连线 + exec_in 警示
 
 差异（相对离线版）:
   - 输出结构化条目 dict: {level, code, message, node_id}
@@ -348,6 +349,34 @@ def static_check_graph(scene_data: dict) -> list[dict]:
     except Exception as e:  # noqa: BLE001
         entries.append(_entry("error", "bci_reference",
                               f"bci check failed: {e}"))
+
+    # 12. 媒体: ShowMedia — Entity 引脚必需连线; exec_in 未连降为 warning
+    try:
+        from ..graph_constraints import SHOW_MEDIA as _SHOW_MEDIA
+
+        for nid_str, nd in nodes.items():
+            if nd.get("node_type") != _SHOW_MEDIA:
+                continue
+            node_pin_ids = nd.get("pin_ids", {}) or {}
+            ep = node_pin_ids.get("Entity")
+            if ep is not None and int(ep) not in connected_pins:
+                entries.append(_entry(
+                    "error", "media_pin_unconnected",
+                    f"Node {nid_str}<ShowMedia>: 'Entity' pin is not connected "
+                    f"(link Get Entity.Entity → ShowMedia.Entity)",
+                    _safe_int(nid_str),
+                ))
+            xp = node_pin_ids.get("exec_in")
+            if xp is not None and int(xp) not in connected_pins:
+                entries.append(_entry(
+                    "warning", "media_exec_unconnected",
+                    f"Node {nid_str}<ShowMedia>: 'exec_in' not connected — "
+                    f"node will never run (wire under OnFrameUpdate)",
+                    _safe_int(nid_str),
+                ))
+    except Exception as e:  # noqa: BLE001
+        entries.append(_entry("error", "media_reference",
+                              f"media check failed: {e}"))
 
     return entries
 

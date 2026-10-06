@@ -76,6 +76,8 @@
 `AttributeError: type object 'RuntimeNodeLayer' has no attribute '_frame'`（线程静默死亡，无异常上抛）。
 回归守卫：`Test/Application/Runtime/test_runtime_node_layer_race.py`（无头 + 可控阻塞点，确定性）。
 
+> 完整线程协议（清单/触达/三通道/探针/新线程检查单）见 `threading_protocol.md`。
+
 ---
 
 ## 4. 导出包结构（v1）

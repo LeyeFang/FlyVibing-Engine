@@ -82,6 +82,55 @@ _COMPONENT_PROPERTIES: dict[str, list[PropertyDescriptor]] = {
             attr_name="visible",
         ),
     ],
+    "MediaPlayer": [
+        PropertyDescriptor(
+            "Source", "Source", "string", "",
+            pin_only=True,
+            attr_name="source",
+        ),
+        PropertyDescriptor(
+            "Playing", "Playing", "bool", True,
+            widget="checkbox",
+            attr_name="playing",
+        ),
+        PropertyDescriptor(
+            "Loop", "Loop", "bool", True,
+            widget="checkbox",
+            attr_name="loop",
+        ),
+        PropertyDescriptor(
+            "Speed", "Speed", "float", 1.0,
+            widget="drag_float",
+            widget_config={"speed": 0.05, "format": "%.2f"},
+            attr_name="speed",
+        ),
+    ],
+    "DirectionalLight": [
+        PropertyDescriptor(
+            "ColorR", "Color R", "float", 1.0,
+            widget="drag_float",
+            widget_config={"speed": 0.01, "min": 0.0, "max": 1.0, "format": "%.2f"},
+            attr_name="color_r",
+        ),
+        PropertyDescriptor(
+            "ColorG", "Color G", "float", 1.0,
+            widget="drag_float",
+            widget_config={"speed": 0.01, "min": 0.0, "max": 1.0, "format": "%.2f"},
+            attr_name="color_g",
+        ),
+        PropertyDescriptor(
+            "ColorB", "Color B", "float", 1.0,
+            widget="drag_float",
+            widget_config={"speed": 0.01, "min": 0.0, "max": 1.0, "format": "%.2f"},
+            attr_name="color_b",
+        ),
+        PropertyDescriptor(
+            "Intensity", "Intensity", "float", 1.0,
+            widget="drag_float",
+            widget_config={"speed": 0.01, "min": 0.0, "max": 10.0, "format": "%.2f"},
+            attr_name="intensity",
+        ),
+    ],
     # Camera —
 }
 
@@ -97,7 +146,7 @@ def get_properties(component_name: str) -> list[PropertyDescriptor]:
 
 def get_registered_component_names() -> list[str]:
     """获取所有已注册属性表的组件名（用于下拉菜单）。Transform 置顶。"""
-    _ORDER = ["Transform", "MeshRenderer", "Camera"]
+    _ORDER = ["Transform", "MeshRenderer", "Camera", "DirectionalLight"]
     names = []
     for c in _ORDER:
         if c in _COMPONENT_PROPERTIES:

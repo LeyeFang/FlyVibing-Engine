@@ -191,6 +191,28 @@ class OpenGLUtils:
         gl.glUniform3fv(loc, 1, data)
 
     @staticmethod
+    def set_uniform_vec3_array(
+        registered_shaders: dict,
+        shader_id: int,
+        name: str,
+        values: np.ndarray,
+        count: int
+    ) -> None:
+        """设置 vec3 数组 uniform (如 uLightDir[4])。
+
+        Args:
+            name: 数组名 (不含 [0] 后缀 — 内部自动附加)
+            values: (count, 3) float32 数组
+            count: 数组元素个数
+        """
+        loc = OpenGLUtils.get_uniform_location(
+            registered_shaders, shader_id, name + '[0]')
+        if loc < 0:
+            return
+        data = np.ascontiguousarray(values, dtype=np.float32)
+        gl.glUniform3fv(loc, count, data)
+
+    @staticmethod
     def set_uniform_value(
         registered_shaders: dict,
         shader_id: int,

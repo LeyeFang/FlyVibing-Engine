@@ -1,15 +1,23 @@
 """
-Engine Editor Live MCP — 运行中编辑器的热注入工具（v2: 模拟控制 + 帧图像 + 摄像机）。
+Engine Editor Live MCP — 运行中编辑器的热注入工具（v0.4.0: 双档位 + CLI/Skill 混合形态）。
 
-Tools:
-  - editor_run_pie / editor_stop_pie / editor_sim_state  → PIE 启停与状态
-  - editor_switch_2d / editor_set_scene_type             → 场景类型按钮语义（影响 PIE 摄像机）
-  - editor_camera_get / editor_camera_set                → 场景摄像机读写（3d / 2d / overlay）
-  - editor_graph_validate(_report/_cancel)               → 节点图干跑校验（引擎内服务: 静态+模拟）
-  - editor_graph_export / editor_graph_import            → 节点图 JSON 导入导出（含 _rules 文档）
-  - editor_project_open                                  → 打开 .myproj 工程（资源+场景全加载）
-  - editor_capture                                       → 抓帧（editor / pie 窗口）→ PNG + 图片返回
-  - editor_quit                                          → 请求关闭编辑器引擎
+档位（--profile lite|full > env MGE_MCP_PROFILE > 默认 full）:
+  lite（推荐, 省 token — 5 个工具）:
+    engine_help(op|topic)        → op 目录 / 单 op 详情 / 主题帮助（按需读取, 不常驻）
+    engine_call(op, args)        → 执行 1 个 op（兼容旧工具名; 大载荷自动瘦身）
+    engine_batch(calls)          → 一次调用顺序执行多个 op
+    engine_validate_graph(...)   → 图干跑校验（detail=summary 默认）
+    engine_capture(target)       → 抓帧（图像直回; 想省 token 用 CLI capture）
+  full（兼容旧用法 — 44 个 editor_* 工具, 见下）:
+    editor_run_pie / editor_stop_pie / editor_sim_state  → PIE 启停与状态
+    editor_switch_2d / editor_set_scene_type             → 场景类型按钮语义（影响 PIE 摄像机）
+    editor_camera_get / editor_camera_set                → 场景摄像机读写（3d / 2d / overlay）
+    editor_graph_validate(_report/_cancel)               → 节点图干跑校验（引擎内服务: 静态+模拟）
+    editor_graph_export / editor_graph_import            → 节点图 JSON 导入导出（含 _rules 文档）
+    editor_project_open                                  → 打开 .myproj 工程（资源+场景全加载）
+    editor_capture                                       → 抓帧（editor / pie 窗口）→ PNG + 图片返回
+    editor_quit                                          → 请求关闭编辑器引擎
+    （含 entity/selection/component/scene/resource 容器级工具）
 
 原理（详见 Doc/Dev/editor_live_protocol.md）:
     MCP(stdio) → 本工具 → 本机回环 TCP 127.0.0.1:8977
@@ -19,22 +27,37 @@ Tools:
     （MGE_MCP_FRAMES_DIR 可覆盖; 仅入口进程启动时清空）。
 编辑器未运行时工具返回明确错误（先启动 startup.bat）。
 
-启动方式（独立包, 三方工作区可直接引用）:
-    python -m engine_editor_mcp                 （或安装后 console script: engine-editor-mcp）
-    dev 仓库内等价入口: python -m Utils.User.EditorMcp.mcp_server  （薄 shim, 同一源码）
+独立分发的三种消费形态（同一 wheel, 同一 op 注册表 ops.py）:
+    CLI（零常驻上下文成本, 任意终端型 agent 首选）: engine-editor-cli
+    MCP lite / full: python -m engine_editor_mcp --profile lite|full
+    Skill（渐进披露）: engine-editor-cli setup --workspace <项目目录>
+
+dev 仓库内等价入口: python -m Utils.User.EditorMcp.mcp_server  （薄 shim, 同一源码）
 """
 
 import io
-import json
 import os
-import shutil
-import socket
-import tempfile
-import time
+import sys
 
 from mcp.server.fastmcp import FastMCP, Image
 
+from . import ops as op_registry
+from .client import (
+    DEFAULT_PORT,
+    FRAMES_DIR,
+    EngineError,
+    capture_png,
+    editor_port,
+    encode_and_save,
+    execute_calls,
+    send,
+    send_raw,
+    validate_graph_orchestrate,
+    wipe_frames_dir,
+)
+
 # 供 dev shim（Utils/User/EditorMcp/mcp_server.py）与外部集成（E2E 脚本）复用的符号
+# （v0.4.0: 底层实现移至 client.py — 名称与行为保持不变）
 __all__ = [
     "mcp",
     "FRAMES_DIR",
@@ -45,128 +68,27 @@ __all__ = [
     "_capture_png",
     "_encode_and_save",
     "_wipe_frames_dir",
+    "apply_profile",
     "main",
 ]
 
-mcp = FastMCP("Engine Editor Live", version="0.3.0")
+mcp = FastMCP("Engine Editor Live", version="0.4.0")
 
-DEFAULT_PORT = 8977
-_ENV_PORT = "MGE_EDITOR_MCP_PORT"
-_ENV_FRAMES_DIR = "MGE_MCP_FRAMES_DIR"
-_next_id = [0]
+# ── 低层函数（v0.4.0 起实现位于 client.py; 此处保留模块级名以兼容 shim / E2E 脚本）──
 
-# ── 抓帧临时目录（独立包形态 — 默认用户临时目录; MGE_MCP_FRAMES_DIR 可覆盖）──
-# 策略: 每次 server 启动清空, 防累积（仅入口进程执行, import 不清空）。
-_FRAMES_ROOT = os.environ.get(_ENV_FRAMES_DIR) or os.path.join(
-    tempfile.gettempdir(), "engine_editor_mcp"
-)
-FRAMES_DIR = os.path.join(_FRAMES_ROOT, "frames")
-
-
-def _wipe_frames_dir() -> None:
-    """清空抓帧目录（server 启动时调用 — 仅入口进程执行）。
-
-    注意: 不在 import 时清空 — 避免开发/E2E 脚本 import 本模块时误删已有帧文件;
-    只有拉起 server 的入口进程（`python -m engine_editor_mcp` / console script）才执行清空。
-    """
-    shutil.rmtree(_FRAMES_ROOT, ignore_errors=True)
-    os.makedirs(FRAMES_DIR, exist_ok=True)
+_send = send
+_send_raw = send_raw
+_capture_png = capture_png
+_encode_and_save = encode_and_save
 
 
 def _port() -> int:
-    try:
-        return int(os.environ.get(_ENV_PORT, "") or DEFAULT_PORT)
-    except ValueError:
-        return DEFAULT_PORT
+    return editor_port()
 
 
-def _send_raw(op: str, args: dict | None = None, timeout: float = 15.0) -> tuple[dict, bytes | None]:
-    """向编辑器发送一条命令并等待回执; 就绪帧随二进制尾随负载返回。
-
-    Returns:
-        (result_or_error, payload) — 失败时 result 含 "error" 键、payload 为 None。
-    """
-    _next_id[0] += 1
-    req = {"id": _next_id[0], "op": op, "args": args or {}}
-    port = _port()
-    try:
-        with socket.create_connection(("127.0.0.1", port), timeout=timeout) as conn:
-            conn.sendall((json.dumps(req, ensure_ascii=False) + "\n").encode("utf-8"))
-            reader = conn.makefile("rb")
-            line = reader.readline()
-            if not line:
-                return {"error": "编辑器连接被关闭（可能正在退出）"}, None
-            resp = json.loads(line.decode("utf-8"))
-            if not resp.get("ok"):
-                return {"error": resp.get("error") or "unknown editor error"}, None
-            result = resp.get("result") or {"ok": True}
-            payload = None
-            if isinstance(result, dict) and result.get("binary_bytes"):
-                n = int(result["binary_bytes"])
-                payload = reader.read(n)
-                if payload is None or len(payload) != n:
-                    return {"error": f"二进制负载不完整（{len(payload or b'')}/{n} bytes）"}, None
-            return result, payload
-    except ConnectionRefusedError:
-        return {"error": f"编辑器未运行（127.0.0.1:{port} 无监听）— 请先启动 startup.bat。"}, None
-    except (socket.timeout, TimeoutError):
-        return {"error": f"等待编辑器响应超时（{timeout}s）— 编辑器可能未在处理帧。"}, None
-    except ValueError as e:
-        return {"error": f"无法解析编辑器回执: {e}"}, None
-    except OSError as e:
-        return {"error": f"连接失败: {e}"}, None
-
-
-def _send(op: str, args: dict | None = None, timeout: float = 15.0) -> dict:
-    """薄包装（非图像场景）— 保持 v1 工具的 dict 返回契约。"""
-    result, _payload = _send_raw(op, args, timeout)
-    return result
-
-
-# ── 抓帧: request → 轮询 fetch → 翻转 → PNG（本进程编码, 不阻塞引擎）──
-
-
-def _encode_and_save(target: str, result: dict, payload: bytes) -> tuple[str, bytes]:
-    """RGBA8 裸帧（bottom-up）→ top-down → PNG → 落盘。返回 (path, png_bytes)。"""
-    import numpy as np
-    from PIL import Image as PILImage
-
-    width = int(result["width"])
-    height = int(result["height"])
-    arr = np.frombuffer(payload, dtype=np.uint8).reshape(height, width, 4)[::-1]
-    png_buf = io.BytesIO()
-    PILImage.frombytes("RGBA", (width, height), np.ascontiguousarray(arr).tobytes()).save(png_buf, "PNG")
-    png_bytes = png_buf.getvalue()
-    ts = time.strftime("%Y%m%d_%H%M%S")
-    path = os.path.join(FRAMES_DIR, f"frame_{target}_{ts}_g{result.get('generation')}.png")
-    with open(path, "wb") as fp:
-        fp.write(png_bytes)
-    return path, png_bytes
-
-
-def _capture_png(target: str = "editor", timeout_s: float = 6.0) -> tuple[str, bytes]:
-    """完整抓帧流程: frame.request → 轮询 frame.fetch → PNG 落盘。返回 (path, png_bytes)。"""
-    result, _ = _send_raw("frame.request", {"target": target})
-    if "error" in result:
-        raise RuntimeError(result["error"])
-    generation = result.get("generation")
-
-    deadline = time.monotonic() + float(timeout_s)
-    while time.monotonic() < deadline:
-        info, payload = _send_raw("frame.fetch", {"target": target, "generation": generation})
-        if "error" in info:
-            raise RuntimeError(info["error"])
-        if info.get("ready"):
-            if payload is None:
-                raise RuntimeError("ready frame without payload")
-            return _encode_and_save(target, info, payload)
-        state = info.get("state")
-        if state == "error":
-            raise RuntimeError(info.get("error") or "engine-side capture failed")
-        if state == "superseded":
-            raise RuntimeError(f"capture superseded (latest_generation={info.get('latest_generation')})")
-        time.sleep(0.03)
-    raise RuntimeError(f"capture timeout after {timeout_s}s (generation={generation})")
+def _wipe_frames_dir() -> None:
+    """清空抓帧目录（server 启动时调用 — 仅入口进程执行；import 不清空）。"""
+    wipe_frames_dir()
 
 
 @mcp.tool()
@@ -311,6 +233,27 @@ def _trim_report(report: dict) -> dict:
     return report
 
 
+def _validate_orchestrate(
+    source: str = "canvas",
+    graph: dict | None = None,
+    frames: int = 360,
+    verbose: bool = True,
+    seed: int = 0,
+    save_path: str | None = None,
+    timeout_s: float = 120.0,
+) -> dict:
+    """校验编排（start→poll→report）— 实现位于 client.py（MCP 工具与 CLI validate 共用）。"""
+    return validate_graph_orchestrate(
+        source=source,
+        graph=graph,
+        frames=frames,
+        verbose=verbose,
+        seed=seed,
+        save_path=save_path,
+        timeout_s=timeout_s,
+    )
+
+
 @mcp.tool()
 def editor_graph_validate(
     source: str = "canvas",
@@ -323,6 +266,7 @@ def editor_graph_validate(
 ) -> dict:
     """干跑校验节点图（引擎内服务: 静态检查 + fake-time 模拟, 需要引擎运行中）。
 
+    提示: lite 档的 engine_validate_graph 默认只回摘要（省 token）— 本工具回全量报告。
     Args:
         source: "canvas"（当前编辑器画布快照, 默认）| "graph"（直接传 graph dict, agent 生成图先验）
         graph:  仅 source="graph" 时必填
@@ -334,38 +278,11 @@ def editor_graph_validate(
         {found, report: {ok, state, counts, static, runtime, log: [...], graph}, saved_path?}
         或 {"error": ...}（引擎未运行）
     """
-    args: dict = {"source": source, "frames": frames, "verbose": verbose, "seed": seed}
-    if graph is not None:
-        args["graph"] = graph
-    started = _send("graph.validate.start", args)
-    if "error" in started:
-        return started
-    task_id = started.get("task_id")
-    if not started.get("started"):
-        return {**started, "note": "任务已在运行 — 先 editor_graph_validate_cancel() 或等待完成"}
-
-    deadline = time.monotonic() + float(timeout_s)
-    while time.monotonic() < deadline:
-        st = _send("graph.validate.state", {"task_id": task_id})
-        if "error" in st:
-            return st
-        if st.get("state") != "running":
-            break
-        time.sleep(0.1)
-    else:
-        return {
-            "state": "running",
-            "task_id": task_id,
-            "note": f"超出 {timeout_s}s 仍在运行 — 稍后用 editor_graph_validate_report(task_id={task_id}) 取回",
-        }
-
-    rargs: dict = {"task_id": task_id}
-    if save_path:
-        rargs["save_path"] = save_path
-    result = _send("graph.validate.report", rargs)
-    if "error" in result:
+    result = _validate_orchestrate(source, graph, frames, verbose, seed, save_path, timeout_s)
+    if "error" in result or not isinstance(result.get("report"), dict):
         return result
-    result["report"] = _trim_report(result.get("report") or {})
+    result = dict(result)
+    result["report"] = _trim_report(result["report"])
     return result
 
 
@@ -703,8 +620,154 @@ def editor_quit() -> dict:
     return _send("editor.quit")
 
 
+# ════════════════════════════════════════════════════════════════
+# v0.4.0: 档位（profile）— lite 精简工具集 / full 兼容旧工具集
+#   选择: 启动参数 --profile lite|full > env MGE_MCP_PROFILE > 默认 full
+#   lite 目标: 44×schema（约 17.8k 字符常驻）→ 5×schema（约 1.2k 字符）;
+#   完整 op 参考按需获取（engine_help / CLI / Skill），不再常驻上下文。
+# ════════════════════════════════════════════════════════════════
+
+_ENV_PROFILE = "MGE_MCP_PROFILE"
+LITE_TOOL_NAMES = (
+    "engine_help",
+    "engine_call",
+    "engine_batch",
+    "engine_validate_graph",
+    "engine_capture",
+)
+
+_HELP_TOPICS = op_registry.TOPIC_HELP  # 主题帮助的单一事实源位于 ops.py（CLI 同用）
+
+
+def _requested_profile(argv: list[str] | None = None) -> str:
+    """档位解析: --profile[-=] 参数 > env > 默认 full。"""
+    args = list(sys.argv[1:] if argv is None else argv)
+    value = ""
+    for i, a in enumerate(args):
+        if a == "--profile" and i + 1 < len(args):
+            value = args[i + 1]
+            break
+        if a.startswith("--profile="):
+            value = a.split("=", 1)[1]
+            break
+    if not value:
+        value = os.environ.get(_ENV_PROFILE, "")
+    return "lite" if value.strip().lower() == "lite" else "full"
+
+
+def apply_profile(profile: str) -> str:
+    """按档位裁剪工具集（幂等 — 可在任意当前档切到另一档; 返回实际档位）。
+
+    lite → 仅保留 LITE_TOOL_NAMES; full → 移除 lite 工具（恢复旧 44 工具集）。
+    内部结构不可用时 fail-open（保留全部并告警）。
+    """
+    profile = "lite" if str(profile).strip().lower() == "lite" else "full"
+    try:
+        tools = mcp._tool_manager._tools  # mcp>=1.10 FastMCP 内部注册表
+    except AttributeError:
+        print(
+            f"[engine-editor-mcp] WARNING: tool filter unavailable — profile {profile!r} not applied",
+            file=sys.stderr,
+        )
+        return profile
+    if not _ALL_TOOL_OBJECTS:
+        print(
+            f"[engine-editor-mcp] WARNING: tool master table empty — profile {profile!r} not applied",
+            file=sys.stderr,
+        )
+        return profile
+    tools.clear()
+    if profile == "lite":
+        tools.update({n: t for n, t in _ALL_TOOL_OBJECTS.items() if n in LITE_TOOL_NAMES})
+    else:
+        tools.update({n: t for n, t in _ALL_TOOL_OBJECTS.items() if n not in LITE_TOOL_NAMES})
+    return profile
+
+
+# 共享辅助（prepare_args / call_timeout / unknown_args / trim_result / summarize_report）
+# 位于 ops.py（CLI 与 lite MCP 共用单一实现）。
+
+
+@mcp.tool()
+def engine_help(op: str = "") -> str:
+    """Op 目录（无参）/ 单 op 详情 / 主题（mcp, cli, skill, capture）。按需读取，不常驻上下文。"""
+    topic = (op or "").strip()
+    if not topic or topic in ("ops", "all"):
+        return op_registry.format_ops_list()
+    if topic in _HELP_TOPICS:
+        return _HELP_TOPICS[topic]
+    return op_registry.format_op_help(topic)
+
+
+@mcp.tool()
+def engine_call(op: str, args: dict | None = None, detail: str = "auto") -> dict:
+    """执行一个编辑器 op（名字见 engine_help()）; 兼容旧工具名（editor_run_pie 等）。detail='full' 关闭自动瘦身。"""
+    name, defaults = op_registry.resolve(op)
+    if not name:
+        return {"error": f"unknown op: {op!r}", "hint": "engine_help() 获取 op 目录"}
+    call_args = dict(defaults)
+    call_args.update(args or {})
+    call_args = op_registry.prepare_args(name, call_args)
+    result = _send(name, call_args, timeout=op_registry.call_timeout(name))
+    unknown = op_registry.unknown_args(name, call_args)
+    if unknown and isinstance(result, dict) and "error" not in result:
+        result = dict(result)
+        result["_unknown_args"] = unknown
+    return op_registry.trim_result(name, result, detail)
+
+
+@mcp.tool()
+def engine_batch(calls: list[dict], continue_on_error: bool = False) -> dict:
+    """一次调用顺序执行多个 op（省往返）: calls=[{"op": "entity.add", "args": {...}}, ...]。出错默认中断。"""
+    results = execute_calls(calls, continue_on_error)
+    return {"count": len(results), "results": results}
+
+
+@mcp.tool()
+def engine_validate_graph(
+    source: str = "canvas",
+    graph: dict | None = None,
+    frames: int = 360,
+    verbose: bool = False,
+    seed: int = 0,
+    save_path: str | None = None,
+    detail: str = "summary",
+    timeout_s: float = 120.0,
+) -> dict:
+    """干跑校验节点图（静态 + fake-time 模拟; 需引擎运行中）。detail='summary'（默认）省 token; 'full' 完整报告。"""
+    result = _validate_orchestrate(source, graph, frames, verbose, seed, save_path, timeout_s)
+    if "error" in result:
+        return result
+    report = result.get("report")
+    if isinstance(report, dict):
+        result = dict(result)
+        if detail == "full":
+            result["report"] = _trim_report(report)
+        else:
+            result["report"] = op_registry.summarize_report(report)
+    return result
+
+
+@mcp.tool()
+def engine_capture(target: str = "editor", timeout_s: float = 6.0):
+    """抓取窗口帧图像 → PNG 落盘 + 图像直回（agent 可直接看到画面）。target: "editor" / "pie"。"""
+    try:
+        path, png_bytes = _capture_png(target, timeout_s)
+    except EngineError as e:
+        raise ValueError(f"capture failed: {e}") from e
+    return [Image(data=png_bytes, format="png"), f"saved: {path}"]
+
+
+# 全量工具主表（apply_profile 的单一数据源 — 在所有 @mcp.tool() 定义之后固化）
+try:
+    _ALL_TOOL_OBJECTS: dict = dict(mcp._tool_manager._tools)
+except AttributeError:
+    _ALL_TOOL_OBJECTS = {}
+
+
 def main() -> None:
-    """入口（`python -m engine_editor_mcp` / console script）: 清空抓帧目录 → 启动 stdio 服务器。"""
+    """入口: 解析档位 → 裁剪工具集 → 清空抓帧目录 → 启动 stdio 服务器。"""
+    apply_profile(_requested_profile())
     _wipe_frames_dir()
     mcp.run()
 

@@ -17,11 +17,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Union
+import traceback
 
 from Application.Core.Engine import Engine, RendererType, WindowType
 from Application.Core.Events.EngineEvent import EngineLifecycleEvent
 from Application.Core.Window.Window import Window
 from Application.Core.Renderer.Renderer import Renderer
+
+# PIE READY 屏障等待上限 (秒) — 章 T M2 (threading_protocol.md 谓词)
+_READY_TIMEOUT = 15.0
 
 
 @dataclass
@@ -44,6 +48,8 @@ class GameRuntime(Engine):
 
     # ── 宿主桥接（PIE/编辑器注入; 独立运行保持 None — 零反向依赖）──
     _host_bridge: 'RuntimeHostBridge | None' = None
+    # 逻辑线程限帧 (章 T M2): 实测无限制时 ~63kHz busy-spin — 240 保低延迟且不烧核
+    logic_target_fps: float = 240.0
 
     @classmethod
     def set_host_bridge(cls, bridge: 'RuntimeHostBridge') -> None:
@@ -89,29 +95,43 @@ class GameRuntime(Engine):
         # ── 宿主桥接（PIE）: 启动前同步宿主场景 + 共享帧同步 ──
         #    独立运行无桥接 → 全部跳过（对 Editor 零反向依赖）
         bridge = cls._host_bridge
-        if bridge is not None and bridge.sync_scene_from_host is not None:
-            try:
-                bridge.sync_scene_from_host()
-            except Exception as e:
-                print(f"[GameRuntime] host sync_scene_from_host failed: {e}")
-        # ── Overlay 模式: 透明背景由 OverlayInputLayer.OnAttach 设置 ──
-        # (OnAttach 在渲染线程创建渲染器后、首帧前调用，保证确定性)
-        # ── 帧同步: PIE 作为 slave, 等待 Editor 每帧完成后再渲染 ──
-        if bridge is not None and bridge.frame_sync is not None:
-            cls._frame_sync = bridge.frame_sync  # 共享同一个 FrameSync
-            cls._is_frame_sync_master = False
-        # ── 启动设备 I/O 线程 ──
-        from Application.Functions.SerialParallelDevice import start as spd_start
-        spd_start()
-        # ── 清理上次运行可能残留的 EEG 会话（异常退出保护）──
-        from Application.Functions.EEGDevice import close_all as gtec_close_all
-        gtec_close_all()
-        # ── 清理上次运行可能残留的 epoch 数据集（同一安全网）──
         try:
-            from Application.Functions.BCIAlgorithm import reset_all as epoch_reset
-            epoch_reset()
-        except Exception:
-            pass
+            if bridge is not None and bridge.sync_scene_from_host is not None:
+                # ★ 章 T M2: 失败不再吞错 — 抛错→清理→调用方置错误态
+                bridge.sync_scene_from_host()
+            # ── Overlay 模式: 透明背景由 OverlayInputLayer.OnAttach 设置 ──
+            # (OnAttach 在渲染线程创建渲染器后、首帧前调用，保证确定性)
+            # ── 帧同步: PIE 作为 slave, 等待 Editor 每帧完成后再渲染 ──
+            if bridge is not None and bridge.frame_sync is not None:
+                cls._frame_sync = bridge.frame_sync  # 共享同一个 FrameSync
+                cls._is_frame_sync_master = False
+            # ── 启动设备 I/O 线程 ──
+            from Application.Functions.SerialParallelDevice import start as spd_start
+            spd_start()
+            # ── 清理上次运行可能残留的 EEG 会话（异常退出保护）──
+            from Application.Functions.EEGDevice import close_all as gtec_close_all
+            gtec_close_all()
+            # ── 清理上次运行可能残留的 epoch 数据集（同一安全网）──
+            try:
+                from Application.Functions.BCIAlgorithm import reset_all as epoch_reset
+                epoch_reset()
+            except Exception:
+                pass
+            # ── ★ READY 屏障 (章 T M2): 等全部 Layer.OnAttach 完成 = 内容注册完毕 ──
+            #    同步失败/挂起 → 显式抛错（调用方置错误态），不再静默进入"半加载"运行
+            if not cls._state()['layers_attached'].wait(timeout=_READY_TIMEOUT):
+                raise RuntimeError(
+                    f"GameRuntime layers not attached within {_READY_TIMEOUT}s — "
+                    "content registration stalled (see threading_protocol.md)"
+                )
+        except Exception as e:
+            # 显式失败: 清理半初始化运行时后上抛 (禁止吞错 — threading_protocol.md §2)
+            print(f"[GameRuntime] START FAILED: {type(e).__name__}: {e}")
+            try:
+                cls.stop()
+            except Exception:
+                traceback.print_exc()
+            raise
         EngineLifecycleEvent.Pack(stage="start", message="Started in PIE mode", engine=cls)
         return cls
 

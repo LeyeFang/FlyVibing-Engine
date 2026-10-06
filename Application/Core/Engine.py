@@ -39,6 +39,7 @@ from Application.Core.Input.InputState import InputState, _set_default_input_sta
 from Application.Core.Window.Window import Window
 from Application.Core.Renderer.Renderer import Renderer
 from Application.Core.Renderer.FrameCaptureSlot import FrameCaptureSlot
+from Application.Core.ThreadRegistry import ThreadRegistry
 from Application.Core.Scene.SceneManager import SceneManager
 from Application.Resource.ResourceManager import ResourceManager
 
@@ -162,6 +163,8 @@ class Engine:
     run_state: bool = True
     renderer_thread: Thread | None = None
     _logic_thread: Thread | None = None
+    # 逻辑线程目标帧率 (0=不限制); PIE 由 GameRuntime 设 240 — 防 busy-spin (章 T M2)
+    logic_target_fps: float = 0.0
     target_frame_time: float = 0.0
     _instance: 'Engine' = None
 
@@ -393,14 +396,26 @@ class Engine:
         本线程仅执行游戏逻辑更新。
         """
         cls._state()['run_ready'].set()
-        while cls.run_state:
-            cls._tick_timing()
-            for layer in cls._state()['layer_stack']:
-                layer.OnUpdate()
-                if not cls.run_state:
-                    break
-            # 不在此处 sleep — 帧率由实际工作负载和 vsync 自然调节；
-            # 需要限帧的场景由上层（验证器 --fps 参数）控制。
+        _reg = f"logic:{cls.__name__}"
+        ThreadRegistry.register(_reg, owner=f"Engine:{cls.__name__}",
+                                expect_hz=20.0, note="每帧 OnUpdate")
+        try:
+            _cap_dt = (1.0 / cls.logic_target_fps) if cls.logic_target_fps else 0.0
+            while cls.run_state:
+                _t0 = _time.perf_counter()
+                ThreadRegistry.heartbeat(_reg)
+                cls._tick_timing()
+                for layer in cls._state()['layer_stack']:
+                    layer.OnUpdate()
+                    if not cls.run_state:
+                        break
+                # ── 限帧 (章 T M2): 默认不限制; PIE 由 GameRuntime 设 240 防 busy-spin ──
+                if _cap_dt > 0.0:
+                    _spent = _time.perf_counter() - _t0
+                    if _spent < _cap_dt:
+                        _time.sleep(_cap_dt - _spent)
+        finally:
+            ThreadRegistry.unregister(_reg)
 
     # ════════════════════════════════════════════════════════════
     # 时间系统
@@ -548,8 +563,15 @@ class Engine:
                 layer.OnAttach()
             cls._state()['layers_attached'].set()
             cls._get_profiler().start(1)
-            while cls.run_state:
-                cls._render_one_frame()
+            _reg = f"render:{cls.__name__}"
+            ThreadRegistry.register(_reg, owner=f"Engine:{cls.__name__}",
+                                    expect_hz=20.0, note="渲染主循环")
+            try:
+                while cls.run_state:
+                    ThreadRegistry.heartbeat(_reg)
+                    cls._render_one_frame()
+            finally:
+                ThreadRegistry.unregister(_reg)
         except Exception as e:
             EngineLifecycleEvent.Pack(
                 stage="exception",

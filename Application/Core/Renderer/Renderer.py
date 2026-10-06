@@ -57,6 +57,8 @@ class Renderer(ABC):
         self._cam_is_orthographic: bool = False
         self._cam_ortho_size: float = 10.0
         self._overlay_callbacks: list = []
+        # 后端信息（GL vendor/version 等; 渲染线程采集, 只读消费 — renderer.snapshot op）
+        self.gl_info: dict = {}
 
     def enqueue(self, cmd: RenderCommand) -> None:
         """主线程安全: 提交一条渲染命令。

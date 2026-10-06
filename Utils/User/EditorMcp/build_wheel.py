@@ -6,7 +6,8 @@ build_wheel.py — 零依赖 wheel 构建器（离线环境用, 不依赖 setupt
 产物:
     Utils/User/EditorMcp/dist/engine_editor_mcp-<version>-py3-none-any.whl
 
-说明: 纯 Python 包, 手工组装 wheel 结构（包目录 + dist-info + RECORD）;
+说明: 纯 Python 包, 手工组装 wheel 结构（包目录[含 skills/ 数据] + dist-info + RECORD）;
+新增 op 后记得先跑 `python -m engine_editor_mcp.docgen` 重生成 ops.md（测试会校验新鲜度）。
 如后续需要 PyPI 生态标准构建, 安装 setuptools 后可直接 `pip wheel`。
 """
 
@@ -69,14 +70,20 @@ def main() -> None:
     entry_points = (
         "[console_scripts]\n"
         "engine-editor-mcp = engine_editor_mcp.__main__:main\n"
+        "engine-editor-cli = engine_editor_mcp.cli:main\n"
     ).encode("utf-8")
 
     dist_info = f"{DIST_NAME}-{version}.dist-info"
     files: list[tuple[str, bytes]] = []
-    for fname in sorted(os.listdir(SRC)):
-        if fname.endswith(".py"):
-            with open(os.path.join(SRC, fname), "rb") as fh:
-                files.append((f"{DIST_NAME}/{fname}", fh.read()))
+    for root, dirs, fnames in os.walk(SRC):
+        dirs[:] = [d for d in sorted(dirs) if d != "__pycache__"]
+        for fname in sorted(fnames):
+            if fname.endswith((".pyc", ".pyo")):
+                continue
+            full = os.path.join(root, fname)
+            rel = os.path.relpath(full, SRC).replace(os.sep, "/")
+            with open(full, "rb") as fh:
+                files.append((f"{DIST_NAME}/{rel}", fh.read()))
     files.append((f"{dist_info}/METADATA", metadata))
     files.append((f"{dist_info}/WHEEL", wheel_meta))
     files.append((f"{dist_info}/entry_points.txt", entry_points))

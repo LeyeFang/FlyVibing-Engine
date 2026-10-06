@@ -1,0 +1,19 @@
+{
+  "format_version": 1,
+  "prefab_name": "DefaultLight",
+  "root": {
+    "name": "Sun",
+    "components": {
+      "Transform": {
+        "position_x": 0.0, "position_y": 5.0, "position_z": 0.0,
+        "rotation_x": 1.135, "rotation_y": 0.357, "rotation_z": 0.0,
+        "scale_x": 1.0, "scale_y": 1.0, "scale_z": 1.0
+      },
+      "DirectionalLight": {
+        "color_r": 1.0, "color_g": 0.98, "color_b": 0.92,
+        "intensity": 1.0
+      }
+    }
+  },
+  "children": {}
+}

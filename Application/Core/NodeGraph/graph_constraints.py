@@ -39,6 +39,9 @@ POOL_ADD = "AddToDevicePool"
 POOL_KILL = "KillDevicePool"
 GLOBAL_POOL = "global"
 
+# 动态媒体驱动节点 (ShowMedia — 编辑器=模板; 图内接线才播放, PIE/独立运行生效)
+SHOW_MEDIA = "ShowMedia"
+
 
 def device_session_key(node_type: str, nid, props) -> str:
     """Init 节点的会话键 — device_name 或 <prefix>#<nid> 回退 (与评估器一致)。"""
@@ -511,6 +514,16 @@ def epoch_key(nid, props) -> str:
     """Append/Load 的数据集键 — epochs_name 或 epochs#<nid> 回退（与评估器一致）。"""
     name = str((props or {}).get("epochs_name", "")).strip()
     return name or f"epochs#{nid}"
+
+
+def nodes_as_dicts(canvas) -> dict:
+    """UI/求值器适配: NodeCanvas → {nid: {"node_type", "props"}}。
+
+    校验体系（checks/epoch_*/model_*/bci_* 等）的入参是序列化 dict；
+    UI 侧持有 NodeInstance — 一律经本函数转换（不要直接传 canvas.nodes）。
+    """
+    return {nid: {"node_type": o.node_type, "props": o.props}
+            for nid, o in (canvas.nodes if canvas is not None else {}).items()}
 
 
 def epoch_source_keys(nodes: dict) -> dict:

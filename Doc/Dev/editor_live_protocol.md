@@ -52,12 +52,17 @@ flowchart LR
 
 ## 4. op 表（v2 基础 13 条 — 2026-09-28 实机验证；v3 容器表见 §4.1）
 
+> 注：下表的“MCP 工具”列为 **full 档**工具名；lite 档统一经 `engine_call(op, args)` 调用（§5），旧工具名可直接作为 op 别名。
+
 | op | MCP 工具 | args | 语义（等价的人工操作） | 响应 |
 |---|---|---|---|---|
 | `sim.play` | `editor_run_pie` | — | 点 **Run**（帧末消费） | `{requested, state}` |
 | `sim.stop` | `editor_stop_pie` | — | 点 **Stop**（帧末消费） | `{requested, state}` |
 | `sim.state` | `editor_sim_state` | — | 只读（状态机 + PIE 线程存活） | `{state, runtime_alive}` |
 | `view.set_mode` | `editor_switch_2d` / `editor_set_scene_type` | `{"mode": "2d"\|"3d"\|"overlay"}` | **Scene Type 按钮完整语义**：`set_game_type`（决定 PIE 用哪台摄像机）+ 视口切换 | `{mode, label, game_type}` |
+| `view.set_grid` | — | `{"visible": bool}` | **View 菜单 Show Grid 同路径**（`Grid.set_visible`；注销/重注册 overlay，幂等，缺参数报错） | `{visible}` |
+| `threads.snapshot` | — | — | **线程注册表快照**（注册/未注册漂移/停滞判定；协议 `threading_protocol.md`，工具 `Utils/Dev/thread_probe.py` 同源） | `{registered, unregistered, stale, count}` |
+| `renderer.snapshot` | — | — | **渲染器状态快照**（后端 / GL 信息 / 资源计数 / 视口 / 帧统计；协议 `rendering_protocol.md`；无头时 `available=false`） | `{available, backend, gl, viewport, counts, overlays, stats}` |
 | `camera.get` | `editor_camera_get` | `{"role": "3d"\|"2d"\|"overlay"}` | 读场景摄像机实体（Transform + Camera） | `{position, rotation, projection, ...}` |
 | `camera.set` | `editor_camera_set` | role + 部分字段（position/rotation/projection/ortho_size/fov/...） | Inspector 改摄像机属性（仅编辑器场景） | 更新后快照 |
 | `graph.list` | `editor_graph_list` | — | 节点图快照（复用 canvas API, 不经 UI） | `{nodes, links}` |
@@ -97,7 +102,7 @@ flowchart LR
 | `component.add` | `editor_component_add` | Inspector Add Component（MeshRenderer 自动绑 Cube 网格） |
 | `component.remove` | `editor_component_remove` | Inspector 移除组件（Transform 不可移除; MeshRenderer 同步注销 GPU） |
 | `component.get` | `editor_component_get` | 组件字段快照（通用序列化; MeshRenderer 附带 mesh/material 语义摘要） |
-| `component.set` | `editor_component_set` | 部分字段更新 — Transform 支持 relative/标量缩放; MeshRenderer 支持 color/mesh/material/material_name/shader/uniform/texture 系列; 其余字段直写 |
+| `component.set` | `editor_component_set` | 部分字段更新 — Transform 支持 relative/标量缩放; MeshRenderer 支持 color/mesh/material/material_name/shader/**blend**/uniform/texture 系列; 其余字段直写 |
 | `scene.list` | `editor_scene_list` | 场景列表 + 活跃场景 |
 | `scene.switch` | `editor_scene_switch` | Scene 下拉切换（保存当前/加载/视口/节点图同步全流程） |
 | `scene.create` | `editor_scene_create` | 点 **+** 新建场景 |
@@ -125,33 +130,48 @@ UI / MCP / 程序三入口共用同一服务实例；离线 `validate_graph` 已
 UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 帧；完成后自动弹报告窗口,
 条目点击跳转节点; Copy / Export .json）。UI 与 MCP 任务互见（同一服务实例）。
 
-## 5. MCP 侧（agent 工具）
+## 5. agent 通道（MCP / CLI / Skill — v0.4.0 混合形态）
 
-- **发布形态（2026-10-02 独立化; 收纳于 `Utils/User/EditorMcp/`）**：源码唯一维护于 `Utils/User/EditorMcp/src/engine_editor_mcp/`（console script `engine-editor-mcp`）；
-  `Utils/User/EditorMcp/mcp_server.py` 为薄 shim（dev/E2E 入口, 同一源码）。**纯 socket 客户端，不 import Application**（测试守卫已扩展到包源码）；
-  三方工作区用法：`pip install` wheel（零依赖构建: `python Utils/User/EditorMcp/build_wheel.py` → 产物 `Utils/User/EditorMcp/dist/`）→
-  `.vscode/mcp.json` 配 `{"command": "python", "args": ["-m", "engine_editor_mcp"]}`（详见 `Utils/User/EditorMcp/README.md`）；
-- **v3 工具**：`entity_*` (8) / `selection_*` (3) / `component_*` (6) / `scene_*` (5) / `resource_*` (3) —— 容器级实时编辑（§4.1）；
-- **v4 工具**：`editor_graph_validate(_report/_cancel)` / `editor_graph_export` / `editor_graph_import` / `editor_project_open` —— 图校验（引擎内服务）+ 导入导出 + 工程打开（§4.2）；
-- 编辑器未运行时返回人话错误：`编辑器未运行（127.0.0.1:8977 无监听）— 请先启动 startup.bat。`
-- **帧图像**（`editor_capture`）：request → 轮询 fetch → numpy 翻转（GL bottom-up → top-down，本进程）→
-  Pillow 编码 PNG → ① 落盘 ② 返回 MCP 图像内容块（agent 可直接查看画面 + 说明文本含路径）；
+- **发布形态（独立分发; 收纳于 `Utils/User/EditorMcp/`）**：源码唯一维护于 `Utils/User/EditorMcp/src/engine_editor_mcp/`
+  （console scripts `engine-editor-mcp` + `engine-editor-cli`）；`Utils/User/EditorMcp/mcp_server.py` 为薄 shim（dev/E2E 入口, 同一源码）。
+  **纯 socket 客户端，不 import Application**（测试守卫已扩展到包源码）；
+  三方工作区：`pip install` wheel（零依赖构建: `python Utils/User/EditorMcp/build_wheel.py`）→
+  `engine-editor-cli setup --workspace <项目>`（拷贝 Skill + 合并 mcp.json, 默认 lite 档）；详见 `Utils/User/EditorMcp/README.md`。
+- **op 注册表（单一事实源）**：`src/engine_editor_mcp/ops.py`（48 ops: 摘要/参数/分类/旧工具别名）。
+  驱动：CLI 命令与帮助、lite MCP 的 engine_help/engine_call、`docgen` 生成 `references/ops.md`；
+  完整性由 `Test/Application/Editor/test_editor_mcp_package.py` 对照 `_register_ops` 守卫（新增 op 必须同步）。
+- **MCP 档位**（`--profile lite|full` > env `MGE_MCP_PROFILE` > 默认 full）：
+  - `lite`（推荐; 5 工具 ≈2.3k schema 字符 — 相比 full 44 工具 ≈17.9k 字符约 -87%）:
+    `engine_help`（op 目录/详情, 按需读取）、`engine_call`（单 op; 兼容旧工具名; 大载荷自动瘦身）、
+    `engine_batch`（顺序多 op, 省往返）、`engine_validate_graph`（detail=summary 默认）、`engine_capture`（图像直回）；
+  - `full`：v1–v4 全部 44 个 `editor_*` 工具（向后兼容, 行为不变）—— lite 工具不注册；
+  - 工具集裁剪在 `server.py::apply_profile`（幂等; 内部结构不可用时 fail-open）。
+- **CLI**（`engine-editor-cli`, 零常驻上下文成本 — 终端型 agent 首选）：
+  `ops` / `help` / `call <op> k=v...` / `batch` / `exec <script.py>`（注入 `engine` 客户端, 脚本内过滤输出）/
+  `validate`（阻塞编排, summary 默认）/ `capture`（只落盘）/ `setup`（向任意工作区装 Skill+mcp.json）。
+- **Skill**（`engine-editor`, 渐进披露）：SKILL.md（通道选择/速查/纪律）+ `references/ops.md`（docgen 生成）
+  + `references/workflows.md`（配方）；安装: `engine-editor-cli setup` 或仓库 `install_mcp.py`（同步到 `.github/skills/`）。
+- **帧图像**（`engine_capture`）：request → 轮询 fetch → numpy 翻转（GL bottom-up → top-down，本进程）→
+  Pillow 编码 PNG → ① 落盘 ② 返回 MCP 图像内容块（agent 可直接查看画面 + 说明文本含路径）；想省 token 用 CLI `capture`（只回路径）；
 - 抓帧目录：`<临时目录>\engine_editor_mcp\frames\frame_{editor|pie}_{时间戳}_g{gen}.png`
   （默认 `%TEMP%`; 环境变量 `MGE_MCP_FRAMES_DIR` 可覆盖）；**清理策略：入口进程启动时清空**（import 不清空）；
-- venv 依赖：`mcp` 1.10.1（FastMCP Image 内容块）+ `Pillow`（已装）；
-- 注册（dev 仓库）：`.venv-py314t\Scripts\python.exe Utils/User/EditorMcp/install_mcp.py` →
-  写入工作区 `.vscode/mcp.json`（名称 `engine-editor-live`，command=venv python）→ **重载 VS Code 生效**；
-- 注册（外部工作区）：手写 mcp.json 指向已安装的独立包（见上方发布形态）；引擎侧无需任何配置；
-  卸载：`... install_mcp.py --uninstall`。
+- 编辑器未运行时返回人话错误：`编辑器未运行（127.0.0.1:8977 无监听）— 请先启动 startup.bat。`
+- 注册（dev 仓库）：`.venv-py314t\Scripts\python.exe Utils/User/EditorMcp/install_mcp.py [--profile lite|full]` →
+  写 `.vscode/mcp.json`（名称 `engine-editor-live`）+ 同步 Skill → **重载 VS Code 生效**；卸载 `--uninstall`；
+- 注册（外部工作区）：`engine-editor-cli setup --workspace <dir>`；引擎侧无需任何配置。
 
 ## 6. 新增一个 op 的步骤（扩展清单）
 
 1. `LiveCommandServer._register_ops()` 里注册 `"域.动作": cls._op_xxx`；
 2. 实现 `_op_xxx(args) -> dict`（**主线程**执行；只调编辑器 API/控制器；错误直接 raise，pump 会转成受控错误）；
-3. `Utils/User/EditorMcp/src/engine_editor_mcp/server.py` 加一个 `@mcp.tool()` 薄包装（→ `_send("域.动作", args)`）；
-   图像类 op: handler 返回的 result 里放 `_payload`（bytes）+ `binary_bytes`
-   （socket 线程会在行后追加裸负载, 不入 JSON）；
-4. 测试：`Test/Application/Editor/test_live_command_server.py` 加一条往返断言（图像类用 `roundtrip_binary`）；
+3. agent 侧登记（v0.4.0 起）：
+   - `src/engine_editor_mcp/ops.py` 加条目（摘要/参数/分类）—— CLI、lite MCP（engine_help/engine_call）立即生效；
+   - 需要旧式独立工具（full 档）再加 `@mcp.tool()` 薄包装（→ `_send("域.动作", args)`）；lite 档无需；
+   - 图像类 op: handler 返回的 result 里放 `_payload`（bytes）+ `binary_bytes`
+     （socket 线程会在行后追加裸负载, 不入 JSON）；
+   - 跑 `python -m engine_editor_mcp.docgen` 重生成 `skills/engine-editor/references/ops.md`；
+4. 测试：`Test/Application/Editor/test_live_command_server.py` 加往返断言（图像类用 `roundtrip_binary`）；
+   `Test/Application/Editor/test_editor_mcp_package.py` 校验注册表与引擎一致 + ops.md 新鲜度；
 5. 更新本文档 op 表（及 §5/§8/§9 如涉及）。
 
 ## 7. 故障排查
@@ -170,6 +190,8 @@ UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 �
 ```powershell
 # 无头回环测试（60 项断言: 生命周期 / 控制 / 二进制尾随帧 / v3 容器 / v4 校验·导入导出受控错误; 不需要 GUI）
 .venv-py314t\Scripts\python.exe Test/Application/Editor/test_live_command_server.py
+# EditorMcp 独立包离线套件（注册表 / lite schema 预算 / CLI / setup / docgen / wheel; 不需要 GUI）
+.venv-py314t\Scripts\python.exe Test/Application/Editor/test_editor_mcp_package.py
 # 校验服务专项（29 项: 静态规则 / 干跑 / 任务流 / 忙拒绝 / 取消; 不需要 GUI）
 .venv-py314t\Scripts\python.exe Test/Application/NodeGraph/test_graph_validation.py
 # 实机 E2E-v4（需 startup.bat 运行中）: 打开 MI-SSSEP 工程 → 切场景 → 画布干跑校验 → 导出/回灌
@@ -203,6 +225,8 @@ UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 �
 
 ## 9. 路线（后续阶段）
 
+- **agent 通道 v0.4.0（2026-10-05 落地）**：MCP 双档位（lite 5 工具 / full 44 工具）+ CLI
+  （ops/help/call/batch/exec/validate/capture/setup）+ Skill（渐进披露）+ op 注册表/文档生成 —— 见 §5/§6。
 - ~~阶段 2~~（2026-09-28 大部分落地）：`sim.stop` ✅、图编辑 ops（`graph.add/link/set_props` + `graph.list` ✅；
   `graph.remove` 未做）、`view.screenshot` ✅（`frame.request/fetch` + `editor_capture`，PNG 在 MCP 进程）；
   仍缺：`sim.pause/resume` 暴露、`graph.remove`、帧环形日志（"实时图像=调试日志"）；容器级缺口见 §10。

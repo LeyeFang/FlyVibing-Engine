@@ -42,10 +42,8 @@ class SceneSync:
         """
         st = self._mgr
 
-        if not st._component_registry:
-            st._component_registry["Camera"] = Camera
-            st._component_registry["MeshRenderer"] = MeshRenderer
-            st._component_registry["Transform"] = Transform
+        # ★ 单一注册源（幂等）: 防止 sync 先于 Init 的路径缺少内置组件
+        st.comp_mgr.ensure_defaults()
 
         scene.entities.clear()
         max_sid = 0
@@ -88,6 +86,7 @@ class SceneSync:
         scene._next_sid = max_sid + 1 if max_sid > 0 else 1
         scene.main_camera_entity_id = st._eid_to_sid.get(st.main_camera_id)
         scene.game_type = st.game_type
+        scene.ambient_color = tuple(getattr(st, 'ambient_color', (0.18, 0.18, 0.18)))
 
     # ════════════════════════════════════════════════════════════
     # Scene → esper (加载)
@@ -101,10 +100,15 @@ class SceneSync:
         """
         st = self._mgr
 
-        if not st._component_registry:
-            st._component_registry["Camera"] = Camera
-            st._component_registry["MeshRenderer"] = MeshRenderer
-            st._component_registry["Transform"] = Transform
+        # ★ 单一注册源（幂等）: 防止 sync 先于 Init 的路径缺少内置组件
+        st.comp_mgr.ensure_defaults()
+
+        # ── 恢复场景环境光 (光照帧状态来源) ──
+        try:
+            amb = getattr(scene, 'ambient_color', (0.18, 0.18, 0.18))
+            st.ambient_color = tuple(float(v) for v in amb[:3])
+        except Exception:
+            st.ambient_color = (0.18, 0.18, 0.18)
 
         # ── 清空现有实体 + 映射表 ──
         if clear_existing:

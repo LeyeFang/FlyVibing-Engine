@@ -126,6 +126,7 @@ class NodeEditorPanel(BasePanel):
         self._export_path: str = ""
         self._import_error: str = ""
         self._export_error: str = ""
+        self._import_validate_first: bool = False  # GUI 默认关（便于导入待修图）; agent ops 默认开
         self._last_io_dir: str = str(Path.home())  # 上次 I/O 目录
         # ── Validate 状态（引擎内校验服务 — 与 MCP 共用同一实例）──
         self._validate_task_id: int | None = None
@@ -580,6 +581,10 @@ class NodeEditorPanel(BasePanel):
                 self._import_error,
             )
 
+        # ── 静态检查开关（agent 导入默认拒绝静态错误; GUI 默认关 — 便于导入待修图）──
+        _, self._import_validate_first = imgui.checkbox(
+            "Validate first (reject on static errors)", self._import_validate_first)
+
         imgui.spacing()
 
         # ── Import / Cancel ──
@@ -646,71 +651,63 @@ class NodeEditorPanel(BasePanel):
         imgui.end_popup()
 
     def _do_import(self, canvas: NodeCanvas) -> None:
-        """执行导入：从 JSON 文件加载节点图。"""
+        """执行导入：读取 + （可选）静态检查 → 替换画布内容。
+
+        实现与 agent ops（LiveCommandServer graph.import）共用 graph_io.prepare_import/apply_to_canvas;
+        validate_first 由弹窗复选框控制（GUI 默认关 — 便于导入待修图; agent 默认开）。
+        """
         fp = self._import_path.strip()
         if not fp:
             self._import_error = "Please select a file."
             return
 
-        if not os.path.isfile(fp):
-            self._import_error = f"File not found:\n{fp}"
-            return
+        from Application.Core.NodeGraph import graph_io
 
         try:
-            with open(fp, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            data, refused = graph_io.prepare_import(path=fp, validate_first=self._import_validate_first)
         except json.JSONDecodeError as e:
             self._import_error = f"Invalid JSON:\n{e}"
             return
-        except Exception as e:
-            self._import_error = f"Failed to read file:\n{e}"
+        except ValueError as e:
+            self._import_error = str(e)
             return
 
-        if "nodes" not in data:
-            self._import_error = "Not a valid node graph file (missing 'nodes')."
+        if refused is not None:
+            errs = refused.get("static_errors") or []
+            first = errs[0].get("message", "") if errs else ""
+            self._import_error = f"Static check failed ({len(errs)} error(s)): {first}"
             return
 
         try:
-            new_canvas = NodeCanvas.from_dict(data)
+            result = graph_io.apply_to_canvas(canvas, data)
         except Exception as e:
             self._import_error = f"Failed to parse graph:\n{e}"
             return
 
-        # ── 替换画布内容 ──
-        canvas.clear()
-        for nid, inst in new_canvas.nodes.items():
-            canvas._nodes[nid] = inst
-        for lid, lk in new_canvas.links.items():
-            canvas._links[lid] = lk
-
         self._last_io_dir = os.path.dirname(fp)
-        print(f"[Import] Loaded {len(canvas.nodes)} nodes, {len(canvas.links)} links from {fp}")
+        print(f"[Import] Loaded {result['nodes']} nodes, {result['links']} links from {fp}")
         self._import_path = ""
         self._import_error = ""
         imgui.close_current_popup()
 
     def _do_export(self, canvas: NodeCanvas) -> None:
-        """执行导出：将节点图保存为 JSON 文件。"""
+        """执行导出：序列化画布（含 _rules）→ JSON 文件。实现与 agent ops 同源（graph_io）。"""
         fp = self._export_path.strip()
         if not fp:
             self._export_error = "Please specify a file path."
             return
 
-        # 自动补 .json
-        if not fp.lower().endswith(".json"):
-            fp += ".json"
+        from Application.Core.NodeGraph import graph_io
 
         try:
-            os.makedirs(os.path.dirname(fp) or ".", exist_ok=True)
-            data = canvas.to_dict()
-            with open(fp, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            result = graph_io.export_graph(canvas, path=fp, include_rules=True, inline=False)
         except Exception as e:
             self._export_error = f"Failed to write file:\n{e}"
             return
 
+        fp = result["saved_path"]
         self._last_io_dir = os.path.dirname(fp)
-        print(f"[Export] Saved {len(canvas.nodes)} nodes, {len(canvas.links)} links to {fp}")
+        print(f"[Export] Saved {result['nodes']} nodes, {result['links']} links to {fp}")
         self._export_path = ""
         self._export_error = ""
         imgui.close_current_popup()
@@ -1102,6 +1099,7 @@ class NodeEditorPanel(BasePanel):
             "KillGtecDevice", "GetGtecData",
             "InitSigGenDevice", "StartSigGenRecord", "StopSigGenRecord",
             "KillSigGenDevice", "GetSigGenData",
+            "ShowMedia",
         }
         for lyr in sorted(layer_nodes.keys()):
             current_y: float = 80.0

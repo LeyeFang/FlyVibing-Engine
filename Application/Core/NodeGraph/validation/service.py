@@ -284,35 +284,43 @@ class ValidationService:
                 self._task["progress"] = float(info.get("progress", self._task.get("progress", 0.0)))
 
     def _work(self, task_id: int, graph_data: dict, options: dict | None, cancel: threading.Event) -> None:
-        try:
-            report = run_validation(
-                graph_data,
-                options,
-                progress_cb=self._update_progress,
-                cancel_event=cancel,
-                task_id=task_id,
-            )
-            state = report["state"]
-        except Exception as e:  # noqa: BLE001 — worker 崩溃收敛为 failed 报告
-            import traceback
+        from Application.Core.ThreadRegistry import ThreadRegistry
 
-            report = {
-                "task_id": task_id,
-                "state": "failed",
-                "ok": False,
-                "error": f"{type(e).__name__}: {e}",
-                "traceback": traceback.format_exc(),
-                "counts": {"errors": 1, "warnings": 0, "log_lines": 0},
-            }
-            state = "failed"
-        with self._lock:
-            self._reports[task_id] = report
-            while len(self._reports) > _MAX_REPORTS:
-                self._reports.popitem(last=False)
-            if self._task is not None and self._task["task_id"] == task_id:
-                self._task["state"] = state
-                self._task["progress"] = 1.0
-                self._task["phase"] = "finished"
+        _reg = f"GraphValidation#{task_id}"
+        ThreadRegistry.register(_reg, owner="NodeGraph.validation", expect_hz=0.0,
+                                note="单任务 worker")
+        try:
+            try:
+                report = run_validation(
+                    graph_data,
+                    options,
+                    progress_cb=self._update_progress,
+                    cancel_event=cancel,
+                    task_id=task_id,
+                )
+                state = report["state"]
+            except Exception as e:  # noqa: BLE001 — worker 崩溃收敛为 failed 报告
+                import traceback
+
+                report = {
+                    "task_id": task_id,
+                    "state": "failed",
+                    "ok": False,
+                    "error": f"{type(e).__name__}: {e}",
+                    "traceback": traceback.format_exc(),
+                    "counts": {"errors": 1, "warnings": 0, "log_lines": 0},
+                }
+                state = "failed"
+            with self._lock:
+                self._reports[task_id] = report
+                while len(self._reports) > _MAX_REPORTS:
+                    self._reports.popitem(last=False)
+                if self._task is not None and self._task["task_id"] == task_id:
+                    self._task["state"] = state
+                    self._task["progress"] = 1.0
+                    self._task["phase"] = "finished"
+        finally:
+            ThreadRegistry.unregister(_reg)
 
 
 _SERVICE = ValidationService()

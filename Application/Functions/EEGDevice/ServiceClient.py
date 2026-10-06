@@ -310,26 +310,35 @@ class ServiceBackend(DeviceBackend):
         if sock is None:
             return
         sock.settimeout(None)   # 阻塞读; 退出靠 socket shutdown/EOF (避免半帧超时)
-        while not self._reader_stop.is_set():
-            try:
-                msg = recv_message(sock)
-            except (OSError, ConnectionError, EOFError):
-                break
-            if msg is None:
-                break
-            if not isinstance(msg, dict):
-                continue
-            if msg.get("type") == "block":
-                cb = self._on_block
-                if cb is not None:
-                    cb(msg.get("data"))
-                continue
-            rid = msg.get("rid")
-            if isinstance(rid, int):
-                with self._router_lock:
-                    q = self._router.get(rid)
-                if q is not None:
-                    try:
-                        q.put_nowait(msg)
-                    except queue.Full:
-                        pass
+        from Application.Core.ThreadRegistry import ThreadRegistry
+
+        _reg = f"eeg-{self.brand}-service"
+        ThreadRegistry.register(_reg, owner="EEGDevice.ServiceClient", expect_hz=0.0,
+                                note="阻塞 recv; 静默期心跳不推进=正常")
+        try:
+            while not self._reader_stop.is_set():
+                try:
+                    msg = recv_message(sock)
+                except (OSError, ConnectionError, EOFError):
+                    break
+                if msg is None:
+                    break
+                ThreadRegistry.heartbeat(_reg)
+                if not isinstance(msg, dict):
+                    continue
+                if msg.get("type") == "block":
+                    cb = self._on_block
+                    if cb is not None:
+                        cb(msg.get("data"))
+                    continue
+                rid = msg.get("rid")
+                if isinstance(rid, int):
+                    with self._router_lock:
+                        q = self._router.get(rid)
+                    if q is not None:
+                        try:
+                            q.put_nowait(msg)
+                        except queue.Full:
+                            pass
+        finally:
+            ThreadRegistry.unregister(_reg)

@@ -579,6 +579,7 @@ class SceneBrowserController:
                 'file_path': mat._file_path,
                 'shader_id': mat.shader_id,
                 'shader_name': ResourceManager.GetShaderName(mat.shader_id),
+                'blend': getattr(mat, 'blend', 'opaque'),
                 'texture_ids': list(mat.texture_id_list),
                 'uniforms': dict(mat.uniforms_data),
             }
@@ -606,6 +607,29 @@ class SceneBrowserController:
         """切换 material 的 shader 并标记修改。"""
         try:
             EditorHost.scene.SetEntityShader(entity_id, shader_id)
+        except Exception:
+            pass
+
+    @classmethod
+    def set_material_blend(cls, entity_id: int, blend: str) -> None:
+        """切换 material 的混合模式 (opaque / alpha) 并标记修改。
+
+        alpha = 透明混合 (SRC_ALPHA, ONE_MINUS_SRC_ALPHA); 透明实体在渲染器
+        内按视图深度从远到近排序绘制 (见 Doc/Dev/rendering_protocol.md §混合)。
+        """
+        blend = str(blend).lower()
+        if blend not in ("opaque", "alpha"):
+            raise ValueError(f"unsupported blend mode: {blend!r} (expected 'opaque' or 'alpha')")
+        try:
+            from Application.Core.Scene.BasicComponents import MeshRenderer
+            import esper
+            mr = esper.component_for_entity(entity_id, MeshRenderer)
+            SceneManager._ensure_unique_material(EditorHost.scene, entity_id, mr)
+            from Application.Resource.ResourceManager import ResourceManager
+            mat = ResourceManager.GetMaterial(mr.material_id)
+            if getattr(mat, 'blend', 'opaque') != blend:
+                mat.blend = blend
+                mat.mark_modified()
         except Exception:
             pass
 

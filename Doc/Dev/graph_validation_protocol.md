@@ -21,7 +21,7 @@ validation/
 | 入口 | 位置 | 说明 |
 |---|---|---|
 | UI | Node Editor 面板工具栏 **Validate** 按钮 | 选项: 静态 / 360 帧 / 600 帧; 完成后自动弹报告窗口 |
-| MCP | `graph.validate.start/state/report/cancel`（LiveCommandServer）+ `editor_graph_validate` 等工具 | 阻塞编排工具内部 start→poll→report |
+| MCP | `graph.validate.start/state/report/cancel`（LiveCommandServer）+ `editor_graph_validate` 等工具（full 档口径; lite 档用 `engine_validate_graph` / CLI `validate`） | 阻塞编排工具内部 start→poll→report |
 | 程序 | `run_validation(graph, options)`（同步） | `PlayerBootstrap.dry_run` 与无头测试使用 |
 
 **离线 `validate_graph` 已弃用**（`Utils/User/NodeEditor/mcp_server.py` 仅返回指引）；agent 干跑验证需要引擎运行中。
@@ -54,6 +54,8 @@ scene 文件格式（`{"scene": {"node_graph": ...}}`）由 `extract_graph_data`
 | `epoch_reference` | error | Epoch 数据集引用（Count/Clear/Save 的 epochs_name 未命中画布源 / 空名多源歧义） |
 | `epoch_pin_unconnected` | error | EpochAppend 的 Data / Label 未连 |
 | `bci_reference` | error | BCI 算法引用（Init/Train/Test 模型与数据集绑定 / TestCCA 频率组 <2 / load 缺 model_path） |
+| `media_pin_unconnected` | error | ShowMedia 的 Entity（entity_ref）未连 |
+| `media_exec_unconnected` | **warning** | ShowMedia 的 exec_in 未连（节点永不执行） |
 
 **静态有 error 时跳过干跑**（报告 `runtime.skipped=True`）；warning 不拦截（`ok` 只由 error 决定）。
 

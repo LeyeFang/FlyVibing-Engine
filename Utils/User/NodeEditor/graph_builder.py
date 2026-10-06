@@ -432,6 +432,21 @@ class GraphBuilder:
                          {"freqs": list(freqs or [10.0, 12.0, 15.0]),
                           "n_harmonics": harmonics})
 
+    # ── 动态媒体 (GIF / 图像 — ShowMedia) ────────────────
+
+    def show_media(self, update_id: int, entity_name: str) -> int:
+        """ShowMedia — 挂到 update_id (如 OnFrameUpdate) 链: Get Entity → Show Media。
+
+        Entity 直连 Get Entity.Entity; 返回 ShowMedia 节点 id (后续 exec 链续接)。
+        """
+        get = self.node("EntityGet", ["exec_in", "exec_out", "Name"],
+                        {"entity_name": entity_name})
+        show = self.node("ShowMedia", ["exec_in", "exec_out", "Entity"])
+        self.link(update_id, "exec", get, "exec_in")
+        self.link(get, "exec_out", show, "exec_in")
+        self.link(get, "Entity", show, "Entity")
+        return show
+
     # ── 输出 ──────────────────────────────────────────────
 
     def build(self, rules: str = "") -> dict:

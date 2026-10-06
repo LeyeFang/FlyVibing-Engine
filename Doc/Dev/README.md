@@ -17,13 +17,21 @@
 | `bci_algorithm_protocol.md` | `Application/Functions/BCIAlgorithm/**` + `node_types/evaluators {epoch,bci_algorithm}` + 对应 widgets | epoch 数据集、FBCSP/CCA 节点、打包 list 超参、训练同步语义、模型注册、空采验证 |
 | `project_export_protocol.md` | `Application/Editor/ProjectManager.py` + EditorHost 场景 I/O + UI/UIManager 主菜单 + UI/FileDialog | 项目保存/另存/导出、资源路径、主菜单 File 项、迁移与打包 |
 | `runtime_packaging_protocol.md` | `Application/PlayerEntry.py` + `Application/Runtime/PlayerBootstrap.py` + `Application/Core/Project/**` + `Utils/Dev/**`（打包流水线） | 播放器/独立运行、Python 环境打包、wheelhouse、run_game.cmd、gtec fork 轮子策略、运行时线程纪律（§3.1） |
-| `editor_live_protocol.md` | `Application/Editor/Services/LiveCommandServer.py` + `Utils/User/EditorMcp/**` | 实时命令总线（agent 热注入）、实体/组件/场景/资源编辑 ops（v3 §4.1）、校验/导入导出/工程 ops（v4 §4.2）、新增 op、容器补全跟进（§10）、MCP 注册与故障排查 |
+| `editor_live_protocol.md` | `Application/Editor/Services/LiveCommandServer.py` + `Utils/User/EditorMcp/**` | 实时命令总线（agent 热注入）、实体/组件/场景/资源编辑 ops（v3 §4.1）、校验/导入导出/工程 ops（v4 §4.2）、新增 op、容器补全跟进（§10）、agent 通道（MCP lite/full 档、CLI、Skill）与故障排查 |
 | `graph_validation_protocol.md` | `Application/Core/NodeGraph/validation/**` + Node Editor 面板 Validate + `graph.validate.*` / `graph.export/import` ops | 改校验规则/干跑语义/报告格式、改 Validate UI 或图导入导出 |
+| `test_protocol.md` | `Test/**` + `Utils/Dev/test_runner.py` + `Test/Application/Editor/ui_scenario.py` + `_ui_boot.py` | 新增/修改测试、UI 场景回放、排查测试互相干扰时必读：档位 / 沙箱 / 输出契约 / 重置清单 |
+| `threading_protocol.md` | `Application/Core/ThreadRegistry.py` + 全体线程启动点 + `Utils/Dev/thread_probe.py` | **新开线程/跨线程通信/服务进程集成前必读**：三通道纪律、心跳注册四步、实时探针、检查单 |
+| `media_protocol.md` | `Application/Functions/Media/**` + `ShowMedia` 节点 + `MediaPlayer` 组件 + `TextureUpdateCommand` 链 | 改动态媒体（GIF/视频/音频）、媒体节点、动态纹理上传：架构决议 **v2**（编辑器=模板 / PIE 唯一由 GameRuntime 控制 / 节点建图才生效）、数据流、注册点、验收证据 |
+| `rendering_protocol.md` | `Application/Core/Renderer/**` + `Resource/Shaders/**` + `Test/Application/Renderer/**` | 改渲染器/渲染命令/shader/纹理上传/overlay，或需要像素级验证时必读：后端现状（OpenGL 一等公民）、线程纪律、资源模型、**验证体系**（GL 像素探针 + 金标准）、agent 工具（`renderer.snapshot` / CLI `probe`）、**§7 渲染目标(RT)**、**§8 光照体系** |
+| `shader_protocol.md` | `Resource/Shaders/**` + `Application/Resource/Material.py` + 渲染器 uniform 注入 | 新增/修改 shader、调整材质 uniform 系统、变换光照/帧级注入 uniform 前必读：顶点属性契约（STD_LAYOUT）、uniform 归属总表（矩阵/材质/**渲染器注入**）、材质默认值与「切 shader 重置」语义、光照模型与数值锁定表、新增 shader 检查单 |
+| `ui_refactor_plan.md` | `Application/Editor/UI/**` 大文件（widgets.py / panel.py / ScenePanel.py） | 执行 UI 文件拆分/搬迁时读：目标结构（mixin/注册表两种拆法）+ 验证顺序 |
+| `roadmap_next.md` | 全局（线程治理 / 资源管线 / 动态媒体 三章蓝图, 待评估草案） | 开工前评估三大愿景方向、依赖取舍与里程碑顺序 |
 
 职责边界（与代码一致，不得跨层）：
 - UI 层只负责**编辑 props 和渲染**；业务逻辑在 evaluators；设备/IO 在 `Application/Functions`。
 - evaluators 不得 `import imgui`；设备层不得反向依赖 Engine / Editor。
 - MCP 工具（`Utils/User/NodeEditor`）只做构建/应用图（图校验已内化为引擎服务 — 见 `graph_validation_protocol.md`），不引入 UI 依赖。
+- **开发过程临时产物（截图/演示场景/实验脚本/日志）只允许放 `Test/**` 下 — 禁止在仓库根新增目录**；产品资源入 `Resource/**`，协议文档入 `Doc/**`。
 
 ---
 
@@ -42,9 +50,9 @@
 
 ## 3. MCP 空跑验证（硬性验收条件）
 
-工具链：`Utils/User/NodeEditor/`（`mcp_server.py` 构建/应用图 + `rules.md` 规则）；图校验已内化为引擎服务（见 `graph_validation_protocol.md`），agent 侧实时校验经 `Utils/User/EditorMcp` MCP（v4 `graph.validate.*`）。
+工具链：`Utils/User/NodeEditor/`（MCP 4 工具 + CLI + `rules.md` 分节规则）；图校验已内化为引擎服务（见 `graph_validation_protocol.md`），agent 侧实时校验经 `Utils/User/EditorMcp`（lite `engine_validate_graph` / CLI validate / v4 `graph.validate.*`）。
 
-- 校验入口：`validate_graph(graph, max_frames>0)` → `node_graph_validator.dry_run_simulation()`。
+- 校验入口：引擎内服务 `Application/Core/NodeGraph/validation`（MCP `engine_validate_graph` / CLI `validate` / 无头 `PlayerEntry --dry-run`）。
   干跑将 `ctx.dry_run=True`，从 `OnGameStart` → N 帧 `OnFrameUpdate` → `OnGameStop` 全链路执行。
 - **所有副作用节点必须支持 dry_run**：分支 `if ctx.dry_run: ctx.emit_log(...); return`，
   参数与真实路径一致（只记录不执行）。
@@ -56,10 +64,10 @@
 ```powershell
 # 单元测试（设备层示例，48 项断言：stub 会话 + 干跑全链路 + 约束）
 .venv-py314t\Scripts\python.exe Test/Application/Functions/test_gtec_device.py
-# 图工具冒烟
+# 图工具冒烟（构建器）
 .venv-py314t\Scripts\python.exe Utils/User/NodeEditor/test_smoke.py
-# 场景干跑（示例）
-.venv-py314t\Scripts\python.exe -m Utils.User.NodeEditor.node_graph_validator Test\TestProject\MI-SSSEP\scenes\MI.scene --frames 120
+# NodeEditor agent 通道离线套件（MCP 分节/构建/应用 + CLI）
+.venv-py314t\Scripts\python.exe Test/Application/NodeGraph/test_node_editor_mcp.py
 ```
 
 ---

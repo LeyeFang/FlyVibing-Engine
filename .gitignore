@@ -13,6 +13,7 @@ Application/Editor/Config
 .venv
 .venv-*
 .vscode
+.github
 
 # Runtime packaging / game export (P2+)
 # 运行时镜像与 wheelhouse 不进 git（拉取轻量; 开发者按 README 用 uv/PyPI 重建）——

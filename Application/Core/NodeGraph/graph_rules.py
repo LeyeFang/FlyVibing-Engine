@@ -261,6 +261,18 @@ BCI algorithm rules (CRITICAL):
 5. TestCCA is training-free: references = sin/cos harmonics of each candidate frequency; Label = argmax canonical correlation (index into freqs), Score = that correlation, Freq = its value. At least 2 frequencies required (no upper limit).
 6. bands/freqs are PACKED lists (UI unpacks into rows with +/-; external MCP sets/replaces the whole list atomically). Models and datasets share the "dryrun#" namespace during validation and are purged afterwards.
 
+#### Media Nodes (Media — GIF/image playback)
+| type_name | input pins | output pins | props |
+|-----------|------------|-------------|-------|
+| ShowMedia | exec_in, Entity (entity_ref) | exec_out | — |
+
+ShowMedia rules (CRITICAL):
+1. Editor-side editing is only a TEMPLATE (entities/MediaPlayer declare source etc.; the editor never plays). Playback takes effect ONCE the graph drives it at runtime (PIE / standalone player, GameRuntime-only).
+2. Target entity: Get Entity (Name) → Entity ref → ShowMedia.Entity; unconnected Entity pin fails the static check (media_pin_unconnected).
+3. Drive frequency = wiring frequency: OnFrameUpdate chain = per-frame playback (recommended); OnGameStart = single first-frame push. Unconnected exec_in = warning only (media_exec_unconnected).
+4. In PIE, editor entities act as EntitySpawn TEMPLATES (they do not render directly); spawn the instance first, then target it by name — EntityGet resolves the spawned instance.
+5. Duplicate drivers for one entity are de-duplicated per engine frame (single advance). Media playback state (clock/frame) is runtime-only — never serialized.
+
 ---
 
 ### COMMON PATTERNS

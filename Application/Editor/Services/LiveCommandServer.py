@@ -109,26 +109,41 @@ class LiveCommandServer:
 
     @classmethod
     def _accept_loop(cls) -> None:
-        while cls._running and cls._sock is not None:
-            try:
-                cls._sock.settimeout(0.5)
-                conn, _addr = cls._sock.accept()
-            except socket.timeout:
-                continue
-            except OSError:
-                break
-            threading.Thread(
-                target=cls._handle_client, args=(conn,), daemon=True
-            ).start()
+        from Application.Core.ThreadRegistry import ThreadRegistry
+
+        _reg = "LiveCommandServer"
+        ThreadRegistry.register(_reg, owner="LiveCommandServer", expect_hz=2.0,
+                                note="accept 循环 (0.5s 超时); 空闲正常")
+        try:
+            while cls._running and cls._sock is not None:
+                ThreadRegistry.heartbeat(_reg)
+                try:
+                    cls._sock.settimeout(0.5)
+                    conn, _addr = cls._sock.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+                threading.Thread(
+                    target=cls._handle_client, args=(conn,), daemon=True
+                ).start()
+        finally:
+            ThreadRegistry.unregister(_reg)
 
     @classmethod
     def _handle_client(cls, conn: socket.socket) -> None:
+        from Application.Core.ThreadRegistry import ThreadRegistry
+
+        _reg = f"live-client:{threading.get_ident()}"
+        ThreadRegistry.register(_reg, owner="LiveCommandServer", expect_hz=0.0,
+                                note="每连接一线程; 阻塞 recv 不推进心跳=正常")
         try:
             reader = conn.makefile("r", encoding="utf-8", newline="\n")
             for line in reader:
                 line = line.strip()
                 if not line:
                     continue
+                ThreadRegistry.heartbeat(_reg)
                 resp = cls._dispatch_line(line)
                 payload = None
                 result = resp.get("result")
@@ -140,6 +155,7 @@ class LiveCommandServer:
         except (OSError, ValueError):
             pass
         finally:
+            ThreadRegistry.unregister(_reg)
             try:
                 conn.close()
             except OSError:
@@ -213,6 +229,7 @@ class LiveCommandServer:
             "sim.stop": cls._op_sim_stop,
             "sim.state": cls._op_sim_state,
             "view.set_mode": cls._op_view_set_mode,
+            "view.set_grid": cls._op_view_set_grid,
             "camera.get": cls._op_camera_get,
             "camera.set": cls._op_camera_set,
             "graph.list": cls._op_graph_list,
@@ -228,6 +245,8 @@ class LiveCommandServer:
             "project.open": cls._op_project_open,
             "frame.request": cls._op_frame_request,
             "frame.fetch": cls._op_frame_fetch,
+            "threads.snapshot": cls._op_threads_snapshot,
+            "renderer.snapshot": cls._op_renderer_snapshot,
             # ── v3: 实体 / 选中 / 组件 / 场景 / 资源 ──
             "entity.list": cls._op_entity_list,
             "entity.get": cls._op_entity_get,
@@ -255,6 +274,56 @@ class LiveCommandServer:
             "resource.find": cls._op_resource_find,
             "resource.material.get": cls._op_resource_material_get,
             "editor.quit": cls._op_editor_quit,
+        }
+
+    @staticmethod
+    def _op_threads_snapshot(args: dict) -> dict:
+        """线程注册表快照（协议: Doc/Dev/threading_protocol.md; 工具: Utils/Dev/thread_probe.py）。"""
+        from Application.Core.ThreadRegistry import ThreadRegistry
+
+        return ThreadRegistry.snapshot()
+
+    @staticmethod
+    def _op_renderer_snapshot(args: dict) -> dict:
+        """渲染器状态快照（协议: Doc/Dev/rendering_protocol.md）。
+
+        后端类型 / GL 信息 (渲染线程采集缓存) / 资源计数 / 视口 / 帧统计。
+        无渲染器（无头/未初始化）→ available=false, 不报错。
+        """
+        from Application.Editor.EditorHost import EditorHost
+
+        renderer = (getattr(EditorHost, "editor_renderer", None)
+                    or getattr(EditorHost, "renderer", None))
+        if renderer is None:
+            return {"available": False, "reason": "no renderer (headless / not initialized)"}
+
+        def _count(attr: str) -> int:
+            return len(getattr(renderer, attr, None) or {})
+
+        stats: dict = {}
+        try:
+            stats = EditorHost._get_profiler().get_current_stats()
+        except Exception:  # noqa: BLE001
+            pass
+        # overlay 真身: OpenGL 后端存于 _resources._overlay_gpu_resources（基类占位字典未使用）
+        overlay_res = (getattr(renderer, "_overlay_gpu_resources", None)
+                       or getattr(renderer, "registered_overlays", None) or {})
+        overlays = sorted(overlay_res.keys())
+        return {
+            "available": True,
+            "backend": type(renderer).__name__,
+            "gl": dict(getattr(renderer, "gl_info", None) or {}),
+            "viewport": [int(getattr(renderer, "viewport_width", 0)),
+                         int(getattr(renderer, "viewport_height", 0))],
+            "counts": {
+                "entities": _count("registered_entities"),
+                "meshes": _count("registered_meshes"),
+                "shaders": _count("registered_shaders"),
+                "textures": _count("registered_textures"),
+                "overlays": len(overlay_res),
+            },
+            "overlays": overlays,
+            "stats": stats,
         }
 
     @staticmethod
@@ -308,6 +377,16 @@ class LiveCommandServer:
         return {"mode": mode, "label": ViewportController.get_mode_label(), "game_type": game_type}
 
     @staticmethod
+    def _op_view_set_grid(args: dict) -> dict:
+        """显示/隐藏编辑器网格 — 与 View 菜单 Show Grid 同路径 (Grid.set_visible)。"""
+        from Application.Editor.Gizmos.Grid import Grid
+
+        if "visible" not in args:
+            raise ValueError("visible is required (true/false)")
+        state = Grid.set_visible(bool(args.get("visible")))
+        return {"visible": state}
+
+    @staticmethod
     def _op_sim_stop(args: dict) -> dict:
         """Stop 按钮语义 — 请求 PIE 停止（主线程帧末由 SimulationController 消费）。"""
         from Application.Editor.UI.controllers.SimulationController import (
@@ -330,7 +409,8 @@ class LiveCommandServer:
             running = bool(GameRuntime.is_running())
         except Exception:  # noqa: BLE001
             running = False
-        return {"state": SimulationController.get_state_label(), "runtime_alive": running}
+        return {"state": SimulationController.get_state_label(), "runtime_alive": running,
+                "last_error": getattr(SimulationController, "last_error", "")}
 
     @staticmethod
     def _op_camera_get(args: dict) -> dict:
@@ -537,27 +617,19 @@ class LiveCommandServer:
         """导出当前画布为 graph JSON（含 _rules 文档; 可落盘 path）。
 
         args: path(可选, 落盘; 自动补 .json), include_rules(默认 true), inline(默认 true — 返回完整 JSON)
+        实现: Application/Core/NodeGraph/graph_io.export_graph（与 GUI Export 同源）。
         """
+        from Application.Core.NodeGraph.graph_io import export_graph
+
         canvas = _node_canvas()
-        data = canvas.to_dict()
-        if args.get("include_rules") is False:
-            data.pop("_rules", None)
-        saved_path = ""
-        if args.get("path"):
-            saved_path = str(args["path"])
-            if not saved_path.lower().endswith(".json"):
-                saved_path += ".json"
-            os.makedirs(os.path.dirname(os.path.abspath(saved_path)), exist_ok=True)
-            with open(saved_path, "w", encoding="utf-8") as fh:
-                json.dump(data, fh, indent=2, ensure_ascii=False)
-            print(f"[Live] graph exported: {len(canvas.nodes)} nodes → {saved_path}")
-        result: dict = {
-            "nodes": len(canvas.nodes),
-            "links": len(canvas.links),
-            "saved_path": saved_path,
-        }
-        if args.get("inline", True):
-            result["graph"] = data
+        result = export_graph(
+            canvas,
+            path=args.get("path"),
+            include_rules=args.get("include_rules") is not False,
+            inline=bool(args.get("inline", True)),
+        )
+        if result["saved_path"]:
+            print(f"[Live] graph exported: {result['nodes']} nodes → {result['saved_path']}")
         return result
 
     @staticmethod
@@ -565,43 +637,22 @@ class LiveCommandServer:
         """导入 graph JSON 替换当前画布（validate_first 默认开 — 静态 error 时拒绝）。
 
         args: graph(dict) 或 path(.json 文件), validate_first(默认 true)
+        实现: graph_io.prepare_import + apply_to_canvas（与 GUI Import 同源）。
+        顺序契约: 读入/校验先于画布获取（无画布时仍先报输入错误 — 回环测试依赖）。
         """
-        path = args.get("path")
-        graph = args.get("graph")
-        if graph is None:
-            if not path:
-                raise ValueError("either 'graph' or 'path' is required")
-            file_path = str(path)
-            if not os.path.isfile(file_path):
-                raise ValueError(f"file not found: {file_path}")
-            with open(file_path, "r", encoding="utf-8") as fh:
-                graph = json.load(fh)
-        if not isinstance(graph, dict) or "nodes" not in graph:
-            raise ValueError("graph must be a dict with 'nodes'")
+        from Application.Core.NodeGraph.graph_io import apply_to_canvas, prepare_import
 
-        if bool(args.get("validate_first", True)):
-            from Application.Core.NodeGraph.validation import static_check_graph
-
-            entries = static_check_graph(graph)
-            errors = [e for e in entries if e["level"] == "error"]
-            if errors:
-                return {
-                    "imported": False,
-                    "reason": "static validation failed — fix errors or pass validate_first=false",
-                    "static_errors": errors,
-                }
-
-        from Application.Core.NodeGraph.canvas import NodeCanvas
-
-        new_canvas = NodeCanvas.from_dict(graph)
+        data, refused = prepare_import(
+            graph=args.get("graph"),
+            path=args.get("path"),
+            validate_first=bool(args.get("validate_first", True)),
+        )
+        if refused is not None:
+            return refused
         canvas = _node_canvas()
-        canvas.clear()
-        for nid, inst in new_canvas.nodes.items():
-            canvas._nodes[nid] = inst
-        for lid, lk in new_canvas.links.items():
-            canvas._links[lid] = lk
-        print(f"[Live] graph imported: {len(canvas.nodes)} nodes, {len(canvas.links)} links")
-        return {"imported": True, "nodes": len(canvas.nodes), "links": len(canvas.links)}
+        result = apply_to_canvas(canvas, data)
+        print(f"[Live] graph imported: {result['nodes']} nodes, {result['links']} links")
+        return result
 
     @staticmethod
     def _op_project_open(args: dict) -> dict:
@@ -978,6 +1029,7 @@ class LiveCommandServer:
           Transform:    {"position": [..], "rotation": [..度], "scale": [..标量或三分量]}
                         （配合 local / relative 参数; relative=位移加法/旋转加法/缩放乘法）
           MeshRenderer: {"mesh": "Cube"|id, "material": id|名称, "color": [r,g,b(,a)], "visible": bool,
+                         "blend": "opaque"|"alpha",
                          "material_name": str, "shader": id|名称, "uniform": {名: 值},
                          "texture": 名称|id (+"texture_slot"), "texture_add": 名称|id, "texture_remove": slot}
           Camera:       {"fov": .., "ortho_size": .., "near_plane": .., "far_plane": .., "projection": "persp"|"ortho"}
@@ -1020,6 +1072,8 @@ class LiveCommandServer:
                     SceneBrowserController.set_material_name(eid, str(value))
                 elif key == "shader":
                     SceneBrowserController.set_material_shader(eid, _resource_id_from_value("shader", value))
+                elif key == "blend":
+                    SceneBrowserController.set_material_blend(eid, str(value))
                 elif key == "uniform":
                     if not isinstance(value, dict) or not value:
                         raise ValueError("uniform must be a non-empty object {name: value}")
@@ -1197,6 +1251,7 @@ class LiveCommandServer:
             "id": mid,
             "name": getattr(mat, "name", None),
             "shader_id": int(getattr(mat, "shader_id", 0)),
+            "blend": getattr(mat, "blend", "opaque"),
             "texture_ids": list(getattr(mat, "texture_id_list", []) or []),
             "uniform_keys": sorted(getattr(mat, "uniforms_data", {}).keys()),
         }

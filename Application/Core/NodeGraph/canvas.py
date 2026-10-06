@@ -242,6 +242,17 @@ class NodeCanvas(DataContract):
         self._nodes.clear()
         self._links.clear()
 
+    def replace_from(self, other: 'NodeCanvas') -> None:
+        """用另一画布内容整体替换（导入路径统一入口 — GUI 面板与 agent ops 共用）。
+
+        保留 self._next_id 不重置（与 clear() 一致; 兼容下界由 from_dict 的全局 _next_id 保证）。
+        """
+        self.clear()
+        for nid, inst in other.nodes.items():
+            self._nodes[nid] = inst
+        for lid, lk in other.links.items():
+            self._links[lid] = lk
+
 
 # ── 注册到 Serializable 注册表 ──
 register_contract("NodeCanvas", NodeCanvas)

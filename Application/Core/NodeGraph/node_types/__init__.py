@@ -48,6 +48,7 @@ SIGGEN_COLOR     = (0.350, 0.780, 0.850)
 POOL_COLOR       = (0.930, 0.780, 0.220)
 EPOCH_COLOR      = (0.290, 0.680, 0.600)
 ALGO_COLOR       = (0.600, 0.360, 0.720)
+MEDIA_COLOR      = (0.870, 0.350, 0.400)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -69,3 +70,4 @@ from . import siggen     # noqa: E402, F401
 from . import device_pool  # noqa: E402, F401
 from . import epoch      # noqa: E402, F401
 from . import bci_algorithm  # noqa: E402, F401
+from . import media      # noqa: E402, F401

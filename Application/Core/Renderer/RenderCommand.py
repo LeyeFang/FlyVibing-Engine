@@ -14,6 +14,9 @@ RenderCommand — 渲染命令基类 + 具体命令。
   OverlayUnregistrationCommand  — Overlay 可绘制对象 GPU 资源解注册
   RegisterHighlightEffectCommand   — 轮廓高亮后处理注册
   UnregisterHighlightEffectCommand — 轮廓高亮后处理注销
+  CreateRenderTargetCommand        — 创建离屏渲染目标 (FBO + 颜色纹理)
+  DestroyRenderTargetCommand       — 销毁渲染目标
+  SetSceneTargetCommand            — 场景输出重定向 (RT / 屏幕)
   UpdateHighlightSelectionCommand  — 更新选中实体集合
   UpdateHighlightConfigCommand     — 更新轮廓渲染参数
 """
@@ -101,6 +104,24 @@ class EntityRegistrationCommand(RenderCommand):
             renderer.register_entity(self.entity_id)
         else:
             renderer.unregister_entity(self.entity_id)
+
+
+@dataclass
+class TextureUpdateCommand(RenderCommand):
+    """动态纹理帧更新 — 主线程提交新像素, 渲染线程就地重传 GPU 纹理。
+
+    用途: 媒体播放 (GIF/视频逐帧纹理; 协议 Doc/Dev/media_protocol.md)。
+    要求: 尺寸/通道与注册帧一致 (GIF 各帧天然一致; 预解码帧只读共享)。
+    """
+    texture_id: int
+    image_data: Any   # np.ndarray (H, W, C) uint8
+    width: int
+    height: int
+    channels: int
+
+    def execute(self, renderer: Any) -> None:
+        renderer.update_texture_data(self.texture_id, self.image_data,
+                                     self.width, self.height, self.channels)
 
 
 @dataclass
@@ -223,3 +244,46 @@ class SetClearColorCommand(RenderCommand):
 
     def execute(self, renderer: Any) -> None:
         renderer.set_clear_color(self.r, self.g, self.b, self.a)
+
+
+@dataclass
+class CreateRenderTargetCommand(RenderCommand):
+    """创建离屏渲染目标 (FBO + RGBA8 颜色纹理 + 可选深度缓冲)。
+
+    rt_id 由调用方指定 — 同时作为纹理 ID 注册进纹理注册表,
+    材质 texture_id_list 直接引用即可采样 (纹理名 "rt:<id>")。
+
+    调用方: 节点/脚本/编辑器 (renderer.create_target 桥接)
+    """
+    rt_id: int = 0
+    width: int = 256
+    height: int = 256
+    with_depth: bool = True
+
+    def execute(self, renderer: Any) -> None:
+        renderer.create_render_target(
+            self.rt_id, self.width, self.height, with_depth=self.with_depth)
+
+
+@dataclass
+class DestroyRenderTargetCommand(RenderCommand):
+    """销毁渲染目标 — 级联清理 GL 对象 + 纹理注册表条目。
+
+    若该 RT 正作为场景目标, 自动回退屏幕 (rt_id=0)。
+    """
+    rt_id: int = 0
+
+    def execute(self, renderer: Any) -> None:
+        renderer.destroy_render_target(self.rt_id)
+
+
+@dataclass
+class SetSceneTargetCommand(RenderCommand):
+    """设置场景渲染目标 — 实体/后处理/overlay 输出重定向到该 RT; 0 = 屏幕。
+
+    激活期间跳过拾取 pass (拾取面向屏幕坐标系)。
+    """
+    rt_id: int = 0
+
+    def execute(self, renderer: Any) -> None:
+        renderer.set_scene_target(self.rt_id)

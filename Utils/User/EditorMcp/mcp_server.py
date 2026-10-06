@@ -28,6 +28,7 @@ from engine_editor_mcp.server import (  # noqa: E402,F401
     _send,
     _send_raw,
     _wipe_frames_dir,
+    apply_profile,
     main,
     mcp,
 )

@@ -97,12 +97,12 @@ flowchart LR
 | `entity.visible` | `editor_entity_visible` | 眼图标（editor）+ MeshRenderer.visible（render） |
 | `entity.reparent` | `editor_entity_reparent` | 树拖拽建立父子（`"none"` 解除） |
 | `selection.get/set/clear` | `editor_selection_*` | 点击选中 / 清空（`set` 默认带 gizmo — 等同视口点选） |
-| `component.types` | `editor_component_types` | 组件注册表（当前: Camera / MeshRenderer / Transform） |
+| `component.types` | `editor_component_types` | 组件注册表（当前: Camera / MeshRenderer / Transform / Light / MediaPlayer / TextDisplay 等；旧名 DirectionalLight 自动迁移） |
 | `component.list` | `editor_component_list` | 实体组件名列表 |
 | `component.add` | `editor_component_add` | Inspector Add Component（MeshRenderer 自动绑 Cube 网格） |
 | `component.remove` | `editor_component_remove` | Inspector 移除组件（Transform 不可移除; MeshRenderer 同步注销 GPU） |
 | `component.get` | `editor_component_get` | 组件字段快照（通用序列化; MeshRenderer 附带 mesh/material 语义摘要） |
-| `component.set` | `editor_component_set` | 部分字段更新 — Transform 支持 relative/标量缩放; MeshRenderer 支持 color/mesh/material/material_name/shader/**blend**/uniform/texture 系列; 其余字段直写 |
+| `component.set` | `editor_component_set` | 部分字段更新 — Transform 支持 relative/标量缩放; MeshRenderer 支持 color/mesh/material/material_name/shader/**blend**/uniform/texture 系列; 其余字段直写（数值范围钳制 = `ComponentRegistry.FIELD_CLAMPS` 单一权威，Inspector/脚本/MCP 同口径） |
 | `scene.list` | `editor_scene_list` | 场景列表 + 活跃场景 |
 | `scene.switch` | `editor_scene_switch` | Scene 下拉切换（保存当前/加载/视口/节点图同步全流程） |
 | `scene.create` | `editor_scene_create` | 点 **+** 新建场景 |

@@ -98,8 +98,11 @@ class Scene:
     game_type: GameType = GameType.GAME_3D
 
     # ── 场景光照: 环境光 (RGB, 0..1) — 渲染器每帧注入 uAmbient ──
-    #    协议: Doc/Dev/shader_protocol.md (Lighting 约定)
-    ambient_color: tuple = (0.18, 0.18, 0.18)
+    #    默认 0.5 (50% 全局光) — 协议: Doc/Dev/shader_protocol.md (Lighting 约定)
+    ambient_color: tuple = (0.5, 0.5, 0.5)
+
+    # 无灯回退: 无任何方向光时环境光强制满亮 (默认开; 关掉可做"故意暗场景")
+    lighting_fallback: bool = True
 
     # {scene-local entity id: EntityData}  — 稳定 ID, 不随 esper 重分配变化
     entities: dict[int, EntityData] = field(default_factory=dict)
@@ -358,6 +361,7 @@ class Scene:
             "name": self.name,
             "game_type": self.game_type.value,
             "ambient_color": list(self.ambient_color),
+            "lighting_fallback": bool(self.lighting_fallback),
             "entities": entities_dict,
             "main_camera_entity_id": self.main_camera_entity_id,
             "next_eid": self._next_sid,
@@ -397,10 +401,14 @@ class Scene:
 
         # ── 恢复环境光 ──
         try:
-            amb = data.get("ambient_color", (0.18, 0.18, 0.18))
+            amb = data.get("ambient_color", (0.5, 0.5, 0.5))
             scene.ambient_color = tuple(float(v) for v in amb[:3])
         except Exception:
-            scene.ambient_color = (0.18, 0.18, 0.18)
+            scene.ambient_color = (0.5, 0.5, 0.5)
+        try:
+            scene.lighting_fallback = bool(data.get("lighting_fallback", True))
+        except Exception:
+            scene.lighting_fallback = True
 
         for eid_str, ed_data in data.get("entities", {}).items():
             eid = int(eid_str)

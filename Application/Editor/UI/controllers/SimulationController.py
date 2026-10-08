@@ -21,6 +21,72 @@ class SimulationController:
     last_error: str = ""
     _pending_stop: bool = False
 
+    # ── PIE 初始窗口偏好 (Play 下方 Settings 按钮; 持久化 Application/Editor/Config/PIE.json) ──
+    _PIE_SETTINGS_PATH: str = "Application/Editor/Config/PIE.json"
+    _PIE_MODES: tuple = ("windowed", "borderless", "fullscreen")
+    _pie_mode: str = "windowed"
+    _pie_width: int = 1280
+    _pie_height: int = 720
+    _pie_settings_loaded: bool = False
+
+    @staticmethod
+    def _clamp_pie_size(v, lo: int = 320, hi: int = 7680) -> int:
+        try:
+            return max(lo, min(hi, int(v)))
+        except (TypeError, ValueError):
+            return lo
+
+    @classmethod
+    def get_pie_settings(cls) -> dict:
+        """PIE 窗口偏好 (懒加载 Config/PIE.json)。"""
+        if not cls._pie_settings_loaded:
+            cls._pie_settings_loaded = True
+            try:
+                import json
+                with open(cls._PIE_SETTINGS_PATH, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                mode = str(data.get("mode", "windowed")).lower()
+                if mode in cls._PIE_MODES:
+                    cls._pie_mode = mode
+                cls._pie_width = cls._clamp_pie_size(data.get("width", cls._pie_width))
+                cls._pie_height = cls._clamp_pie_size(data.get("height", cls._pie_height))
+            except Exception:  # noqa: BLE001 — 缺失/损坏→默认值
+                pass
+        return {"mode": cls._pie_mode, "width": cls._pie_width, "height": cls._pie_height}
+
+    @classmethod
+    def set_pie_settings(cls, mode: str | None = None, width=None, height=None) -> dict:
+        """更新并持久化 PIE 窗口偏好; 返回最新的完整设置。"""
+        cls.get_pie_settings()
+        if mode is not None:
+            m = str(mode).lower()
+            if m in cls._PIE_MODES:
+                cls._pie_mode = m
+        if width is not None:
+            cls._pie_width = cls._clamp_pie_size(width)
+        if height is not None:
+            cls._pie_height = cls._clamp_pie_size(height)
+        try:
+            import json, os
+            os.makedirs(os.path.dirname(cls._PIE_SETTINGS_PATH) or ".", exist_ok=True)
+            with open(cls._PIE_SETTINGS_PATH, "w", encoding="utf-8") as fh:
+                json.dump(cls.get_pie_settings(), fh, indent=2)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[Simulation] PIE settings save failed: {exc}")
+        return cls.get_pie_settings()
+
+    @classmethod
+    def _apply_pie_window_prefs(cls, game_type) -> None:
+        """PIE 启动前: 应用窗口偏好到 RuntimeWindow (下次 Run 生效)。"""
+        from Application.Runtime.RuntimeWindow import RuntimeWindow
+        from Application.Core.Scene.Scene import GameType
+        s = cls.get_pie_settings()
+        mode = s["mode"]
+        if game_type == GameType.OVERLAY and mode == "fullscreen":
+            mode = "borderless"   # 独占全屏与透明 Overlay 不兼容 (glfwWindow 已警示)
+            print("[Simulation] Overlay 模式不支持独占全屏 — 回退 borderless")
+        RuntimeWindow.apply_start_preferences(mode, s["width"], s["height"])
+
     # ── 状态查询 ────────────────────────────────────────────
 
     @classmethod
@@ -55,10 +121,10 @@ class SimulationController:
         """将 ECS 世界中的实体同步到 Scene.entities 注册表（PIE 模板来源）。
 
         白名单组件随模板进入运行时（EntitySpawn 实例化携带）:
-        Transform / Camera / MeshRenderer / MediaPlayer / DirectionalLight。
+        Transform / Camera / MeshRenderer / MediaPlayer / Light / TextDisplay。
         """
         import copy
-        from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer, MediaPlayer, DirectionalLight
+        from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer, MediaPlayer, Light, TextDisplay
         from Application.Core.Scene.Scene import EntityData
 
         if scene_mgr is None:
@@ -67,7 +133,10 @@ class SimulationController:
 
         # ★ 场景环境光随模板同步 (光照帧状态来源; 协议: Doc/Dev/shader_protocol.md)
         scene.ambient_color = tuple(
-            getattr(scene_mgr, 'ambient_color', (0.18, 0.18, 0.18)))
+            getattr(scene_mgr, 'ambient_color', (0.5, 0.5, 0.5)))
+        # ★ 无灯回退开关同步 (无光源时满亮 — 避免默认变黑; shader_protocol §7.3)
+        scene.lighting_fallback = bool(
+            getattr(scene_mgr, 'lighting_fallback', True))
 
         _sys_ids = {
             scene_mgr.get_main_camera_id(),
@@ -97,8 +166,13 @@ class SimulationController:
             except Exception:
                 pass
             try:
-                dl = scene_mgr.GetComponent(eid, DirectionalLight)
-                comps["DirectionalLight"] = copy.deepcopy(dl)
+                dl = scene_mgr.GetComponent(eid, Light)
+                comps["Light"] = copy.deepcopy(dl)
+            except Exception:
+                pass
+            try:
+                td = scene_mgr.GetComponent(eid, TextDisplay)
+                comps["TextDisplay"] = copy.deepcopy(td)
             except Exception:
                 pass
             scene.entities[eid] = EntityData(name=name, components=comps, parent_id=parent_id)
@@ -240,6 +314,9 @@ class SimulationController:
             RuntimeWindow._transparent = False
             RuntimeWindow._topmost = False
             RuntimeWindow._click_through = False
+
+        # ── 应用 PIE 窗口偏好 (Play 下方 Settings: 全屏 / 窗口化尺寸) ──
+        cls._apply_pie_window_prefs(gt)
 
         # ── 注册运行时宿主桥接 + 上下文钩子 (运行时对 Editor 零反向依赖) ──
         RuntimeNodeLayer.set_context_hooks(on_stop_request=cls.stop)

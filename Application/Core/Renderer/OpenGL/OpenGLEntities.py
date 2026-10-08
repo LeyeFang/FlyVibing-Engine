@@ -170,10 +170,11 @@ class OpenGLEntities:
     # ════════════════════════════════════════════════════════════
 
     def _collect_light_frame(self, view: np.ndarray) -> dict:
-        """每帧收集一次场景光照状态 (环境光 + 至多 4 个方向光)。
+        """每帧收集一次场景光照状态 (环境光 + 至多 4 平面光 + 至多 4 点光)。
 
-        - 方向光取实体 Transform 的局部 -Z 前向 → 世界空间传播方向
-        - 颜色 × 强度 合并为 uLightColor
+        - 平面光: 方向 = 实体 Transform 局部 -Z 前向 → 世界空间传播方向 (位置无关)
+        - 点光: 位置 = 实体世界坐标; 衰减 = (1 - d/range)² (d ≥ range → 0)
+        - 颜色 × 强度合并
         """
         r = self._renderer
         try:
@@ -181,7 +182,7 @@ class OpenGLEntities:
         except Exception:  # noqa: BLE001
             st = None
         ambient = np.array(
-            getattr(st, 'ambient_color', (0.18, 0.18, 0.18)), dtype=np.float32)
+            getattr(st, 'ambient_color', (0.5, 0.5, 0.5)), dtype=np.float32)
         # 相机世界坐标 (行向量约定: 相机位 = inv(view) 的平移行)
         try:
             cam_pos = np.linalg.inv(
@@ -190,37 +191,60 @@ class OpenGLEntities:
             cam_pos = np.zeros(3, dtype=np.float32)
         dirs = np.zeros((4, 3), dtype=np.float32)
         colors = np.zeros((4, 3), dtype=np.float32)
+        point_pos = np.zeros((4, 3), dtype=np.float32)
+        point_color = np.zeros((4, 3), dtype=np.float32)
+        point_range = np.ones(4, dtype=np.float32)
         count = 0
+        pcount = 0
         if st is not None:
             try:
-                from Application.Core.Scene.BasicComponents import DirectionalLight
-                for eid, light in st.GetAllEntitiesWithComponent(DirectionalLight):
-                    if count >= 4:
-                        break
+                from Application.Core.Scene.BasicComponents import Light
+                for eid, light in st.GetAllEntitiesWithComponent(Light):
                     try:
                         model = np.asarray(
                             st.GetEntityModelMatrix(eid), dtype=np.float64)
                     except Exception:  # noqa: BLE001
                         continue
-                    d = -model[2, :3]  # 局部 -Z 前向 → 世界空间光线传播方向
-                    norm = float(np.linalg.norm(d))
-                    d = np.array([0.0, -1.0, 0.0]) if norm < 1e-8 else d / norm
-                    dirs[count] = d.astype(np.float32)
                     inten = float(getattr(light, 'intensity', 1.0))
-                    colors[count] = np.array([
+                    lc = np.array([
                         float(getattr(light, 'color_r', 1.0)) * inten,
                         float(getattr(light, 'color_g', 1.0)) * inten,
                         float(getattr(light, 'color_b', 1.0)) * inten,
                     ], dtype=np.float32)
-                    count += 1
+                    ltype = str(getattr(light, 'light_type', 'directional')).lower()
+                    if ltype == 'point':
+                        if pcount >= 4:
+                            continue
+                        point_pos[pcount] = model[3, :3].astype(np.float32)
+                        point_color[pcount] = lc
+                        point_range[pcount] = max(
+                            float(getattr(light, 'range', 10.0)), 1e-4)
+                        pcount += 1
+                    else:
+                        if count >= 4:
+                            continue
+                        d = -model[2, :3]  # 局部 -Z 前向 → 世界空间光线传播方向
+                        norm = float(np.linalg.norm(d))
+                        d = np.array([0.0, -1.0, 0.0]) if norm < 1e-8 else d / norm
+                        dirs[count] = d.astype(np.float32)
+                        colors[count] = lc
+                        count += 1
             except Exception:  # noqa: BLE001 — 组件未注册时保持无光
                 pass
+        # ★ 无灯回退: 场景无任何光源 → 满亮环境光 (默认开, 可关;
+        #   shader_protocol §7.3 — 避免"未配置光照=默认变黑")
+        if count == 0 and pcount == 0 and bool(getattr(st, 'lighting_fallback', True)):
+            ambient = np.ones(3, dtype=np.float32)
         return {
             'ambient': ambient,
             'camera_pos': cam_pos,
             'dirs': dirs,
             'colors': colors,
             'count': count,
+            'point_pos': point_pos,
+            'point_color': point_color,
+            'point_range': point_range,
+            'point_count': pcount,
         }
 
     def _inject_lighting(self, shader_id: int, frame: dict) -> None:
@@ -231,3 +255,7 @@ class OpenGLEntities:
         OpenGLUtils.set_uniform_int(sh, shader_id, 'uLightCount', frame['count'])
         OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uLightDir', frame['dirs'], 4)
         OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uLightColor', frame['colors'], 4)
+        OpenGLUtils.set_uniform_int(sh, shader_id, 'uPointCount', frame['point_count'])
+        OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uPointPos', frame['point_pos'], 4)
+        OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uPointColor', frame['point_color'], 4)
+        OpenGLUtils.set_uniform_float_array(sh, shader_id, 'uPointRange', frame['point_range'], 4)

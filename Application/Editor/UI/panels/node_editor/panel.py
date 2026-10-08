@@ -1091,7 +1091,7 @@ class NodeEditorPanel(BasePanel):
         # 带内联控件的节点类型 (VarGet/VarSet/Constant 等) 渲染时额外高
         _WIDGET_NODES = {
             "VarGet", "VarSet", "Constant", "StringConst",
-            "EntitySpawn", "EntityGet", "EntitySetRenderVisible",
+            "EntitySpawn", "EntityGet", "EntitySetRenderVisible", "EntityGroupSetVisible",
             "ComponentAdd", "SetComponent", "GetComponent", "ComponentRemove",
             "ParallelSend", "SerialSend", "PathVar", "TextFileWrite",
             "TimeGetDate",
@@ -1099,7 +1099,7 @@ class NodeEditorPanel(BasePanel):
             "KillGtecDevice", "GetGtecData",
             "InitSigGenDevice", "StartSigGenRecord", "StopSigGenRecord",
             "KillSigGenDevice", "GetSigGenData",
-            "ShowMedia",
+            "ShowMedia", "SetText",
         }
         for lyr in sorted(layer_nodes.keys()):
             current_y: float = 80.0

@@ -37,6 +37,11 @@ class EditorGizmoLayer(Layer):
 
     _CAM_GIZMO_REFRESH_INTERVAL: int = 10
 
+    # ── Light 图标 (与 camera 图标同范式/同可见性规则) ──
+    _light_gizmo_keys: set[str] = set()
+    _light_gizmo_state_hash: int = -1
+    _light_gizmo_frame_skip: int = 0
+
     # ════════════════════════════════════════════════════════════
     # 生命周期
     # ════════════════════════════════════════════════════════════
@@ -45,18 +50,23 @@ class EditorGizmoLayer(Layer):
     def OnAttach(cls):
         super().OnAttach()
         cls._refresh_camera_gizmos(force=True)
+        cls._refresh_light_gizmos(force=True)
         from Application.Editor.UI.controllers.SelectionController import SelectionController
         SelectionController.register_selection_callback(cls.invalidate_camera_gizmos)
+        SelectionController.register_selection_callback(cls.invalidate_light_gizmos)
 
     @classmethod
     def OnDetach(cls):
         cls._unregister_all_camera_gizmos()
+        cls._unregister_all_light_gizmos()
         cls._camera_gizmo_state_hash = -1
+        cls._light_gizmo_state_hash = -1
         cls._preview_entity_id = None
 
     @classmethod
     def OnUpdate(cls):
         cls._refresh_camera_gizmos()
+        cls._refresh_light_gizmos()
 
     @classmethod
     def OnEvent(cls, event: Event) -> None:
@@ -193,3 +203,91 @@ class EditorGizmoLayer(Layer):
             if cls.renderer is not None:
                 cls.renderer.enqueue(OverlayUnregistrationCommand(key))
         cls._camera_gizmo_keys.clear()
+
+    # ════════════════════════════════════════════════════════
+    # Light 图标 (与 camera 图标同范式/同可见性规则)
+    # ════════════════════════════════════════════════════════
+
+    @classmethod
+    def invalidate_light_gizmos(cls) -> None:
+        """标记 light gizmo 需要重建。"""
+        cls._light_gizmo_state_hash = -1
+        cls._light_gizmo_frame_skip = 0
+
+    @classmethod
+    def _refresh_light_gizmos(cls, force: bool = False) -> None:
+        """遍历 ECS 中所有 Light entity，注册/更新光位图标。
+
+        可见性规则与 camera 一致: `_editor_visible` (眼图标) 关闭 → 不注册。
+        """
+        if cls.renderer is None:
+            return
+
+        if not force and cls._light_gizmo_state_hash >= 0:
+            cls._light_gizmo_frame_skip += 1
+            if cls._light_gizmo_frame_skip < cls._CAM_GIZMO_REFRESH_INTERVAL:
+                return
+            cls._light_gizmo_frame_skip = 0
+
+        from Application.Core.Scene.GizmoQuery import GizmoQuery
+        from Application.Editor.UI.controllers.SelectionController import SelectionController
+        from Application.Core.Renderer.RenderCommand import (
+            OverlayRegistrationCommand, OverlayUnregistrationCommand)
+
+        try:
+            selected_id = SelectionController.get_selected()
+            selected_ids = {selected_id} if selected_id is not None else set()
+        except Exception:
+            selected_ids = set()
+
+        try:
+            light_list = GizmoQuery.get_light_gizmos(selected_ids=selected_ids)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            return
+
+        state_parts: list[tuple] = []
+        for ld in light_list:
+            pos = tuple(round(v, 4) for v in ld.position)
+            rot = tuple(round(r, 4) for r in ld.rotation)
+            scl = tuple(round(s, 4) for s in ld.scale)
+            state_parts.append((ld.entity_id, pos, rot, scl,
+                                ld.light_type, round(ld.range, 3),
+                                ld.is_selected, ld.is_editor_visible,
+                                round(ld.intensity, 3)))
+        new_hash = hash(frozenset(state_parts))
+        if not force and new_hash == cls._light_gizmo_state_hash:
+            cls._light_gizmo_frame_skip = 0
+            return
+        cls._light_gizmo_state_hash = new_hash
+
+        from Application.Core.Math.Transform import calculate_entity_model
+        from Application.Editor.Gizmos.LightIconGizmo import LightIconGizmo
+
+        cls._unregister_all_light_gizmos()
+        for ld in light_list:
+            if not ld.is_editor_visible:
+                continue
+            model = calculate_entity_model(
+                position=ld.position, rotation=ld.rotation, scale=ld.scale)
+            world_pos = (float(model[3, 0]), float(model[3, 1]), float(model[3, 2]))
+            overlay = LightIconGizmo.build_icon_overlay(
+                ld.entity_id, world_pos, is_selected=ld.is_selected)
+            cls.renderer.enqueue(OverlayRegistrationCommand(overlay))
+            cls._light_gizmo_keys.add(overlay.key)
+            # ★ 方向射线 — 仅平面光 (点光无方向)
+            if ld.light_type != 'point':
+                ray = LightIconGizmo.build_ray_overlay(
+                    ld.entity_id, world_pos, ld.direction, is_selected=ld.is_selected)
+                cls.renderer.enqueue(OverlayRegistrationCommand(ray))
+                cls._light_gizmo_keys.add(ray.key)
+
+    @classmethod
+    def _unregister_all_light_gizmos(cls) -> None:
+        """注销所有已注册的 light gizmo overlay。"""
+        from Application.Core.Renderer.RenderCommand import OverlayUnregistrationCommand
+        for key in list(cls._light_gizmo_keys):
+            if cls.renderer is not None:
+                cls.renderer.enqueue(OverlayUnregistrationCommand(key))
+        cls._light_gizmo_keys.clear()

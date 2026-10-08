@@ -88,11 +88,14 @@ SUMMARY: 11/12 passed in 84s | failed: test_x | tier=core | skipped=5 | runs: Te
 
 | 域 | 位置 | 档位 | 备注 |
 |---|---|---|---|
-| 图数据/校验/IO | `Test/Application/NodeGraph/` | core | `test_graph_validation` / `test_graph_io`；`Test/Application/Editor/test_node_runtime.py` 为交互演示（manual） |
+| 图数据/校验/IO | `Test/Application/NodeGraph/` | core | `test_graph_validation` / `test_graph_io` / `test_entity_group_visible`（组可见性节点: 单批下发原子显隐）；`Test/Application/Editor/test_node_runtime.py` 为交互演示（manual） |
 | 设备/算法/Functions | `Test/Application/Functions/` | core | gtec / siggen / pool / epoch / bci（stub 后端） |
 | 动态媒体 | `Test/Application/Media/` | core | `test_media_system`（解码/时钟/引擎帧去重/错误遏制）+ `test_media_node`（ShowMedia 注册/静态检查/干跑惰性/节点驱动 + PIE 模板白名单）; 协议 `media_protocol.md` |
-| 渲染器 | `Test/Application/Renderer/` | core | `test_render_commands`（16 命令 dispatch 契约 + CommandQueue 并发）+ `test_vertex_layout`（布局不变式 + shader 一致性快照）+ `test_gl_pixels`（隐藏窗真 GL 像素: 映射/深度/纹理/动态重传/混合排序; 夹具 `_gl_probe.py`）+ `test_gl_lighting`（光照数值锁定）+ `test_gl_render_targets`（RT 生命周期）；`test_material_isolation`（Core/ — 内置材质模板保护）; 协议 `rendering_protocol.md` + `shader_protocol.md` |
+| 文字显示 | `Test/Application/Text/` | core | `test_text_system`（24 checks: 注册链 / 两形态角落像素 / auto 画布 / 同尺寸热更 / 合成粗斜体 / auto_scale / SetText 节点）; 协议 `text_protocol.md` |
+| 渲染器 | `Test/Application/Renderer/` | core | `test_render_commands`（16 命令 dispatch 契约 + CommandQueue 并发/**原子批**）+ `test_vertex_layout`（布局不变式 + shader 一致性快照）+ `test_gl_pixels`（隐藏窗真 GL 像素: 映射/深度/纹理/动态重传/混合排序; 夹具 `_gl_probe.py`）+ `test_gl_lighting`（平面光/点光数值锁定 + 点光衰减三档 + **无灯满亮回退**）+ `test_gl_render_targets`（RT 生命周期）；`test_material_isolation`（Core/ — 内置材质模板保护）; 协议 `rendering_protocol.md` + `shader_protocol.md` |
 | 编辑器服务（回环） | `Test/Application/Editor/test_live_command_server.py` | core | 含边界扫描; 无 GUI |
+| PIE 设置 / 光位图标 | `Test/Application/Editor/test_pie_settings.py` + `test_light_gizmo.py` | core | Settings 持久化/尺寸钳位/窗口映射/Overlay 回退; 光图标(+平面光方向射线)查询/overlay 语义/眼图标联动/方向公式钉死/点光 direction=(0,0,0)（均无 GL）; 协议 `ui_protocol.md` §9 + `rendering_protocol.md` §8 |
+| 组件字段钳制 | `Test/Application/Core/test_component_clamps.py` | core | `FIELD_CLAMPS` 单元（标量/tuple/int/bool/无规则）+ Inspector(`SceneBrowserController.set_component_field`)/MCP(`_op_component_set`) 两条写入路径 + 旧名迁移 (`get/add/set`)；单一权威 `ComponentRegistry.FIELD_CLAMPS`（Light/Camera/Transform/MediaPlayer/TextDisplay） |
 | agent 通道包 | `Test/Application/Editor/{test_editor_mcp_package,test_node_editor_mcp}.py` | core | wheel/CLI/注册表 |
 | UI 场景回放 | `Test/Application/Editor/scenarios/` | gui | 快照 + 行为断言（panels_smoke / menu_smoke / node_editor_smoke） |
 | ~~UI 面板/gizmo（遗留交互 demo）~~ | ~~`test_*_{opengl,zengl}.py`~~ | — | **2026-10-05 已清理**（18 个交互 demo 删除; 覆盖转入 scenarios + e2e） |

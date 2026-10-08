@@ -73,6 +73,24 @@ class Renderer(ABC):
         if self._command_queue is not None:
             self._command_queue.enqueue(cmd)
 
+    def enqueue_many(self, cmds) -> None:
+        """提交一组渲染命令 — 同批成员保证被同一帧消费 (原子批语义)。"""
+        if self._command_queue is not None:
+            self._command_queue.enqueue_many(cmds)
+
+    def begin_command_batch(self) -> None:
+        """开启原子命令批 (线程局部) — 逻辑 tick 级显隐/生成命令不会被帧边界切开。
+
+        见 CommandQueue 头注; 调用方必须 try/finally 保证 end_command_batch。
+        """
+        if self._command_queue is not None:
+            self._command_queue.begin_batch()
+
+    def end_command_batch(self) -> None:
+        """结束原子命令批 — 深度归零时整批入队。"""
+        if self._command_queue is not None:
+            self._command_queue.end_batch()
+
     # ── 相机矩阵缓存 (所有后端共享, 由 SetViewProjectionCommand 写入) ──
     _cached_view: 'np.ndarray' = None       # 4x4 视图矩阵 (float32)
     _cached_proj: 'np.ndarray' = None       # 4x4 投影矩阵 (float32)

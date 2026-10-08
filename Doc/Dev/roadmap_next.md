@@ -183,7 +183,7 @@
 | 拾取 FBO / 高亮后处理 / overlay 系统 / 抓帧 | ✅ | 编辑器与验证 | — |
 | **实体混合(透明)+排序** | ✅ **已交付**（P1, 2026-10-06: `Material.blend` opaque/alpha + 透明由远到近 painter + 状态恢复; `test_gl_pixels` §9） | 刺激叠加/淡入淡出/半透明提示 | — |
 | **FBO/离屏渲染目标通用化** | ✅ **已交付**（P1, 2026-10-06: `OpenGLRenderTargets` + 3 命令; rt_id=纹理ID 可直接采样; `test_gl_render_targets`） | 视频墙/刺激合成/后处理底座 | — |
-| **基本光照**（环境光 + 1~N 方向光, Blinn-Phong; 顺带解决 normal 浪费） | ✅ **已交付**（P1, 2026-10-06: `DirectionalLight` 组件 + 场景 ambient + Lighting shader + 默认场景 Sun/DefaultLit; `test_gl_lighting` 数值锁定） | “有渲染引擎样”的立体感 | — |
+| **基本光照**（环境光 + 1~N 平面光 + 点光, Blinn-Phong; 顺带解决 normal 浪费） | ✅ **已交付**（P1, 2026-10-06: 光照体系; 2026-10-07: `Light` 组件化（平面光/点光开关）+ 点光衰减 + 组件字段钳制; `test_gl_lighting`/`test_component_clamps` 数值锁定） | “有渲染引擎样”的立体感 | — |
 | MSAA / UBO 合批 / 色调对比后处理 | ❌ / ❌ / 🔶(1 效果) | 视觉质量 & 大量实体性能/刺激对比度 | P2（按需求佐证） |
 | 立方体贴图与天空盒 / 阴影映射 / 实例化 | ❌ | 可选氛围/规模 | P3（观察） |
 | 模型导入扩展（glTF 已有 trimesh 路径） | 🔶 | 实验刺激物 | P2（与章 R 联动） |
@@ -195,7 +195,8 @@
 - **G1 = 已交付**（2026-10-06 P1 推送）：① 实体混合+排序（per-material blend + painter）✅
   ② FBO/离屏目标通用化（`OpenGLRenderTargets` + Create/Destroy/SetSceneTarget 命令）✅。
 - **G2 = 已交付**（同上）：基本光照（DirectionalLight 组件 + 场景环境光 + Lighting shader
-  Blinn-Phong；normal 正式启用；默认场景 Sun + DefaultLit 材质）。**shader 设计规范**（用户
+  Blinn-Phong；normal 正式启用；默认场景 Sun + DefaultLit 材质。后于 2026-10-07 组件更名为 `Light`
+  并扩展点光）。**shader 设计规范**（用户
   预期缺口）：`shader_protocol.md` 已建立。
 - **G3**: 按需求选做 MSAA / UBO 优化 / 后期效果 / 阴影 / 天空盒（每步准入 = 沿用本章验证体系：
   core 契约 + GL 像素用例 + e2e 最小断言；新字段可平滑扩展 `renderer.snapshot`）。
@@ -210,6 +211,19 @@
   `test_material_isolation` 锁定）; 克隆体除名 `builtin_name`。
 - 测试: core 29/29（含新三件: gl_lighting 11 + gl_render_targets 18 + material_isolation 11）;
   e2e 15/15; live 演示证据 `Test/_runs/p1_demo/`（默认场景/混合/光照截图 + snapshot）。
+
+### G.6 光照组件化 + 字段钳制（2026-10-07）
+
+- 组件改名: `DirectionalLight` → **`Light`**（`light_type` = `directional` 平面光 / `point` 点光 + `range`）；
+  全链迁移: 别名 `DirectionalLight = Light` + `SceneSync._COMP_NAME_MIGRATIONS` + `PrefabManager._COMP_MAP` +
+  `LiveCommandServer._migrate_type_name`（component.add/get/set 全路径）。
+- 新渲染: 点光（至多 4）+ `uPointCount/uPointPos[4]/uPointColor[4]/uPointRange[4]`；衰减 att=(1−d/range)²，
+  超距截断；无灯回退判定 = 平面光+点光计数均 0。
+- 组件字段数值钳制: 单一权威 `ComponentRegistry.FIELD_CLAMPS` + `clamp_component_field()`
+  （Inspector `set_component_field` / MCP `_op_component_set` 同口径; Light/Camera/Transform/MediaPlayer/TextDisplay）。
+- 编辑器: 点光仅图标不画方向射线；图标状态哈希含 light_type/range。
+- 测试: core 34/34（新增 `test_component_clamps` 25 checks; `test_gl_lighting` 16; `test_light_gizmo` 22）;
+  e2e 证据 `Test/_runs/light_component_demo/`（5 抓帧 + 像素差分: 点光近/远 2964px 暖色偏移, 回近 0px 差 = 确定性）。
 - 协议: `shader_protocol.md`（新）; `rendering_protocol.md` §2.5/§6/§7/§8 大幅更新。
 
 ### G.4 归属

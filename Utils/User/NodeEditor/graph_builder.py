@@ -136,7 +136,10 @@ class GraphBuilder:
                           {"template": t}) for t in templates]
 
     def hide(self, *entity_names: str, value: float = 0.0) -> tuple[int, int]:
-        """隐藏/显示一组实体。返回 (entry_id, exit_id) — 第一个 EntityGet 和最后一个 EntitySetRenderVisible。"""
+        """隐藏/显示一组实体。返回 (entry_id, exit_id) — 第一个 EntityGet 和最后一个 EntitySetRenderVisible。
+
+        原子性: 多部件需同帧显隐时请优先用 group_visible (单节点单批命令)。
+        """
         entry = None
         prev = None
         for en in entity_names:
@@ -153,6 +156,38 @@ class GraphBuilder:
             self.link(c0, "Result", es, "Visible")
             prev = es
         return entry, prev
+
+    def group_visible(self, *entity_names: str, value: float = 1.0) -> tuple[int, int]:
+        """一组实体原子显隐 (EntityGroupSetVisible) — 组内同帧生效。
+
+        返回 (entry_id, exit_id) — 第一个 EntityGet 与最后一个组节点。
+        超过 4 个实体时自动串联多个组节点 (每节点 4 个目标)。
+        """
+        first_entry = None
+        prev_exec = None
+        last = None
+        for start in range(0, len(entity_names), 4):
+            chunk = entity_names[start:start + 4]
+            gets = [self.node("EntityGet", ["exec_in", "exec_out", "Name", "Entity"],
+                              {"entity_name": en}) for en in chunk]
+            gv = self.node("EntityGroupSetVisible",
+                           ["exec_in", "Entity1", "Entity2", "Entity3", "Entity4",
+                            "Visible", "exec_out"])
+            for i, eg in enumerate(gets):
+                self.link(eg, "Entity", gv, f"Entity{i + 1}")
+            c0 = self.node("Constant", ["Result"], {"value": value})
+            self.link(c0, "Result", gv, "Visible")
+            if prev_exec is not None:
+                self.link(prev_exec, "exec_out", gets[0], "exec_in")
+            if first_entry is None and gets:
+                first_entry = gets[0]
+            for a, b in zip(gets, gets[1:]):
+                self.link(a, "exec_out", b, "exec_in")
+            if gets:
+                self.link(gets[-1], "exec_out", gv, "exec_in")
+            prev_exec = gv
+            last = gv
+        return first_entry, last
 
     def show(self, *entity_names: str) -> tuple[int, int]:
         """显示一组实体。返回 (entry_id, exit_id)。"""

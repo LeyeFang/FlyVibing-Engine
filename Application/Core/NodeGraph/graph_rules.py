@@ -129,9 +129,17 @@ VarGet: reads ctx.get_var(name) and writes to Value output.
 | EntityAddMesh         | exec_in,EntityID,MeshID,MaterialID (int)    | exec_out             | —                |
 | EntityAddCamera       | exec_in,EntityID (int)                      | exec_out             | —                |
 | EntitySetRenderVisible| exec_in,EntityID(int),Visible(bool)         | exec_out             | —                |
+| EntityGroupSetVisible | exec_in,Entity1-4(ref,可选),Visible(bool)  | exec_out             | —                |
+| SetText               | exec_in,Entity(ref),Text(string)            | exec_out             | —                |
 
 EntitySpawn: creates entity from Scene.entities template (dropdown). Recursively spawns children.
 EntityRef: type-safe wrapper with is_valid property. Output as entity_ref on data pins.
+EntityGroupSetVisible: show/hide up to 4 entities as ONE atomic batch (same frame).
+  Use it for multi-part cues (arrow body+head, rigs) — EntitySetRenderVisible per entity
+  can be split across frames by the render boundary (partial appearances).
+SetText: sets TextDisplay.text on the target entity and re-rasterizes immediately (PIE).
+  Target must have a TextDisplay component; style (font/size/bold/italic/color/bg) lives
+  on the component and is editable in the inspector or via MCP component.set.
 
 #### Game Nodes
 | type_name    | input pins                  | output pins | notes                    |

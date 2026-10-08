@@ -119,6 +119,14 @@
 | EntitySpawn | exec_in | exec_out, Entity(ref) | template: string |
 | EntityGet | exec_in, Name(string) | exec_out, Entity(ref) | entity_name: string |
 | EntitySetRenderVisible | exec_in, EntityID(int), Visible(bool) | exec_out | — |
+| EntityGroupSetVisible | exec_in, Entity1-4(ref, 可选), Visible(bool) | exec_out | — |
+| SetText | exec_in, Entity(ref), Text(string) | exec_out | — |
+
+多部件 cue（箭把+箭头等）显隐 MUST 用 `EntityGroupSetVisible`：同一批命令下发，
+组内实体**同帧生效**（渲染帧边界不会把一组切成两半）；`EntitySetRenderVisible`
+保留给单实体。
+`SetText`：设置目标实体 `TextDisplay.text` 并立即重新光栅化（PIE）；目标实体需有
+`TextDisplay` 组件（字号/颜色/粗斜体等样式在组件上，编辑器/MCP 可改）。
 
 ### IO
 | type_name | input | output | props |

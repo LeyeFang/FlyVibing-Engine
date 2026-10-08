@@ -9,9 +9,13 @@ import os
 _RESERVED_UNIFORMS = frozenset({
     "uAmbient",      # 场景环境光 (vec3)
     "uCameraPos",    # 相机世界坐标 (vec3) — 高光用
-    "uLightCount",   # 方向光数量 (int)
-    "uLightDir",     # 方向光方向数组 (vec3[4]) — 光线传播方向
-    "uLightColor",   # 方向光颜色×强度 数组 (vec3[4])
+    "uLightCount",   # 平面光数量 (int)
+    "uLightDir",     # 平面光方向数组 (vec3[4]) — 光线传播方向
+    "uLightColor",   # 平面光颜色×强度 数组 (vec3[4])
+    "uPointCount",   # 点光数量 (int)
+    "uPointPos",     # 点光世界坐标数组 (vec3[4])
+    "uPointColor",   # 点光颜色×强度 数组 (vec3[4])
+    "uPointRange",   # 点光衰减半径数组 (float[4])
 })
 
 

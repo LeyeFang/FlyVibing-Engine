@@ -169,7 +169,7 @@ class PrefabManager:
         Returns:
             新创建的实体 ID 列表 (root 在最前)
         """
-        from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer, DirectionalLight
+        from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer, Light, TextDisplay
         import esper
 
         # 组件类型映射 (名称 → esper component class)
@@ -177,7 +177,9 @@ class PrefabManager:
             "Transform": Transform,
             "Camera": Camera,
             "MeshRenderer": MeshRenderer,
-            "DirectionalLight": DirectionalLight,
+            "Light": Light,
+            "DirectionalLight": Light,   # 旧 prefab 名 → 迁移
+            "TextDisplay": TextDisplay,
         }
 
         # 旧 ID → 新 ID 映射

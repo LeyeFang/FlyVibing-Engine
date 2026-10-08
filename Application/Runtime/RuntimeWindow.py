@@ -44,6 +44,27 @@ class RuntimeWindow(glfwWindow):
             glfw.set_window_title(cls.glfw_window, cls._window_title)
         return cls
 
+    @classmethod
+    def apply_start_preferences(cls, mode: str, width: int, height: int) -> None:
+        """PIE 启动前应用窗口偏好 (Settings 按钮; 由 SimulationController 调用)。
+
+        - mode: "windowed" / "borderless" / "fullscreen" (非法值回退 windowed)
+        - 仅 windowed 使用自定义尺寸; 其余模式由显示器/系统决定
+        """
+        from Application.Core.Window.glfwWindow import WindowMode
+        _MAP = {
+            "windowed": WindowMode.WINDOWED,
+            "borderless": WindowMode.BORDERLESS,
+            "fullscreen": WindowMode.FULLSCREEN,
+        }
+        cls._window_mode = _MAP.get(str(mode).strip().lower(), WindowMode.WINDOWED)
+        if cls._window_mode == WindowMode.WINDOWED:
+            cls._default_size_override = (int(width), int(height))
+        else:
+            cls._default_size_override = None
+        _sz = f" size={cls._default_size_override}" if cls._default_size_override else ""
+        print(f"[RuntimeWindow] Start prefs: mode={cls._window_mode.value}{_sz}")
+
     # ════════════════════════════════════════════════════════════
     # GL 特化窗口操作
     # ════════════════════════════════════════════════════════════

@@ -965,7 +965,7 @@ class LiveCommandServer:
         from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
 
         eid, extras = _resolve_entity(args)
-        type_name = str(args.get("type") or "")
+        type_name = _migrate_type_name(str(args.get("type") or ""))
         available = SceneBrowserController.get_available_components()
         if type_name not in available:
             raise ValueError(
@@ -985,7 +985,7 @@ class LiveCommandServer:
         from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
 
         eid, extras = _resolve_entity(args)
-        type_name = str(args.get("type") or "")
+        type_name = _migrate_type_name(str(args.get("type") or ""))
         ok = bool(SceneBrowserController.remove_component(eid, type_name))
         return {
             "entity_id": eid,
@@ -1001,7 +1001,7 @@ class LiveCommandServer:
         MeshRenderer 额外附带 meta: 网格与材质的语义化摘要（名称/颜色/shader — 便于“读后再改”）。
         """
         eid, extras = _resolve_entity(args)
-        type_name = str(args.get("type") or "")
+        type_name = _migrate_type_name(str(args.get("type") or ""))
         comp = _get_component_by_name(eid, type_name)
         result: dict = {"entity_id": eid, "type": type_name, "fields": comp.serialize()}
         if type_name == "MeshRenderer":
@@ -1038,7 +1038,7 @@ class LiveCommandServer:
         from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
 
         eid, extras = _resolve_entity(args)
-        type_name = str(args.get("type") or "")
+        type_name = _migrate_type_name(str(args.get("type") or ""))
         fields = args.get("fields") or {}
         if not isinstance(fields, dict) or not fields:
             raise ValueError("fields must be a non-empty object")
@@ -1129,6 +1129,7 @@ class LiveCommandServer:
 
         else:
             import dataclasses
+            from Application.Core.Scene.ComponentRegistry import clamp_component_field
 
             comp = _get_component_by_name(eid, type_name)
             valid = {f.name for f in dataclasses.fields(comp)}
@@ -1137,7 +1138,7 @@ class LiveCommandServer:
                     raise ValueError(
                         f"unknown {type_name} field: {key!r} (available: {', '.join(sorted(valid))})"
                     )
-                setattr(comp, key, value)
+                setattr(comp, key, clamp_component_field(type_name, key, value))
                 applied.append(key)
 
         result = LiveCommandServer._op_component_get({"id": eid, "type": type_name})
@@ -1330,6 +1331,17 @@ def _require_editor_scene():
     if scene is None:
         raise ValueError("no active scene")
     return scene
+
+
+# 旧组件名迁移表 — MCP/CLI 全链兼容 (DirectionalLight 已改名为 Light)
+_COMP_TYPE_MIGRATIONS = {
+    "DirectionalLight": "Light",
+}
+
+
+def _migrate_type_name(name: str) -> str:
+    """旧组件名 → 当前注册名（无迁移则原样返回）。"""
+    return _COMP_TYPE_MIGRATIONS.get(name, name)
 
 
 def _resolve_entity(args: dict) -> tuple[int, dict]:

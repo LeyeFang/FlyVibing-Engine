@@ -24,6 +24,7 @@
 | `media_protocol.md` | `Application/Functions/Media/**` + `ShowMedia` 节点 + `MediaPlayer` 组件 + `TextureUpdateCommand` 链 | 改动态媒体（GIF/视频/音频）、媒体节点、动态纹理上传：架构决议 **v2**（编辑器=模板 / PIE 唯一由 GameRuntime 控制 / 节点建图才生效）、数据流、注册点、验收证据 |
 | `rendering_protocol.md` | `Application/Core/Renderer/**` + `Resource/Shaders/**` + `Test/Application/Renderer/**` | 改渲染器/渲染命令/shader/纹理上传/overlay，或需要像素级验证时必读：后端现状（OpenGL 一等公民）、线程纪律、资源模型、**验证体系**（GL 像素探针 + 金标准）、agent 工具（`renderer.snapshot` / CLI `probe`）、**§7 渲染目标(RT)**、**§8 光照体系** |
 | `shader_protocol.md` | `Resource/Shaders/**` + `Application/Resource/Material.py` + 渲染器 uniform 注入 | 新增/修改 shader、调整材质 uniform 系统、变换光照/帧级注入 uniform 前必读：顶点属性契约（STD_LAYOUT）、uniform 归属总表（矩阵/材质/**渲染器注入**）、材质默认值与「切 shader 重置」语义、光照模型与数值锁定表、新增 shader 检查单 |
+| `text_protocol.md` | `Application/Functions/Text/**` + `TextDisplay` 组件 + `SetText` 节点 + ScenePanel 通用组件检视 | 改文字显示/光栅化/字体/动态纹理绑定前必读：**两种形态**（有色画布 vs 浮空文字=透明底+alpha 混合）、auto 画布热更策略、合成粗体/斜体、字段表、驱动通道矩阵（编辑器预览/检查器/MCP/节点）、注册点清单与验收证据 |
 | `ui_refactor_plan.md` | `Application/Editor/UI/**` 大文件（widgets.py / panel.py / ScenePanel.py） | 执行 UI 文件拆分/搬迁时读：目标结构（mixin/注册表两种拆法）+ 验证顺序 |
 | `roadmap_next.md` | 全局（线程治理 / 资源管线 / 动态媒体 三章蓝图, 待评估草案） | 开工前评估三大愿景方向、依赖取舍与里程碑顺序 |
 

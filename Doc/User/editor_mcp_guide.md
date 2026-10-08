@@ -106,12 +106,12 @@
 
 | 命令 | 作用 |
 |---|---|
-| `editor_component_types` | 可用组件类型表（当前：Camera / MeshRenderer / Transform / DirectionalLight） |
+| `editor_component_types` | 可用组件类型表（当前：Camera / MeshRenderer / Transform / Light / MediaPlayer / TextDisplay 等；旧名 DirectionalLight 自动迁移） |
 | `editor_component_list` | 实体的组件列表 |
 | `editor_component_add` | 添加组件（MeshRenderer 自动绑定默认 Cube 网格） |
 | `editor_component_remove` | 移除组件（Transform 为实体必需，不可移除） |
 | `editor_component_get` | 读取组件全部字段（MeshRenderer 还会附带网格/材质的摘要信息） |
-| `editor_component_set` | 修改组件字段，例如：<br>• MeshRenderer：`{"mesh": "Cube", "material": 2, "color": [1,0,0], "visible": true, "material_name": "Cue", "shader": "Basic", "blend": "alpha", "uniform": {"uColor": [1,0.5,0,1]}, "texture": "Default"}`<br>• Transform：`{"position": [3,0,0], "rotation": [0,90,0], "scale": 2}`<br>• Camera：`{"fov": 60, "projection": "ortho"}` |
+| `editor_component_set` | 修改组件字段，例如：<br>• MeshRenderer：`{"mesh": "Cube", "material": 2, "color": [1,0,0], "visible": true, "material_name": "Cue", "shader": "Basic", "blend": "alpha", "uniform": {"uColor": [1,0.5,0,1]}, "texture": "Default"}`<br>• Transform：`{"position": [3,0,0], "rotation": [0,90,0], "scale": 2}`<br>• Camera：`{"fov": 60, "projection": "ortho"}`<br>• Light：`{"light_type": "point", "intensity": 2, "range": 8, "color_r": 1, "color_g": 0.55, "color_b": 0.2}`（`directional` 平面光 / `point` 点光；数值自动钳制到合法范围） |
 
 ### 3.8 场景
 

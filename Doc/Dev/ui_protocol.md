@@ -106,3 +106,20 @@
   （真实面板 + 输入注入 + PNG 快照，含完整 ImGui 界面；`--preview` 交互预览）。
 - 批量运行 / 档位（core/gui/heavy/live）/ 沙箱与输出契约：`Doc/Dev/test_protocol.md`
   （`python Utils/Dev/test_runner.py`）。
+
+---
+
+## 9. PIE 窗口设置（ScenePanel ⚙ Settings）
+
+- **位置**：Scene Information 卡片，`Stopped` 状态行下方 `⚙ Settings` 按钮（图标用
+  `icons_fontawesome_6.ICON_FA_GEAR`，`getattr` 兑底）→ `pie_settings_popup` 弹层。
+- **选项**：显示模式（窗口化 / 无边窗口 / 独占全屏）+ 窗口化尺寸（预设 1280×720 / 1600×900 /
+  1920×1080 + 宽高输入；非窗口化时尺寸控件 disabled）。**下次 Run 生效**。
+- **持久化**：`Application/Editor/Config/PIE.json`（`{"mode", "width", "height"}`；
+  懒加载 + 修改即存；尺寸 clamp 320..7680；缺失/损坏 → 默认值不报错）。
+  ⚠ 手写该文件用无 BOM UTF-8（PS 5.1 `Set-Content -Encoding UTF8` 带 BOM → JSON 解析失败回默认值）。
+- **应用链**：`SimulationController._apply_pie_window_prefs(game_type)`（Play 消费时、
+  `GameRuntime.start` 之前）→ `RuntimeWindow.apply_start_preferences(mode, w, h)`
+  （`_window_mode` + `_default_size_override`）→ `Window._compute_default_size` 读取覆盖。
+  Overlay 场景 + 独占全屏 → 自动回退 borderless（透明窗口不兼容独占全屏）。
+- **测试**：`Test/Application/Editor/test_pie_settings.py`（core；持久化/钳位/映射/Overlay 回退）。

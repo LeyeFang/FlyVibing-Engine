@@ -77,3 +77,17 @@ _reg(NodeTypeDef(
     ],
     "Show or hide entity (MeshRenderer.visible)",
 ))
+
+_reg(NodeTypeDef(
+    "EntityGroupSetVisible", "Set Group Visible", "Entity", ENTITY_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Entity1", "data", "input", "entity_ref", optional=True),
+        PinDef(_gen_id(), "Entity2", "data", "input", "entity_ref", optional=True),
+        PinDef(_gen_id(), "Entity3", "data", "input", "entity_ref", optional=True),
+        PinDef(_gen_id(), "Entity4", "data", "input", "entity_ref", optional=True),
+        PinDef(_gen_id(), "Visible", "data", "input", "bool"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+    ],
+    "Show/hide up to 4 entities as one atomic batch (same frame)",
+))

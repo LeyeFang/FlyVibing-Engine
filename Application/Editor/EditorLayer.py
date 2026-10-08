@@ -102,6 +102,12 @@ class EditorLayer(Layer):
         # 编辑器编辑=模板; PIE 播放由 ShowMedia 节点驱动
         # （RuntimeNodeLayer → evaluators/media.py; 协议 Doc/Dev/media_protocol.md）
 
+        # ── 文字预览: 编辑器编辑即光栅化并刷新纹理 (无时钟维度 — 与媒体的
+        #    "编辑器=模板"有意偏差; PIE 中由 SetText 节点驱动; text_protocol.md) ──
+        from Application.Editor.EditorHost import EditorHost
+        from Application.Functions.Text import TextSystem
+        TextSystem.tick(EditorHost)
+
         # ── 检测 RuntimeWindow 关闭 (用户点 X) ──
         if SimulationController.is_running():
             from Application.Runtime.GameRuntime import GameRuntime

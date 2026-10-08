@@ -105,7 +105,13 @@ _COMPONENT_PROPERTIES: dict[str, list[PropertyDescriptor]] = {
             attr_name="speed",
         ),
     ],
-    "DirectionalLight": [
+    "Light": [
+        PropertyDescriptor(
+            "LightType", "Type", "string", "directional",
+            widget="combo",
+            widget_config={"options": ["directional", "point"]},
+            attr_name="light_type",
+        ),
         PropertyDescriptor(
             "ColorR", "Color R", "float", 1.0,
             widget="drag_float",
@@ -130,6 +136,50 @@ _COMPONENT_PROPERTIES: dict[str, list[PropertyDescriptor]] = {
             widget_config={"speed": 0.01, "min": 0.0, "max": 10.0, "format": "%.2f"},
             attr_name="intensity",
         ),
+        PropertyDescriptor(
+            "Range", "Range (仅点光)", "float", 10.0,
+            widget="drag_float",
+            widget_config={"speed": 0.1, "min": 0.01, "max": 1000.0, "format": "%.2f"},
+            attr_name="range",
+        ),
+    ],
+    "TextDisplay": [
+        PropertyDescriptor(
+            "Text", "Text", "string", "Text",
+            pin_only=True, attr_name="text",
+        ),
+        PropertyDescriptor(
+            "Font", "Font", "string", "segoeui",
+            pin_only=True, attr_name="font",
+        ),
+        PropertyDescriptor(
+            "Size", "Size", "int", 64,
+            widget="input_int", attr_name="size",
+        ),
+        PropertyDescriptor(
+            "Bold", "Bold", "bool", False,
+            widget="checkbox", attr_name="bold",
+        ),
+        PropertyDescriptor(
+            "Italic", "Italic", "bool", False,
+            widget="checkbox", attr_name="italic",
+        ),
+        PropertyDescriptor(
+            "Align", "Align", "string", "center",
+            widget="combo",
+            widget_config={"options": ["left", "center", "right"]},
+            attr_name="align",
+        ),
+        PropertyDescriptor(
+            "WorldHeight", "World Height", "float", 1.0,
+            widget="drag_float",
+            widget_config={"speed": 0.05, "min": 0.0, "max": 100.0, "format": "%.2f"},
+            attr_name="world_height",
+        ),
+        PropertyDescriptor(
+            "AutoScale", "Auto Scale", "bool", True,
+            widget="checkbox", attr_name="auto_scale",
+        ),
     ],
     # Camera —
 }
@@ -146,7 +196,7 @@ def get_properties(component_name: str) -> list[PropertyDescriptor]:
 
 def get_registered_component_names() -> list[str]:
     """获取所有已注册属性表的组件名（用于下拉菜单）。Transform 置顶。"""
-    _ORDER = ["Transform", "MeshRenderer", "Camera", "DirectionalLight"]
+    _ORDER = ["Transform", "MeshRenderer", "Camera", "Light"]
     names = []
     for c in _ORDER:
         if c in _COMPONENT_PROPERTIES:

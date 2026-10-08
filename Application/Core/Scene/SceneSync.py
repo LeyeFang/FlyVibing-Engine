@@ -23,6 +23,11 @@ from Application.Core.Scene.DataContract import DataContract, format_value
 if TYPE_CHECKING:
     from Application.Core.Scene.SceneManager import SceneManager
 
+# 旧场景/prefab 组件名 → 新组件名 (加载时迁移)
+_COMP_NAME_MIGRATIONS = {
+    "DirectionalLight": "Light",
+}
+
 
 class SceneSync:
     """Scene ↔ ECS 双向同步器。"""
@@ -86,7 +91,8 @@ class SceneSync:
         scene._next_sid = max_sid + 1 if max_sid > 0 else 1
         scene.main_camera_entity_id = st._eid_to_sid.get(st.main_camera_id)
         scene.game_type = st.game_type
-        scene.ambient_color = tuple(getattr(st, 'ambient_color', (0.18, 0.18, 0.18)))
+        scene.ambient_color = tuple(getattr(st, 'ambient_color', (0.5, 0.5, 0.5)))
+        scene.lighting_fallback = bool(getattr(st, 'lighting_fallback', True))
 
     # ════════════════════════════════════════════════════════════
     # Scene → esper (加载)
@@ -105,10 +111,14 @@ class SceneSync:
 
         # ── 恢复场景环境光 (光照帧状态来源) ──
         try:
-            amb = getattr(scene, 'ambient_color', (0.18, 0.18, 0.18))
+            amb = getattr(scene, 'ambient_color', (0.5, 0.5, 0.5))
             st.ambient_color = tuple(float(v) for v in amb[:3])
         except Exception:
-            st.ambient_color = (0.18, 0.18, 0.18)
+            st.ambient_color = (0.5, 0.5, 0.5)
+        try:
+            st.lighting_fallback = bool(getattr(scene, 'lighting_fallback', True))
+        except Exception:
+            st.lighting_fallback = True
 
         # ── 清空现有实体 + 映射表 ──
         if clear_existing:
@@ -143,6 +153,8 @@ class SceneSync:
         for sid, ed in scene.entities.items():
             comp_instances = []
             for comp_name, comp_value in ed.components.items():
+                # 组件名迁移 (旧场景文件兼容)
+                comp_name = _COMP_NAME_MIGRATIONS.get(comp_name, comp_name)
                 comp_cls = st._component_registry.get(comp_name)
                 if comp_cls is None:
                     continue

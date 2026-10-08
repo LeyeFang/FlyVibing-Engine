@@ -126,6 +126,7 @@ class glfwWindow(Window):
     # ── 窗口显示模式 ──
     _window_mode: WindowMode = WindowMode.WINDOWED
     _saved_window_rect: tuple[int, int, int, int] | None = None  # (x, y, w, h) 用于退出全屏时恢复
+    _default_size_override: tuple[int, int] | None = None  # 窗口化尺寸覆盖 (PIE Settings)
 
     @classmethod
     def Create(

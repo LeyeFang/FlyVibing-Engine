@@ -184,11 +184,18 @@ class Window(ABC):
     def _compute_default_size(cls) -> tuple[int, int]:
         """便捷方法：获取系统分辨率 → 选取小一圈分辨率 → 缓存并返回。
 
+        窗口偏好可通过类属性 `_default_size_override` (形如 (w, h)) 覆盖 —
+        PIE Settings 经 RuntimeWindow.apply_start_preferences 注入。
+
         Returns:
             (width, height)
         """
-        sys_w, sys_h = cls._get_system_resolution()
-        w, h = cls._pick_optimal_resolution(sys_w, sys_h)
+        override = getattr(cls, '_default_size_override', None)
+        if override:
+            w, h = int(override[0]), int(override[1])
+        else:
+            sys_w, sys_h = cls._get_system_resolution()
+            w, h = cls._pick_optimal_resolution(sys_w, sys_h)
         cls._window_width, cls._window_height = w, h
         return w, h
 

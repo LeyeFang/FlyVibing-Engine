@@ -708,6 +708,58 @@ class SceneBrowserController:
         from Application.Resource.ResourceManager import ResourceManager
         mid = EditorHost.scene.GetEntityMaterial(entity_id)
         ResourceManager.AddMaterialTexture(mid, texture_id)
+
+    # ── 通用组件检视 (TextDisplay / MediaPlayer / Light 等) ──
+
+    _SPECIAL_COMPONENTS = {"Transform", "MeshRenderer", "Camera", "ObjectInfo", "Component"}
+
+    @classmethod
+    def get_extra_components(cls, entity_id: int) -> list[str]:
+        """返回除专属编辑区之外的全部已注册组件名 (ScenePanel 通用检视用)。"""
+        try:
+            import esper
+            names = []
+            for comp in esper.components_for_entity(entity_id):
+                name = type(comp).__name__
+                if name not in cls._SPECIAL_COMPONENTS:
+                    names.append(name)
+            return sorted(names)
+        except Exception:
+            return []
+
+    @classmethod
+    def get_component_fields(cls, entity_id: int, comp_name: str) -> list | None:
+        """返回组件的 (字段名, 当前值) 列表; 组件不存在返回 None。"""
+        try:
+            import esper
+            from dataclasses import fields as _dc_fields
+            comp_cls = EditorHost.scene.comp_mgr.get_all().get(comp_name)
+            if comp_cls is None:
+                return None
+            comp = esper.component_for_entity(entity_id, comp_cls)
+            return [(f.name, getattr(comp, f.name)) for f in _dc_fields(comp_cls)]
+        except Exception:
+            return None
+
+    @classmethod
+    def set_component_field(cls, entity_id: int, comp_name: str, field_name: str, value) -> None:
+        """通用组件字段写 (数值范围钳制 + tuple 归一化 + ComponentModifiedEvent)。"""
+        import esper
+        from Application.Core.Scene.ComponentRegistry import clamp_component_field
+        from Application.Core.Events.SceneEvent import ComponentModifiedEvent
+        comp_cls = EditorHost.scene.comp_mgr.get_all().get(comp_name)
+        if comp_cls is None:
+            return
+        comp = esper.component_for_entity(entity_id, comp_cls)
+        value = clamp_component_field(comp_name, field_name, value)
+        current = getattr(comp, field_name, None)
+        if isinstance(current, tuple) and isinstance(value, (list, tuple)):
+            value = tuple(value)
+        setattr(comp, field_name, value)
+        try:
+            ComponentModifiedEvent.Pack(entity_id, comp, engine=EditorHost)
+        except Exception:
+            pass
 # ── 注册到 ControllerRegistry（供 Panel 通过名称查找） ──
 from Application.Editor.Services.ControllerRegistry import register, NAME_SCENE_BROWSER
 register(NAME_SCENE_BROWSER, SceneBrowserController)

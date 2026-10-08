@@ -47,6 +47,12 @@ Engine._render_loop (渲染线程)
 - **GL 调用只允许在渲染线程**（该线程持有上下文；`render:` 已注册 ThreadRegistry）。
 - 跨线程唯一通道 = `renderer.enqueue(cmd)`（`CommandQueue` 带锁；任意线程可入队）+
   `FrameCaptureSlot`（单槽信箱：请求/发布/取回）。
+- **原子拍 (atomic beat)**：逻辑线程每个 tick 由 `RuntimeNodeLayer.OnUpdate` 包裹
+  `begin_command_batch()` / `end_command_batch()`（try/finally）——该 tick 的全部命令
+  **整批入队**，渲染帧边界不会把同一 tick 的多部件显隐/生成切成两帧
+  （`CommandQueue` 线程局部 staging；修复 MI-SSSEP cue "箭把/箭头各自一帧出现"）。
+  批量入口：`Renderer.enqueue_many` / `SceneManager.SetEntitiesRenderVisible` /
+  节点 `EntityGroupSetVisible`；均覆盖于 `test_render_commands` + `test_entity_group_visible`。
 - 渲染器上的只读信息（如 `gl_info`）**在渲染线程采集一次**，其他线程只读消费。
 - 资源注册表（`registered_*`）与 `_visible_entities` 是渲染线程私有状态。
 
@@ -85,7 +91,7 @@ Engine._render_loop (渲染线程)
 - 实体渲染分**两段**：不透明（按 shader_id→material_id 排序）→ 透明（`Material.blend=='alpha'`，
   按视图空间深度**由远到近**画家排序）；透明段 `glEnable(GL_BLEND)` +
   `BlendFunc(SRC_ALPHA, ONE_MINUS_SRC_ALPHA)` + `DepthMask FALSE`，帧尾恢复。
-- 光照帧状态（`uAmbient/uCameraPos/uLightCount/uLightDir/uLightColor`）在 program 首次出现时
+- 光照帧状态（`uAmbient/uCameraPos/uLightCount/uLightDir/uLightColor/uPointCount/uPointPos/uPointColor/uPointRange`）在 program 首次出现时
   注入一次/帧；未声明这些 uniform 的 shader 自动 no-op（Basic/SSVEP 不受影响）。
 实体绘制**仅启用深度测试**；混合/剔除目前只在 overlay/pick 各自启用（实体透明=不支持，见 §6）。
 
@@ -127,12 +133,13 @@ Editor 侧只产纯数据 `overlay_drawable_struct`（含 layout/blend/cull/dept
 
 | 测试 | 档位 | 内容 |
 |---|---|---|
-| `Test/Application/Renderer/test_render_commands.py` | core | 16 命令 dispatch 契约（方法名/参数钉死）+ CommandQueue（FIFO/排空/并发入队/生产-消费）+ 命令注册表计数 |
+| `Test/Application/Renderer/test_render_commands.py` | core | 16 命令 dispatch 契约（方法名/参数钉死）+ CommandQueue（FIFO/排空/并发入队/生产-消费/**原子批: staging 不可见/嵌套/线程隔离/并发不拆批**）+ 命令注册表计数 |
 | `Test/Application/Renderer/test_vertex_layout.py` | core | STD_LAYOUT 不变式 + 后端适配器 + **shader 一致性警告快照**（改 shader/layout 必须同步该表） |
 | `Test/Application/Renderer/test_gl_pixels.py` | core (GL) | 隐藏窗口真 GL：世界→像素金标准 / uColor / 深度 / 可见性命令 / Checkerboard / **动态纹理重传（媒体链回归）** / 清屏色 / Highlight 注册-注销 / Resize / **材质混合（alpha 叠加 + 透明排序 + 状态恢复）** |
 | `Test/Application/Renderer/test_gl_lighting.py` | core (GL) | **光照数值锁定**：环境光单独 / 垂直 & 斜射 / 侧背向 / 强度 / 双灯叠加 / 保留 uniform 不进材质 |
 | `Test/Application/Renderer/test_gl_render_targets.py` | core (GL) | **RT 生命周期**：创建/注册（rt_id=纹理 id）/ 场景目标重定向 / 翻转钉死 / 采样 / 销毁回退 / with_depth=False / 重建语义 |
 | `Test/Application/Core/test_material_isolation.py` | core | **内置材质模板保护**：独占也克隆 / 克隆体除名 builtin / 模板不污染 / 后建实体洁净 |
+| `Test/Application/NodeGraph/test_entity_group_visible.py` | core | **组可见性节点**：注册（Entity1-4 optional）/ 干跑惰性 / **单批 enqueue_many**（组内同帧）/ 批量 API 去重 |
 | `Test/Application/Editor/test_live_command_server.py` §3e | core | `renderer.snapshot` 无头路径（available=false + reason） |
 | `Test/Application/Editor/e2e_renderer_check.py` | live | 实机：snapshot 真值（GL 4.4/NVIDIA/计数/overlays/统计）+ 裸帧采样 + capture |
 
@@ -222,13 +229,21 @@ Editor 侧只产纯数据 `overlay_drawable_struct`（含 layout/blend/cull/dept
 
 ## 8. 光照体系（运行链路）
 
-- **组件**：`DirectionalLight`（color_r/g/b + intensity；方向 = Transform 局部 -Z；注册链：
-  `BasicComponents.register_contract` + `ComponentRegistry.ensure_defaults` + `NodeGraph/component_registry` +
+- **组件**：`Light`（`light_type` = `directional` 平面光 / `point` 点光 + color_r/g/b + intensity + range；
+  平面光方向 = Transform 局部 -Z，点光位置 = Transform 平移、衰减 att=(1-d/range)²；
+  字段写入钳制单一权威 `ComponentRegistry.FIELD_CLAMPS`；旧名 `DirectionalLight` = `Light` 别名 + 全链迁移；
+  注册链：`BasicComponents.register_contract` + `ComponentRegistry.ensure_defaults` + `NodeGraph/component_registry` +
   `SimulationController._sync_ecs_to_scene` 白名单 + `PrefabManager._COMP_MAP`）。
-- **场景**：`SceneManager.ambient_color`（默认 0.18）+ `Scene.ambient_color` 序列化 +
-  `SceneSync` 双向同步（编辑器 ↔ PIE 模板）。
-- **帧收集**：`OpenGLEntities._collect_light_frame(view)` — 每帧一次：ambient + 至多 4 盏
-  （`-model[2,:3]` 归一化）+ 相机世界坐标；**每 program 每帧注入一次**（program 首现时）。
+- **场景**：`SceneManager.ambient_color`（默认 **0.5 = 50% 全局光** — 保证未直照面带可见）+ `Scene.ambient_color` 序列化 +
+  `SceneSync` 双向同步（编辑器 ↔ PIE 模板）。首次启动默认场景 = 环境光 0.5 + `Sun` (平面光, intensity 0.6, 编辑器角 [50°, 0°, 220°])。
+- **帧收集**：`OpenGLEntities._collect_light_frame(view)` — 每帧一次：ambient + 至多 4 盏平面光
+  （`-model[2,:3]` 归一化）+ 至多 4 盏点光（世界位置 + range）+ 相机世界坐标；**每 program 每帧注入一次**（program 首现时）。
+- **无灯回退**：`SceneManager.lighting_fallback`（默认开）— 无任何光源（平面光+点光计数均 0）时光照帧 ambient 强制
+  (1,1,1)（详见 `shader_protocol.md` §7.3）；`Scene` 序列化 + `SceneSync`/`_sync_ecs_to_scene` 双通道同步。
+- **光位图标 + 方向射线（编辑器）**：`Light` 实体在视口显示 `Resource/Icons/Light.png` 光照标记，
+  平面光另带沿传播方向的方向线（点光仅图标）；`GizmoQuery.get_light_gizmos`（含 light_type/direction/range 字段）→
+  `LightIconGizmo.build_icon/ray_overlay` → `EditorGizmoLayer` 刷新；两者均为 NDC 屏幕空间、与图标同一相机投影链；可见性=眼图标
+  `_editor_visible`，与 camera 图标同规则；选中→亮黄 tint）。旋转平面光时射线实时摆动 = 调光直观反馈。
 - **默认场景**：`DefaultLight.prefab` → `SceneManager._create_default_light`（EditorHost 首次 Init），
   实体名 `Sun`；默认 Cube 改用 `DefaultLit` 材质（Lighting shader），**用户新建实体仍用 unlit `Default`**
   （SSVEP 刺激色精确性依赖）。
@@ -239,5 +254,5 @@ Editor 侧只产纯数据 `overlay_drawable_struct`（含 layout/blend/cull/dept
 对齐基准 = learnopengl.com「现代仍常用」子集（非商业引擎对标）。**详表与优先级见
 `roadmap_next.md` 章 G**。摘要：已具备 = 上下文/着色器/纹理/变换/两种相机/深度/拾取 FBO/
 高亮后处理/overlay/抓帧 + **实体混合(透明)+排序** + **离屏 RT(FBO) 通用化** + **基本光照
-（环境光+至多4方向光, Blinn-Phong, normal 启用）**；主要缺口 = MSAA、UBO/合批、阴影、
+（环境光+至多4平面光+至多4点光, Blinn-Phong, normal 启用）**；主要缺口 = MSAA、UBO/合批、阴影、
 立方体贴图/天空盒、实例化、模型导入扩展、sRGB 管理。

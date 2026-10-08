@@ -250,6 +250,14 @@ def _draw_component_property_rows(
     imgui.pop_item_width()
 
 
+# ── EntityGroupSetVisible ───────────────────────────────────
+
+@register("EntityGroupSetVisible")
+def _draw_entity_group_visible_widgets(nid: int, inst, _canvas) -> None:
+    """一组实体原子显隐 — 目标由 Entity1-4 引脚连线决定 (最多 4 个)。"""
+    imgui.text_disabled("目标: Entity1-4 连线 (组内同帧原子显隐)")
+
+
 # ── VecMath ────────────────────────────────────────────────
 
 @register("VecMath")

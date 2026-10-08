@@ -140,30 +140,40 @@ class RuntimeNodeLayer(Layer):
         if cls._evaluator is None or cls._context is None:
             return
 
-        # ── 延迟的 OnGameStart: 在逻辑线程首次 OnUpdate 执行 ──
-        if cls._pending_start:
-            cls._pending_start = False
-            cls._evaluator.trigger("OnGameStart", cls._context)
-            print("[RuntimeNodeLayer] Graph execution started")
-            # ★ ExitGame 等节点请求停止 (宿主未注册回调时的兜底)
-            cls._consume_stop_request()
-            # 首帧后立即同步摄像机
-            cls._sync_camera_to_renderer()
-            return
+        # ── ★ 原子拍 (atomic beat): 本次逻辑 tick 产生的全部渲染命令作为一批入队 ──
+        #    (批暂存于本线程, tick 结束时整批可见 — 渲染线程的帧边界不会把
+        #     同一 tick 的多部件显隐/生成命令切成两帧; 见 CommandQueue 头注)
+        _renderer = getattr(cls._engine, 'renderer', None) if cls._engine is not None else None
+        if _renderer is not None:
+            _renderer.begin_command_batch()
+        try:
+            # ── 延迟的 OnGameStart: 在逻辑线程首次 OnUpdate 执行 ──
+            if cls._pending_start:
+                cls._pending_start = False
+                cls._evaluator.trigger("OnGameStart", cls._context)
+                print("[RuntimeNodeLayer] Graph execution started")
+                # ★ ExitGame 等节点请求停止 (宿主未注册回调时的兜底)
+                cls._consume_stop_request()
+                # 首帧后立即同步摄像机
+                cls._sync_camera_to_renderer()
+                return
 
-        cls._frame += 1
-        # 仅当 frame 为奇数时执行（跳过重复实例的第二次调用）
-        if cls._frame % 2 == 1:
-            if cls._engine is not None:
-                cls._context.delta_time = cls._engine.get_delta_time()
-                cls._context.elapsed_time = cls._engine.get_elapsed_time()
-            cls._evaluator.trigger("OnFrameUpdate", cls._context)
+            cls._frame += 1
+            # 仅当 frame 为奇数时执行（跳过重复实例的第二次调用）
+            if cls._frame % 2 == 1:
+                if cls._engine is not None:
+                    cls._context.delta_time = cls._engine.get_delta_time()
+                    cls._context.elapsed_time = cls._engine.get_elapsed_time()
+                cls._evaluator.trigger("OnFrameUpdate", cls._context)
 
-            # ★ ExitGame 等节点请求停止 (宿主未注册回调时的兜底)
-            cls._consume_stop_request()
+                # ★ ExitGame 等节点请求停止 (宿主未注册回调时的兜底)
+                cls._consume_stop_request()
 
-            # ★ 每帧同步场景摄像机矩阵到渲染器
-            cls._sync_camera_to_renderer()
+                # ★ 每帧同步场景摄像机矩阵到渲染器
+                cls._sync_camera_to_renderer()
+        finally:
+            if _renderer is not None:
+                _renderer.end_command_batch()
 
     @classmethod
     def _sync_camera_to_renderer(cls) -> None:

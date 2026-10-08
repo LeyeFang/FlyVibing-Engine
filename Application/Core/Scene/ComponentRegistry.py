@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import esper
 
-from Application.Core.Scene.BasicComponents import Transform, MeshRenderer, Camera, MediaPlayer, DirectionalLight
+from Application.Core.Scene.BasicComponents import Transform, MeshRenderer, Camera, MediaPlayer, Light, TextDisplay
 from Application.Core.Renderer.RenderCommand import (
     EntityRegistrationCommand, EntityRenderVisibleCommand, EntityVisibilityCommand,
 )
@@ -22,6 +22,86 @@ from Application.Core.Events.SceneEvent import NewComponentEvent
 
 if TYPE_CHECKING:
     from Application.Core.Scene.SceneManager import SceneManager
+
+
+# ═══════════════════════════════════════════════════════════════
+# 组件字段数值范围 (单一权威 — Inspector / MCP / 脚本写入共用)
+# ═══════════════════════════════════════════════════════════════
+# 值: (min, max); None = 该侧不限制; tuple/list 字段逐元素钳制。
+# 写入口径: SceneBrowserController.set_component_field / LiveCommandServer component.set。
+FIELD_CLAMPS: dict = {
+    # ── Transform (world 分量; 与 SceneBrowserController 安全钳制同源) ──
+    ("Transform", "position_x"): (-100000.0, 100000.0),
+    ("Transform", "position_y"): (-100000.0, 100000.0),
+    ("Transform", "position_z"): (-100000.0, 100000.0),
+    ("Transform", "rotation_x"): (-3600.0, 3600.0),
+    ("Transform", "rotation_y"): (-3600.0, 3600.0),
+    ("Transform", "rotation_z"): (-3600.0, 3600.0),
+    ("Transform", "scale_x"): (-10000.0, 10000.0),
+    ("Transform", "scale_y"): (-10000.0, 10000.0),
+    ("Transform", "scale_z"): (-10000.0, 10000.0),
+    # ── Camera ──
+    ("Camera", "fov"): (1.0, 179.0),
+    ("Camera", "ortho_size"): (0.01, 10000.0),
+    ("Camera", "near_plane"): (0.0001, 100.0),
+    ("Camera", "far_plane"): (0.01, 1000000.0),
+    # ── MeshRenderer (资源 id) ──
+    ("MeshRenderer", "mesh_id"): (-1, 100000),
+    ("MeshRenderer", "material_id"): (-1, 100000),
+    # ── Light ──
+    ("Light", "color_r"): (0.0, 1.0),
+    ("Light", "color_g"): (0.0, 1.0),
+    ("Light", "color_b"): (0.0, 1.0),
+    ("Light", "intensity"): (0.0, 10.0),
+    ("Light", "range"): (0.01, 1000.0),
+    # ── MediaPlayer ──
+    ("MediaPlayer", "speed"): (0.0, 10.0),
+    # ── TextDisplay ──
+    ("TextDisplay", "size"): (4, 512),
+    ("TextDisplay", "line_spacing"): (0.1, 5.0),
+    ("TextDisplay", "padding"): (0, 256),
+    ("TextDisplay", "wrap_width"): (0, 8192),
+    ("TextDisplay", "world_height"): (0.01, 100.0),
+    ("TextDisplay", "color"): (0.0, 1.0),      # tuple: 逐元素
+    ("TextDisplay", "bg_color"): (0.0, 1.0),   # tuple: 逐元素
+}
+
+
+def clamp_component_field(component_name: str, field_name: str, value):
+    """按 FIELD_CLAMPS 钳制组件字段值。
+
+    - 无规则 / bool / 非数值 → 原样返回;
+    - tuple/list 值 → 逐元素钳制并保持 tuple;
+    - int 值保持 int。
+    """
+    rule = FIELD_CLAMPS.get((component_name, field_name))
+    if rule is None:
+        return value
+    lo, hi = rule
+
+    def _clamp_one(v):
+        if isinstance(v, bool):
+            return v
+        try:
+            if isinstance(v, int):
+                out = v
+                if lo is not None:
+                    out = max(int(lo), out)
+                if hi is not None:
+                    out = min(int(hi), out)
+                return out
+            out = float(v)
+            if lo is not None:
+                out = max(float(lo), out)
+            if hi is not None:
+                out = min(float(hi), out)
+            return out
+        except (TypeError, ValueError):
+            return v
+
+    if isinstance(value, (tuple, list)):
+        return tuple(_clamp_one(v) for v in value)
+    return _clamp_one(value)
 
 
 class ComponentRegistry:
@@ -67,5 +147,7 @@ class ComponentRegistry:
             reg["Transform"] = Transform
         if "MediaPlayer" not in reg:
             reg["MediaPlayer"] = MediaPlayer
-        if "DirectionalLight" not in reg:
-            reg["DirectionalLight"] = DirectionalLight
+        if "Light" not in reg:
+            reg["Light"] = Light
+        if "TextDisplay" not in reg:
+            reg["TextDisplay"] = TextDisplay

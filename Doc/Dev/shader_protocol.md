@@ -43,7 +43,8 @@ Resource/Shaders/Builtin/
    （含数组/初始化式）→ `uniforms_name_type`（名 → GLSL 类型）。`material_mat4` 等引擎注入项
    也在此表内。
 3. **保留 uniform 黑名单**（`_RESERVED_UNIFORMS`，同文件）：
-   `uAmbient / uCameraPos / uLightCount / uLightDir / uLightColor`
+   `uAmbient / uCameraPos / uLightCount / uLightDir / uLightColor /`
+   `uPointCount / uPointPos / uPointColor / uPointRange`
    —— 由渲染管线**每帧统一注入**，解析时**直接剔除**，不进材质、UI 不可见、逐实体上传时跳过
    （`OpenGLEntities._MATERIAL_SKIP_UNIFORMS`）。新增帧级注入项时必须两处同步。
 
@@ -104,13 +105,14 @@ ENTITY_POS_UV_NORMAL  (stride 32B):  loc0 → vec3 aPos (12B)
 | 采样 | `uTexture`（binding=0） | sampler2D | 渲染器（texture unit 0） | 逐实体 |
 | 材质通用 | `uColor` 等 | vec4… | 材质 `uniforms_data` | 逐实体 |
 | 材质自定义 | 任意（如 `uShininess`） | 见 §2.3 | 材质 | 逐实体 |
-| **渲染器注入** | `uAmbient` (vec3) · `uCameraPos` (vec3) · `uLightCount` (int) · `uLightDir[4]` (vec3) · `uLightColor[4]` (vec3) | — | `OpenGLEntities._inject_lighting` | 每 program 每帧**一次** |
+| **渲染器注入** | `uAmbient` (vec3) · `uCameraPos` (vec3) · `uLightCount` (int) · `uLightDir[4]` (vec3) · `uLightColor[4]` (vec3) · `uPointCount` (int) · `uPointPos[4]` (vec3) · `uPointColor[4]` (vec3) · `uPointRange[4]` (float) | — | `OpenGLEntities._inject_lighting` | 每 program 每帧**一次** |
 
 规则：
 
 1. 未声明某类 uniform 的 shader：注入调用全部 no-op（`glGetUniformLocation` 返回 -1），
    **Basic/SSVEP 不受光照体系影响**（SSVEP 刺激色精确性依赖此点）。
-2. `uLightColor` = 颜色 × 强度（已合并）；`uLightDir` = 光线**传播**方向（世界空间单位向量）。
+2. `uLightColor` = 颜色 × 强度（已合并）；`uLightDir` = 光线**传播**方向（世界空间单位向量）；
+   点光组：`uPointPos` = 世界位置、`uPointColor` = 颜色 × 强度、`uPointRange` = 衰减半径。
 3. 逐实体材质上传跳过黑名单（§2.2），材质若**历史遗留**同名键也不会覆盖注入值（双保险）。
 4. 新增帧级注入：黑名单两处 + `_inject_lighting` + 本表 + GL 测试各一处，共五处同步。
 
@@ -145,40 +147,69 @@ ENTITY_POS_UV_NORMAL  (stride 32B):  loc0 → vec3 aPos (12B)
 |---|---|---|
 | `NormalWorld` (loc1 out) | VS: `mat3(model) * aNormal` | 世界/引擎空间法线 |
 | `PosWorld` (loc2 out) | VS: `(model * vec4(aPos,1)).xyz` | 世界/引擎空间位置 |
-| `uLightDir[i]` / `uLightColor[i]` / `uLightCount` | 渲染器注入（§5） | 至多 4 盏方向光 |
+| `uLightDir[i]` / `uLightColor[i]` / `uLightCount` | 渲染器注入（§5） | 至多 4 盏平面光 |
+| `uPointPos[i]` / `uPointColor[i]` / `uPointRange[i]` / `uPointCount` | 渲染器注入（§5） | 至多 4 盏点光 |
 | `uAmbient` | 渲染器注入（场景 `SceneManager.ambient_color`） | 环境光 |
 
 ### 7.2 光照模型（参考实现 = `Lighting.frag`）
 
 $$
-\text{accum} = uAmbient + \sum_{i=0}^{uLightCount-1} uLightColor_i \cdot \Big( \max(N \cdot L_i,\ 0) + s_i \Big)
+\text{accum} = uAmbient
++ \sum_{i=0}^{uLightCount-1} uLightColor_i \cdot \Big( \max(N \cdot L_i,\ 0) + s_i \Big)
++ \sum_{j=0}^{uPointCount-1} att_j \cdot uPointColor_j \cdot \Big( \max(N \cdot L_j,\ 0) + s_j \Big)
+$$
+$$
+att_j = \Big( \max\big(1 - \tfrac{|uPointPos_j - PosWorld|}{uPointRange_j},\ 0\big) \Big)^2
 \qquad
-s_i = \max(N \cdot H_i,\ 0)^{sh} \cdot 0.25 \cdot \mathrm{step}(\varepsilon,\ N \cdot L_i)
+s = \max(N \cdot H,\ 0)^{sh} \cdot 0.25 \cdot \mathrm{step}(\varepsilon,\ N \cdot L)
 $$
 
-其中 $L_i = \mathrm{normalize}(-uLightDir_i)$（指向光源），$H_i = \mathrm{normalize}(L_i + V)$，
+其中（平面光组）$L_i = \mathrm{normalize}(-uLightDir_i)$（指向光源）、$H_i = \mathrm{normalize}(L_i + V)$；
+（点光组）$L_j = \mathrm{normalize}(uPointPos_j - PosWorld)$（指向光源），$att_j$ 为距离衰减
+（$|uPointPos_j - PosWorld| \ge uPointRange_j$ 时 $att_j = 0$，该点光整项跳过）；
 $V = \mathrm{normalize}(uCameraPos - PosWorld)$，$sh$ = `uShininess`（§6 哨兵）。最终
 `FragColor.rgb = albedo × accum`（clamp 由帧缓冲完成）；`FragColor.a` 见 §8。
 
-### 7.3 方向光数据来源（`DirectionalLight` 组件）
+### 7.3 光源数据来源（`Light` 组件 — 平面光 / 点光）
 
-- 光线传播方向 = 实体 Transform **局部 -Z** 前向的世界变换（`-model[2,:3]`，自动归一化）。
-- 上限 4 盏（`uLightDir[4]`）；按世界查询顺序取前 4；无阴影（roadmap P2）。
-- 默认场景含一盏 `Sun`（`Resource/Prefabs/Builtin/DefaultLight.prefab`，Rx≈65°/Ry≈20.5°）。
-- 场景环境光：`SceneManager.ambient_color`（默认 0.18 灰；`SetAmbientColor` / Scene.ambient_color
+- 组件：`Light`（`Application/Core/Scene/BasicComponents.py`）—— `light_type`（`"directional"` 平面光 /
+  `"point"` 点光）+ `color_r/g/b` + `intensity` + `range`（仅点光）。
+  旧名 `DirectionalLight` 已改名：模块保留 `DirectionalLight = Light` 别名（旧 import 兼容），
+  场景 / 预置体 / MCP 加载链自动迁移（见 Editor 协议与 `SceneSync._COMP_NAME_MIGRATIONS`）。
+- **平面光**（`light_type="directional"`，上限 4 = `uLightDir[4]`）：
+  光线传播方向 = 实体 Transform **局部 -Z** 前向的世界变换（`-model[2,:3]`，自动归一化）；
+  位置**无光学意义**（仅编辑器方向射线可视化用）。
+- **点光**（`light_type="point"`，上限 4 = `uPointPos[4]`）：世界位置 = Transform 平移（`model[3,:3]`）；
+  距离衰减 $att = (1 - d/range)^2$（$d \ge range$ ⇒ 整项跳过）；投影/锥向不做（无聚光）。
+- 收集：`OpenGLEntities._collect_light_frame` 按世界查询顺序各取前 4；无阴影（roadmap P2）。
+- 默认场景含一盏 `Sun`（平面光，`Resource/Prefabs/Builtin/DefaultLight.prefab`，GL 存储 rotation≈(0.873, 3.840, 0) rad；
+  编辑器面板显示为 [50°, 0°, 220°] — UI/MCP 旋转均为编辑器空间, 见下）。
+- 场景环境光：`SceneManager.ambient_color`（默认 **0.5 = 50% 全局光**；`SetAmbientColor` / Scene.ambient_color
   随工程序列化与 PIE 同步）。
+- **坐标系提醒**：编辑器 UI / MCP / Inspector 的 position/rotation 均为**编辑器空间**（Z-up；
+  权威换算 `Application/Core/Math/CoordinateSystem.py`：editor (x, 前, 上) ↔ GL (x, z, -y)），
+  引擎内部存储与渲染统一 GL。因此“仰角”=编辑器 rot.x（对平面光=俯仰）、“方位角”=编辑器 rot.z（=偏航，
+  改变光方向）、编辑器 rot.y=滚转（对平面光无方向效果）——调光时以面板角度为准。
+- **无灯回退**（`SceneManager.lighting_fallback`，默认开；`SetLightingFallback` / `Scene.lighting_fallback`
+  随工程序列化与 PIE 同步）：场景**无任何光源**（平面光 + 点光计数均为 0）时，本帧 ambient 强制为 (1,1,1) ——
+  "未配置光照 ≠ 全黑"。单点实现：`OpenGLEntities._collect_light_frame`（`count == 0 and pcount == 0` 判定）。
 
 ### 7.4 数值锁定（`Test/Application/Renderer/test_gl_lighting.py`，手算参照）
 
-夹具：俯视相机（V=(0,1,0)）、Square 法线 +Y、uColor 0.8、ambient (0.2, 0.1, 0.05)：
+夹具：俯视相机（V=(0,1,0)）、Square 法线 +Y、uColor 0.8、ambient (0.2, 0.1, 0.05)；
+fallback 钉死 OFF（回退用例单独开关）；点光用例光源在正上方（L=(0,1,0), ndl=1, spec=0.25）：
 
 | 场景 | 期望像素 | 说明 |
 |---|---|---|
 | 无灯 | (41, 20, 10) | = 0.8 × ambient，逐通道 |
-| 垂直向下 (Rx=+90°) | ≥250 全通道 | ndl=1 + 镜面 0.25 → 饱和 |
-| 斜射 60° | (234, 214, 204) ±10 | ndl=0.866 + spec≈0.083 |
-| 侧向 (Rx=0) / 背向 (Rx=-90°) | (41, 20, 10) | ndl≤0，`step` 拍死高光（背面不漏光） |
-| 白×0.5 + 红×0.5 双灯 | (255, 148, 138) ±8 | 逐通道叠加 + 饱和 |
+| 平面光垂直向下 (Rx=+90°) | ≥250 全通道 | ndl=1 + 镜面 0.25 → 饱和 |
+| 平面光斜射 60° | (234, 214, 204) ±10 | ndl=0.866 + spec≈0.083 |
+| 平面光侧向 (Rx=0) / 背向 (Rx=-90°) | (41, 20, 10) | ndl≤0，`step` 拍死高光（背面不漏光） |
+| 平面光 白×0.5 + 红×0.5 双灯 | (255, 148, 138) ±8 | 逐通道叠加 + 饱和 |
+| 点光 d=5, range=10（att=0.25） | (105, 84, 74) ±10 | 0.8×(ambient + 1.25×0.25) |
+| 点光 d=7.5, range=10（att=0.0625） | (57, 36, 26) ±8 | 衰减中间档 |
+| 点光 d=15 > range=10（att=0） | (41, 20, 10) | 超距截断 → 仅环境光 |
+| 无灯 + fallback=ON | (204, 204, 204) | ambient 强制 1.0 → 0.8×1.0 |
 
 ---
 
@@ -198,7 +229,7 @@ $V = \mathrm{normalize}(uCameraPos - PosWorld)$，$sh$ = `uShininess`（§6 哨�
 |---|---|---|
 | 法线矩阵简化 | `mat3(model)` 不支持非均匀缩放 | 出现需求时换 inverse-transpose |
 | 材质不支持 int/数组 uniform | §2.3 | 扩充材质类型表 |
-| 光照无阴影 | 方向光不产 shadow map | roadmap P2/P3 |
+| 光照无阴影 | 平面光/点光均不产 shadow map | roadmap P2/P3 |
 | SPIR-V 旁路仅 Vulkan 实验 | GL 路径永远用 GLSL 源 | — |
 
 ---

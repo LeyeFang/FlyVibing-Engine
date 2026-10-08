@@ -138,6 +138,8 @@ MENU_SECTIONS: list[tuple[str, list]] = [
             ("Get Entity", "EntityGet"),
             ("Destroy Entity", "EntityDestroy"),
             ("Set Render Visible", "EntitySetRenderVisible"),
+            ("Set Group Visible", "EntityGroupSetVisible"),
+            ("Set Text", "SetText"),
         ]),
         ("Component", [
             ("Add Component", "ComponentAdd"),

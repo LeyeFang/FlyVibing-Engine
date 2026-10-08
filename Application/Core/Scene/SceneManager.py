@@ -61,7 +61,10 @@ class SceneManager:
         self._eid_to_sid: dict[int, int] = {}  # esper eid → scene-local sid
         self.game_type = GameType.GAME_3D
         # ── 场景环境光 (RGB 0..1) — 渲染器每帧注入 uAmbient ──
-        self.ambient_color: tuple = (0.18, 0.18, 0.18)
+        #    默认 0.5 (50% 全局光; 业内常用软光基调 — 保证未直照面带也能看清)
+        self.ambient_color: tuple = (0.5, 0.5, 0.5)
+        # ── 无灯回退: 场景无任何方向光时满亮 (避免"未配置光照=全黑"; shader_protocol §7.3) ──
+        self.lighting_fallback: bool = True
 
         # ★ 组合子管理器
         self.entity_mgr = EntityManager(self)
@@ -169,6 +172,13 @@ class SceneManager:
         """返回场景环境光 (RGB)。"""
         return tuple(self.ambient_color)
 
+    def SetLightingFallback(self, enabled: bool) -> None:
+        """设置"无灯满亮回退"开关 (无方向光时环境光强制 1.0)。"""
+        self.lighting_fallback = bool(enabled)
+
+    def GetLightingFallback(self) -> bool:
+        return bool(self.lighting_fallback)
+
     # ============================================================
     # GameType
     # ============================================================
@@ -216,6 +226,38 @@ class SceneManager:
 
     def IsEntityRenderVisible(self, entity_id: int) -> bool:
         return self.xform_mgr.is_render_visible(entity_id)
+
+    def SetEntitiesRenderVisible(self, entity_ids, visible: bool) -> int:
+        """批量设置多个实体的渲染可见性 — 单批命令 (同一帧全部生效)。
+
+        用于多部件组合体 (cue 箭把+箭头等) 的原子显隐: 命令经 enqueue_many
+        一次入队, 渲染帧边界不会把该组切成两半 (见 CommandQueue 原子批)。
+
+        Returns:
+            实际应用到的实体数量
+        """
+        cmds = []
+        seen: set[int] = set()
+        for eid in entity_ids:
+            eid = int(eid)
+            if eid in seen:
+                continue
+            seen.add(eid)
+            try:
+                mr = esper.component_for_entity(eid, MeshRenderer)
+            except KeyError:
+                continue
+            mr.visible = visible
+            cmds.append(EntityRenderVisibleCommand(eid, visible=visible))
+        if cmds:
+            _renderer = getattr(self.app, 'renderer', None)
+            if _renderer is not None:
+                if hasattr(_renderer, 'enqueue_many'):
+                    _renderer.enqueue_many(cmds)
+                else:
+                    for c in cmds:
+                        _renderer.enqueue(c)
+        return len(cmds)
 
     # ============================================================
     # 实体管理 → EntityManager (实例方法 — 各自引擎独立)

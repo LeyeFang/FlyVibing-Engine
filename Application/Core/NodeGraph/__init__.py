@@ -47,6 +47,7 @@ from .evaluators import (  # noqa: F401
     epoch,
     bci_algorithm,
     media,
+    text,
 )
 
 __all__ = [

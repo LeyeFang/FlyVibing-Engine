@@ -80,19 +80,58 @@ class MediaPlayer(DataclassContract):
 
 
 @component
-class DirectionalLight(DataclassContract):
-    """方向光 — 光照方向由实体 Transform 决定 (局部 -Z 前向 = 光线传播方向)。
+class Light(DataclassContract):
+    """光源 — 平面光 / 点光 双类型 (协议: Doc/Dev/shader_protocol.md §7)。
 
-    设计要点 (协议: Doc/Dev/shader_protocol.md):
-    - 颜色 × 强度 由渲染器每帧合并注入 uLightDir[]/uLightColor[]
-      (至多 4 盏, 按世界查询顺序; 见 rendering_protocol.md §光照);
+    light_type:
+      - "directional" (平面光/方向光): 照射方向 = Transform 局部 -Z 前向的世界方向,
+        与实体位置无关 (位置仅决定图标位置); 经 uLightDir[]/uLightColor[] 注入。
+      - "point" (点光): 光源位于实体世界坐标; 按 range 衰减
+        att = (1 - d/range)² (d ≥ range → 0); 经 uPointPos[]/uPointColor[]/uPointRange[] 注入。
+
+    - 每类至多 4 盏 (按世界查询顺序; 超出忽略); 颜色 × 强度由渲染器每帧合并注入;
     - 仅在使用 Lighting 约定 shader 的材质上可见 — Basic/SSVEP 不受影响;
-    - 无阴影 (roadmap P2); 默认场景含一盏 "Sun" (DefaultLight.prefab)。
+    - 无阴影 (roadmap P2); 默认场景含一盏平面光 "Sun" (DefaultLight.prefab)。
     """
+    light_type: str = "directional"        # "directional" (平面光) | "point" (点光)
     color_r: float = 1.0
     color_g: float = 1.0
     color_b: float = 1.0
     intensity: float = 1.0
+    range: float = 10.0                    # 点光衰减半径 (平面光忽略)
+
+
+# 向后兼容别名 (旧 import 路径; 新代码统一用 Light; 旧场景文件 "DirectionalLight" 由加载器迁移)
+DirectionalLight = Light
+
+
+@component
+class TextDisplay(DataclassContract):
+    """文字显示 — 文本→动态纹理光栅化载体 (协议: Doc/Dev/text_protocol.md)。
+
+    两种形态 (bg_color alpha 决定):
+      - 有色画布: bg_color alpha = 1 (文字画在实心背景上, 如标签/题板);
+      - 浮空文字: bg_color alpha = 0 (画布透明, 仅字形可见 — 依赖
+        Material.blend="alpha" 标准混叠, 见的 P1 混合交付)。
+
+    生命周期:
+      - 编辑器内编辑即预览 (无时钟维度, 与媒体"编辑器=模板"有意偏差);
+      - PIE 中由 SetText 节点驱动 (组件=状态载体 / 节点=控制面);
+      - 画布尺寸 auto: 随内容自动变化 (内部同尺寸热更 / 换尺寸换纹理, 无感)。
+    """
+    text: str = "Text"
+    font: str = "segoeui"                    # Resource/Fonts 名称 或字体文件路径 (中文需 CJK 字体)
+    size: int = 64                            # 字号 (像素)
+    bold: bool = False                        # 合成加粗 (描边扩展 — 无需字体变体)
+    italic: bool = False                      # 合成斜体 (斜切变换)
+    color: tuple = (1.0, 1.0, 1.0, 1.0)       # 文字 RGBA (0..1)
+    bg_color: tuple = (0.0, 0.0, 0.0, 0.0)    # 画布底色 RGBA — alpha=0 = 浮空文字
+    align: str = "center"                     # left / center / right
+    line_spacing: float = 1.15
+    padding: int = 8                          # 画布内边距 (像素)
+    wrap_width: int = 0                       # >0 = 按像素宽度自动折行
+    world_height: float = 1.0                 # auto_scale 时的画布世界高度 (引擎单位)
+    auto_scale: bool = True                   # 自动把载体 quad 缩放为画布纵横比
 
 
 @component
@@ -120,6 +159,7 @@ register_contract("Transform", Transform)
 register_contract("MeshRenderer", MeshRenderer)
 register_contract("Camera", Camera)
 register_contract("MediaPlayer", MediaPlayer)
-register_contract("DirectionalLight", DirectionalLight)
+register_contract("Light", Light)
+register_contract("TextDisplay", TextDisplay)
 register_contract("Component", Component)
 register_contract("ObjectInfo", ObjectInfo)

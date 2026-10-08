@@ -32,6 +32,7 @@ engine-editor-cli call entity.transform id=5 position='[1,0,2]' scale=2
 engine-editor-cli call component.set id=5 type=MeshRenderer fields='{"color":[0.2,0.7,1,1]}'
 engine-editor-cli call component.set id=5 type=MeshRenderer fields='{"blend":"alpha","color":[0,1,0,0.5]}'   # 半透明
 engine-editor-cli call component.set id=5 type=MeshRenderer fields='{"shader":"Lighting"}'                    # 受光（默认场景含 Sun）
+engine-editor-cli call component.set name=X type=TextDisplay fields='{"text":"你好","size":72,"bold":true}'  # 文字（自动生成纹理; 见 text_protocol.md）
 engine-editor-cli call sim.play
 engine-editor-cli batch ops.json             # [{"op":...,"args":{...}}, ...]（- = stdin）
 engine-editor-cli exec build_scene.py        # 脚本模式（见 §4）
@@ -59,7 +60,7 @@ engine-editor-cli call renderer.snapshot     # 渲染器状态（后端/GL/资�
 | `entity.transform` | 位置/旋转(角度)/缩放；`relative=true` 相对调整；`scale` 可标量 |
 | `entity.visible` / `entity.delete` / `entity.rename` / `entity.reparent` | 显隐/删除/改名/父子 |
 | `selection.set` | 选中（截图前常用来打高亮/显示 gizmo） |
-| `component.add` / `component.set` / `component.get` | MeshRenderer: `mesh/material/material_name/color/shader/**blend**/uniform/texture/visible`；`blend`=`"opaque"|"alpha"`（透明由渲染器排序处理）；`shader` 切到 `Lighting` 可受方向光/环境光影响（切 shader 会重置材质 uniform — 先切后设参） |
+| `component.add` / `component.set` / `component.get` | MeshRenderer: `mesh/material/material_name/color/shader/**blend**/uniform/texture/visible`；`blend`=`"opaque"|"alpha"`（透明由渲染器排序处理）；`shader` 切到 `Lighting` 可受方向光/环境光影响（切 shader 会重置材质 uniform — 先切后设参）；`TextDisplay`: `text/font/size/bold/italic/color/bg_color/align/...`（自动光栅化纹理; PIE 用 SetText 节点驱动） |
 | `scene.list` / `scene.switch` / `scene.save` / `scene.load` | 场景管理 |
 | `graph.list` / `graph.add` / `graph.link` / `graph.set_props` | 节点图编辑（等价画布操作） |
 | `graph.validate.start`(→`state`/`report`) | 图干跑校验（静态+模拟; 见 §5） |

@@ -25,7 +25,7 @@ description: "控制正在运行的 MyGameEngine 编辑器：创建/修改场景
 ## 2. CLI 速查
 
 ```powershell
-engine-editor-cli ops                        # op 目录（48 个; 一行一个）
+engine-editor-cli ops                        # op 目录（53 个核心 op; 一行一个; 扩展 op 见 extension.list）
 engine-editor-cli help entity.transform      # 单 op 详情（参数 + 示例）
 engine-editor-cli call entity.add name=MCP_Cue
 engine-editor-cli call entity.transform id=5 position='[1,0,2]' scale=2
@@ -41,6 +41,8 @@ engine-editor-cli validate --detail full --save report.json
 engine-editor-cli capture pie --out cue.png  # 抓帧（只回路径）
 engine-editor-cli probe editor --points 160:120;800:450   # 像素采样（顶左坐标 → RGBA; 免图像通道）
 engine-editor-cli call renderer.snapshot     # 渲染器状态（后端/GL/资源计数/帧统计）
+engine-editor-cli call project.save          # 保存工程（当前路径; 带 path=Save As）
+engine-editor-cli call project.export target_parent=D:/out include_player=true   # 导出成品（含 runtime; 分钟级）
 ```
 
 - 值解析：先按 JSON（数字/true/false/数组/对象/带引号字符串），失败按纯字符串；`parent=none` 即字符串。
@@ -65,7 +67,8 @@ engine-editor-cli call renderer.snapshot     # 渲染器状态（后端/GL/资�
 | `graph.list` / `graph.add` / `graph.link` / `graph.set_props` | 节点图编辑（等价画布操作） |
 | `graph.validate.start`(→`state`/`report`) | 图干跑校验（静态+模拟; 见 §5） |
 | `graph.export` / `graph.import` | 图落盘/回灌（**export 一定带 `path`**，见 §5） |
-| `project.open` | 打开 `.myproj`（资源+场景全加载） |
+| `project.open` / `project.save` / `project.export` | 工程：打开 `.myproj` / 保存（带 `path`=Save As）/ 导出（`target_parent` 必填; `include_player` 默认 true=自包含成品） |
+| `extension.list` / `extension.enable` / `extension.disable` | 扩展体系：发现（含 `ext.<id>.*` 扩展 op 清单）/ 启停；扩展 op 直接调（`ext.*` 透传, 如 `ext.sigproc.info`） |
 | `camera.get` / `camera.set` | 场景摄像机读写 |
 | `resource.list` / `resource.find` / `resource.material.get` | 资源与材质查询 |
 

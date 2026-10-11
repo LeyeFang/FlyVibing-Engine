@@ -12,10 +12,11 @@ SerialParallelDevice — 串口 + 并口 I/O 模块。
 
 子模块:
   - tasks             : SerialTask / ParallelTask 数据类
-  - state             : 模块级共享状态（驱动引用、端口字典、队列）
+  - state             : 模块级共享状态（驱动引用、端口字典、队列、监视缓冲）
   - serial_manager    : 串口打开/关闭/生命周期
   - parallel_manager  : 并口写入 + 5ms 自动复位调度
-  - io_thread         : I/O 线程主循环 + 任务分发
+  - io_thread         : I/O 线程主循环 + 任务分发 + 监视 poll
+  - monitor           : 监视能力（端口枚举 / 收发事件流 / 统计 — 扩展面板消费）
   - api               : start / stop / send / write_parallel 公开 API
   - test_hooks        : 测试注入钩子
   - protocol          : 数据编码/解码
@@ -43,6 +44,17 @@ from .api import (
 # ── 任务类型（供高级用户直接构造） ──────────────────────────
 from .tasks import SerialTask, ParallelTask
 
+# ── 监视能力（扩展面板 / agent ops 消费） ───────────────────
+from .monitor import (
+    PARALLEL_ADDRS,
+    list_serial_ports,
+    start_watch,
+    stop_watch,
+    watch_state,
+    monitor_snapshot,
+    parallel_status,
+)
+
 # ── 向后兼容: 测试钩子 (旧名下划线前缀) ─────────────────────
 from .test_hooks import (
     get_reset_schedule       as _test_get_reset_schedule,
@@ -60,4 +72,11 @@ __all__ = [
     "is_running",
     "SerialTask",
     "ParallelTask",
+    "PARALLEL_ADDRS",
+    "list_serial_ports",
+    "start_watch",
+    "stop_watch",
+    "watch_state",
+    "monitor_snapshot",
+    "parallel_status",
 ]

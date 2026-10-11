@@ -34,7 +34,12 @@ import threading
 
 DEFAULT_PORT = 8977
 _ENV_PORT = "MGE_EDITOR_MCP_PORT"
-_PUMP_TIMEOUT = 15.0    # 主线程回执等待上限（秒）
+_PUMP_TIMEOUT = 15.0    # 主线程回执等待上限（秒; 逐 op 可覆盖）
+# 长任务 op 的主线程等待上限覆盖（引擎侧单一来源; 与 ops.py call_timeout 同口径, 服务器上限≥客户端）
+_OP_PUMP_TIMEOUT_OVERRIDES = {
+    "project.open": 120.0,     # 大工程资源+场景全量加载
+    "project.export": 900.0,   # 游戏层复制 runtime 镜像（数百 MB / 上万文件）— 分钟级
+}
 _MAX_OPS_PER_FRAME = 16
 
 
@@ -45,6 +50,10 @@ class LiveCommandServer:
     _thread: threading.Thread | None = None
     _queue: "queue.Queue[dict] | None" = None
     _ops: dict[str, object] = {}
+    # ── 扩展 op（增量扫描通道: ExtensionManager 注册, 不入核心注册表/守卫计数） ──
+    _ext_ops: dict[str, object] = {}          # op 名 → handler
+    _ext_ops_owner: dict[str, str] = {}       # op 名 → 扩展 id
+    _ext_ops_summary: dict[str, str] = {}     # op 名 → 摘要
     port: int = 0
     _running: bool = False
 
@@ -181,7 +190,8 @@ class LiveCommandServer:
 
         work = {"id": rid, "op": op, "args": args, "event": threading.Event()}
         cls._queue.put(work)
-        if not work["event"].wait(timeout=_PUMP_TIMEOUT):
+        wait_timeout = _OP_PUMP_TIMEOUT_OVERRIDES.get(op, _PUMP_TIMEOUT)
+        if not work["event"].wait(timeout=wait_timeout):
             return {"id": rid, "ok": False, "error": "timeout waiting for editor main thread"}
         if work.get("ok"):
             return {"id": rid, "ok": True, "result": work.get("result")}
@@ -194,6 +204,12 @@ class LiveCommandServer:
     @classmethod
     def pump(cls, max_ops: int = _MAX_OPS_PER_FRAME) -> None:
         """取队列中的命令在本线程执行（每帧限量，保证帧率）。"""
+        # 主线程维护点: 扩展挂起的停用请求（窗口 X 关闭等 — 每帧, 与 op 同线程）
+        try:
+            from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+            ExtensionManager.consume_pending_disables()
+        except Exception:  # noqa: BLE001 — 无扩展体系环境跳过
+            pass
         q = cls._queue
         if q is None:
             return
@@ -205,9 +221,12 @@ class LiveCommandServer:
             try:
                 handler = cls._ops.get(work["op"])
                 if handler is None:
+                    handler = cls._ext_ops.get(work["op"])
+                if handler is None:
                     raise ValueError(
                         f"unknown op: '{work['op']}' "
-                        f"(available: {', '.join(sorted(cls._ops))})"
+                        f"(core: {len(cls._ops)}; extension ops: {', '.join(sorted(cls._ext_ops)) or 'none'} "
+                        f"— see extension.list)"
                     )
                 work["result"] = handler(work["args"])
                 work["ok"] = True
@@ -243,6 +262,12 @@ class LiveCommandServer:
             "graph.validate.report": cls._op_graph_validate_report,
             "graph.validate.cancel": cls._op_graph_validate_cancel,
             "project.open": cls._op_project_open,
+            "project.save": cls._op_project_save,
+            "project.export": cls._op_project_export,
+            # ── 扩展体系（L1, M0; 扩展 op 本身经 register_extension_ops 增量注册） ──
+            "extension.list": cls._op_extension_list,
+            "extension.enable": cls._op_extension_enable,
+            "extension.disable": cls._op_extension_disable,
             "frame.request": cls._op_frame_request,
             "frame.fetch": cls._op_frame_fetch,
             "threads.snapshot": cls._op_threads_snapshot,
@@ -686,6 +711,128 @@ class LiveCommandServer:
         if previous_name and not previous_saved:
             result["warning"] = f"previous project '{previous_name}' had unsaved changes"
         return result
+
+    @staticmethod
+    def _op_project_save(args: dict) -> dict:
+        """保存工程（等同 File ▸ Save Project；提供 path 则为 Save As 语义 — 换根保存, 不复制文件）。
+
+        args: path? (.myproj — 省略 = 保存到当前路径, 需已保存过)
+        """
+        from Application.Editor.ProjectManager import ProjectManager
+
+        path = args.get("path")
+        if path:
+            if not ProjectManager.save_project_as(str(path)):
+                raise RuntimeError(f"Save As failed: {path}")
+            mode = "save_as"
+        else:
+            if not ProjectManager.get_project_path():
+                raise ValueError(
+                    "project is not saved yet — pass 'path' (Save As) for the first save")
+            if not ProjectManager.save_project():
+                raise RuntimeError("save_project failed — see editor log")
+            mode = "save"
+        return {
+            "saved": True,
+            "mode": mode,
+            "path": ProjectManager.get_project_path(),
+            "name": ProjectManager.get_project_name(),
+        }
+
+    @staticmethod
+    def _op_project_export(args: dict) -> dict:
+        """导出工程包（等同 File ▸ Export；include_player=true 时附游戏层 → 自包含成品）。
+
+        args: target_parent (str 必填 — 输出到 <target_parent>/<ProjectName>/),
+              include_player (bool, 默认 true — false = 纯工程包不含运行时)
+
+        注意: 游戏层复制 runtime 镜像 (数百 MB / 上万文件), 耗时可达分钟级;
+        客户端超时已在 op 注册表 call_timeout 放宽 (600s)。
+        """
+        from Application.Editor.ProjectManager import ProjectManager
+
+        target = str(args.get("target_parent") or "")
+        if not target:
+            raise ValueError("target_parent is required (parent dir for <Name>/ bundle)")
+        include_player = bool(args.get("include_player", True))
+        summary = ProjectManager.export_project_bundle(target, include_player=include_player)
+        if not summary:
+            raise RuntimeError(
+                "export failed — check editor log (project unsaved / target missing / "
+                "non-empty non-export folder)")
+        result = dict(summary)
+        result["exported"] = True
+        result["include_player"] = include_player
+        return result
+
+    # ════════════════════════════════════════════════════════════
+    # 扩展 op 注册表（增量扫描通道 — 见 Doc/ExtDev/extension_dev_protocol.md §9）
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def register_extension_ops(cls, owner_id: str, ops: dict, summaries: dict | None = None) -> None:
+        """注册扩展 op（强制命名 `ext.<owner_id>.*`）。由 ExtensionManager/ctx.ops 调用。"""
+        prefix = f"ext.{owner_id}."
+        for name, fn in ops.items():
+            if not str(name).startswith(prefix):
+                raise ValueError(f"extension op must start with '{prefix}': {name!r}")
+            cls._ext_ops[str(name)] = fn
+            cls._ext_ops_owner[str(name)] = owner_id
+            if summaries and name in summaries:
+                cls._ext_ops_summary[str(name)] = str(summaries[name])
+
+    @classmethod
+    def unregister_extension_ops(cls, owner_id: str) -> list[str]:
+        """注销某扩展的全部 op（disable/unload 时调用）。返回被移除的 op 名。"""
+        removed = [n for n, o in cls._ext_ops_owner.items() if o == owner_id]
+        for n in removed:
+            cls._ext_ops.pop(n, None)
+            cls._ext_ops_owner.pop(n, None)
+            cls._ext_ops_summary.pop(n, None)
+        return removed
+
+    @classmethod
+    def extension_ops_snapshot(cls) -> dict:
+        """当前扩展 op 快照 {op: {owner, summary}}（agent 侧经 `extension.list` 发现）。"""
+        return {
+            n: {"owner": cls._ext_ops_owner.get(n, ""), "summary": cls._ext_ops_summary.get(n, "")}
+            for n in sorted(cls._ext_ops)
+        }
+
+    # ── extension.* ops ──
+
+    @staticmethod
+    def _op_extension_list(args: dict) -> dict:
+        """列出扩展（发现/装载状态/贡献 ops）+ 已增量扫描到的扩展 op 清单。"""
+        from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+
+        ExtensionManager.ensure_init()
+        return {
+            "extensions": ExtensionManager.list_infos(),
+            "extension_ops": LiveCommandServer.extension_ops_snapshot(),
+        }
+
+    @staticmethod
+    def _op_extension_enable(args: dict) -> dict:
+        """启用扩展（加载 on_load/on_enable; 等同 Extensions 菜单勾选; 持久化）。"""
+        ext_id = str(args.get("id") or "")
+        if not ext_id:
+            raise ValueError("id is required")
+        from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+
+        info = ExtensionManager.enable(ext_id)
+        return {"extension": info, "extension_ops": LiveCommandServer.extension_ops_snapshot()}
+
+    @staticmethod
+    def _op_extension_disable(args: dict) -> dict:
+        """停用扩展（on_disable/on_unload + 注销其全部 ext.<id>.* ops; 持久化）。"""
+        ext_id = str(args.get("id") or "")
+        if not ext_id:
+            raise ValueError("id is required")
+        from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+
+        info = ExtensionManager.disable(ext_id)
+        return {"extension": info, "extension_ops": LiveCommandServer.extension_ops_snapshot()}
 
     @staticmethod
     def _op_frame_request(args: dict) -> dict:

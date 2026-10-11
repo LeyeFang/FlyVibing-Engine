@@ -61,6 +61,22 @@ class UIManager:
                 return p
         return None
 
+    @classmethod
+    def unregister(
+        cls,
+        panel: BasePanel
+    ) -> bool:
+        """移除一个已注册面板（触发 on_detach 回调）。返回是否成功移除。"""
+        try:
+            cls._panels.remove(panel)
+        except ValueError:
+            return False
+        try:
+            panel.on_detach()
+        except Exception:  # noqa: BLE001
+            pass
+        return True
+
     # ============================================================
     # 每帧绘制
     # ============================================================
@@ -117,9 +133,9 @@ class UIManager:
             cls._setup_default_dock_layout(dockspace_id)
             cls._dock_layout_done = True
 
-        # ── 依次绘制所有可见面板 ──
+        # ── 依次绘制所有可见面板 (快照迭代: 面板可能在处理链上被注销) ──
         cls._panel_rects.clear()
-        for panel in cls._panels:
+        for panel in list(cls._panels):
             if panel.visible:
                 expanded = panel.begin_panel()
                 # 📸 无论展开还是折叠，都记录窗口矩形，防止摄像头穿透
@@ -328,21 +344,20 @@ class UIManager:
                     pass
                 imgui.end_menu()
 
-            # ── View 菜单：切换面板可见性 ──
+            # ── View 菜单：切换面板可见性（动态枚举 — 扩展窗口自动纳入） ──
             if imgui.begin_menu("View", True):
-                for target_name in [
-                    "Scene",
-                    "Node Editor",
-                    "Resources",
-                    "Properties",
-                    "Console"
-                ]:
-                    panel = cls.find(target_name)
-                    if panel:
-                        _, panel.visible = imgui.menu_item(
-                            target_name, "", panel.visible, True
-                        )
+                for panel in list(cls._panels):
+                    pname = str(panel.name or "")
+                    if not pname or pname.startswith("##"):
+                        continue
+                    _, panel.visible = imgui.menu_item(
+                        pname, "", panel.visible, True
+                    )
                 imgui.end_menu()
+
+            # ── Extensions 菜单：扩展启停 / 增量扫描入口 ──
+            from Application.Editor.Extensions.ExtensionMenu import draw_extensions_menu
+            draw_extensions_menu()
 
             # ── Help 菜单 ──
             if imgui.begin_menu("Help", True):

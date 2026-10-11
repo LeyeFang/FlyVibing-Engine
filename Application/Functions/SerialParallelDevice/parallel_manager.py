@@ -60,6 +60,9 @@ def handle_parallel(task: ParallelTask) -> None:
             print(f"{state._TAG} Parallel write error @ 0x{task.address + offset:04X}: {e}")
             break
 
+    from .monitor import observe_parallel_write
+    observe_parallel_write(task.address, task.data)
+
     if has_nonzero:
         state._reset_schedule.append(
             (time.perf_counter() + 0.005, task.address, len(task.data))

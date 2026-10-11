@@ -74,6 +74,10 @@ class MenuBarPanel(BasePanel):
                     toggle_grid_visible()
                 imgui.end_menu()
 
+            # ── Extensions ──────────────────────────────────
+            from Application.Editor.Extensions.ExtensionMenu import draw_extensions_menu
+            draw_extensions_menu()
+
             # ── Help ────────────────────────────────────────
             if imgui.begin_menu("Help", True):
                 if imgui.menu_item("About", "", False, True)[0]:

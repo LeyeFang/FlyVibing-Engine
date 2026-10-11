@@ -1,7 +1,7 @@
 """Op registry — 编辑器 Live op 的单一事实源（CLI / 精简 MCP / 文档生成共用）。
 
 数据来源与责任:
-  - 引擎侧实现: Application/Editor/Services/LiveCommandServer.py `_register_ops()`（47 ops）;
+  - 引擎侧实现: Application/Editor/Services/LiveCommandServer.py `_register_ops()`（48 ops）;
   - 本注册表是 agent 侧（CLI/MCP/Skill）的唯一元数据来源;
   - 新增 op 时: 引擎侧注册实现 → 本表加条目 → `python -m engine_editor_mcp.docgen` 重生成 ops.md;
   - 完整性由 Test/Application/Editor/test_editor_mcp_package.py 对照引擎源码守卫。
@@ -50,6 +50,7 @@ CATEGORY_ORDER = [
     ("resource", "资源"),
     ("graph", "节点图"),
     ("project", "工程"),
+    ("extension", "扩展体系"),
     ("frame", "抓帧（内部）"),
     ("threads", "线程诊断"),
     ("editor", "编辑器"),
@@ -87,7 +88,7 @@ OPS: dict[str, OpSpec] = {o.name: o for o in [
     OpSpec("entity.list", "entity", "列出实体（roots_only=true 仅根）",
            (Param("roots_only", "bool", False, "默认 false"),)),
     OpSpec("entity.get", "entity", "读取实体快照（组件/层级/可见性/transform）", _E),
-    OpSpec("entity.add", "entity", "新建实体（Transform only；有选中时成为其子级）",
+    OpSpec("entity.add", "entity", "新建实体（Transform only；有选中时成为其子级；自动选中新实体）",
            (Param("name", "str", False, "实体名"),
             Param("parent", "str", False, '父实体 id/名称；"none"=强制根实体')),
            detail="返回: {entity_id, name, components, ...} — 后续 op 用 id=entity_id。"),
@@ -126,7 +127,7 @@ OPS: dict[str, OpSpec] = {o.name: o for o in [
     OpSpec("scene.list", "scene", "场景列表 + 活跃场景"),
     OpSpec("scene.switch", "scene", "切换场景（保存当前/加载/视口同步全流程）",
            (Param("name", "str", True, ""),)),
-    OpSpec("scene.create", "scene", "新建场景并设为活跃", (Param("name", "str", True, ""),)),
+    OpSpec("scene.create", "scene", "新建场景并切换为活跃（含视口/节点图同步）", (Param("name", "str", True, ""),)),
     OpSpec("scene.save", "scene", "保存当前场景（省略 path 用最近路径）",
            (Param("path", "str", False, ""),)),
     OpSpec("scene.load", "scene", "加载 .scene 文件并设为活跃", (Param("path", "str", True, ""),)),
@@ -171,6 +172,18 @@ OPS: dict[str, OpSpec] = {o.name: o for o in [
     # ── project ──
     OpSpec("project.open", "project", "打开 .myproj 工程（资源+场景全加载）",
            (Param("path", "str", True, ".myproj 路径"),)),
+    OpSpec("project.save", "project", "保存工程（File ▸ Save Project；带 path = Save As）",
+           (Param("path", "str", False, "省略=保存到当前路径（需已保存过）；提供=Save As"),)),
+    OpSpec("project.export", "project", "导出工程包（File ▸ Export；include_player=true 附游戏层成品）",
+           (Param("target_parent", "str", True, "父目录 → 输出 <target_parent>/<Name>/"),
+            Param("include_player", "bool", False, "默认 true（含 runtime 自包含）；false=纯工程包"))),
+    # ── extension（扩展体系: 增量扫描发现 ext.<id>.* 扩展 op） ──
+    OpSpec("extension.list", "extension", "扩展列表+状态+扩展 op（ext.<id>.* 在此发现）",
+           detail="扩展 op 为运行期增量注册（不在本静态表中）— 用 extension.list 获取当前清单。"),
+    OpSpec("extension.enable", "extension", "启用扩展（等同 Extensions 菜单勾选; 加载 on_load/on_enable）",
+           (Param("id", "str", True, "扩展 id（如 sigproc）"),)),
+    OpSpec("extension.disable", "extension", "停用扩展（on_disable/on_unload + 注销其全部 ops）",
+           (Param("id", "str", True, "扩展 id"),)),
     # ── frame（内部；agent 侧请用 capture / engine_capture）──
     OpSpec("frame.request", "frame", "请求抓下一渲染帧（内部）",
            (Param("target", "enum", True, "editor / pie"),), internal=True),
@@ -266,11 +279,17 @@ TOPIC_HELP = {
 
 
 def resolve(op_or_alias: str) -> tuple[str, dict[str, Any]]:
-    """把 op 名或旧工具名解析为 (op, 默认 args)。未知名返回 ("", {})。"""
+    """把 op 名或旧工具名解析为 (op, 默认 args)。未知名返回 ("", {})。
+
+    例外: `ext.<id>.*` 为扩展 op（运行期增量注册, 无静态元数据）— 直接透传到引擎端,
+    由引擎的扩展注册表解析（清单/状态经 `extension.list` 获取）。
+    """
     if op_or_alias in OPS:
         return op_or_alias, {}
     if op_or_alias in ALIASES:
         return ALIASES[op_or_alias]
+    if op_or_alias.startswith("ext."):
+        return op_or_alias, {}
     return "", {}
 
 
@@ -353,6 +372,8 @@ def prepare_args(op_name: str, args: dict) -> dict:
 def call_timeout(op_name: str) -> float:
     if op_name == "project.open":
         return 60.0
+    if op_name == "project.export":
+        return 600.0  # 游戏层复制 runtime 镜像 (数百 MB / 上万文件) — 分钟级
     if op_name in ("graph.export", "graph.import", "graph.validate.report"):
         return 30.0
     return 15.0

@@ -495,18 +495,33 @@ class SceneBrowserController:
         """创建新实体（仅 Transform），返回 entity_id。
         
         若未提供 name，自动生成 "Entity_{id}" 以避免同名。
+        ★ 创建后自动选中新实体（经 SelectionController — 数据层+轮廓+gizmo 一步同步;
+          与空区右键 New / MCP entity.add 同语义）。
         """
         eid = EditorHost.scene.AddEntity(name=name)
         if cls.selected_entity_id is not None:
             EditorHost.scene.SetEntityParent(eid, cls.selected_entity_id)
+        from Application.Editor.UI.controllers.SelectionController import SelectionController
+        SelectionController.select(eid)
         return eid
 
     @classmethod
     def delete_entity(cls, entity_id: int) -> bool:
-        """删除实体及其子实体。若删除的是当前选中实体，则清除选中。"""
-        if cls.selected_entity_id == entity_id:
-            cls.selected_entity_id = None
-        return EditorHost.scene.DeleteEntity(entity_id)
+        """删除实体及其子实体。
+
+        删除后若当前选中实体已不存在（自身或祖先被删）→ 经 SelectionController 全量清理
+        选中（数据层 + 轮廓高亮 + gizmo；MCP entity.delete 与面板 Delete/右键菜单同语义）。
+        """
+        ok = EditorHost.scene.DeleteEntity(entity_id)
+        if cls.selected_entity_id is not None:
+            try:
+                exists = EditorHost.scene.EntityExists(cls.selected_entity_id)
+            except Exception:
+                exists = False
+            if not exists:
+                from Application.Editor.UI.controllers.SelectionController import SelectionController
+                SelectionController.clear()
+        return ok
 
     @classmethod
     def delete_selected(cls) -> bool:
@@ -729,15 +744,21 @@ class SceneBrowserController:
 
     @classmethod
     def get_component_fields(cls, entity_id: int, comp_name: str) -> list | None:
-        """返回组件的 (字段名, 当前值) 列表; 组件不存在返回 None。"""
+        """返回组件的 (字段名, 当前值, 选择集) 列表; 组件不存在返回 None。
+
+        选择集 = ComponentRegistry.get_field_choices(...) — 受控枚举字段的 [(值, 标签)]
+        (应渲染下拉而非自由文本; 自由度分级见 ui_protocol.md §11); 无登记 → None。
+        """
         try:
             import esper
             from dataclasses import fields as _dc_fields
+            from Application.Core.Scene.ComponentRegistry import get_field_choices
             comp_cls = EditorHost.scene.comp_mgr.get_all().get(comp_name)
             if comp_cls is None:
                 return None
             comp = esper.component_for_entity(entity_id, comp_cls)
-            return [(f.name, getattr(comp, f.name)) for f in _dc_fields(comp_cls)]
+            return [(f.name, getattr(comp, f.name), get_field_choices(comp_name, f.name))
+                    for f in _dc_fields(comp_cls)]
         except Exception:
             return None
 

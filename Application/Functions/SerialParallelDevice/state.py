@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import threading
+from collections import deque
 from queue import Queue
 from typing import Optional
 
@@ -30,5 +31,13 @@ _running: bool = False
 
 # 并口自动复位调度: [(deadline, address, byte_count), ...]
 _reset_schedule: list[tuple[float, int, int]] = []
+
+# ── 监视器状态（扩展面板消费 — 见 monitor.py） ───────────────
+# io_thread 单线程写; 快照读取由 _lock 保护。
+_monitor: dict = {"active": False, "port": "", "baud": 115200,
+                  "opened": False, "next_retry": 0.0}
+_events: deque = deque(maxlen=500)       # (perf_ts, kind, bytes, note)
+_stats: dict = {"tx_count": 0, "tx_bytes": 0, "rx_count": 0, "rx_bytes": 0,
+                "parallel_writes": 0, "last_error": ""}
 
 _TAG = "[SPD]"

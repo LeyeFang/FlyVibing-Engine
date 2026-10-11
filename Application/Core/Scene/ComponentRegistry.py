@@ -104,6 +104,31 @@ def clamp_component_field(component_name: str, field_name: str, value):
     return _clamp_one(value)
 
 
+# ═══════════════════════════════════════════════════════════════
+# 组件字段选择集 (受控枚举 — Inspector 应渲染下拉而非自由文本)
+# ═══════════════════════════════════════════════════════════════
+# 值: [(存储值, 显示标签), ...]; 仅登记**已实现且测试过**的枚举值 —
+# 不得登记未实现的未来选项 (假自由度; GUI 自由度规范见 Doc/Dev/ui_protocol.md §11)。
+FIELD_CHOICES: dict = {
+    # ── Light ──
+    ("Light", "light_type"): [("directional", "Directional (平面光)"),
+                              ("point", "Point (点光)")],
+    # ── TextDisplay ──
+    ("TextDisplay", "align"): [("left", "Left 左"),
+                                ("center", "Center 中"),
+                                ("right", "Right 右")],
+}
+
+
+def get_field_choices(component_name: str, field_name: str):
+    """返回字段选择集 [(value, label)]; 无登记 → None。
+
+    消费者: SceneBrowserController.get_component_fields → ScenePanel 通用检视
+    (受控枚举字段渲染 Combo — 详见 ui_protocol.md §11 自由度分级)。
+    """
+    return FIELD_CHOICES.get((component_name, field_name))
+
+
 class ComponentRegistry:
     """组件类型注册与管理。"""
 

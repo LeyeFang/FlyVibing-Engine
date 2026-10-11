@@ -7,6 +7,18 @@
 
 ---
 
+## 0. 读者三分区（文档消费者模型 — 2026-10-11 确立）
+
+| 读者 | 文档区 | 说明 |
+|---|---|---|
+| 主应用开发团队（含 agent） | **`Doc/Dev/**`（本目录）** | 引擎内部开发契约（协议/坑/守则） |
+| 社区开发者（扩展/插件作者） | **`Doc/ExtDev/**`** | 扩展开发规范（自包含，不要求读本目录）；入口 `Doc/ExtDev/README.md` |
+| 用户（实验/游戏使用者） | **`Doc/User/**`** | 手册级文档（编辑器 MCP 指南等） |
+
+> 变更涉及时修对区：对外开发者的内容写 `Doc/ExtDev`，产品手册写 `Doc/User`，引擎内部写本目录。
+
+---
+
 ## 1. 文档地图（职责分离 — 与代码目录一一对应）
 
 | 文档 | 对应代码域 | 何时必须读 |
@@ -26,7 +38,11 @@
 | `shader_protocol.md` | `Resource/Shaders/**` + `Application/Resource/Material.py` + 渲染器 uniform 注入 | 新增/修改 shader、调整材质 uniform 系统、变换光照/帧级注入 uniform 前必读：顶点属性契约（STD_LAYOUT）、uniform 归属总表（矩阵/材质/**渲染器注入**）、材质默认值与「切 shader 重置」语义、光照模型与数值锁定表、新增 shader 检查单 |
 | `text_protocol.md` | `Application/Functions/Text/**` + `TextDisplay` 组件 + `SetText` 节点 + ScenePanel 通用组件检视 | 改文字显示/光栅化/字体/动态纹理绑定前必读：**两种形态**（有色画布 vs 浮空文字=透明底+alpha 混合）、auto 画布热更策略、合成粗体/斜体、字段表、驱动通道矩阵（编辑器预览/检查器/MCP/节点）、注册点清单与验收证据 |
 | `ui_refactor_plan.md` | `Application/Editor/UI/**` 大文件（widgets.py / panel.py / ScenePanel.py） | 执行 UI 文件拆分/搬迁时读：目标结构（mixin/注册表两种拆法）+ 验证顺序 |
+| `extension_protocol.md` | 三层模型（EngineModule / Extension / Mod）+ `Functions/**` 扩展区 + `Application/Editor/Extensions/**` | **Functions 功能模块化、扩展体系开发前必读**：Plugin 审计与改名（已执行）、三档侵入模型（T0 声明式 / T1 Hooks / T2 进程外）、依赖方向铁律、兼容与遏制机制（SDK 门面 / 命名空间 / 冲突检测 / 能力声明）、节点包与设计面板贡献点 |
 | `roadmap_next.md` | 全局（线程治理 / 资源管线 / 动态媒体 三章蓝图, 待评估草案） | 开工前评估三大愿景方向、依赖取舍与里程碑顺序 |
+
+> **社区开发者（第三方扩展作者）的外部文档已独立**：规范全文 `Doc/ExtDev/extension_dev_protocol.md`、
+> 入口 `Doc/ExtDev/README.md`；开发者生态/工具链剥离规划 `ecosystem_plan.md`（本目录）。
 
 职责边界（与代码一致，不得跨层）：
 - UI 层只负责**编辑 props 和渲染**；业务逻辑在 evaluators；设备/IO 在 `Application/Functions`。

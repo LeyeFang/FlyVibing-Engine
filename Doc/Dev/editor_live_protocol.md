@@ -2,7 +2,7 @@
 
 > 适用：`Application/Editor/Services/LiveCommandServer.py`（编辑器侧总线）、
 > `Utils/User/EditorMcp/**`（agent 侧 MCP 服务器 / 独立包 / 安装）、`Application/Editor/EditorLayer.py`（pump 接入点）、
-> `Application/Editor/EditorPlugin.py`（启停接入点）。
+> `Application/Editor/EditorModule.py`（启停接入点; 原名 EditorPlugin, 2026-10-11 更名 — extension_protocol §2）。
 > 目标：让 agent 像操作 Fusion360 一样**实时操作运行中的编辑器**（热注入，非文件式）。
 
 ---
@@ -29,8 +29,8 @@ flowchart LR
 |---|---|
 | 地址 | `127.0.0.1:<port>`（**仅回环**，外部网络不可达） |
 | 端口 | 默认 `8977`；环境变量 `MGE_EDITOR_MCP_PORT` 覆盖（编辑器与 MCP 两侧都读） |
-| 启动 | 编辑器加载时由 `EditorPlugin.on_load → LiveCommandServer.start()` 自动启动 |
-| 停止 | `EditorPlugin.on_unload → stop()`；daemon 线程随进程退出 |
+| 启动 | 编辑器加载时由 `EditorModule.on_load → LiveCommandServer.start()` 自动启动 |
+| 停止 | `EditorModule.on_unload → stop()`；daemon 线程随进程退出 |
 | 端口占用 | 打印 `[Live] WARNING: cannot bind ...` 并禁用（不阻塞编辑器） |
 | 审计日志 | 每条命令在主线程打印 `[Live] id=<n> op=<op> → ok / ERR ...` |
 
@@ -46,7 +46,9 @@ flowchart LR
 
 - `id`：任意值原样回传（int/str）；
 - 非法 JSON → `{"id": null, "ok": false, "error": "invalid request: ..."}`；
-- 主线程超时未消费 → `{"ok": false, "error": "timeout waiting for editor main thread"}`；
+- 主线程超时未消费 → `{"ok": false, "error": "timeout waiting for editor main thread"}`
+  （默认 15s; 长任务 op 逐 op 覆盖 `_OP_PUMP_TIMEOUT_OVERRIDES`: `project.open` 120s / `project.export` 900s —
+  与 agent 侧 `ops.call_timeout` 同口径，服务器上限 ≥ 客户端）;
 - **二进制尾随帧（v2 — 图像通道）**：若回执行 `result.binary_bytes = N`，则该行之后紧跟 N 字节
   裸负载（RGBA8, bottom-up）——客户端必须先读行、再精确读 N 字节；其余响应仍为严格单行 NDJSON。
 
@@ -84,19 +86,22 @@ flowchart LR
 
 ### 4.1 v3 — 实体 / 组件 / 选中 / 场景 / 资源（25 条, 2026-09-28 实机验证）
 
+> GUI 状态联动（面板/轮廓/gizmo/树 reveal/选中清理）的完整契约与守卫测试见
+> `ui_protocol.md` §10（每个 op 的 UI 同路径入口 + 联动维度）。
+
 实体寻址: `{"id": N}` 或 `{"name": "..."}`（二选一; 名称不唯一时返回首个 + `duplicate_ids` 警告）。
 
 | op | MCP 工具 | 语义（等价的人工操作） |
 |---|---|---|
 | `entity.list` | `editor_entity_list` | Entities 列表（`roots_only` 可仅根实体） |
 | `entity.get` | `editor_entity_get` | 读取实体快照（组件/层级/可见性/transform — 角度制） |
-| `entity.add` | `editor_entity_add` | 点 **+ New**（有选中时成为其子级; `parent` 可显式指定/解除） |
+| `entity.add` | `editor_entity_add` | 点 **+ New**（有选中时成为其子级; `parent` 可显式指定/解除; 自动选中新实体） |
 | `entity.rename` | `editor_entity_rename` | Inspector 名称框（不强制唯一; 返回重名警告） |
-| `entity.delete` | `editor_entity_delete` | 点 **Delete**（含子实体; 删除选中者会清除选中） |
+| `entity.delete` | `editor_entity_delete` | 点 **Delete**（含子实体; 选中实体已不存在（自身/祖先被删）→ 轮廓/gizmo 级联清理） |
 | `entity.transform` | `editor_entity_transform` | Inspector Transform（编辑器坐标/角度; `local` 本地; `relative` 相对调整=位移加法/旋转加法/缩放乘法; scale 可标量等比） |
 | `entity.visible` | `editor_entity_visible` | 眼图标（editor）+ MeshRenderer.visible（render） |
 | `entity.reparent` | `editor_entity_reparent` | 树拖拽建立父子（`"none"` 解除） |
-| `selection.get/set/clear` | `editor_selection_*` | 点击选中 / 清空（`set` 默认带 gizmo — 等同视口点选） |
+| `selection.get/set/clear` | `editor_selection_*` | 点击选中 / 清空（`set` 默认带 gizmo — 等同视口点选; 树自动展开到选中项 reveal） |
 | `component.types` | `editor_component_types` | 组件注册表（当前: Camera / MeshRenderer / Transform / Light / MediaPlayer / TextDisplay 等；旧名 DirectionalLight 自动迁移） |
 | `component.list` | `editor_component_list` | 实体组件名列表 |
 | `component.add` | `editor_component_add` | Inspector Add Component（MeshRenderer 自动绑 Cube 网格） |
@@ -104,15 +109,15 @@ flowchart LR
 | `component.get` | `editor_component_get` | 组件字段快照（通用序列化; MeshRenderer 附带 mesh/material 语义摘要） |
 | `component.set` | `editor_component_set` | 部分字段更新 — Transform 支持 relative/标量缩放; MeshRenderer 支持 color/mesh/material/material_name/shader/**blend**/uniform/texture 系列; 其余字段直写（数值范围钳制 = `ComponentRegistry.FIELD_CLAMPS` 单一权威，Inspector/脚本/MCP 同口径） |
 | `scene.list` | `editor_scene_list` | 场景列表 + 活跃场景 |
-| `scene.switch` | `editor_scene_switch` | Scene 下拉切换（保存当前/加载/视口/节点图同步全流程） |
-| `scene.create` | `editor_scene_create` | 点 **+** 新建场景 |
+| `scene.switch` | `editor_scene_switch` | Scene 下拉切换（保存当前/加载/视口/节点图同步全流程 + 选中清理） |
+| `scene.create` | `editor_scene_create` | 点 **+** 新建场景（新场景成为活跃 + 选中清理） |
 | `scene.save` | `editor_scene_save` | 点 **💾**（省略 path 用最近路径; 联动 startup_scene） |
-| `scene.load` | `editor_scene_load` | 点 **📂** 加载 .scene |
+| `scene.load` | `editor_scene_load` | 点 **📂** 加载 .scene（全链同步 + 选中清理） |
 | `resource.list` | `editor_resource_list` | 资源列表（mesh/shader/texture/material/prefab） |
 | `resource.find` | `editor_resource_find` | 按名查找（线性扫描; 返回全部匹配） |
 | `resource.material.get` | `editor_resource_material_get` | 材质详情（shader/颜色/纹理槽/uniform 键） |
 
-### 4.2 v4 — 图校验 / 图导入导出 / 工程（7 条, 2026-10-02）
+### 4.2 v4 — 图校验 / 图导入导出 / 工程 / 扩展（12 条; 2026-10-02 起源, 扩展体系 2026-10-11 追加）
 
 图校验已内化为**引擎服务**（`Application/Core/NodeGraph/validation/`, 协议详见 `graph_validation_protocol.md`）——
 UI / MCP / 程序三入口共用同一服务实例；离线 `validate_graph` 已弃用退场。
@@ -126,6 +131,11 @@ UI / MCP / 程序三入口共用同一服务实例；离线 `validate_graph` 已
 | `graph.export` | `editor_graph_export` | 导出画布 JSON（含 `_rules`; `path` 落盘） |
 | `graph.import` | `editor_graph_import` | 导入 JSON 替换画布（`validate_first` 默认拒绝静态 error） |
 | `project.open` | `editor_project_open` | 打开 .myproj（资源+场景全加载, 启动场景激活） |
+| `project.save` | `editor_project_save` | 保存工程（File ▸ Save Project；`path` 省略=当前路径, 提供=Save As 换根） |
+| `project.export` | `editor_project_export` | 导出工程包（File ▸ Export；`include_player` 默认 true=附游戏层成品含 runtime；false=纯工程包；目标目录须为空或旧导出，`output/` 实验数据保留） |
+| `extension.list` | `editor_extension_list` | 扩展列表+状态+贡献 ops（扩展 op `ext.<id>.*` 增量扫描的发现入口；等价 Extensions 菜单） |
+| `extension.enable` | `editor_extension_enable` | 启用扩展（加载 on_load/on_enable；等同菜单勾选；持久化到 `Config/extensions.json`） |
+| `extension.disable` | `editor_extension_disable` | 停用扩展（on_disable/on_unload + 注销其全部 ext.<id>.* ops） |
 
 UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 帧；完成后自动弹报告窗口,
 条目点击跳转节点; Copy / Export .json）。UI 与 MCP 任务互见（同一服务实例）。
@@ -137,7 +147,9 @@ UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 �
   **纯 socket 客户端，不 import Application**（测试守卫已扩展到包源码）；
   三方工作区：`pip install` wheel（零依赖构建: `python Utils/User/EditorMcp/build_wheel.py`）→
   `engine-editor-cli setup --workspace <项目>`（拷贝 Skill + 合并 mcp.json, 默认 lite 档）；详见 `Utils/User/EditorMcp/README.md`。
-- **op 注册表（单一事实源）**：`src/engine_editor_mcp/ops.py`（48 ops: 摘要/参数/分类/旧工具别名）。
+- **op 注册表（单一事实源）**：`src/engine_editor_mcp/ops.py`（53 ops: 摘要/参数/分类/旧工具别名; 每 op 含 call_timeout）。
+  **扩展 op**（`ext.<id>.*`）为运行期增量注册，不入本静态表 — 发现用 `extension.list`, 调用直接透传
+  （见 `Doc/ExtDev/extension_dev_protocol.md` §9）。
   驱动：CLI 命令与帮助、lite MCP 的 engine_help/engine_call、`docgen` 生成 `references/ops.md`；
   完整性由 `Test/Application/Editor/test_editor_mcp_package.py` 对照 `_register_ops` 守卫（新增 op 必须同步）。
 - **MCP 档位**（`--profile lite|full` > env `MGE_MCP_PROFILE` > 默认 full）：

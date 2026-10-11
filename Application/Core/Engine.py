@@ -16,7 +16,7 @@ Engine 不做的事:
 
 继承层次:
   Engine              ← 核心运行时
-    ├── EditorHost     ← 编辑器宿主（强制 OpenGL + 加载 EditorPlugin）
+    ├── EditorHost     ← 编辑器宿主（强制 OpenGL + 加载 EditorModule）
     └── GameRuntime    ← 游戏运行时（干净打包，不含任何 Editor 模块）
 """
 
@@ -468,9 +468,9 @@ class Engine:
             except Exception:
                 traceback.print_exc()
             cls.window = None
-        # 卸载插件
+        # 卸载装配模块
         try:
-            cls._unload_plugin()
+            cls._unload_module()
         except Exception:
             traceback.print_exc()
         # 注销 atexit (避免重复调用)
@@ -481,8 +481,8 @@ class Engine:
         cls._state()['_initialized'] = False
 
     @classmethod
-    def _unload_plugin(cls) -> None:
-        """卸载插件 — 子类 (EditorHost) 可覆写。"""
+    def _unload_module(cls) -> None:
+        """卸载装配模块 — 子类 (EditorHost) 可覆写。"""
         pass
 
     # ════════════════════════════════════════════════════════════

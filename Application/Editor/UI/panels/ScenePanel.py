@@ -48,6 +48,9 @@ class ScenePanel(BasePanel):
         self._transform_local: bool = False  # 默认 Global
         # ── 新建场景输入缓冲 ──
         self._new_scene_name: str = ""
+        # ── Entity 树: 选中联动 (reveal: 选中变化时展开祖先链一次) ──
+        self._last_selected: int | None = None
+        self._reveal_pending: bool = False
 
     # ============================================================
     # Material I/O 回调
@@ -405,8 +408,24 @@ class ScenePanel(BasePanel):
             return
 
         selected = self._selection_ctrl.get_selected()
+        # ★ Reveal: 选中变化 (视口点选 / MCP selection.set / entity.add 自动选中) → 展开祖先链一次
+        if selected != self._last_selected:
+            self._last_selected = selected
+            self._reveal_pending = selected is not None
+        reveal_chain: set[int] = set()
+        if self._reveal_pending and selected is not None:
+            eid = selected
+            for _ in range(64):  # 防环防御
+                if not eid:
+                    break
+                reveal_chain.add(int(eid))
+                parent = self._browser_ctrl.get_entity_parent(eid)
+                if not parent or parent == eid:
+                    break
+                eid = parent
         for entity_id in root_ids:
-            self._draw_entity_node(entity_id, selected)
+            self._draw_entity_node(entity_id, selected, reveal_chain)
+        self._reveal_pending = False
 
         # ── 树底部空白: 拖放到此处解除父子关系 / 点击空白取消选中 ──
         imgui.dummy(imgui.ImVec2(imgui.get_content_region_avail().x, 20))
@@ -473,6 +492,7 @@ class ScenePanel(BasePanel):
         self,
         entity_id: int,
         selected_id: int | None,
+        reveal_chain: set | None = None,
     ) -> None:
         """递归绘制单个实体节点及其子节点。支持拖拽重设父子关系 + 右键菜单。"""
         info = self._browser_ctrl.get_entity_info(entity_id)
@@ -505,6 +525,11 @@ class ScenePanel(BasePanel):
         # ── 子节点 ──
         children = self._browser_ctrl.get_entity_children(entity_id)
         has_children = len(children) > 0
+
+        # ★ Reveal: 选中实体的祖先节点 — 强制展开一次 (让选中项在树中可见)
+        if (has_children and reveal_chain and entity_id in reveal_chain
+                and entity_id != selected_id):
+            imgui.set_next_item_open(True)
 
         if has_children:
             node_flags = imgui.TreeNodeFlags_.open_on_arrow
@@ -542,7 +567,7 @@ class ScenePanel(BasePanel):
 
         if opened and has_children:
             for child_id in children:
-                self._draw_entity_node(child_id, selected_id)
+                self._draw_entity_node(child_id, selected_id, reveal_chain)
             imgui.tree_pop()
         elif opened:
             # 叶子节点不需要 tree_pop
@@ -792,15 +817,32 @@ class ScenePanel(BasePanel):
         self._draw_add_component(entity_id)
 
     def _draw_generic_component_fields(self, entity_id: int, comp_name: str, fields_list) -> None:
-        """按值类型通用绘制组件字段 (str/bool/int/float/tuple; *color* 字段用 ColorEdit4)。"""
-        for fname, fval in fields_list:
+        """按值类型通用绘制组件字段 (str/bool/int/float/tuple)。
+
+        - *color* 字段 → ColorEdit4;
+        - 带选择集的 str 字段 → **下拉 Combo** (受控枚举, 禁止自由文本 — ui_protocol §11);
+        - 其余 str → 自由文本框。
+        """
+        for fname, fval, choices in fields_list:
             changed = False
             new_value = None
             if isinstance(fval, bool):
                 changed, new_value = imgui.checkbox(fname, fval)
             elif isinstance(fval, str):
-                changed, new_value = imgui.input_text(
-                    f"##{comp_name}_{fname}_{entity_id}", fval, 512)
+                if choices:
+                    cur_label = next((lbl for v, lbl in choices if v == fval), fval)
+                    if imgui.begin_combo(f"{fname}##{comp_name}_{fname}_{entity_id}", cur_label):
+                        for v, lbl in choices:
+                            selected = (v == fval)
+                            if imgui.selectable(f"{lbl}##{v}_{comp_name}_{entity_id}", selected)[0]:
+                                changed = True
+                                new_value = v
+                            if selected:
+                                imgui.set_item_default_focus()
+                        imgui.end_combo()
+                else:
+                    changed, new_value = imgui.input_text(
+                        f"##{comp_name}_{fname}_{entity_id}", fval, 512)
             elif isinstance(fval, int):
                 changed, new_value = imgui.drag_int(fname, fval, 0.25, 0, 4096)
             elif isinstance(fval, float):

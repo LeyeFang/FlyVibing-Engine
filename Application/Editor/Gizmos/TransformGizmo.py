@@ -153,7 +153,7 @@ class TransformGizmo:
 
     @classmethod
     def show(cls, renderer: 'Renderer', entity_id: int) -> None:
-        if cls._renderer is None:
+        if renderer is not None and cls._renderer is None:
             cls._register_current(renderer)
             cls._renderer = renderer
         cls._visible = True
@@ -161,8 +161,8 @@ class TransformGizmo:
         try:
             t = EditorHost.scene.GetEntityTransform(entity_id)
             cls.set_target_position((t.position_x, t.position_y, t.position_z))
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001 — 场景未就绪时仅定位失败; 显式告警 (禁止静默)
+            print(f"[TransformGizmo] show target lookup failed: {e!r}")
 
     @classmethod
     def hide(cls) -> None:

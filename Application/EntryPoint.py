@@ -5,12 +5,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from Application.Editor.EditorHost import EditorHost
-from Application.Editor.EditorPlugin import EditorPlugin
+from Application.Editor.EditorModule import EditorModule
 
 
 EditorHost.init(window_type='GLFW', renderer_type='OpenGL')
 
 
-EditorHost.load_plugin(EditorPlugin())
+EditorHost.load_module(EditorModule())
 
 EditorHost.run()

@@ -20,6 +20,7 @@ from typing import Optional, Callable
 from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
 from Application.Editor.Gizmos.OutlinerID import OutlinerID
 from Application.Editor.Gizmos.TransformGizmo import TransformGizmo
+from Application.Editor.EditorHost import EditorHost
 from Application.Core.Scene.SceneManager import SceneManager
 
 
@@ -53,7 +54,7 @@ class SelectionController:
     def select(cls, entity_id: int) -> None:
         SceneBrowserController.select(entity_id)
         OutlinerID.set_selected_entities({entity_id})
-        TransformGizmo._visible = False
+        TransformGizmo.hide()   # ★ 完整清理 (含渲染器注销), 不直接改私有标志
         cls._notify_selection_changed()
 
     @classmethod
@@ -61,20 +62,11 @@ class SelectionController:
         SceneBrowserController.select(entity_id)
         OutlinerID.set_selected_entities({entity_id})
         try:
-            from Application.Core.Math.Transform import calculate_entity_model
-            t = EditorHost.scene.GetEntityTransform(entity_id)
-            model = calculate_entity_model(
-                position=(t.position_x, t.position_y, t.position_z),
-                rotation=(t.rotation_x, t.rotation_y, t.rotation_z),
-                scale=(t.scale_x, t.scale_y, t.scale_z),
-            )
-            from Application.Editor.EditorHost import EditorHost as _eh
-            renderer = _eh.get_editor_renderer()
-            TransformGizmo.show(renderer, entity_id)
-            TransformGizmo.set_target_position(
-                (float(model[3, 0]), float(model[3, 1]), float(model[3, 2])))
-        except Exception:
-            pass
+            # TransformGizmo.show() 自带目标定位; renderer=None (无头) 仅置状态
+            TransformGizmo.show(EditorHost.get_editor_renderer(), entity_id)
+        except Exception as e:  # noqa: BLE001 — 显式告警 (禁止静默吞错)
+            print(f"[SelectionController] select_with_gizmo failed: {e!r}")
+        cls._notify_selection_changed()
 
     @classmethod
     def clear(cls) -> None:

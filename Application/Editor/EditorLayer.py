@@ -74,6 +74,13 @@ class EditorLayer(Layer):
         EditorGizmoLayer.renderer = cls.renderer
         EditorGizmoLayer._editor_layer = cls
 
+        # ── 扩展体系 (L1, M0): 首次发现 + 自动装载已启用扩展 ──
+        try:
+            from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+            ExtensionManager.ensure_init()
+        except Exception as e:  # noqa: BLE001 — 扩展体系失败不阻断编辑器启动
+            print(f"[Extensions] init skipped: {e!r}")
+
     @classmethod
     def OnDetach(cls):
         """编辑器核心清理 — 仅注销视口 overlay。"""

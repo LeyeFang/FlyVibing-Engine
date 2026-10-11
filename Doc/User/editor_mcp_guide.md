@@ -147,6 +147,8 @@
 | `editor_graph_export` | 导出节点图 JSON 文件 | `path` 落盘位置（含规则文档） |
 | `editor_graph_import` | 导入节点图 JSON 替换当前图 | 导入前自动静态检查，有错会拒绝 |
 | `editor_project_open` | 打开 `.myproj` 工程 | 资源+场景全量加载，自动激活启动场景 |
+| `editor_project_save` | 保存工程 | 等同 File ▸ Save Project；带 `path` = Save As（换根保存） |
+| `editor_project_export` | 导出工程包 | 等同 File ▸ Export；`include_player`（默认 true）附游戏层 → 自包含成品（含 runtime）；false = 纯工程包 |
 
 > 也可以直接在 Node Editor 面板点 **Validate** 按钮：完成后面板自动弹「Validation Report」窗口，
 > 点报告里的条目能直接跳转到对应节点；支持复制摘要 / 导出 JSON。
@@ -159,7 +161,7 @@
 
 | 命令 | 作用 |
 |---|---|
-| `engine-editor-cli ops` | 列出全部 48 个 op（一行一个） |
+| `engine-editor-cli ops` | 列出全部 53 个核心 op（一行一个；扩展 op 经 `extension.list` 发现） |
 | `engine-editor-cli help <op>` | 单 op 详情（参数 + 示例） |
 | `engine-editor-cli call <op> k=v ...` | 执行一个 op（数组/对象值加引号，如 `position='[1,0,2]'`） |
 | `engine-editor-cli batch ops.json` | 一次执行多个 op（JSON 数组；`-` 读 stdin） |

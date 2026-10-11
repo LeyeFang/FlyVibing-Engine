@@ -171,8 +171,14 @@ class EngineClient:
         self.timeout = float(timeout)
 
     def try_send(self, op: str, **args: Any) -> dict:
-        """发送 op；永不 raise — 失败返回 {"error": "..."}。"""
-        result, _payload = send_raw(op, args or None, self.timeout)
+        """发送 op；永不 raise — 失败返回 {"error": "..."}。
+
+        超时取 max(self.timeout, op 注册表 call_timeout(op)) — 长任务 op
+        （project.export 600s / project.open 60s 等）在 exec 脚本里也自动放宽。
+        """
+        from . import ops as op_registry
+        timeout = max(self.timeout, op_registry.call_timeout(op))
+        result, _payload = send_raw(op, args or None, timeout)
         return result
 
     def ok(self, op: str, **args: Any) -> dict:

@@ -3,7 +3,7 @@ EditorHost — 编辑器宿主（Engine 子类）。
 
 职责:
   - 覆写 Engine 工厂方法: 创建 EditorWindow + openGLRenderer
-  - 加载 EditorPlugin（编辑器功能包）
+  - 加载 EditorModule（编辑器装配模块, 原名 EditorPlugin）
   - 提供编辑器全局便利 API (get_editor_window / get_editor_renderer)
   - 过渡期: 桥接 Event → Renderer（RHI 化后移除）
 
@@ -23,7 +23,7 @@ from Application.Core.Events.Event import Event
 from Application.Core.Events.EngineEvent import EngineLifecycleEvent
 from Application.Core.Window.Window import Window
 from Application.Core.Renderer.Renderer import Renderer
-from Application.Core.Plugin import Plugin
+from Application.Core.EngineModule import EngineModule
 from Application.Core.Scene.DataContract import DataContract
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ class EditorHost(Engine):
     """
 
     # ── 编辑器专属状态 ──────────────────────────────────────────
-    _editor_plugin: Plugin | None = None
+    _editor_module: EngineModule | None = None
     _active_scene: object | None = None     # 当前编辑的 Scene 对象
     _scenes: dict[str, object] = {}          # name → Scene (所有已创建的场景)
 
@@ -74,19 +74,36 @@ class EditorHost(Engine):
 
     @classmethod
     def create_scene(cls, name: str) -> object:
-        """创建新场景并设为活跃。返回 Scene 对象。"""
+        """创建新场景；已有活跃场景时切换为活跃（等同面板 + New 语义）。返回 Scene 对象。"""
         from Application.Core.Scene.Scene import Scene
         scene = Scene(name=name)
         cls._scenes[name] = scene
-        if cls._active_scene is None:
-            cls._active_scene = scene
         # 同步到 SceneManager
         try:
             from Application.Core.Scene.SceneManager import SceneManager
             cls.scene.scene[name] = name
         except Exception:
             pass
+        if cls._active_scene is None:
+            cls._active_scene = scene
+        else:
+            # ★ 新场景成为活跃 (含视口/节点图/GPU 全链同步; 失败回退直接置活跃)
+            try:
+                cls.switch_scene(name)
+            except Exception as e:  # noqa: BLE001
+                print(f"[EditorHost] WARNING: switch to new scene failed: {e!r}")
+                cls._active_scene = scene
         return scene
+
+    @classmethod
+    def _clear_editor_selection(cls) -> None:
+        """清残留选中（场景切换/加载后; 数据层 + 轮廓 + gizmo 一步清理, 无选中为 no-op）。"""
+        try:
+            from Application.Editor.UI.controllers.SelectionController import SelectionController
+            if SelectionController.get_selected() is not None:
+                SelectionController.clear()
+        except Exception as e:  # noqa: BLE001 — 初始化早期/无头环境允许跳过
+            print(f"[EditorHost] _clear_editor_selection skipped: {e!r}")
 
     @classmethod
     def switch_scene(cls, name: str) -> bool:
@@ -110,6 +127,8 @@ class EditorHost(Engine):
         cls.scene.SyncFromScene(cls._active_scene, clear_existing=True)
         # ★ 同步 Node Editor 面板的节点图 (新场景)
         cls._sync_node_graph_from_scene()
+        # ★ 清理旧场景选中 (实体 id 在新场景无意义 — 数据层+轮廓+gizmo 一步)
+        cls._clear_editor_selection()
         # ★ 注册 GPU 实体
         cls._register_mesh_entities_after_load()
         # ★ 根据 game_type 切换视口模式
@@ -233,6 +252,8 @@ class EditorHost(Engine):
         # ★ 加载后: Scene → esper + node graph → panel
         cls.scene.SyncFromScene(scene, clear_existing=True)
         cls._sync_node_graph_from_scene()
+        # ★ 清理旧场景选中 (实体 id 在新场景无意义)
+        cls._clear_editor_selection()
         # ★ 同步视口模式到 ViewportController（含摄像机投影切换）
         try:
             from Application.Editor.UI.controllers.ViewportController import ViewportController
@@ -306,44 +327,55 @@ class EditorHost(Engine):
         super()._on_event(event)
 
     # ════════════════════════════════════════════════════════════
-    # 插件管理
+    # 装配模块管理 (L0 — 见 Doc/Dev/extension_protocol.md §1/§2)
     # ════════════════════════════════════════════════════════════
     @classmethod
-    def load_plugin(cls, plugin: Plugin) -> None:
-        """加载编辑器插件。
+    def load_module(cls, module: EngineModule) -> None:
+        """加载宿主装配模块。
 
         调用时机: EditorHost.init() 之后、EditorHost.run() 之前。
 
         流程:
-          1. 调用 plugin.on_load(engine) — 插件初始化
-          2. 遍历 plugin.get_layers() — push 到引擎层栈
+          1. 调用 module.on_load(engine) — 装配初始化
+          2. 遍历 module.get_layers() — push 到引擎层栈
 
         Args:
-            plugin: 插件实例 (如 EditorPlugin())
+            module: 装配模块实例 (如 EditorModule())
         """
-        # 1. 插件初始化（主线程）
-        plugin.on_load(cls)
-        # 2. 推入插件拥有的 Layer
-        for layer_cls in plugin.get_layers():
+        # 1. 装配初始化（主线程）
+        module.on_load(cls)
+        # 2. 推入装配拥有的 Layer
+        for layer_cls in module.get_layers():
             cls.push_layer(layer_cls)
-        cls._editor_plugin = plugin
+        cls._editor_module = module
         EngineLifecycleEvent.Pack(
-            stage="plugin",
-            message=f"Plugin loaded: {plugin.name} v{plugin.version}",
+            stage="module",
+            message=f"Module loaded: {module.name} v{module.version}",
             engine=cls
         )
 
     @classmethod
-    def unload_plugin(cls) -> None:
-        """卸载编辑器插件（引擎关闭时自动调用）。"""
-        if cls._editor_plugin is not None:
-            cls._editor_plugin.on_unload()
-            cls._editor_plugin = None
+    def unload_module(cls) -> None:
+        """卸载宿主装配模块（引擎关闭时自动调用）。"""
+        if cls._editor_module is not None:
+            cls._editor_module.on_unload()
+            cls._editor_module = None
 
     @classmethod
-    def _unload_plugin(cls) -> None:
-        """Engine.shutdown() 回调 — 卸载编辑器插件。"""
-        cls.unload_plugin()
+    def _unload_module(cls) -> None:
+        """Engine.shutdown() 回调 — 卸载宿主装配模块。"""
+        cls.unload_module()
+
+    # ── 过渡别名（旧名, ≥1 个版本后移除; 2026-10-11 更名, 见 extension_protocol §2） ──
+    @classmethod
+    def load_plugin(cls, plugin: EngineModule) -> None:
+        """[已弃用] 旧名 → load_module。"""
+        cls.load_module(plugin)
+
+    @classmethod
+    def unload_plugin(cls) -> None:
+        """[已弃用] 旧名 → unload_module。"""
+        cls.unload_module()
 
     # ════════════════════════════════════════════════════════════
     # 关闭流程（覆写 Engine.shutdown）

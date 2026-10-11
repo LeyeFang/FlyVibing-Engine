@@ -92,7 +92,7 @@
 
 ### `entity.add`
 
-新建实体（Transform only；有选中时成为其子级）
+新建实体（Transform only；有选中时成为其子级；自动选中新实体）
 
 返回: {entity_id, name, components, ...} — 后续 op 用 id=entity_id。
 
@@ -257,7 +257,7 @@
 
 ### `scene.create`
 
-新建场景并设为活跃
+新建场景并切换为活跃（含视口/节点图同步）
 
 - `name` (str, 必填)
 
@@ -409,6 +409,49 @@
 - `path` (str, 必填) — .myproj 路径
 
 - 示例: `engine-editor-cli call project.open path=VALUE`
+
+### `project.save`
+
+保存工程（File ▸ Save Project；带 path = Save As）
+
+- `path` (str, 可选) — 省略=保存到当前路径（需已保存过）；提供=Save As
+
+- 示例: `engine-editor-cli call project.save path=VALUE`
+
+### `project.export`
+
+导出工程包（File ▸ Export；include_player=true 附游戏层成品）
+
+- `target_parent` (str, 必填) — 父目录 → 输出 <target_parent>/<Name>/
+- `include_player` (bool, 可选) — 默认 true（含 runtime 自包含）；false=纯工程包
+
+- 示例: `engine-editor-cli call project.export target_parent=VALUE include_player=true`
+
+## 扩展体系
+
+### `extension.list`
+
+扩展列表+状态+扩展 op（ext.<id>.* 在此发现）
+
+扩展 op 为运行期增量注册（不在本静态表中）— 用 extension.list 获取当前清单。
+
+- 示例: `engine-editor-cli call extension.list`
+
+### `extension.enable`
+
+启用扩展（等同 Extensions 菜单勾选; 加载 on_load/on_enable）
+
+- `id` (str, 必填) — 扩展 id（如 sigproc）
+
+- 示例: `engine-editor-cli call extension.enable id=VALUE`
+
+### `extension.disable`
+
+停用扩展（on_disable/on_unload + 注销其全部 ops）
+
+- `id` (str, 必填) — 扩展 id
+
+- 示例: `engine-editor-cli call extension.disable id=VALUE`
 
 ## 线程诊断
 

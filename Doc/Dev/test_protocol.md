@@ -96,6 +96,7 @@ SUMMARY: 11/12 passed in 84s | failed: test_x | tier=core | skipped=5 | runs: Te
 | 编辑器服务（回环） | `Test/Application/Editor/test_live_command_server.py` | core | 含边界扫描; 无 GUI |
 | PIE 设置 / 光位图标 | `Test/Application/Editor/test_pie_settings.py` + `test_light_gizmo.py` | core | Settings 持久化/尺寸钳位/窗口映射/Overlay 回退; 光图标(+平面光方向射线)查询/overlay 语义/眼图标联动/方向公式钉死/点光 direction=(0,0,0)（均无 GL）; 协议 `ui_protocol.md` §9 + `rendering_protocol.md` §8 |
 | 组件字段钳制 | `Test/Application/Core/test_component_clamps.py` | core | `FIELD_CLAMPS` 单元（标量/tuple/int/bool/无规则）+ Inspector(`SceneBrowserController.set_component_field`)/MCP(`_op_component_set`) 两条写入路径 + 旧名迁移 (`get/add/set`)；单一权威 `ComponentRegistry.FIELD_CLAMPS`（Light/Camera/Transform/MediaPlayer/TextDisplay） |
+| Action 契约（GUI↔op） | `Test/Application/Editor/test_action_contract.py` | core | `ui_protocol.md` §10 映射表 ↔ `ops.py` ↔ `LiveCommandServer._register_ops()` 三方集合相等（48）+ 映射行列完整性 + 选中链行为（gizmo 状态机/自动选中/级联清理/场景切换清选中）；背景: `select_with_gizmo` 静默 NameError 修复（2026-10-08） |
 | agent 通道包 | `Test/Application/Editor/{test_editor_mcp_package,test_node_editor_mcp}.py` | core | wheel/CLI/注册表 |
 | UI 场景回放 | `Test/Application/Editor/scenarios/` | gui | 快照 + 行为断言（panels_smoke / menu_smoke / node_editor_smoke） |
 | ~~UI 面板/gizmo（遗留交互 demo）~~ | ~~`test_*_{opengl,zengl}.py`~~ | — | **2026-10-05 已清理**（18 个交互 demo 删除; 覆盖转入 scenarios + e2e） |

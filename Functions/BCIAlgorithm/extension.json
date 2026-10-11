@@ -1,0 +1,10 @@
+{
+  "id": "bci",
+  "name": "BCI Algorithm",
+  "version": "0.1.0",
+  "api_version": "1",
+  "maturity": "partial",
+  "description": "经典 BCI 算法节点（FBCSP / CCA 已有实现待迁移）+ 自定义算法开发模板与测试生态",
+  "capabilities": ["ops", "nodes"],
+  "requires": []
+}

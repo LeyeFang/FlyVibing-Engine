@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "api_version": "1",
   "maturity": "skeleton",
-  "description": "电生理信号处理节点族 — 初始化 / 滤波 / 参考 / 变换(FFT·SDFT·CWT·Hilbert) / 坏道 / ICA",
+  "description": "Electrophysiology signal-processing node family — init / filter / reference / transforms (FFT·SDFT·CWT·Hilbert) / bad channels / ICA",
   "entry": "extension.py:create_extension",
   "capabilities": ["ops", "nodes"],
   "requires": []

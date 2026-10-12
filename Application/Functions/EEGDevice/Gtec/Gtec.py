@@ -259,6 +259,22 @@ class GtecHiampBackend(DeviceBackend):
             self._d = None
             time.sleep(0.05)  # 给 GDS 服务释放会话的余量
 
+    def get_impedance(self, electrode_type: str = "passive", tms_box: bool = False) -> list:
+        """电极阻抗测量（pygds GetImpedanceEx — 单位 Ω; 通道 1 恒 NaN 属硬件特例）。
+
+        要求设备已 configure（会话 Open）且空闲; firstMeasurementOfSession=True
+        （单次测量语义 — 与 GtecAPI/scripts/record_resting.py 一致）。
+        """
+        if self._d is None:
+            raise GtecUnavailable("设备未打开（先 Open / init）")
+        pygds = _load_pygds()
+        if str(electrode_type or "passive").lower() == "active":
+            etype = getattr(pygds, "ELECTRODE_TYPE_ACTIVE", 1)
+        else:
+            etype = getattr(pygds, "ELECTRODE_TYPE_PASSIVE", 0)
+        values = list(self._d.GetImpedanceEx(etype, bool(tms_box), True)[0])
+        return [float(v) for v in values]
+
     def info(self) -> dict:
         info = {
             "backend": type(self).__name__,

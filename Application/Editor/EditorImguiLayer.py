@@ -23,7 +23,7 @@ from Application.Core.Layers.Layer import Layer
 from Application.Core.Events.Event import Event
 from Application.Editor.EditorHost import EditorHost
 from Application.Editor.UI.UIManager import UIManager
-from Application.Editor.UI.panels import ScenePanel, NodeEditorPanel, ResourcePanel
+from Application.Editor.UI.panels import ScenePanel, SettingsPanel, NodeEditorPanel, ResourcePanel
 
 
 class EditorImguiLayer(Layer):
@@ -34,6 +34,12 @@ class EditorImguiLayer(Layer):
         "Resource/Fonts/Inter-Regular.ttf",
         "C:/Windows/Fonts/segoeui.ttf",
         "C:/Windows/Fonts/arial.ttf",
+    ]
+    # CJK 系统字体候选（中文 UI / 用户数据字形 — 经 merge_to_last_font 合并）
+    CJK_FONT_CANDIDATES: list[str] = [
+        "C:/Windows/Fonts/msyh.ttc",            # 微软雅黑（Windows）
+        "/System/Library/Fonts/PingFang.ttc",  # 苹方（macOS）
+        "C:/Windows/Fonts/simhei.ttf",          # 黑体（Windows 兜底）
     ]
 
     _config_dir: str = ""
@@ -57,6 +63,11 @@ class EditorImguiLayer(Layer):
         io.set_ini_filename("")
 
         cls._load_fonts()
+
+        # 编辑器设置（字号 / 语言）— 载入并全量应用（装配阶段, 渲染线程尚未使用 style）
+        from Application.Editor.EditorSettings import EditorSettings
+        EditorSettings.load()
+        EditorSettings.apply_all()
 
         editor_window = EditorHost.get_editor_window()
         window_address = ctypes.cast(editor_window.glfw_window, ctypes.c_void_p).value
@@ -93,6 +104,9 @@ class EditorImguiLayer(Layer):
         """ImGui 帧绘制 — new_frame → draw → render。"""
         if imgui.get_current_context() is None:
             return
+        # 设置变更应用点（渲染线程帧首 — style 是渲染线程资产; 见 EditorSettings 线程模型）
+        from Application.Editor.EditorSettings import EditorSettings
+        EditorSettings.apply_pending()
         imgui.backends.glfw_new_frame()
         imgui.backends.opengl3_new_frame()
         imgui.new_frame()
@@ -135,6 +149,43 @@ class EditorImguiLayer(Layer):
                 "       Place a .ttf in Resource/Fonts/, e.g. Inter-Regular.ttf"
             )
 
+        cls._merge_cjk_font(_hi)
+
+    @classmethod
+    def _merge_cjk_font(cls, hi) -> None:
+        """合并 CJK 系统字体（中文 UI / 用户数据字形）。
+
+        1.92 动态字体按需光栅化 → 合并几乎零成本（不渲染的汉字不 bake）;
+        无候选（精简系统）→ 跳过提示（中文将显示为 '?' — 见 ui_protocol §12）。
+        """
+        for path in cls.CJK_FONT_CANDIDATES:
+            if not os.path.isfile(path):
+                continue
+            try:
+                from imgui_bundle import hello_imgui as _hi
+                params = _hi.FontLoadingParams()
+                params.merge_to_last_font = True
+                # 绝对路径系统字体: 必须绕过 hello_imgui assets 解析 (否则按 assets 相对路径
+                # 查找 → "assetFileFullPath failed"; 实测 2026-10-12)
+                params.inside_assets = False
+                _hi.load_font(path, cls.FONT_SIZE, params)
+                print(f"[Font] Merged CJK: {path}")
+            except Exception as e:  # noqa: BLE001 — 合并失败不阻塞启动
+                print(f"[Font] CJK merge failed ({path}): {e!r}")
+            return
+
+    @classmethod
+    def apply_font_scale(cls, scale: float) -> None:
+        """应用 UI 字体缩放（imgui 1.92 动态字体即时生效）。
+
+        由 EditorSettings（`ui.font_scale`）经 apply_pending/apply_all 驱动;
+        调用点: 装配期 + 每帧渲染线程帧首。
+        """
+        try:
+            imgui.get_style().font_scale_main = float(scale)
+        except Exception as e:  # noqa: BLE001
+            print(f"[Font] apply_font_scale failed: {e!r}")
+
     @classmethod
     def _init_ui_panels(cls):
         """注册编辑器 UI 面板 (幂等, 仅首次调用生效)。"""
@@ -143,4 +194,5 @@ class EditorImguiLayer(Layer):
         UIManager.register(ScenePanel())
         UIManager.register(NodeEditorPanel())
         UIManager.register(ResourcePanel())
+        UIManager.register(SettingsPanel())
         cls._panels_registered = True

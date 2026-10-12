@@ -51,6 +51,7 @@ CATEGORY_ORDER = [
     ("graph", "节点图"),
     ("project", "工程"),
     ("extension", "扩展体系"),
+    ("settings", "设置"),
     ("frame", "抓帧（内部）"),
     ("threads", "线程诊断"),
     ("editor", "编辑器"),
@@ -184,6 +185,12 @@ OPS: dict[str, OpSpec] = {o.name: o for o in [
            (Param("id", "str", True, "扩展 id（如 sigproc）"),)),
     OpSpec("extension.disable", "extension", "停用扩展（on_disable/on_unload + 注销其全部 ops）",
            (Param("id", "str", True, "扩展 id"),)),
+    # ── settings（编辑器全局设置; 与 Settings 面板同一单点 EditorSettings） ──
+    OpSpec("settings.get", "settings", "读取编辑器设置（省略 key = 全量; UI: Settings 面板 Common 页）",
+           (Param("key", "str", False, "如 ui.font_scale / ui.language"),)),
+    OpSpec("settings.set", "settings", "写入编辑器设置（校验+钳制 → 持久化 → 下一渲染帧生效）",
+           (Param("key", "str", True, "如 ui.font_scale / ui.language"),
+            Param("value", "json", True, "新值（数值 / 字符串）"))),
     # ── frame（内部；agent 侧请用 capture / engine_capture）──
     OpSpec("frame.request", "frame", "请求抓下一渲染帧（内部）",
            (Param("target", "enum", True, "editor / pie"),), internal=True),

@@ -136,6 +136,8 @@ UI / MCP / 程序三入口共用同一服务实例；离线 `validate_graph` 已
 | `extension.list` | `editor_extension_list` | 扩展列表+状态+贡献 ops（扩展 op `ext.<id>.*` 增量扫描的发现入口；等价 Extensions 菜单） |
 | `extension.enable` | `editor_extension_enable` | 启用扩展（加载 on_load/on_enable；等同菜单勾选；持久化到 `Config/extensions.json`） |
 | `extension.disable` | `editor_extension_disable` | 停用扩展（on_disable/on_unload + 注销其全部 ext.<id>.* ops） |
+| `settings.get` | — | 读取编辑器设置（`key` 省略=全量；UI 同路径 = Settings 面板 Common 页，协议 `ui_protocol.md` §13） |
+| `settings.set` | — | 写入编辑器设置（校验+钳制 → 落盘 → **下一渲染帧生效**；脏值返回定格后的实际值） |
 
 UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 帧；完成后自动弹报告窗口,
 条目点击跳转节点; Copy / Export .json）。UI 与 MCP 任务互见（同一服务实例）。
@@ -147,7 +149,7 @@ UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 �
   **纯 socket 客户端，不 import Application**（测试守卫已扩展到包源码）；
   三方工作区：`pip install` wheel（零依赖构建: `python Utils/User/EditorMcp/build_wheel.py`）→
   `engine-editor-cli setup --workspace <项目>`（拷贝 Skill + 合并 mcp.json, 默认 lite 档）；详见 `Utils/User/EditorMcp/README.md`。
-- **op 注册表（单一事实源）**：`src/engine_editor_mcp/ops.py`（53 ops: 摘要/参数/分类/旧工具别名; 每 op 含 call_timeout）。
+- **op 注册表（单一事实源）**：`src/engine_editor_mcp/ops.py`（55 ops: 摘要/参数/分类/旧工具别名; 每 op 含 call_timeout）。
   **扩展 op**（`ext.<id>.*`）为运行期增量注册，不入本静态表 — 发现用 `extension.list`, 调用直接透传
   （见 `Doc/ExtDev/extension_dev_protocol.md` §9）。
   驱动：CLI 命令与帮助、lite MCP 的 engine_help/engine_call、`docgen` 生成 `references/ops.md`；

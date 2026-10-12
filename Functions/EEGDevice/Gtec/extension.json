@@ -1,10 +1,11 @@
 {
   "id": "gtec",
   "name": "Gtec Device",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "api_version": "1",
   "maturity": "partial",
-  "description": "Gtec EEG 监视面板（信号质量 / 阻抗）+ 设备节点 — 品牌服务进程架构（独立 env, 中介线程通信）",
-  "capabilities": ["ops", "nodes", "ui", "device"],
+  "description": "Gtec EEG live monitor: watch (view only) vs record (view + file), real-time waveform, software display filters (notch harmonics / band presets), electrode impedance and recording (npz/csv). Device nodes stay in core (migration pending).",
+  "entry": "extension.py:create_extension",
+  "capabilities": ["ops", "ui", "device"],
   "requires": []
 }

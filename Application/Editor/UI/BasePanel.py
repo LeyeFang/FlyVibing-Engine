@@ -15,6 +15,10 @@ class BasePanel(ABC):
     name: str = "UnnamedPanel"
     visible: bool = True
     flags: imgui.WindowFlags = imgui.WindowFlags_.none
+    # 显示标题的 I18n 键（可翻译 — 协议 `Doc/Dev/i18n_protocol.md` §4)。
+    # 空 = 直接用 `name`（英文标识符）。imgui 窗口 ID 恒为 `###<name>`，
+    # 因此标题文案随语言变化不影响 dock 布局与状态身份。
+    title_key: str = ""
 
     def __init__(
         self
@@ -63,9 +67,18 @@ class BasePanel(ABC):
     def begin_panel(
         self
     ) -> bool:
-        """打开一个带标题的 imgui 窗口，返回该窗口是否可见/展开"""
+        """打开一个带标题的 imgui 窗口，返回该窗口是否可见/展开。
+
+        标题 = `t(title_key)`（设置了键时）；imgui ID 经 `###<name>` 固定 ——
+        显示文案可随语言即时变化，dock/折叠状态身份不变。
+        """
+        if self.title_key:
+            from Application.Editor.I18n import t
+            label = f"{t(self.title_key)}###{self.name}"
+        else:
+            label = self.name
         expanded, self.visible = imgui.begin(
-            self.name, self.visible, self.flags
+            label, self.visible, self.flags
         )
         return expanded
 

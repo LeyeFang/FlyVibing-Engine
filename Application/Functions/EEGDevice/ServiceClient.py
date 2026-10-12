@@ -174,6 +174,14 @@ class ServiceBackend(DeviceBackend):
         return {"backend": f"ServiceBackend({self.brand})", "service": True,
                 "stub": False}
 
+    def get_impedance(self, electrode_type: str = "passive", tms_box: bool = False) -> list:
+        """电极阻抗测量（控制命令 — push/pump 两模式均可路由; 单位 Ω, NaN 保持）。"""
+        resp = self._request("impedance", electrode_type=str(electrode_type),
+                             tms_box=bool(tms_box), timeout=120.0)
+        if not resp.get("ok"):
+            raise ServiceError(f"impedance failed: {resp.get('detail', 'unknown')}")
+        return list(resp.get("values_ohm") or [])
+
     # ── 连接与进程 ─────────────────────────────────────────
 
     def _ensure_connected(self) -> None:

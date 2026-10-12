@@ -268,6 +268,9 @@ class LiveCommandServer:
             "extension.list": cls._op_extension_list,
             "extension.enable": cls._op_extension_enable,
             "extension.disable": cls._op_extension_disable,
+            # ── settings（编辑器全局设置; 与设置面板同一业务单点 EditorSettings） ──
+            "settings.get": cls._op_settings_get,
+            "settings.set": cls._op_settings_set,
             "frame.request": cls._op_frame_request,
             "frame.fetch": cls._op_frame_fetch,
             "threads.snapshot": cls._op_threads_snapshot,
@@ -833,6 +836,31 @@ class LiveCommandServer:
 
         info = ExtensionManager.disable(ext_id)
         return {"extension": info, "extension_ops": LiveCommandServer.extension_ops_snapshot()}
+
+    # ── settings.* ops（UI 同路径: Settings 面板 ▸ Common / Edit ▸ Preferences） ──
+
+    @staticmethod
+    def _op_settings_get(args: dict) -> dict:
+        """读取编辑器设置（省略 key = 全量; UI: Settings 面板 Common 页）。"""
+        from Application.Editor.EditorSettings import EditorSettings
+
+        key = str(args.get("key") or "")
+        if not key:
+            return {"settings": EditorSettings.all()}
+        return {"key": key, "value": EditorSettings.get(key)}
+
+    @staticmethod
+    def _op_settings_set(args: dict) -> dict:
+        """写入编辑器设置（校验+钳制 → 立即持久化 → 下一渲染帧生效）。"""
+        from Application.Editor.EditorSettings import EditorSettings
+
+        key = str(args.get("key") or "")
+        if not key:
+            raise ValueError("key is required")
+        if "value" not in args:
+            raise ValueError("value is required")
+        value = EditorSettings.set(key, args.get("value"))
+        return {"key": key, "value": value, "applied": "next render frame"}
 
     @staticmethod
     def _op_frame_request(args: dict) -> dict:

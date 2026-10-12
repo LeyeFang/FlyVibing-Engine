@@ -65,10 +65,16 @@ def send(port: str, baud: int, data: bytes) -> None:
     """入队串口发送 — 非阻塞，立即返回。
 
     Args:
-        port:  串口号，如 "COM2"
+        port:  串口号（`"COM2"`）或**逻辑设备名**（`"@mibox"` — 机器侧绑定, 见协议 §12）
         baud:  波特率，如 9600
         data:  要发送的字节数据
+
+    Raises:
+        DeviceUnresolved / ValueError — `@name` 未绑定或端口为空（解析在入队前完成,
+        便于调用方（节点/面板/op）拿到**显式错误**而不是静默发错端口）。
     """
+    from .serial_manager import resolve_port
+    port = resolve_port(port)           # @name → 物理端口（未绑定 → 显式抛错）
     if not state._running:
         print(f"{state._TAG} Not running — dropping serial send to {port}@{baud}")
         return

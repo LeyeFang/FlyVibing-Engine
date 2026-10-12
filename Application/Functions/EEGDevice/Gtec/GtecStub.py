@@ -85,6 +85,15 @@ class GtecStubBackend(DeviceBackend):
         ramp = np.mod(n, 100.0)[:, None] * 0.05
         return (wave + bias[None, :] + ramp).astype(np.float32)
 
+    # ── 阻抗 ────────────────────────────────────────────────
+
+    def get_impedance(self, electrode_type: str = "passive", tms_box: bool = False) -> list:
+        """确定性合成阻抗（kΩ 演示分布, 单位 Ω）— 无硬件演示/测试。"""
+        from ..Device import synthetic_impedance_ohm
+
+        channels = self._cfg.channels if self._cfg is not None else 64
+        return synthetic_impedance_ohm(channels, electrode_type)
+
     # ── 信息 ────────────────────────────────────────────────
 
     def info(self) -> dict:

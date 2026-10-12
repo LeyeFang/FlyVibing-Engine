@@ -24,6 +24,9 @@
 | 文档 | 对应代码域 | 何时必须读 |
 |---|---|---|
 | `ui_protocol.md` | `Application/Editor/UI/**`（Panel / Widget / 样式 / 菜单 / FileDialog） | 改编辑器 UI、加内联控件、调 Add 菜单、改删除交互 |
+| `i18n_protocol.md` | `Application/Editor/I18n.py` + `Application/Editor/Locale/**` + `Utils/Dev/i18n_tool.py` + `Doc/Dev/i18n_baseline.json` | **写任何 UI 文案 / 加菜单项 / 新增语言前必读**：角色分工、键规范与可提取性、不翻译边界表（agent 面=中文不随语言变化）、运行时回退链、**守卫三层与棘轮口径**、新增语言 Runbook（全量适配门槛）、扩展侧约定 |
+| `upstream_imgui_beginchild_fullclip.md` | —（外部依赖 imgui/imgui_bundle 的可用性档案；复现脚本 `Utils/Dev/repro_imgui_child_clipping.py`） | 遇到 `Must call EndChild() and not End()` / 最小化后渲染循环被杀 / 准备向上游提交同类 issue 时读：现象链、4 条语义实测、官方原文、三条文档改进建议 |
+| `community_feedback_gtec_2026-10-12.md` | 扩展示例 `Functions/EEGDevice/Gtec/` 开发实录（社区反馈存档） | 评估 **ExtDev 文档自包含性与工具链缺口** 时读：A1–A5（需引擎/上游信息）+ B1–B4（口径不一致）+ C1 + **§6 引擎侧消化记录**（已合并/已裁决/待办） |
 | `node_editor_protocol.md` | `Application/Core/NodeGraph/**`（运行时）+ `Application/Editor/UI/panels/node_editor/**`（编辑器交互）+ `Utils/User/NodeEditor/**` | 新增/修改节点类型、求值器、图约束、图校验、MCP 文档 |
 | `device_io_protocol.md` | `Application/Functions/**`（SerialParallelDevice / EEGDevice） | 设备集成、真实/空跑双后端、线程与数据落盘 |
 | `bci_algorithm_protocol.md` | `Application/Functions/BCIAlgorithm/**` + `node_types/evaluators {epoch,bci_algorithm}` + 对应 widgets | epoch 数据集、FBCSP/CCA 节点、打包 list 超参、训练同步语义、模型注册、空采验证 |

@@ -202,6 +202,15 @@ class VirtualSigGenBackend(DeviceBackend):
                                            size=(count, cfg.channels))
         return wave.astype(np.float32)
 
+    # ── 阻抗（合成 — 演示/无硬件验证） ─────────────────────
+
+    def get_impedance(self, electrode_type: str = "passive", tms_box: bool = False) -> list:
+        """虚拟设备的合成阻抗（确定性演示分布; 通道 1 恒 NaN）。"""
+        from ..Device import synthetic_impedance_ohm
+
+        channels = self._cfg.channels if self._cfg is not None else 8
+        return synthetic_impedance_ohm(channels, electrode_type)
+
     # ── 信息 ────────────────────────────────────────────────
 
     def info(self) -> dict:

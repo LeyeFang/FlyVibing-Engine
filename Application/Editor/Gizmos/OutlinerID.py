@@ -1,4 +1,4 @@
-﻿"""
+"""
 Editor Outliner (ID Buffer) — Blender 风格的实体 ID + 屏幕空间边缘检测轮廓高亮。
 
 设计理念:

@@ -922,7 +922,7 @@ class NodeEditorPanel(BasePanel):
                         f"{ent.get('action')} | {ent.get('detail')}"
                     )
                 if len(log) > len(shown):
-                    imgui.text_disabled(f"… ({len(log) - len(shown)} more — Export 获取完整日志)")
+                    imgui.text_disabled(f"… ({len(log) - len(shown)} more — Export for full log)")
 
             imgui.separator()
             if imgui.button("Copy summary"):

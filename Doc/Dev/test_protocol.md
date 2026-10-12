@@ -90,17 +90,23 @@ SUMMARY: 11/12 passed in 84s | failed: test_x | tier=core | skipped=5 | runs: Te
 |---|---|---|---|
 | 图数据/校验/IO | `Test/Application/NodeGraph/` | core | `test_graph_validation` / `test_graph_io` / `test_entity_group_visible`（组可见性节点: 单批下发原子显隐）；`Test/Application/Editor/test_node_runtime.py` 为交互演示（manual） |
 | 设备/算法/Functions | `Test/Application/Functions/` | core | gtec / siggen / pool / epoch / bci（stub 后端） |
+| 扩展体系 | `Test/Application/Extensions/` | core | `test_extension_manager`（发现/启停/隔离/持久化）+ `test_extension_ui`（窗口注册/purge/quarantine/close_policy）+ `test_extension_review`（审查器静态规则）+ `test_gtec_extension`（**Gtec 监视面板**: DSP/ops/会话/录制/**全裁剪栈平衡回归**）; 协议 `Doc/ExtDev/extension_dev_protocol.md` |
 | 动态媒体 | `Test/Application/Media/` | core | `test_media_system`（解码/时钟/引擎帧去重/错误遏制）+ `test_media_node`（ShowMedia 注册/静态检查/干跑惰性/节点驱动 + PIE 模板白名单）; 协议 `media_protocol.md` |
 | 文字显示 | `Test/Application/Text/` | core | `test_text_system`（24 checks: 注册链 / 两形态角落像素 / auto 画布 / 同尺寸热更 / 合成粗斜体 / auto_scale / SetText 节点）; 协议 `text_protocol.md` |
 | 渲染器 | `Test/Application/Renderer/` | core | `test_render_commands`（16 命令 dispatch 契约 + CommandQueue 并发/**原子批**）+ `test_vertex_layout`（布局不变式 + shader 一致性快照）+ `test_gl_pixels`（隐藏窗真 GL 像素: 映射/深度/纹理/动态重传/混合排序; 夹具 `_gl_probe.py`）+ `test_gl_lighting`（平面光/点光数值锁定 + 点光衰减三档 + **无灯满亮回退**）+ `test_gl_render_targets`（RT 生命周期）；`test_material_isolation`（Core/ — 内置材质模板保护）; 协议 `rendering_protocol.md` + `shader_protocol.md` |
 | 编辑器服务（回环） | `Test/Application/Editor/test_live_command_server.py` | core | 含边界扫描; 无 GUI |
-| PIE 设置 / 光位图标 | `Test/Application/Editor/test_pie_settings.py` + `test_light_gizmo.py` | core | Settings 持久化/尺寸钳位/窗口映射/Overlay 回退; 光图标(+平面光方向射线)查询/overlay 语义/眼图标联动/方向公式钉死/点光 direction=(0,0,0)（均无 GL）; 协议 `ui_protocol.md` §9 + `rendering_protocol.md` §8 |
+| PIE 设置 / 光位图标 | `Test/Application/Editor/test_pie_settings.py` + `test_light_gizmo.py` | core | PIE 设置持久化/尺寸钳位/窗口映射/Overlay 回退（UI 位置 = Settings 面板 ▸ Export — `ui_protocol.md` §9/§13）; 光图标(+平面光方向射线)查询/overlay 语义/眼图标联动/方向公式钉死/点光 direction=(0,0,0)（均无 GL）; 协议 `rendering_protocol.md` §8 |
+| 设置体系（Settings 面板） | `Test/Application/Editor/test_editor_settings.py` | core | 服务（默认/落盘往返/clamp/枚举回退/未知键 KeyError/损坏 JSON 容错）+ pending 应用模型（只应用一次）+ `I18n` 三级回退 + 页面注册表（重名/空 id/owner 清理/排序）+ `settings.*` op 行为链；协议 `ui_protocol.md` §13 |
+| i18n 目录与文案棘轮 | `Test/Application/Editor/test_i18n_coverage.py` | core | 目录完备（en 源语言）/ 代码键 ⊆ en / 可提取性 / 键集与占位符跨语言一致 / 键规范 / **棘轮（总量+每文件预算，只减不增）** / 新语言并入沙箱（语言表→设置枚举→面板选项→切换 自动跟随）/ 扩展目录注册卸载；工具 `Utils/Dev/i18n_tool.py check --strict`；协议 `i18n_protocol.md` |
+| imgui 窗口栈配对 | `Test/Application/Editor/test_imgui_stack_pairing.py` | core | 反模式静态拦截（`begin_child` 被条件门控 → 全裁剪 0×0 漏 `EndChild` 杀渲染循环）：规则自检（合成片段）+ `Application/Editor/**` 与 `Functions/**` 同源扫描 + 文件级配对计数（早退补偿）+ 顶层上下文创建；规则单一权威 = `Utils/User/ExtensionKit/review_extension.py` C8/C9/C10；协议 `ui_protocol.md` §2.13 + `ExtDev` §7.7 |
+| imgui 卫生（ini/入口） | `Test/Application/Editor/test_imgui_hygiene.py` | core | 无头上下文唯一入口 `Utils/User/ExtensionKit/imgui_headless.py`（禁用 ini）功能验证 + `Test/**` 禁裸 `create_context`（白名单自证禁用 ini）+ 全仓禁 `set_ini_filename(None)`（原生崩溃）+ 防回归（引擎仍禁用 ini）；协议 `ui_protocol.md` §2.14 + `ExtDev` §12.6 |
+| 设备别名（跨机器迁移） | `Test/Application/Functions/test_device_alias.py` | core | 两级设备身份：`DeviceRegistry` 增删改查/原子落盘/损坏容错/名称校验 + `resolve_port`（`@name`→物理 / 未绑定显式错 / 空端口 ValueError）+ `send`/`start_watch` 入队前解析 + `SerialSend` 求值器（空端口/未绑定别名 → 显式 error 日志，不再默认 COM1）+ 校验规则 13 warning + `ext.device.{bind_alias,bind_nodes}`（面板按钮同一实现，dry_run）；注册表用 `MGE_DEVICES_FILE` 沙箱；协议 `device_io_protocol.md` §12 |
 | 组件字段钳制 | `Test/Application/Core/test_component_clamps.py` | core | `FIELD_CLAMPS` 单元（标量/tuple/int/bool/无规则）+ Inspector(`SceneBrowserController.set_component_field`)/MCP(`_op_component_set`) 两条写入路径 + 旧名迁移 (`get/add/set`)；单一权威 `ComponentRegistry.FIELD_CLAMPS`（Light/Camera/Transform/MediaPlayer/TextDisplay） |
-| Action 契约（GUI↔op） | `Test/Application/Editor/test_action_contract.py` | core | `ui_protocol.md` §10 映射表 ↔ `ops.py` ↔ `LiveCommandServer._register_ops()` 三方集合相等（48）+ 映射行列完整性 + 选中链行为（gizmo 状态机/自动选中/级联清理/场景切换清选中）；背景: `select_with_gizmo` 静默 NameError 修复（2026-10-08） |
+| Action 契约（GUI↔op） | `Test/Application/Editor/test_action_contract.py` | core | `ui_protocol.md` §10 映射表 ↔ `ops.py` ↔ `LiveCommandServer._register_ops()` 三方集合相等（55; 解析器在下一章标题处停止）+ 映射行列完整性 + 选中链行为（gizmo 状态机/自动选中/级联清理/场景切换清选中）；背景: `select_with_gizmo` 静默 NameError 修复（2026-10-08） |
 | agent 通道包 | `Test/Application/Editor/{test_editor_mcp_package,test_node_editor_mcp}.py` | core | wheel/CLI/注册表 |
-| UI 场景回放 | `Test/Application/Editor/scenarios/` | gui | 快照 + 行为断言（panels_smoke / menu_smoke / node_editor_smoke） |
+| UI 场景回放 | `Test/Application/Editor/scenarios/` | gui | 快照 + 行为断言（panels_smoke / menu_smoke / node_editor_smoke / gtec_panel_smoke） |
 | ~~UI 面板/gizmo（遗留交互 demo）~~ | ~~`test_*_{opengl,zengl}.py`~~ | — | **2026-10-05 已清理**（18 个交互 demo 删除; 覆盖转入 scenarios + e2e） |
-| 实机 E2E | `Test/Application/Editor/e2e_*.py` | live | 需编辑器运行中（例: `e2e_renderer_check` — 渲染快照 + 裸帧像素采样） |
+| 实机 E2E | `Test/Application/Editor/e2e_*.py` + `Test/Application/Extensions/e2e_*.py` | live | 需编辑器运行中（例: `e2e_renderer_check` — 渲染快照 + 裸帧像素采样；`e2e_gtec_monitor_check` — 监视面板 sim 观察/滤波 + virtual 录制） |
 | 线程压力/边界 | `Test/Application/stress/` + `Core/test_thread_boundary.py` | core | `--stress N` 放大; 协议 `threading_protocol.md` |
 | 导出包 | `test_export_game_bundle.py` | heavy | 分钟级重 IO |
 

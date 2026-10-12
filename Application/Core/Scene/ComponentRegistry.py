@@ -111,12 +111,12 @@ def clamp_component_field(component_name: str, field_name: str, value):
 # 不得登记未实现的未来选项 (假自由度; GUI 自由度规范见 Doc/Dev/ui_protocol.md §11)。
 FIELD_CHOICES: dict = {
     # ── Light ──
-    ("Light", "light_type"): [("directional", "Directional (平面光)"),
-                              ("point", "Point (点光)")],
+    ("Light", "light_type"): [("directional", "Directional"),
+                              ("point", "Point")],
     # ── TextDisplay ──
-    ("TextDisplay", "align"): [("left", "Left 左"),
-                                ("center", "Center 中"),
-                                ("right", "Right 右")],
+    ("TextDisplay", "align"): [("left", "Left"),
+                                ("center", "Center"),
+                                ("right", "Right")],
 }
 
 

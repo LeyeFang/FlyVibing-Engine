@@ -11,10 +11,11 @@ EEGDevice — 设备层门面 (品牌目录化: Gtec / VirtualDevice / eCon; 进
 
 公开 API:
     init_session(name, cfg, dry_run)          → (session | None, detail)
-    start_record(name, elapsed_s, pool)       → (ok, detail)
-    stop_record(name, scope, elapsed_s, pool) → (ok, detail)
+    start_record(name, elapsed_s, pool, record) → (ok, detail)   record=False = 仅监视
+    stop_record(name, scope, elapsed_s, pool, save) → (ok, detail)   save=False = 弃录
     kill_device(name, pool)                   → (ok, detail)
     get_data(name, elapsed_s, pool)           → (result | None, detail)
+    measure_impedance(name, electrode_type, tms_box, pool) → (result | None, detail)
     close_all()                               → int        (Runtime 停止保护)
     list_sessions()                           → list[str]
 
@@ -41,6 +42,8 @@ from .Device import (
     DEVICE_CHOICES,
     EXPORT_FORMATS,
     GLOBAL_POOL,
+    IMPEDANCE_ELECTRODE_TYPES,
+    IMPEDANCE_THRESHOLDS_KOHM,
     MAX_BUFFER_SAMPLES,
     MAX_RECORD_BYTES,
     SUPPORTED_RATES,
@@ -51,6 +54,7 @@ from .Device import (
     SaveResult,
     add_to_pool,
     channel_names_for,
+    classify_impedance,
     close_all,
     create_pool,
     destroy_pool,
@@ -78,10 +82,14 @@ __all__ = [
     "EXPORT_FORMATS",
     "MAX_BUFFER_SAMPLES",
     "MAX_RECORD_BYTES",
+    "IMPEDANCE_ELECTRODE_TYPES",
+    "IMPEDANCE_THRESHOLDS_KOHM",
+    "classify_impedance",
     "channel_names_for",
     "init_session",
     "start_record",
     "stop_record",
+    "measure_impedance",
     "kill_device",
     "get_data",
     "close_all",
@@ -173,32 +181,55 @@ def init_session(name: str, cfg: GtecConfig, dry_run: bool = False):
     return session, f"'{name}' ready [{mode}] {cfg.summary()}{note}"
 
 
-def start_record(name: str, elapsed_s: float = 0.0, pool: Optional[str] = None):
-    """开始采集（重复调用无害）。pool: 空名称时的池作用域（None=全注册表）。"""
+def start_record(name: str, elapsed_s: float = 0.0, pool: Optional[str] = None,
+                 record: bool = True):
+    """开始流式采集（重复调用无害）。pool: 空名称时的池作用域（None=全注册表）。
+
+    record=True  → 录制（含监视）; record=False → 仅监视（不累积全量录制, 不落盘）。
+    监视中再调 record=True → 从当前时刻起录制（升级; 已过去的监视段不保存）。
+    """
     session, why = resolve_session(name, pool=pool)
     if session is None:
         return False, why
     if session.state == "recording":
         return True, f"'{session.name}' already recording"
+    if session.state == "monitoring":
+        if not record:
+            return True, f"'{session.name}' already monitoring"
+        try:
+            session.begin_recording(elapsed_s)
+        except Exception as e:
+            return False, f"record failed: {e}"
+        return True, f"'{session.name}' recording started (from monitoring)"
     try:
-        session.start(elapsed_s)
+        session.start(elapsed_s, record=record)
     except Exception as e:
         return False, f"start failed: {e}"
-    return True, f"'{session.name}' recording started"
+    return True, f"'{session.name}' {'recording' if record else 'monitoring'} started"
 
 
 def stop_record(name: str, save_scope: str = "session", elapsed_s: float = 0.0,
-                pool: Optional[str] = None):
-    """停止采集并按配置目录保存数据。pool: 空名称时的池作用域（None=全注册表）。"""
+                pool: Optional[str] = None, save: bool = True):
+    """停止流式采集（recording → 按 scope 保存; 监视/显式 save=False 不落盘）。
+
+    pool: 空名称时的池作用域（None=全注册表）。
+    """
     session, why = resolve_session(name, pool=pool)
     if session is None:
         return False, why
-    if session.state != "recording":
-        return False, f"'{session.name}' is not recording (state={session.state})"
+    if session.state not in ("recording", "monitoring"):
+        return False, f"'{session.name}' is not streaming (state={session.state})"
+    was_recording = session.state == "recording"
+    do_save = bool(save) and was_recording
     try:
-        result = session.stop(save_scope=save_scope, elapsed_s=elapsed_s)
+        result = session.stop(save_scope=save_scope, elapsed_s=elapsed_s, save=do_save)
     except Exception as e:
         return False, f"stop failed: {e}"
+    if not was_recording:
+        return True, f"'{session.name}' monitoring stopped (nothing recorded)"
+    if not do_save:
+        return True, (f"'{session.name}' stopped; recording discarded "
+                      f"({result.samples} samples, {result.duration_s:.2f}s)")
 
     where = " → ".join(result.paths) if result.paths else "(save failed — see console)"
     if result.written:
@@ -234,3 +265,18 @@ def get_data(name: str, elapsed_s: float = 0.0, pool: Optional[str] = None):
         return session.get_data(elapsed_s=elapsed_s), ""
     except Exception as e:
         return None, f"get_data failed: {e}"
+
+
+def measure_impedance(name: str, electrode_type: str = "passive",
+                      tms_box: bool = False, pool: Optional[str] = None):
+    """测量电极阻抗（设备空闲操作 — 采集中返回失败）。
+
+    Returns: (result | None, detail) — result 见 RecordingSession.measure_impedance。
+    """
+    session, why = resolve_session(name, pool=pool)
+    if session is None:
+        return None, why
+    try:
+        return session.measure_impedance(electrode_type, tms_box), ""
+    except Exception as e:
+        return None, f"impedance failed: {e}"

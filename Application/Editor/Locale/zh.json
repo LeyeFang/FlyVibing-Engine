@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "language": "zh",
+    "name": "\u4e2d\u6587",
+    "source": false,
+    "reviewed": true,
+    "note": "Translations for the Simplified Chinese catalog. Renders via merged CJK system font (see ui_protocol.md 13.4). Keys must match en.json exactly (guarded)."
+  },
+  "strings": {
+    "panel.settings": "\u8bbe\u7f6e",
+    "settings.page.common": "\u901a\u7528",
+    "settings.page.export": "\u5bfc\u51fa",
+    "settings.common.appearance": "\u5916\u89c2",
+    "settings.common.font_size": "\u5b57\u4f53\u5927\u5c0f",
+    "settings.common.language": "\u8bed\u8a00",
+    "settings.common.instant": "\u7acb\u5373\u751f\u6548\u3002",
+    "settings.export.pie": "PIE \u542f\u52a8\u7a97\u53e3",
+    "settings.export.note": "\u4e0b\u6b21 Run \u751f\u6548\u3002",
+    "settings.export.mode": "\u6a21\u5f0f",
+    "settings.export.width": "\u5bbd\u5ea6",
+    "settings.export.height": "\u9ad8\u5ea6",
+    "settings.export.preset": "\u9884\u8bbe\uff08\u7a97\u53e3\u5316\uff09",
+    "menu.edit.preferences": "\u9996\u9009\u9879..."
+  }
+}

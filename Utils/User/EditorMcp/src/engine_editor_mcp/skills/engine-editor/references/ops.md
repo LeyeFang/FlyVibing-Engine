@@ -453,6 +453,25 @@
 
 - 示例: `engine-editor-cli call extension.disable id=VALUE`
 
+## 设置
+
+### `settings.get`
+
+读取编辑器设置（省略 key = 全量; UI: Settings 面板 Common 页）
+
+- `key` (str, 可选) — 如 ui.font_scale / ui.language
+
+- 示例: `engine-editor-cli call settings.get key=VALUE`
+
+### `settings.set`
+
+写入编辑器设置（校验+钳制 → 持久化 → 下一渲染帧生效）
+
+- `key` (str, 必填) — 如 ui.font_scale / ui.language
+- `value` (json, 必填) — 新值（数值 / 字符串）
+
+- 示例: `engine-editor-cli call settings.set key=VALUE value={"k":1}`
+
 ## 线程诊断
 
 ### `threads.snapshot`

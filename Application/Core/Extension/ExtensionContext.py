@@ -42,6 +42,8 @@ class ExtensionContext:
         self.jobs = None     # M2: submit → Future
         self.settings = None # M1: schema 化设置（持久化 + 自动 UI）
         self.nodes = None    # M1: NodePack 注册
+        self.graph = None    # M1: 受限图访问（capabilities 含 "graph" 才注入 —
+                             #     见 Application/Editor/Extensions/ExtensionGraph.py）
 
     # ════════════════════════════════════════════════════════════
     # 基础能力（M0）

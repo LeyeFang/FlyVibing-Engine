@@ -25,7 +25,7 @@ description: "控制正在运行的 MyGameEngine 编辑器：创建/修改场景
 ## 2. CLI 速查
 
 ```powershell
-engine-editor-cli ops                        # op 目录（53 个核心 op; 一行一个; 扩展 op 见 extension.list）
+engine-editor-cli ops                        # op 目录（55 个核心 op; 一行一个; 扩展 op 见 extension.list）
 engine-editor-cli help entity.transform      # 单 op 详情（参数 + 示例）
 engine-editor-cli call entity.add name=MCP_Cue
 engine-editor-cli call entity.transform id=5 position='[1,0,2]' scale=2
@@ -69,6 +69,7 @@ engine-editor-cli call project.export target_parent=D:/out include_player=true  
 | `graph.export` / `graph.import` | 图落盘/回灌（**export 一定带 `path`**，见 §5） |
 | `project.open` / `project.save` / `project.export` | 工程：打开 `.myproj` / 保存（带 `path`=Save As）/ 导出（`target_parent` 必填; `include_player` 默认 true=自包含成品） |
 | `extension.list` / `extension.enable` / `extension.disable` | 扩展体系：发现（含 `ext.<id>.*` 扩展 op 清单）/ 启停；扩展 op 直接调（`ext.*` 透传, 如 `ext.sigproc.info`） |
+| `settings.get` / `settings.set` | 编辑器设置（UI: Edit ▸ Preferences… = Settings 面板）：`{"key":"ui.font_scale","value":1.25}`；`key` 省略 = 全量；**下一渲染帧生效** |
 | `camera.get` / `camera.set` | 场景摄像机读写 |
 | `resource.list` / `resource.find` / `resource.material.get` | 资源与材质查询 |
 

@@ -126,13 +126,22 @@ def _draw_random_set_seed_widgets(nid: int, inst, _canvas) -> None:
 
 @register("SerialSend")
 def _draw_serial_send_widgets(nid: int, inst, _canvas) -> None:
-    """Port / BaudRate / Format 始终在节点属性中配置；Value 从上游 pin 传入。"""
+    """Port / BaudRate / Format 始终在节点属性中配置；Value 从上游 pin 传入。
+
+    Port 可为物理端口（`COM5`）或**逻辑设备名**（`@mibox` — 本机绑定, 协议
+    `Doc/Dev/device_io_protocol.md` §12）: 换机器只需在面板里重绑别名, 场景不用改。
+    """
     imgui.dummy(imgui.ImVec2(0, 2))
     imgui.push_item_width(105)
 
     # ── Port ──
-    port = str(inst.props.get("port", "COM1"))
+    port = str(inst.props.get("port", ""))
     ports = _list_com_ports()
+    try:                                    # 逻辑设备名（本机已绑定）也进候选
+        from Application.Core.DeviceRegistry import all as _aliases
+        ports = ports + ["@" + n for n in sorted(_aliases())]
+    except Exception:                       # noqa: BLE001 — 无注册表环境降级
+        pass
     if ports:
         try:
             idx = ports.index(port)

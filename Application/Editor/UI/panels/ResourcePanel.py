@@ -256,7 +256,7 @@ class ResourcePanel(BasePanel):
         if not resources:
             imgui.spacing()
             imgui.spacing()
-            hint = "No assets loaded. Use File → Import or click 'Import'."
+            hint = "No assets loaded. Use File -> Import or click 'Import'."
             hint_w = imgui.calc_text_size(hint).x
             imgui.set_cursor_pos_x(
                 imgui.get_cursor_pos_x()

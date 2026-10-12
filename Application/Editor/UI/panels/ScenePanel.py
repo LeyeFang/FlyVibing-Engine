@@ -271,47 +271,6 @@ class ScenePanel(BasePanel):
         # 状态提示
         imgui.text_disabled(self._sim_ctrl.get_state_label())
 
-        # ⚙ Settings — PIE 初始窗口行为 (全屏 / 窗口化尺寸)
-        _gear = getattr(fa, 'ICON_FA_GEAR', '')
-        if imgui.button(f"{_gear}  Settings##pie_settings", (-1, 0)):
-            imgui.open_popup("pie_settings_popup")
-        if imgui.begin_popup("pie_settings_popup"):
-            self._draw_pie_settings_popup()
-            imgui.end_popup()
-
-    def _draw_pie_settings_popup(self) -> None:
-        """PIE 初始窗口行为设置 (Settings 按钮弹出层; 下次 Run 生效)。"""
-        s = self._sim_ctrl.get_pie_settings()
-        imgui.text_disabled("PIE 启动窗口 (下次 Run 生效)")
-        imgui.separator()
-
-        _MODES = [("窗口化", "windowed"),
-                  ("无边窗口 (全屏尺寸)", "borderless"),
-                  ("独占全屏", "fullscreen")]
-        labels = [m[0] for m in _MODES]
-        keys = [m[1] for m in _MODES]
-        cur = keys.index(s["mode"]) if s["mode"] in keys else 0
-        changed, idx = imgui.combo("显示模式##pie", cur, labels)
-        if changed:
-            self._sim_ctrl.set_pie_settings(mode=keys[idx])
-            cur = idx
-
-        imgui.separator()
-        imgui.begin_disabled(keys[cur] != "windowed")
-        for label, pw, ph in (("1280 × 720", 1280, 720),
-                              ("1600 × 900", 1600, 900),
-                              ("1920 × 1080", 1920, 1080)):
-            if imgui.small_button(f"{label}##pie"):
-                self._sim_ctrl.set_pie_settings(width=pw, height=ph)
-                s = self._sim_ctrl.get_pie_settings()
-            imgui.same_line()
-        imgui.new_line()
-        cw, nw = imgui.input_int("宽度##pie", int(s["width"]))
-        ch, nh = imgui.input_int("高度##pie", int(s["height"]))
-        if cw or ch:
-            self._sim_ctrl.set_pie_settings(width=nw, height=nh)
-        imgui.end_disabled()
-
     # ============================================================
     # 通用: 区域标题
     # ============================================================

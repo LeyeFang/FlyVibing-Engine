@@ -258,7 +258,7 @@ class ProjectManager:
         from Application.Editor.EditorHost import EditorHost
 
         if not cls._project_path:
-            print("[Export] Project is not saved yet — use File ▸ Save Project As... first")
+            print("[Export] Project is not saved yet — use File -> Save Project As... first")
             return None
         if not target_parent_dir or not os.path.isdir(target_parent_dir):
             print(f"[Export] Parent folder not found: {target_parent_dir}")

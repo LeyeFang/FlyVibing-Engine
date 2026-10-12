@@ -46,6 +46,16 @@ _CLR_OK = imgui.ImVec4(0.45, 0.85, 0.55, 1.0)
 _CLR_WARN = imgui.ImVec4(0.95, 0.75, 0.35, 1.0)
 _CLR_ERR = imgui.ImVec4(0.90, 0.40, 0.35, 1.0)
 _CLR_DIM = imgui.ImVec4(0.60, 0.60, 0.60, 1.0)
+
+try:  # FontAwesome 图标（UI 文本只用图集内字符 — 见 dev protocol §7 / ui_protocol §12）
+    from imgui_bundle import icons_fontawesome_6 as _fa6
+except Exception:  # noqa: BLE001
+    _fa6 = None
+
+
+def _icon(name: str) -> str:
+    """FontAwesome 图标常量（getattr 兜底 — 缺失时回退空串, 不产生 '?'）。"""
+    return getattr(_fa6, name, "") if _fa6 is not None else ""
 _KIND_CLR = {
     "RX": imgui.ImVec4(0.40, 0.85, 0.55, 1.0),
     "TX": imgui.ImVec4(0.45, 0.65, 1.00, 1.0),
@@ -80,6 +90,8 @@ class DeviceExtension(UIExtensionBase):
         self._ports_ts = 0.0
         self._ui_error = ""
         self._ui_error_ts = 0.0
+        self._alias_name = ""            # 面板: 新设备名输入
+        self._alias_msg = ""             # 面板: 绑定/迁移结果行
 
     # ════════════════════════════════════════════════════════════
     # 生命周期（协议 §5）
@@ -134,16 +146,23 @@ class DeviceExtension(UIExtensionBase):
                      summary="{max_events?} 事件流快照（agent 监视通道）")
         ops.register("write_parallel", self._op_write_parallel,
                      summary="{value, address?, fmt?} 写并口（5ms 自动复位）")
+        ops.register("bind_alias", self._op_bind_alias,
+                     summary="{name, port?, baud?, unbind?} 绑定/解绑逻辑设备名（机器侧注册表）")
+        ops.register("bind_nodes", self._op_bind_nodes,
+                     summary="{name, migrate_from?, dry_run?} 把引用物理端口的场景节点迁到 @name")
 
     # ════════════════════════════════════════════════════════════
     # ops 实现（agent 通道 — 协议 §9; 全部可在无 UI 环境调用）
     # ════════════════════════════════════════════════════════════
 
     def _op_status(self, args) -> dict:
+        import Application.Core.DeviceRegistry as reg
         from Application.Functions.SerialParallelDevice import (
             is_running, parallel_status, watch_state)
         return {"io_running": is_running(), "watch": watch_state(),
-                "parallel": parallel_status(), "settings": dict(self._settings)}
+                "parallel": parallel_status(), "settings": dict(self._settings),
+                "devices": [{"alias": "@" + name, "describe": reg.describe(name), **entry}
+                            for name, entry in sorted(reg.all().items())]}
 
     def _op_watch(self, args) -> dict:
         args = args or {}
@@ -202,6 +221,146 @@ class DeviceExtension(UIExtensionBase):
             start()
         write_parallel(address, value, fmt)
         return {"queued": True, "address": address, "fmt": fmt}
+
+    # ════════════════════════════════════════════════════════════
+    # ops: 设备名（@alias）—— 两级设备身份（协议 device_io_protocol §12）
+    # ════════════════════════════════════════════════════════════
+
+    def _op_bind_alias(self, args) -> dict:
+        """绑定/解绑逻辑设备名 → 物理端口（机器侧注册表; 面板按钮走同一实现）。"""
+        args = args or {}
+        import Application.Core.DeviceRegistry as reg
+        name = str(args.get("name") or "").strip()
+        if not name:
+            raise ValueError("name is required (e.g. name=mibox)")
+        if args.get("unbind"):
+            return {"alias": "@" + reg.parse_ref(name), "unbound": reg.unbind(name),
+                    "devices": reg.all()}
+        port = str(args.get("port") or self._settings.get("port") or "").strip()
+        if not port:
+            raise ValueError("port is required (pass port=COMx or set the panel port first)")
+        baud = int(args.get("baud") or self._settings.get("baud") or 115200)
+        entry = reg.bind(name, transport=str(args.get("transport") or "serial"),
+                         port=port, baud=baud)
+        return {"alias": "@" + reg.parse_ref(name), "entry": entry,
+                "describe": reg.describe(name), "devices": reg.all()}
+
+    def _op_bind_nodes(self, args) -> dict:
+        """把场景里指向某物理端口的节点一键迁到逻辑设备名（面板按钮走同一实现）。
+
+        args: `{name, migrate_from?, dry_run?}` —— `migrate_from` 省略时用该别名
+        当前绑定的物理端口（即"把裸 COMx 的节点迁到 @name"）。
+        """
+        args = args or {}
+        import Application.Core.DeviceRegistry as reg
+        name = str(args.get("name") or "").strip()
+        if not name:
+            raise ValueError("name is required")
+        alias = "@" + reg.parse_ref(name)
+        migrate_from = str(args.get("migrate_from") or "").strip()
+        if not migrate_from:
+            entry = reg.get(name)
+            if entry is None:
+                raise ValueError(f"{alias} is not bound — bind it first (bind_alias)")
+            migrate_from = str(entry.get("port") or "")
+        if not migrate_from:
+            raise ValueError(f"{alias} has no bound port to migrate from")
+        graph = getattr(self._ctx, "graph", None)
+        if graph is None:
+            raise ValueError("graph capability unavailable (manifest needs "
+                             "capabilities: [..., \"graph\"])")
+        if not graph.available():
+            raise ValueError("no active node graph (open a scene with a node graph first)")
+        targets = graph.find("port", equals=migrate_from)
+        if args.get("dry_run"):
+            return {"alias": alias, "migrate_from": migrate_from,
+                    "would_migrate": [n["id"] for n in targets], "migrated": []}
+        migrated = []
+        for node in targets:
+            graph.set_props(node["id"], {"port": alias})
+            migrated.append(node["id"])
+        if self._ctx is not None:
+            self._ctx.log(f"migrated {len(migrated)} node(s) {migrate_from} -> {alias}")
+        return {"alias": alias, "migrate_from": migrate_from, "migrated": migrated}
+
+    # ════════════════════════════════════════════════════════════
+    # 面板: 设备名段（实验室 = 发现/检定/绑定; 设计真相仍在场景）
+    # ════════════════════════════════════════════════════════════
+
+    def _nodes_with_port(self, port: str) -> list:
+        """当前图中 `props.port == port` 的节点（无图/无能力 → []）。"""
+        if not port:
+            return []
+        graph = getattr(self._ctx, "graph", None)
+        if graph is None:
+            return []
+        try:
+            return graph.find("port", equals=port) if graph.available() else []
+        except Exception:  # noqa: BLE001 — 无图环境降级
+            return []
+
+    def _guard(self, op_name: str, args: dict) -> None:
+        """面板按钮 → **与 agent 同一操作实现**（动作单点），结果显式显示（禁静默）。"""
+        fn = {"bind_alias": self._op_bind_alias, "bind_nodes": self._op_bind_nodes}.get(op_name)
+        try:
+            res = fn(args or {})
+            self._alias_msg = "ok: " + json.dumps(res, ensure_ascii=False)[:120]
+        except Exception as e:  # noqa: BLE001 — 显式显示 + 记日志
+            self._alias_msg = f"error: {e}"
+            if self._ctx is not None:
+                self._ctx.log(f"{op_name} failed: {e}")
+
+    def _draw_alias_section(self) -> None:
+        """设备名（`@alias`）: 绑定当前端口 / 重绑 / 解绑 / 把裸端口节点迁到别名。
+
+        跨机器迁移的日常动线: 插设备 → 端口枚举 → 发测试确认 → 绑 `@name` →
+        场景里的 `@name` 自动生效（实验设计一行不改）。
+        """
+        import Application.Core.DeviceRegistry as reg
+
+        imgui.spacing()
+        if not imgui.collapsing_header("Device names (@alias)", imgui.TreeNodeFlags_.default_open):
+            return
+        cur_port = str(self._settings.get("port") or "")
+        devices = reg.all()
+        if not devices:
+            imgui.text_disabled("(none bound — type a name below, then Bind current port)")
+        for name in sorted(devices):
+            entry = devices[name]
+            col = _CLR_OK if entry.get("port") else _CLR_WARN
+            imgui.text_colored(col, reg.describe(name))
+            imgui.same_line()
+            if imgui.small_button(f"Rebind to current##rb_{name}"):
+                if cur_port:
+                    self._guard("bind_alias",
+                                {"name": name, "port": cur_port, "baud": self._settings["baud"]})
+                else:
+                    self._set_error("set a port first")
+            imgui.same_line()
+            if imgui.small_button(f"Unbind##ub_{name}"):
+                self._guard("bind_alias", {"name": name, "unbind": True})
+            raw = str(entry.get("port") or "")
+            n_raw = len(self._nodes_with_port(raw))
+            if n_raw:
+                imgui.same_line()
+                if imgui.small_button(f"Migrate {n_raw} node(s) -> @{name}##mg_{name}"):
+                    self._guard("bind_nodes", {"name": name})
+
+        imgui.set_next_item_width(150)
+        changed, val = imgui.input_text("New name##spd_alias_new", self._alias_name)
+        if changed:
+            self._alias_name = val
+        imgui.same_line()
+        if imgui.small_button(f"{_icon('ICON_FA_TAG')} Bind current port##spd_alias_bind"):
+            if not self._alias_name.strip():
+                self._set_error("device name required")
+            elif not cur_port:
+                self._set_error("port required")
+            else:
+                self._guard("bind_alias", {"name": self._alias_name.strip(), "port": cur_port,
+                                           "baud": self._settings["baud"]})
+        if self._alias_msg:
+            imgui.text_disabled(self._alias_msg)
 
     # ════════════════════════════════════════════════════════════
     # 设置持久化（协议 §11 — ctx.data_dir/settings.json）
@@ -272,7 +431,7 @@ class DeviceExtension(UIExtensionBase):
         if io_running:
             imgui.text_colored(_CLR_OK, "running")
         else:
-            imgui.text_colored(_CLR_WARN, "stopped (watch/send 时自动启动)")
+            imgui.text_colored(_CLR_WARN, "stopped (auto-start on watch/send)")
         watch = watch_state()
         if watch["active"]:
             imgui.same_line()
@@ -293,7 +452,7 @@ class DeviceExtension(UIExtensionBase):
             self._list_ports_now()
         imgui.same_line()
         preview = (f"{len(self._ports)} found" if self._ports
-                   else "(none enumerated — 可手输端口名)")
+                   else "(none enumerated — type manually)")
         if imgui.begin_combo("##spd_port_pick", preview):    # [自由度: L1]
             for p in self._ports:
                 label = p["device"] + (f" — {p['description']}" if p["description"] else "")
@@ -310,9 +469,12 @@ class DeviceExtension(UIExtensionBase):
                     self._save_settings()
             imgui.end_combo()
 
+        # ── 设备名（@alias）: 逻辑名绑定 + 场景节点迁移 [自由度: L2 名称开放 + L0 固定动作] ──
+        self._draw_alias_section()
+
         # ── 监视启停: [自由度: L0] ──
         if not watch["active"]:
-            if imgui.button("Start Watch##spd_watch"):
+            if imgui.button(f"{_icon('ICON_FA_PLAY')} Start Watch##spd_watch"):
                 if not s["port"]:
                     self._set_error("port required")
                 else:
@@ -320,7 +482,7 @@ class DeviceExtension(UIExtensionBase):
                         start()
                     start_watch(s["port"], int(s["baud"]))
         else:
-            if imgui.button("Stop Watch##spd_watch"):
+            if imgui.button(f"{_icon('ICON_FA_STOP')} Stop Watch##spd_watch"):
                 stop_watch()
 
         imgui.separator()
@@ -344,7 +506,7 @@ class DeviceExtension(UIExtensionBase):
             s["hex_mode"] = hv
             self._save_settings()
         imgui.same_line()
-        if imgui.button("Send##spd_send_btn"):                                # [L0]
+        if imgui.button(f"{_icon('ICON_FA_PAPER_PLANE')} Send##spd_send_btn"):                                # [L0]
             self._do_send()
 
     def _do_send(self) -> None:
@@ -425,28 +587,37 @@ class DeviceExtension(UIExtensionBase):
             imgui.text_colored(_CLR_ERR, f"last error: {stats['last_error']}")
         if self._ui_error and (now - self._ui_error_ts) < 10.0:
             imgui.same_line()
-            imgui.text_colored(_CLR_ERR, f"✗ {self._ui_error}")
+            imgui.text_colored(_CLR_ERR,
+                               f"{_icon('ICON_FA_TRIANGLE_EXCLAMATION') or '!'} {self._ui_error}")
 
-        if imgui.begin_child("##spd_stream", (0, 220), True):
-            events = snap.get("events") or []
-            if not events:
-                imgui.text_disabled("(no events — Start Watch 后接收/发送将显示在这里)")
-            for ev in events:
-                imgui.text_colored(_KIND_CLR.get(ev["kind"], _CLR_DIM), f"{ev['kind']}")
-                imgui.same_line()
-                imgui.text_disabled(f"{ev['t']:10.3f}")
-                imgui.same_line()
-                hex_part = ev["hex"]
-                if len(hex_part) > 96:
-                    hex_part = hex_part[:96] + " …"
-                line = hex_part or ""
-                if ev["text"]:
-                    line += f"  |  {ev['text'][:48]}"
-                imgui.text(line)
-                if ev["note"]:
-                    imgui.same_line()
-                    imgui.text_disabled(f"[{ev['note']}]")
+        # ★ BeginChild/EndChild 必须无条件配对（全裁剪/最小化时 BeginChild 返回 False
+        #   也必须 EndChild — 否则窗口栈失衡、渲染循环断言崩溃）
+        stream_visible = imgui.begin_child("##spd_stream", (0, 220), True)
+        try:
+            if stream_visible:
+                self._draw_stream_rows(snap)
+        finally:
             imgui.end_child()
+
+    def _draw_stream_rows(self, snap: dict) -> None:
+        events = snap.get("events") or []
+        if not events:
+            imgui.text_disabled("(no events — Start Watch to see TX/RX activity here)")
+        for ev in events:
+            imgui.text_colored(_KIND_CLR.get(ev["kind"], _CLR_DIM), f"{ev['kind']}")
+            imgui.same_line()
+            imgui.text_disabled(f"{ev['t']:10.3f}")
+            imgui.same_line()
+            hex_part = ev["hex"]
+            if len(hex_part) > 96:
+                hex_part = hex_part[:96] + " …"
+            line = hex_part or ""
+            if ev["text"]:
+                line += f"  |  {ev['text'][:48]}"
+            imgui.text(line)
+            if ev["note"]:
+                imgui.same_line()
+                imgui.text_disabled(f"[{ev['note']}]")
 
     # ── 工具 ──────────────────────────────────────────────────
 

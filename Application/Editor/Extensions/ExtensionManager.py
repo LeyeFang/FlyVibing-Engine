@@ -363,6 +363,14 @@ class ExtensionManager:
                 ctx.ui = ExtensionUI(info.id, instance)
             except Exception:  # noqa: BLE001 — 无 UI 环境允许为空
                 ctx.ui = None
+            # ctx.graph: 受限图访问（**需显式声明** capabilities 含 "graph" —
+            # 面板 ↔ 场景节点 的官方示范通道, 见 ExtensionGraph.py）
+            if "graph" in [str(c) for c in (info.capabilities or [])]:
+                try:
+                    from Application.Editor.Extensions.ExtensionGraph import ExtensionGraph
+                    ctx.graph = ExtensionGraph
+                except Exception:  # noqa: BLE001 — 无编辑器环境允许为空
+                    ctx.graph = None
 
             instance.on_load(ctx)
             cls._instances[info.id] = instance

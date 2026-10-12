@@ -43,12 +43,20 @@ def _eval_serial_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
     本函数仅做参数读取 + 编码 + 入队 — 不阻塞逻辑线程。
     """
     inst = g._canvas.nodes[node_id]
-    port = str(inst.props.get("port", "COM1"))
+    port = str(inst.props.get("port", "")).strip()
     baud = int(inst.props.get("baud_rate", 9600))
     fmt = inst.props.get("format", "bytes")
     value = _read_input_raw(node_id, "Value", ctx, g, 0)
     if value is None:
         value = 0.0
+
+    # ── 端口未配置 → 显式跳过（2026-10-12: 不再假定 COM1 —— 静默发错端口比报错更糟）──
+    if not port:
+        ctx.emit_log(node_id, "SerialSend", "error",
+                     "no port configured (set 'port' to COMx or @device name)")
+        if not ctx.dry_run:
+            print("[SerialSend] skipped: no port configured (COM1 default removed)")
+        return
 
     # ── 编码 + 入队 ──
     if ctx.dry_run:
@@ -60,7 +68,13 @@ def _eval_serial_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
     from Application.Functions.SerialParallelDevice.protocol import encode
 
     payload = encode(value, fmt)
-    spd_send(port, baud, payload)
+    try:
+        # '@device' 别名在此解析（机器侧绑定; 未绑定 → 显式抛错而非静默回退）
+        spd_send(port, baud, payload)
+    except Exception as e:  # noqa: BLE001 — 显式告警, 禁止静默吞错（ui_protocol §2.12）
+        ctx.emit_log(node_id, "SerialSend", "error", f"{port}@{baud}: {e}")
+        print(f"[SerialSend] {port}@{baud} FAILED: {e}")
+        return
 
     # debug: 首 4 字节 hex
     _hex = payload[:4].hex(' ') if len(payload) >= 4 else payload.hex()

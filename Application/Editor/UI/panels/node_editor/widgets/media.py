@@ -40,8 +40,8 @@ def _draw_show_media_widgets(nid: int, inst, canvas) -> None:
     name = _upstream_entity_get_name(inst, canvas)
     imgui.dummy(imgui.ImVec2(0, 2))
     if name:
-        imgui.text_disabled(f"  → {name}")
+        imgui.text_disabled(f"  -> {name}")
     else:
-        imgui.text_disabled("  → (link Get Entity → Entity)")
+        imgui.text_disabled("  -> (link Get Entity -> Entity)")
     imgui.text_disabled("  plays in PIE · wire on OnFrameUpdate")
     imgui.dummy(imgui.ImVec2(0, 2))

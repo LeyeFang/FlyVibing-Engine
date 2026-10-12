@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "language": "en",
+    "name": "English",
+    "source": true,
+    "reviewed": true,
+    "note": "Source language. Every key in the code base MUST exist here (missing en key = build error, see Doc/Dev/i18n_protocol.md)."
+  },
+  "strings": {
+    "panel.settings": "Settings",
+    "settings.page.common": "Common",
+    "settings.page.export": "Export",
+    "settings.common.appearance": "Appearance",
+    "settings.common.font_size": "Font size",
+    "settings.common.language": "Language",
+    "settings.common.instant": "Applies immediately.",
+    "settings.export.pie": "PIE launch window",
+    "settings.export.note": "Applied on next Run.",
+    "settings.export.mode": "Mode",
+    "settings.export.width": "Width",
+    "settings.export.height": "Height",
+    "settings.export.preset": "Presets (windowed)",
+    "menu.edit.preferences": "Preferences..."
+  }
+}

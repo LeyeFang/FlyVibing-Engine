@@ -36,12 +36,12 @@ def draw_extensions_menu() -> None:
         status = info.get("status", "planned")
         if status == "broken":
             imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.85, 0.35, 0.30, 1.0))
-            imgui.menu_item(f"{label} — 损坏", "", False, False)
+            imgui.menu_item(f"{label} — broken", "", False, False)
             imgui.pop_style_color(1)
             if imgui.is_item_hovered():
                 imgui.set_tooltip(str(info.get("error", "")))
         elif not info.get("loadable"):
-            imgui.menu_item(f"{label} — 计划中 ({info.get('maturity', 'planned')})", "", False, False)
+            imgui.menu_item(f"{label} — planned ({info.get('maturity', 'planned')})", "", False, False)
             if imgui.is_item_hovered():
                 imgui.set_tooltip(f"{info.get('dir', '')}\n{info.get('description', '')}")
         else:

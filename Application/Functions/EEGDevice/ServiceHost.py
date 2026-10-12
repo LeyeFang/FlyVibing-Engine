@@ -3,7 +3,7 @@ EEGDevice.ServiceHost — 品牌服务进程侧宿主 (纯 stdlib + 后端注入
 
 职责:
   - 监听本机端口, 接受单个客户端连接 (引擎或调试客户端);
-  - 按协议处理命令: hello / init / start / pump / stop / kill / info / shutdown;
+  - 按协议处理命令: hello / init / start / pump / stop / kill / info / impedance / shutdown;
   - push 模式: 后端采集线程 → on_block → 加锁写 socket (与响应同通道, 顺序保证);
   - 客户端断开 → 进程退出 (引擎崩溃时连接关闭 → 服务自动清理, 不驻留)。
 
@@ -139,6 +139,12 @@ class ServiceHost:
                 return {"ok": True, "rid": rid, "detail": "closed"}
             if cmd == "info":
                 return {"ok": True, "rid": rid, "info": self._backend.info()}
+            if cmd == "impedance":
+                values = self._backend.get_impedance(
+                    str(msg.get("electrode_type", "passive")),
+                    bool(msg.get("tms_box", False)))
+                return {"ok": True, "rid": rid,
+                        "values_ohm": [None if v is None else float(v) for v in values]}
             return {"ok": False, "rid": rid, "detail": f"unknown cmd '{cmd}'"}
         except Exception as e:  # noqa: BLE001 — 服务端绝不崩, 错误回传客户端
             return {"ok": False, "rid": rid,

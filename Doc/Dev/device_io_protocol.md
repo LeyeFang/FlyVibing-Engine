@@ -126,7 +126,7 @@
 | 组件 | 位置 | 职责 |
 |---|---|---|
 | `ServiceProtocol.py` | 共享 | 帧格式 `[4B 大端长度][pickle(protocol=4)]`；3.9+ 兼容（服务可能跑在低版本环境） |
-| `ServiceHost.py` | 服务侧 | 命令循环 hello/init/start/pump/stop/kill/info/shutdown；push 模式采集线程加锁写 socket |
+| `ServiceHost.py` | 服务侧 | 命令循环 hello/init/start/pump/stop/kill/info/**impedance**/shutdown；push 模式采集线程加锁写 socket |
 | `ServiceClient.py` | 引擎侧 | `ServiceBackend`（DeviceBackend 实现）；pump/push 双模式；rid 路由 + 单读者线程 |
 
 - **数据模式**：`pump`（合成后端——块随响应同步返回，与进程内逐位一致，确定性来源）；
@@ -136,9 +136,9 @@
   Gtec 外部启动（自有环境；`MGE_GTEC_SERVICE=host:port`，默认 127.0.0.1:47810）；
   客户端断开 → 服务退出（引擎崩溃自动清理）；`kill/close` 发 shutdown 并回收子进程。
 - **连通失败诊断**：报错含启动提示 + 服务日志尾部（自动拉起场景）。
-- 验证：`Test/Application/Functions/test_eeg_service.py`（往返/确定性/端到端保存/逃生门/进程清理 +
+- 验证：`Test/Application/Functions/test_eeg_service.py`（往返（含 `impedance` 命令）/确定性/端到端保存/逃生门/进程清理 +
   Gtec 3.9 跨版本握手——不触硬件）。
-- 待办：Gtec 实机联调（自有环境启动服务 + 硬件会话）、PIE E2E 复跑、品牌目录随环境打包（规划见 §7）。
+- 待办：Gtec 实机联调（自有环境启动服务 + 硬件会话）、阻抗实机验证（电极帽）、PIE E2E 复跑、品牌目录随环境打包（规划见 §7）。
 
 ---
 
@@ -148,6 +148,8 @@
 .venv-py314t\Scripts\python.exe Test/Application/Functions/test_gtec_device.py        # 设备层 + 干跑 + 约束 (48 checks)
 .venv-py314t\Scripts\python.exe Test/Application/Functions/test_siggen_device.py      # 虚拟信号发生器 (配置/会话/落盘/干跑/配对)
 .venv-py314t\Scripts\python.exe Test/Application/Functions/test_serial_parallel_device.py
+.venv-py314t\Scripts\python.exe Test/Application/Extensions/test_gtec_extension.py    # 监视面板扩展 (DSP/ops/watch-record/阻抗/全裁剪栈平衡, 91 checks)
+# 实机 (需引擎运行中): Test/Application/Extensions/e2e_gtec_monitor_check.py          # watch/record 拆分 + 滤波 + 阻抗 + virtual 录制, 35 checks
 ```
 
 - 干跑用例必须断言：静态校验零错误、`events_by_type` 覆盖全链路节点、干跑后注册表为空。
@@ -168,3 +170,81 @@
    `kill` 无会话时宽容返回（幂等）。服务进程客户端断开即退出（不驻留）。
 8. 控制台编码：GBK 环境**管道输出**（如 `| Select-Object`）遇非 GBK 字符（`↔` 等）会 UnicodeEncodeError
    —— 测试脚本打印只用 GBK 覆盖的符号（`──` `×` `→` 可用，箭头互指用 `<->`）。
+
+---
+
+## 11. 监视面板（扩展 `ext.gtec` — 2026-10-12, 同上日升级）
+
+类经典信号工具的实时观察面板（`Functions/EEGDevice/Gtec/`；M1 参考实现 — 见
+`Doc/ExtDev/extension_dev_protocol.md`）: **观察/采集分离 / 实时波形 / 软件实时滤波 /
+电极阻抗 / 采集落盘**。
+
+- **观察 vs 采集（会话两段式, Device.py 状态机）**: `watch` = monitoring（流式 + 环形缓冲，
+  **不累积**全量录制）；`record` = recording（监视基础上累积，Stop 落盘）；监视中 `record`
+  升级 = 从此刻起录（`session.begin_recording`）。`stop` 自动判别（录制→保存；监视→无落盘），
+  `save=false` 显式弃录。节点侧 `start_record` 默认 `record=True` 保持旧语义（兼容红线）。
+- **数据通路与节点图同源**: Watch/Record → facade `start_record`（device=品牌服务 push /
+  virtual=pump / sim=进程内 stub）；面板 ~25 Hz 节流拉取 `session.get_data(elapsed)`
+  （环形缓冲锁内只读拷贝）→ 显示滤波（因果 IIR，滑窗+预热余量，无跨帧状态）
+  → min/max 抽取列 → 绘制（点列按版本缓存）。面板**绝不直接触碰设备 API**。
+- **三种模式**: `sim`（进程内 GtecStub — 确定性合成，窗口容量封顶，不落盘）/ `device`
+  （外部 Gtec 服务，push — 真实 g.HIamp）/ `virtual`（引擎自动拉起 VIRTUAL 服务 — 连续合成，
+  Stop 真实落盘；无硬件环境下验证完整录制链路的推荐通道）。连接失败 = 显式报错
+  （含服务启动指引），绝不静默回退 stub。
+- **电极阻抗**（`ext.gtec.impedance` + 面板 Impedance 视图页）: 门面 `measure_impedance`
+  → 后端 `get_impedance`（真机 = pygds `GetImpedanceEx(etype, tms_box, first=True)`，单位 Ω;
+  sim/virtual = 确定性合成演示值，`simulated` 标记）。**空闲操作**: 流式采集中会话层拒绝。
+  阈值（`classify_impedance`，来源 GtecAPI docs/api_summary）: 被动 <7.5 / 7.5–20 / >20 kΩ,
+  主动 <65 / 65–200 / >200 kΩ; 通道 1 恒 NaN（硬件特例）→ n/a。服务协议新增 `impedance` 命令
+  （ServiceHost/ServiceClient; 真实硬件验证待做）。
+- **显示滤波选项 v2**: 陷波 `off|50|60|50+100|60+120`（谐波组合 = 成级联）; 频带预设
+  （broadband 0.5-45/0.5-100, delta/theta/alpha/beta/gamma, hp/lp）或 custom; IIR 阶数 2/4。
+  显示滤波 ≠ 设备滤波: 前者 = 面板软件链（随时可改，即时生效）；后者 = g.HIamp 硬件预设
+  （Open 时下发，改后需重开会话）。显示滤波为**因果、非零相位**（实时工具语义；离线分析用
+  `Functions/SignalProcess`）。
+- **落盘**: Stop(save) → 引擎侧 npz/csv + json 元数据 — 与节点族完全同一条实现
+  （`session/buffer` scope 可选；sim 模式为干跑语义，只算路径不写盘）。
+- **agent 通道**: `ext.gtec.{status, open, close, watch, record, start, stop, filters, display,
+  impedance, snapshot}` — 全程 JSON、无 UI 可调；`snapshot` 返回 per-channel mean/rms/ptp +
+  等间隔数值预览（干跑/实机数值断言通道）；`freeze` 冻结显示（不拉新数据，设置变更仅重渲染冻结帧）。
+- **UI 纪律**: 面板绘制在渲染线程帧内、只读快照（dev protocol §7）；imgui 窗口栈配对
+  纪律见 `ui_protocol.md` §2.13（最小化 0×0 全裁剪时 `BeginChild`=False — `EndChild`
+  仍必须调用，否则渲染循环断言崩溃）。
+- 测试: `Test/Application/Extensions/test_gtec_extension.py`（91 checks 无头, 含 watch/record/
+  阻抗/全裁剪）+ GUI 场景 `scenarios/gtec_panel_smoke.py` + 实机 `e2e_gtec_monitor_check.py`
+  （截图产物在 `Test/_runs/gtec_monitor_demo/`）；服务协议阻抗闭环在 `test_eeg_service.py`。
+
+---
+
+## 12. 两级设备身份与跨机器迁移（`@alias` — 2026-10-12 新增）
+
+**问题**: 场景节点里写死 `COM3`，换机器 / 换 USB 口后设备"找不到"，实验设计被物理拓扑绑死。
+
+**方案 = 两级身份**（设计真相在场景，物理真相在机器）:
+
+| 层 | 写在哪 | 内容 | 谁负责 |
+|---|---|---|---|
+| L1 逻辑设备名 | 场景节点 `props.port = "@mibox"` | 与机器无关的**实验设计** | 场景作者（写一次，跨机器不变） |
+| L2 物理端点 | `%APPDATA%/MyGameEngine/devices.json`（`MGE_DEVICES_FILE` 可覆盖 — 测试沙箱） | 本机上 `@mibox` **当前**是哪个 `COMx@baud` | 每台机器绑一次（面板 / agent） |
+
+- 注册表实现: `Application/Core/DeviceRegistry.py` —— 原子写（tmp+replace）、线程锁、损坏文件
+  容错为空表；名称 `^[A-Za-z][A-Za-z0-9_.-]{0,31}$`；字段 `transport/port/baud/updated/hint`。
+- **单一解析点**: `SerialParallelDevice.serial_manager.resolve_port(text)` —— `""` → `ValueError`；
+  `@name` → 注册表 → 物理端口；其它 → 原样直通（裸 `COMx` 仍可用，兼容旧场景）。`send` /
+  `start_watch` 在**入队前**解析；扩展面板与节点走同一条路径。
+- **未绑定 = 显式报错，绝不静默回退**: `DeviceUnresolved` 消息含"绑在哪、怎么绑"
+  （面板 Device names 段 / `ext.device.bind_alias name=… port=…`）与注册表路径。
+- **静态校验（提前发现）**: 校验规则 13 扫描节点 props 中任意 `@` 前缀值 → 本机未绑定则 warning
+  `device_alias_unresolved`（打开场景即提示，不必等运行）；已绑定不报；裸端口不参与。
+- **求值器不再猜端口**: `SerialSend.port` 默认值由 `"COM1"` 改为 `""`（**兼容性变更**）——
+  未配置端口时显式 `emit_log(..., "error", ...)` 并跳过，不再往 COM1 盲写。
+- **日常动线（迁移一台机器）**: 插设备 → 面板 Device names 段 → [Bind current port]
+  （或 agent `ext.device.bind_alias name=mibox`）→ 需要时 [Migrate N node(s) -> @mibox] 把场景里
+  裸 `COMx` 的节点批量换成 `@mibox`（= `ext.device.bind_nodes`，`dry_run` 可先预演）。
+- **官方示范（面板 → 场景 同步）**: 面板按钮与 agent 调用**同一个**操作实现（动作单点），
+  经 `ctx.graph`（`capabilities` 含 `"graph"` 才注入；只读 `nodes/find` + 受控 `set_props`）
+  读写当前图，扩展不 import 编辑器层。`ext.device.status` 一并返回别名视图。
+- 测试: `Test/Application/Functions/test_device_alias.py`（31 checks — 注册表 / 解析 / 发送链路 /
+  求值器 / 校验 / 扩展 ops；注册表用 `MGE_DEVICES_FILE` 沙箱，不污染真实机器配置）。
+- 规划（未做）: 自动重绑 —— `hint` 已预留 `usb_serial` / `vid_pid`，用于同型号设备换口自动认出。
+

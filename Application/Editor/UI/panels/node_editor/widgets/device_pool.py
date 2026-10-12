@@ -62,7 +62,7 @@ def _draw_add_pool_widgets(nid: int, inst, _canvas) -> None:
     inv = device_inventory(_canvas)
     src_nid = next((k for k, a in inv["assignments"].items() if a["add"] == nid), None)
     src = inv["inits"].get(src_nid, "") if src_nid is not None else ""
-    imgui.text_disabled(f"  ← {src}" if src else "  ← (device pin not linked)")
+    imgui.text_disabled(f"  <- {src}" if src else "  <- (device pin not linked)")
 
 
 @register("KillDevicePool")

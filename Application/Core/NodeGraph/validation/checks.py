@@ -378,7 +378,42 @@ def static_check_graph(scene_data: dict) -> list[dict]:
         entries.append(_entry("error", "media_reference",
                               f"media check failed: {e}"))
 
+    # 13. 设备别名: props 中以 "@" 开头的引用必须在**本机**已绑定
+    #     （跨机器迁移的第一道提示 —— 换电脑后 PIE 之前就能看见, 协议 device_io_protocol §12）
+    entries.extend(_check_device_aliases(nodes))
+
     return entries
+
+
+def _check_device_aliases(nodes: dict) -> list[dict]:
+    """扫节点 props 中的 `@device` 引用 → 本机未绑定则 warning（带可操作提示）。"""
+    out: list[dict] = []
+    refs: list[tuple[str, str, object]] = []          # (nid_str, prop_name, value)
+    for nid_str, nd in nodes.items():
+        props = nd.get("props")
+        if not isinstance(props, dict):
+            continue
+        for key, value in props.items():
+            if isinstance(value, str) and value.startswith("@") and len(value) > 1:
+                refs.append((str(nid_str), str(key), value))
+    if not refs:
+        return out
+    try:
+        from Application.Core.DeviceRegistry import describe, get, parse_ref
+    except Exception as e:  # noqa: BLE001 — 无注册表环境不阻塞校验
+        return [_entry("warning", "device_alias_check_unavailable",
+                       f"device alias check skipped: {e}")]
+    for nid_str, key, value in refs:
+        name = parse_ref(value)
+        if get(name) is None:
+            out.append(_entry(
+                "warning", "device_alias_unresolved",
+                f"Node {nid_str}: {key}='{value}' is not bound on this machine "
+                f"({describe(name)}) — bind it in the Serial/Parallel panel or via "
+                f"ext.device.bind_alias name={name} port=COMx",
+                _safe_int(nid_str),
+            ))
+    return out
 
 
 def _safe_int(value) -> int | None:

@@ -271,7 +271,7 @@ class UIManager:
         """导出 → 打开目标文件夹选择对话框（非阻塞；选中目录下创建 <项目名>/）。"""
         from Application.Editor.ProjectManager import ProjectManager
         if not ProjectManager.get_project_path():
-            print("[Export] Save the project first — File ▸ Save Project As...")
+            print("[Export] Save the project first — File -> Save Project As...")
             return
         start = os.path.dirname(ProjectManager.get_project_path())
         FileDialog.open_export_dir(
@@ -340,8 +340,10 @@ class UIManager:
                 if imgui.menu_item("Redo", "Ctrl+Y", False, False)[0]:
                     pass
                 imgui.separator()
-                if imgui.menu_item("Preferences...", "", False, False)[0]:
-                    pass
+                from Application.Editor.I18n import t as _t
+                if imgui.menu_item(_t("menu.edit.preferences"), "", False, True)[0]:
+                    from Application.Editor.UI.panels.SettingsPanel import SettingsPanel
+                    SettingsPanel.open()
                 imgui.end_menu()
 
             # ── View 菜单：切换面板可见性（动态枚举 — 扩展窗口自动纳入） ──

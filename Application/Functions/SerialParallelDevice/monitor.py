@@ -77,7 +77,13 @@ def list_serial_ports() -> list[dict]:
 
 
 def start_watch(port: str, baud: int) -> dict:
-    """开始监视指定串口（实际打开交给 spd-io 线程; 幂等 — 重复调用替换参数）。"""
+    """开始监视指定串口（实际打开交给 spd-io 线程; 幂等 — 重复调用替换参数）。
+
+    `port` 可为物理端口或**逻辑设备名** `@mibox`（协议 §12）—— 解析失败会显式抛错
+    （`DeviceUnresolved` / `ValueError`），便于面板与 op 立刻给出可操作提示。
+    """
+    from .serial_manager import resolve_port
+    port = resolve_port(port)           # @name → 物理端口（未绑定 → 显式抛错）
     with state._lock:
         state._monitor.update(active=True, port=str(port), baud=int(baud),
                               opened=False, next_retry=0.0)

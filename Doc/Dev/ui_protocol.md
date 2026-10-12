@@ -12,6 +12,10 @@
 | `Application/Editor/UI/UIManager.py` | 主菜单栏（File/Edit/View/**Extensions**/Help）— **实际渲染路径**、DockSpace 布局、状态栏；菜单回调 → FileDialog 非阻塞对话框 |
 | `Application/Editor/Extensions/ExtensionMenu.py` | `Extensions` 菜单（扩展列表/启停/broken 展示/Rescan）；`draw_extensions_menu()` 供 UIManager 调用；与 `extension.*` ops 同路径（协议见 `Doc/ExtDev/extension_dev_protocol.md`） |
 | `Application/Editor/Extensions/ExtensionUI.py` | 扩展 UI 桥 — `ctx.ui.register_window` 实装（ExtensionPanel 异常隔离/重名防护/purge 保险丝；扩展窗口经此进出 UIManager） |
+| `Application/Editor/UI/panels/SettingsPanel.py` | **设置面板**（Edit ▸ Preferences…；左页面列表 + 右内容；页注册表 core/扩展同级 — 见 §13） |
+| `Application/Editor/EditorSettings.py` | **编辑器设置服务**（单一读写入口：键表/钳制/枚举/落盘/pending 应用 — 见 §13） |
+| `Application/Editor/I18n.py` | **UI 文案表服务**（目录驱动：`t(key)` 当前语言 → en → 键名；`register_catalog` 扩展语言包）— 协议 `Doc/Dev/i18n_protocol.md` |
+| `Application/Editor/Locale/*.json` | **语言目录**（单一事实源；`en` = 源语言；新增语言 = 新增一个 JSON 即全链跟随）— 同上协议 |
 | `Application/Editor/UI/panels/MenuBarPanel.py` | 主菜单栏面板（**当前未注册**，保留文件 — 见 `GUI_STRUCTURE.md`）；View 菜单 = 面板开关 + Show Grid（`toggle_grid_visible` 动作单点 → `Grid.set_visible`，与 `view.set_grid` op 同路径）；Extensions 段与 UIManager 共用 `ExtensionMenu.draw_extensions_menu` |
 | `Application/Editor/UI/panels/node_editor/panel.py` | `NodeEditorPanel`：画布渲染、Add 菜单、连线创建、Delete 删除（含级联）、Rearrange 自动布局、Import/Export（经 `Application/Core/NodeGraph/graph_io` 与 agent ops 同源） |
 | `Application/Editor/UI/panels/node_editor/widgets/` | 节点内联控件包 — 注册表在 `core.py`（`@register`）；子模块 flow_io / entity_comp / device_siggen / device_gtec / device_pool / epoch / algorithm，**import 即注册**；设备共用助手在 `device_common.py` |
@@ -51,6 +55,29 @@
     （`Test/Application/Editor/test_action_contract.py`）。
 12. **禁止静默吞错**：UI/控制器路径中的 `except` 必须打印显式告警（教训 2026-10-08：
     `select_with_gizmo` 的 NameError 被裸 except 吞掉 → MCP 选中长期无 gizmo）。
+13. **imgui 窗口栈配对纪律**（2026-10-12 — 最小化崩溃根治）：`begin_child/end_child`
+    **无条件配对** —— 宿主窗口被完全裁剪（最小化 0×0）时 `BeginChild` 返回 False，
+    仍必须调用 `EndChild`（官方 demo 的 `if begin: ... end` 模式在此场景腐蚀窗口栈，
+    最终 `end_panel` 断言杀掉渲染循环；两处官方扩展示例已改 `try/finally` 无条件配对）。
+    相反规则：`begin_combo` / `begin_tab_item` **仅返回 True 时** end（无条件 end 会
+    "EndPopup too many times"）；`begin_table` 按其返回值配对。
+    **静态拦截**（2026-10-12）：`Test/Application/Editor/test_imgui_stack_pairing.py`
+    （core — 反模式自检 + 主应用与 `Functions/**` 同源扫描 + 早退补偿的配对计数），
+    扩展侧同一规则由审查器 C8/C9/C10 执行；运行期回归 `test_gtec_extension` 全裁剪段。
+    崩溃定位指引与上游 issue 材料：`Doc/Dev/upstream_imgui_beginchild_fullclip.md`。
+14. **imgui 布局持久化永久禁用**（2026-10-12 实测裁决）：引擎侧 `EditorImguiLayer.OnAttach`
+    以空串禁用 ini（`io.set_ini_filename("")`）—— 实测删文件 → 完整启停编辑器 → 文件不重现，
+    即**第三方 ini 对我们完全惰性**（既不读也不写）。配套规则：
+    - 需要裸 imgui 上下文的测试/扩展自测**必须**走 `Utils/User/ExtensionKit/imgui_headless.py`
+      的 `headless_imgui()`（自动禁用 ini）—— 裸 `create_context()` 会在 `destroy_context()`
+      时把 `imgui.ini` 写进 CWD（2026-10-12 实测：扩展自测在仓库根留下 `imgui.ini`）；
+    - **`set_ini_filename(None)` 会让进程原生崩溃**（exit `0xC0000005`，可复现）—— 禁用一律用空串；
+    - 守卫：`Test/Application/Editor/test_imgui_hygiene.py`（功能 + 静态 + 防回归），
+      扩展侧同族约束见审查器 **C11**（不得触碰宿主全局 imgui 状态）；
+    - 若将来要"记住布局"，只能**宿主自管**：`save_ini_settings_to_memory()` → 净化（丢未知
+      section / 夹取 Pos·Size / schema 版本不匹配即丢 / 扩展窗口几何永不落盘）→ 写
+      `%APPDATA%/MyGameEngine/layout/`（**绝不写 CWD**）+ `View ▸ Reset Layout` 复位；
+      开放持久化前必须先把这套规范落成协议。
 
 ---
 
@@ -118,19 +145,24 @@
 
 ---
 
-## 9. PIE 窗口设置（ScenePanel ⚙ Settings）
+## 9. PIE 窗口设置（Settings 面板 ▸ Export 页）
 
-- **位置**：Scene Information 卡片，`Stopped` 状态行下方 `⚙ Settings` 按钮（图标用
-  `icons_fontawesome_6.ICON_FA_GEAR`，`getattr` 兑底）→ `pie_settings_popup` 弹层。
+> **2026-10-12 迁移**：原 ScenePanel `Settings` 按钮 + `pie_settings_popup` 弹层已删除；
+> 选项迁入 **Settings 面板 `Export` 页**（与 `Common` 同级，见 §13）。迁移动机：设置类控件
+> 归属设置面板 — ScenePanel 回归"场景信息 + 运行控制"单一职责。
+
+- **位置**：Edit ▸ Preferences… ▸ 左列表 `Export`；**下次 Run 生效**。
 - **选项**：显示模式（窗口化 / 无边窗口 / 独占全屏）+ 窗口化尺寸（预设 1280×720 / 1600×900 /
-  1920×1080 + 宽高输入；非窗口化时尺寸控件 disabled）。**下次 Run 生效**。
+  1920×1080 + 宽高输入；非窗口化时尺寸控件 disabled）。宽度/高度钳制委托
+  `SimulationController.set_pie_settings`（320..7680）。
 - **持久化**：`Application/Editor/Config/PIE.json`（`{"mode", "width", "height"}`；
-  懒加载 + 修改即存；尺寸 clamp 320..7680；缺失/损坏 → 默认值不报错）。
+  懒加载 + 修改即存；缺失/损坏 → 默认值不报错）。
   ⚠ 手写该文件用无 BOM UTF-8（PS 5.1 `Set-Content -Encoding UTF8` 带 BOM → JSON 解析失败回默认值）。
 - **应用链**：`SimulationController._apply_pie_window_prefs(game_type)`（Play 消费时、
   `GameRuntime.start` 之前）→ `RuntimeWindow.apply_start_preferences(mode, w, h)`
   （`_window_mode` + `_default_size_override`）→ `Window._compute_default_size` 读取覆盖。
   Overlay 场景 + 独占全屏 → 自动回退 borderless（透明窗口不兼容独占全屏）。
+- **agent 侧**：无专 op（设置面板 ≠ agent op 面；见 §13.5）。
 - **测试**：`Test/Application/Editor/test_pie_settings.py`（core；持久化/钳位/映射/Overlay 回退）。
 
 ---
@@ -201,6 +233,8 @@
 | `extension.list` | Extensions 菜单（列表本体） | 扩展状态/贡献 op 清单查询（扩展 op 发现入口） | D |
 | `extension.enable` | Extensions 菜单 ▸ 勾选启用 | 勾选态、装载日志、`ext.<id>.*` op 注册（增量扫描） | D + C |
 | `extension.disable` | Extensions 菜单 ▸ 取消勾选 | 勾选态、卸载 + 扩展 op 注销 | D + C |
+| `settings.get` | Settings 面板 ▸ Common（选项本体） | 无（只读） | D |
+| `settings.set` | Settings 面板 ▸ Common / Export；Edit ▸ Preferences… | 控件值即时反映新值；字体缩放/语言在下一渲染帧生效（含面板标题） | D + Q |
 | `frame.request` / `frame.fetch` | —（内部；`engine_capture` 封装） | — | — |
 | `editor.quit` | 窗口关闭按钮 | 全链清理退出（PIE 先行停止） | — |
 
@@ -272,4 +306,123 @@
 |---|---|---|---|
 | 2026-10-11 | `Light.light_type` 检查器 | L1 枚举以自由文本框呈现 | `FIELD_CHOICES` 登记 + `ScenePanel` Combo 渲染（同批修复 `TextDisplay.align`） |
 | 待审计 | 全部通用组件字段（ScenePanel 通用检视） | 逐个核对 str/数值字段的应有自由度与约束 | 分批进行，新发现入本表 |
+| 2026-10-11 | PIE Settings / `FIELD_CHOICES` / ExtensionMenu / device 面板 / widgets / ResourcePanel / Export 提示 | **"?" 现象**：UI 字面量含字体图集外字符（中文、`▶■✗`、`←→`、`▸`） | 全量改英文/FA 图标/`->`；守卫 `test_ui_text_safety` + reviewer C7 上线（见 §12） |
+
+---
+
+## 12. 文本与字形安全（2026-10-11 — "?" 现象根治）
+
+### 12.1 根因
+
+UI 字体经 `hello_imgui.load_font_ttf_with_font_awesome_icons` 加载（`EditorImguiLayer._load_fonts`），
+字形图集 = **ASCII + Lati**字面量** → `?`（守卫拦）; **经 `I18n.t()` 的条目 + 用户数据** ✅（2026-10-12 起合并系统 CJK 字体, 见 §13.4
+图集外的字符一律渲染为 `?`——**这不是"图标坏了"，是字形缺失**：
+
+| 类别 | 码点 | 现状 |
+|---|---|---|
+| CJK 中文 | U+4E00+ | segoeui/Inter 无 CJK 字形 → `???`（曾致 PIE Settings / 字段标签 / 扩展面板乱码） |
+| 箭头 | U+2190-21FF（`← → ↑ ↓`） | 图集外 → `?`（imgui 文本内禁用；`->` 替代） |
+| 几何/装饰 | U+25A0-25FF（`▶ ■ ●`）、U+2700-27BF（`✓ ✗ ★`） | 图集外 → `?` |
+| 安全标点 | `— – ' ' " " • … · ×` | ✅ 图集内，可用 |
+
+### 12.2 规则（imgui 字面量）
+
+1. **只用安全字符集**（单一权威 = `Test/Application/Editor/test_ui_text_safety.py` 的
+   `_SAFE_RANGES`）：ASCII / Latin-1 / `— – ' ' " " • …` / FA 私有区 / `\n \t`。
+2. **图标一律用 FontAwesome 常量**：
+   `from imgui_bundle import icons_fontawesome_6 as fa` + `getattr(fa, "ICON_FA_XXX", "")`（兜底防呆）
+   ——不要手写 `▶ ■ ✗` 等符号。
+3. **数据驱动的 UI 文本同样适用**（选择集 label / 列表 / 菜单文案）——例：
+   `ComponentRegistry.FIELD_CHOICES` 的值直接进检查器 Combo；守卫覆盖其字面量，
+   动态拼装列表由 review 清单（§11.4）把关。
+4. 中文 UI 文案**只走 `I18n.t()`**（2026-10-12 v2：`EditorImguiLayer._merge_cjk_font` 已合并
+   系统 CJK 字体 → 中文可渲染；**字面量仍禁** — `_SAFE_RANGES` 继续拦 CJK 字面量，语言切换
+   由词条表驱动）。**用户数据**（场景名/实体名含中文）随字体合并可正常显示（按需光栅化）。
+   面向 agent 的 JSON（op summary / 日志文本）不受限。
+   → 键规范、不翻译边界（含 agent 面裁决）、目录与守卫：`Doc/Dev/i18n_protocol.md`。
+5. **print 的独立约束（GBK 控制台）**：`▸(U+25B8) ✗(U+2717) ▶ ► ✓` 等**不在 GBK** →
+   print 到管道会 `UnicodeEncodeError`（实测 2026-10-11）；`→ ← ★ ■ ≤ — × ─` 在 GBK 可用。
+
+### 12.3 守卫与反例
+
+- **守卫**：`test_ui_text_safety.py`（core）— AST 扫描 `Application/Editor/**` 全部
+  `imgui.*() / hello_imgui.*()` 调用的字符串常量 + `FIELD_CHOICES` → 违规 FAIL；
+  含规则自检（CJK 拦/箭头拦/安全集放行，防规则退化）。
+- **修复反例库**（2026-10-11 全量）：PIE Settings×7、`FIELD_CHOICES`×5、ExtensionMenu×2、
+  device 面板×4（`✗`→FA、中文→英文+FA 图标示范）、node_editor widgets×4（`→←`→`-><-`）、
+  ResourcePanel×1、Export 提示 `▸`×2（print/GBK）。
+- 扩展侧同规则见 `Doc/ExtDev/extension_dev_protocol.md` §7 + 审查器 C7。
+
+---
+
+## 13. Settings 面板与设置体系（2026-10-12）
+
+> 结构借鉴 MATLAB / Blender settings：**左侧页面列表 + 右侧当前页内容**；
+> 扩展贡献页与 core 页**同级**展示。本面板同时充当"主应用开发者侧管理"的验证载体
+> （协议 → 自由度标注 → 文本安全 → Action 契约 → 测试 → 文档 全链走一遍）。
+
+### 13.1 组成
+
+| 文件 | 职责 |
+|---|---|
+| `Application/Editor/UI/panels/SettingsPanel.py` | 面板本体（左导航 + 右内容）+ **页面注册表**（core / 扩展共用） |
+| `Application/Editor/EditorSettings.py` | 设置服务：单一读写入口（键表 / 钳制 / 枚举 / 落盘 / pending 应用） |
+| `Application/Editor/I18n.py` | 文案表：`t(key)`（当前语言 → en → 键名）+ `set_language` |
+| `Application/Editor/Config/settings.json` | 落盘位置（env `MGE_EDITOR_SETTINGS` 可覆盖 — 测试沙箱） |
+
+入口：**Edit ▸ Preferences…**（标签经 `I18n.t("menu.edit.preferences")`）→ `SettingsPanel.open()`；
+面板亦在 **View 菜单**自动出现（UIManager 动态枚举 `_panels`，无需登记）。
+
+### 13.2 页面注册表（扩展贡献点 = 与 core 同级）
+
+```python
+SettingsPage(id="common", title_key="settings.page.common", draw_fn=_draw_common_page, order=0)
+SettingsPanel.register_page(page)                 # 重名 / 空 id → ValueError（不静默改写）
+SettingsPanel.register_page(page)                 # 页面集排序: (order, id)
+SettingsPanel.unregister_pages_by_owner("ext_x")  # 扩展卸载保险丝（与 purge_ui 对称）
+```
+
+- `title_key` 是 **I18n 键**（绘制时解析 → 语言切换后左列表标题即时更新）；无词条 → 回退键原文，
+  因此扩展页可直接用自有文案作键。
+- **窗口标题也可翻译**：`BasePanel.title_key`（设置后 `begin_panel` 渲染
+  `t(title_key) + "###" + name`，imgui ID 固定 → 语言切换不影响 dock 身份/折叠状态）。
+- 内置页：`Common`（order 0）/ `Export`（order 10，PIE 设置迁入 — §9）。
+- 扩展贡献页（规划 M1：`ctx.settings(schema)` 自动生成 + 注册 — 见
+  `Doc/ExtDev/extension_dev_protocol.md` §6/§7）。
+
+### 13.3 键位（首版）与约束
+
+| 键 | 类型 | 约束 | 应用点 |
+|---|---|---|---|
+| `ui.font_scale` | float | `CLAMPS` 0.7..1.6 | `EditorImguiLayer.apply_font_scale` → `style.font_scale_main` |
+| `ui.language` | 语言代码 | 由 `Locale/*.json` **动态推导**（未知/越界 → 默认 en） | `I18n.set_language`（协议 `i18n_protocol.md` §5） |
+
+- **未知键 → `KeyError`**（不静默创建任意键）；非法数值 → 回默认；`set` 返回**定格值**。
+- 自由度标注：`Common` 页两项 = **L1 受控枚举**；`Export` 页模式 = L1、预设 = L0、宽高 = L2
+  （钳制委托 SimulationController）。
+
+### 13.4 线程模型 + 字体管线（free-threaded 关键）
+
+- 任意线程可 `get` / `set`（锁保护 + 锁内落盘，低频）；
+- **应用只在渲染线程帧首**：`EditorImguiLayer.OnRender` 开头 `EditorSettings.apply_pending()`
+  （imgui style 是渲染线程资产）；启动期 `OnAttach` 在 `_load_fonts()` 后 `load()` + `apply_all()`；
+- 字体缩放走 imgui 1.92 **`style.font_scale_main`**（`io.font_global_scale` 已不存在）；
+- 中文字形：`_merge_cjk_font()` 以 `FontLoadingParams.merge_to_last_font = True` 合并系统 CJK 字体
+  （Windows `msyh.ttc` / macOS `PingFang.ttc` / 兜底 `simhei.ttf`）；1.92 动态字体按需光栅化，
+  **无字形范围参数**（旧 `glyph_ranges` 方案作废），未渲染的汉字零成本。
+
+### 13.5 agent 侧（Action 契约）
+
+| op | 语义 |
+|---|---|
+| `settings.get` | `{key?}` 省略 key = 全量；UI 同路径 = 面板自身（只读，D） |
+| `settings.set` | `{key, value}` → 校验+钳制 + 落盘 + **下一渲染帧**生效（D + Q） |
+
+三方一致（§10 表 ↔ `ops.py` ↔ `_register_ops`）由 `test_action_contract.py` 守卫（55 op）。
+
+### 13.6 测试
+
+`Test/Application/Editor/test_editor_settings.py`（core，39 checks）：默认值 / 落盘往返 / clamp /
+枚举回退 / 未知键 KeyError / 损坏 JSON 容错 / pending 出队且只应用一次 / I18n 命中与回退 /
+页面注册表（重名、空 id、owner 清理、排序）/ `settings.*` op 行为链。
 

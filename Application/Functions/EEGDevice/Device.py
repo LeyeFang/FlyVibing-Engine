@@ -14,6 +14,9 @@ EEGDevice.Device — g.tec EEG 设备集成核心（后端无关，不依赖 pyg
   - 缓冲数组形状 (channels, capacity) float32、单位 µV；快照按时间顺序返回，
     尚未填充的区域为 0（有效样本数 valid 单独给出）
   - 会话以 name 注册到模块级注册表；Start/Stop/Kill/Get 节点按 name 绑定
+  - 采集两段式: monitoring（仅观察 — 环形缓冲 + 实时显示, 不累积全量录制）→
+    recording（累积全量数据, Stop 落盘）；节点侧 start_record 默认 record=True 保持旧语义
+  - 阻抗测量 (measure_impedance) 属设备空闲操作: 流式采集期间拒绝请求; 通道 1 恒为 NaN（硬件特例）
   - 引擎以自由线程模式运行 (-Xgil=0)，跨线程访问一律加锁
   - 空跑后端绝不触硬件、绝不落盘：保存只计算目标路径并标记 written=False
 """
@@ -21,6 +24,7 @@ EEGDevice.Device — g.tec EEG 设备集成核心（后端无关，不依赖 pyg
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import threading
@@ -57,6 +61,14 @@ MAX_RECORD_BYTES: int = 2 * 1024 ** 3
 # 导出格式
 EXPORT_FORMATS: tuple[str, ...] = ("npz", "csv")
 
+# 阻抗测量（换算与阈值来源: GtecAPI/docs/api_summary.md — GetImpedanceEx; 单位 Ω）
+IMPEDANCE_ELECTRODE_TYPES: tuple[str, ...] = ("passive", "active")
+# (good 上限, medium 上限) kΩ — 被动 <7.5 好 / 7.5–20 中 / >20 差; 主动 <65 / 65–200 / >200
+IMPEDANCE_THRESHOLDS_KOHM: dict[str, tuple[float, float]] = {
+    "passive": (7.5, 20.0),
+    "active": (65.0, 200.0),
+}
+
 # g.tec extended 10-20 64 通道电极名（A1/A2 在 63/64，无 TP9/TP10）
 # 来源: GtecAPI/scripts/montages.py（g.Recorder 电极模板 gHIamp_64ch.xml）
 TEMPLATE_64: tuple[str, ...] = (
@@ -78,6 +90,45 @@ def channel_names_for(n_channels: int) -> list[str]:
     names = list(TEMPLATE_64[: min(n_channels, len(TEMPLATE_64))])
     names += [f"ch{i + 1}" for i in range(len(TEMPLATE_64), n_channels)]
     return names
+
+
+def classify_impedance(value_kohm, electrode_type: str = "passive") -> str:
+    """阻抗值 (kΩ) → 'good' | 'medium' | 'bad' | 'n/a'（NaN/None/负值 = n/a）。"""
+    if value_kohm is None:
+        return "n/a"
+    try:
+        v = float(value_kohm)
+    except (TypeError, ValueError):
+        return "n/a"
+    if not math.isfinite(v) or v < 0.0:
+        return "n/a"
+    good, medium = IMPEDANCE_THRESHOLDS_KOHM.get(
+        str(electrode_type or "passive").lower(), IMPEDANCE_THRESHOLDS_KOHM["passive"])
+    if v < good:
+        return "good"
+    if v <= medium:
+        return "medium"
+    return "bad"
+
+
+def synthetic_impedance_ohm(channels: int, electrode_type: str = "passive") -> list[float]:
+    """确定性阻抗合成（sim/virtual 模式的无硬件演示源; 单位 Ω）。
+
+    分布固定: 多数通道 good, 少量 medium, 固定几处“接触差”演示通道（bad）;
+    通道 1 恒为 NaN（与真实 g.HIamp 一致 — 硬件特例）。同一入参 → 同一结果。
+    """
+    active = str(electrode_type or "passive").lower() == "active"
+    out: list[float] = []
+    for i in range(max(0, int(channels))):
+        if i == 0:
+            out.append(float("nan"))          # 真实设备: ch1 永远 NaN
+            continue
+        band = (i * 37) % 23                  # 0..22 确定性分布
+        kohm = (22.0 + band * 4.0) if active else (2.0 + band * 0.45)
+        if band in (19, 21):                  # 固定“接触差”演示通道
+            kohm = 260.0 if active else 28.0
+        out.append(round(kohm * 1000.0, 1))
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -329,6 +380,14 @@ class DeviceBackend:
         """空跑后端：按仿真时间补齐数据并回调；真实后端为空操作（数据由采集线程推送）。"""
         return None
 
+    def get_impedance(self, electrode_type: str = "passive", tms_box: bool = False) -> list:
+        """电极阻抗测量 → 每通道 Ω（NaN = 不可测; 通道 1 恒 NaN — 硬件特例）。
+
+        不要求所有后端支持（真实硬件 / 合成源可实现; 服务后端经协议转发）——
+        缺失时抛 NotImplementedError，由上层转为受控错误。
+        """
+        raise NotImplementedError("backend does not support impedance measurement")
+
     def info(self) -> dict:
         """设备/后端信息（写入导出元数据）。"""
         return {"backend": type(self).__name__, "stub": self.is_stub}
@@ -350,7 +409,10 @@ class SaveResult:
 class RecordingSession:
     """单个设备会话 — 配置 / 采集 / 缓冲 / 保存 / 关闭。
 
-    state: configured → recording ⇄ stopped → closed
+    采集两段式（观察 vs 采集）:
+      monitoring — 流式接收 + 环形缓冲（面板实时显示）; **不累积**全量录制;
+      recording  — 在监视基础上累积全量数据, Stop 时按 scope 落盘。
+    state: configured → monitoring ⇄ recording ⇄ stopped → closed
     """
 
     def __init__(self, name: str, cfg: GtecConfig, backend: DeviceBackend) -> None:
@@ -388,8 +450,9 @@ class RecordingSession:
 
     # ── 生命周期 ────────────────────────────────────────────
 
-    def start(self, elapsed_s: float = 0.0) -> None:
-        self.state = "recording"
+    def start(self, elapsed_s: float = 0.0, record: bool = True) -> None:
+        """启动流式采集（record=False → 仅监视, 不累积全量录制）。"""
+        self.state = "recording" if record else "monitoring"
         self.started_iso = _iso_now()
         with self._lock:
             self._blocks.clear()
@@ -399,11 +462,40 @@ class RecordingSession:
         # 空跑后端: 在 start 后锚定仿真起点 (真实后端 pump 为 no-op)
         self.backend.pump(elapsed_s, self._on_block)
 
-    def stop(self, save_scope: str = "session", elapsed_s: float = 0.0) -> SaveResult:
+    def begin_recording(self, elapsed_s: float = 0.0) -> None:
+        """监视中升级为录制（从当前时刻起算; 已过去的监视段不进入录制）。"""
+        if self.state == "recording":
+            return
+        if self.state != "monitoring":
+            raise RuntimeError(f"not monitoring (state={self.state})")
+        self.backend.pump(elapsed_s, self._on_block)   # 补齐监测段, 保持时序连续
+        with self._lock:
+            self._blocks.clear()
+            self._record_bytes = 0
+            self._record_full = False
+        self.started_iso = _iso_now()
+        self.state = "recording"
+
+    def stop(self, save_scope: str = "session", elapsed_s: float = 0.0,
+             save: bool = True) -> SaveResult:
+        """停止流式采集。
+
+        save=True 且原为 recording → 按 scope 落盘; 其余情形（仅监视 / 显式弃录）
+        不写盘 — 弃录时返回的 SaveResult 仍给出被丢弃的样本量（供日志/详情）。
+        """
         self.backend.pump(elapsed_s, self._on_block)
         self.backend.stop()
+        was = self.state
         self.state = "stopped"
         self.stopped_iso = _iso_now()
+        if not save or was != "recording":
+            result = SaveResult()
+            if was == "recording":       # 显式弃录 — 报告被丢弃的量
+                with self._lock:
+                    n = sum(int(b.shape[0]) for b in self._blocks)
+                result.samples = n
+                result.duration_s = n / max(1, self.cfg.sampling_rate)
+            return result
         return self.save(save_scope)
 
     def kill(self) -> None:
@@ -418,7 +510,7 @@ class RecordingSession:
 
     def get_data(self, elapsed_s: float = 0.0) -> dict:
         """非销毁快照 + 元信息。"""
-        if self.state == "recording":
+        if self.state in ("recording", "monitoring"):
             self.backend.pump(elapsed_s, self._on_block)
         data = self.ring.snapshot()
         return {
@@ -429,6 +521,47 @@ class RecordingSession:
             "fs": self.cfg.sampling_rate,
             "stub": self.backend.is_stub,
             "state": self.state,
+        }
+
+    # ── 阻抗测量 ────────────────────────────────────────────
+
+    def measure_impedance(self, electrode_type: str = "passive",
+                          tms_box: bool = False) -> dict:
+        """测电极阻抗（设备空闲操作 — 流式采集中拒绝）。
+
+        Returns: {electrode_type, tms_box, values_ohm, values_kohm, channels,
+                  serial, stub, ts} — 不可测通道 (NaN) 为 None。
+        """
+        etype = str(electrode_type or "passive").strip().lower()
+        if etype not in IMPEDANCE_ELECTRODE_TYPES:
+            raise ValueError(f"electrode_type must be one of {IMPEDANCE_ELECTRODE_TYPES}")
+        if self.state in ("recording", "monitoring"):
+            raise RuntimeError(
+                f"stop streaming first (state={self.state}) — impedance "
+                f"measurement requires the device idle")
+        raw = list(self.backend.get_impedance(etype, bool(tms_box)))
+        ohm: list = []
+        kohm: list = []
+        for v in raw:
+            try:
+                fv = float(v)
+            except (TypeError, ValueError):
+                fv = float("nan")
+            if math.isfinite(fv):
+                ohm.append(round(fv, 1))
+                kohm.append(round(fv / 1000.0, 3))
+            else:
+                ohm.append(None)
+                kohm.append(None)
+        return {
+            "electrode_type": etype,
+            "tms_box": bool(tms_box),
+            "values_ohm": ohm,
+            "values_kohm": kohm,
+            "channels": self.cfg.channels,
+            "serial": self.backend_info.get("serial", self.cfg.serial),
+            "stub": bool(self.backend.is_stub),
+            "ts": _iso_now(),
         }
 
     # ── 保存 ────────────────────────────────────────────────

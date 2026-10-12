@@ -161,7 +161,7 @@
 
 | 命令 | 作用 |
 |---|---|
-| `engine-editor-cli ops` | 列出全部 53 个核心 op（一行一个；扩展 op 经 `extension.list` 发现） |
+| `engine-editor-cli ops` | 列出全部 55 个核心 op（一行一个；扩展 op 经 `extension.list` 发现） |
 | `engine-editor-cli help <op>` | 单 op 详情（参数 + 示例） |
 | `engine-editor-cli call <op> k=v ...` | 执行一个 op（数组/对象值加引号，如 `position='[1,0,2]'`） |
 | `engine-editor-cli batch ops.json` | 一次执行多个 op（JSON 数组；`-` 读 stdin） |

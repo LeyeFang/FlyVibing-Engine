@@ -1,11 +1,11 @@
 {
   "id": "device",
   "name": "Device (Serial/Parallel)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "api_version": "1",
   "maturity": "partial",
-  "description": "串口/并口实时监视面板（类串口监视器）+ 通信发送 — 官方示例扩展（对照开发规范）",
-  "capabilities": ["ops", "nodes", "ui"],
+  "description": "Serial / parallel live monitor panel (like a serial monitor) + comm send + logical device names (@alias) for cross-machine port rebinding - official example extension",
+  "capabilities": ["ops", "nodes", "ui", "graph"],
   "entry": "extension.py:create_extension",
   "requires": []
 }

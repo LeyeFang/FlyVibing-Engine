@@ -21,6 +21,12 @@
     C4 ops 注册名不得自带 "ext." 前缀（前缀由宿主强制）
     C5 无 monkey-patch 迹象（顶层引擎赋值启发式）
     C6 Application.* import 在常用白名单内
+    C7 imgui 文本字形安全（字体图集外字符显示为 '?' — 与主应用 test_ui_text_safety 同源规则）
+    C8 imgui 窗口栈配对纪律：begin_child 不得被条件门控（全裁剪 0x0 时返回 False）
+    C9 combo/tab_item 反向规则：end_combo/end_tab_item 仅在 begin 返回 True 时调用
+    C10 无顶层 imgui 上下文/窗口/GL 创建（纯导入允许 — M0 口径）
+    C11 不触碰宿主全局 imgui 状态（create/destroy_context、set_ini_filename、io/style 赋值 —
+        含 get_io()/get_style() 链式与别名写法）
 
   [files]
     F2 TODO.md 存在（状态档案）
@@ -30,12 +36,13 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
 import sys
 
-_CAPABILITIES = {"ops", "ui", "nodes", "threads", "jobs", "settings", "device"}
+_CAPABILITIES = {"ops", "ui", "nodes", "threads", "jobs", "settings", "device", "graph"}
 _ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _IMPORT_RE = re.compile(
     r"^\s*from\s+(Application[\w\.]*)\s+import|^\s*import\s+(Application[\w\.]*)", re.M)
@@ -44,9 +51,177 @@ _IMPORT_ALLOW = (
     "Application.Functions",
     "Application.Core.Events",
     "Application.Core.ThreadRegistry",
+    # 跨机器设备身份（协议 device_io_protocol §12）— 官方示例扩展依赖的公共设施
+    "Application.Core.DeviceRegistry",
 )
 _MONKEY_RE = re.compile(r"^Application\w*(?:\.\w+)*\s*=", re.M)
 _UI_BASE_RE = re.compile(r"class\s+\w+\s*\([^)]*UIExtensionBase")
+
+# 字形安全集（与主应用 Test/Application/Editor/test_ui_text_safety.py 同源；字体图集 = 
+# ASCII + Latin-1 + General Punctuation 子集 + FontAwesome 私有区）
+_SAFE_RANGES = [
+    (0x0020, 0x007E),
+    (0x00A0, 0x00FF),
+    (0x2013, 0x2014),
+    (0x2018, 0x201D),
+    (0x2022, 0x2022),
+    (0x2026, 0x2026),
+    (0xF000, 0xFFFF),
+]
+
+
+def unsafe_chars(text: str) -> list:
+    """返回 imgui 字体图集外字符（去重排序 → 渲染为 '?' 的隐患）；换行/制表符放行。"""
+    bad = set()
+    for ch in text:
+        if ch in "\n\t":
+            continue
+        cp = ord(ch)
+        if not any(a <= cp <= b for a, b in _SAFE_RANGES):
+            bad.add(ch)
+    return sorted(bad)
+
+
+# ── imgui 窗口栈纪律（C8/C9/C10 — 与 Doc/Dev/ui_protocol.md §2.13 同源规则） ──
+_BEGIN_CHILD = ("begin_child",)
+_BEGIN_SCOPED = ("begin_combo", "begin_tab_item", "begin_menu", "begin_popup")
+_END_SCOPED = ("end_combo", "end_tab_item", "end_menu", "end_popup")
+_CTX_CREATE = ("create_context", "glfw_init", "glfw_init_for_opengl", "opengl2_init",
+               "opengl3_init", "new_frame", "end_frame", "render", "run",
+               "manually_render", "manually_show_gui")
+
+
+def _imgui_call(node: ast.AST) -> tuple:
+    """`imgui.xxx(...)` / `hello_imgui.xxx(...)` → (base 名, 属性名); 其它 → ("", "")。"""
+    if not isinstance(node, ast.Call):
+        return "", ""
+    f = node.func
+    if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+        return f.value.id, f.attr
+    return "", ""
+
+
+def gated_begin_child(tree: ast.AST) -> list:
+    """把 `begin_child` 当条件用的位置 → ["L<行> …"]。
+
+    反模式: `if imgui.begin_child(...): … imgui.end_child()` —— 宿主窗口被完全裁剪
+    （最小化 0x0）时返回 False → 漏 `end_child` → 窗口栈失衡 → 之后任意 `end()` 断言。
+    """
+    out: list[str] = []
+    for node in ast.walk(tree):
+        test = None
+        if isinstance(node, (ast.If, ast.While)):
+            test = node.test
+        elif isinstance(node, ast.IfExp):
+            test = node.test
+        if test is None:
+            continue
+        for sub in ast.walk(test):
+            _base, attr = _imgui_call(sub)
+            if attr in _BEGIN_CHILD:
+                out.append(f"L{node.lineno} {attr}() 被当作条件")
+    return out
+
+
+def unguarded_scoped_ends(tree: ast.AST) -> list:
+    """函数内不在任何 `if` 体内的 `end_combo/end_tab_item` 等 → ["L<行> …"]（反向规则）。"""
+    out: list[str] = []
+    for fn in ast.walk(tree):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        guarded: set = set()
+        for sub in ast.walk(fn):
+            if isinstance(sub, ast.If):
+                for stmt in sub.body:
+                    for c in ast.walk(stmt):
+                        if isinstance(c, ast.Call) and _imgui_call(c)[1] in _END_SCOPED:
+                            guarded.add(id(c))
+        for sub in ast.walk(fn):
+            if isinstance(sub, ast.Call):
+                _base, attr = _imgui_call(sub)
+                if attr in _END_SCOPED and id(sub) not in guarded:
+                    out.append(f"L{sub.lineno} {attr}() 不在任何 if 体内")
+    return out
+
+
+def toplevel_context_calls(tree: ast.Module) -> list:
+    """模块顶层（**不含**函数/类体内）的 imgui 上下文/窗口/GL 创建 → ["L<行> …"]。
+
+    注意: `ast.walk` 会钻进函数体 — 必须逐层剪掉函数/类作用域, 否则窗口回调里的
+    `imgui.new_frame()` 之类会被误判（实测踩过）。
+    """
+    out: list[str] = []
+    scope_cut = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+    stack: list = list(tree.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, scope_cut):       # 在"取出时"剪枝（压入时剪不掉自身）
+            continue
+        base, attr = _imgui_call(node)
+        if base in ("imgui", "hello_imgui") and attr in _CTX_CREATE:
+            out.append(f"L{node.lineno} {base}.{attr}()")
+        stack.extend(ast.iter_child_nodes(node))
+    return out
+
+
+# C11: 扩展不得触碰宿主全局 imgui 状态（会污染整个编辑器与其它扩展）
+_GLOBAL_FORBIDDEN_CALLS = ("create_context", "destroy_context", "set_ini_filename")
+_GLOBAL_FORBIDDEN_IO_ATTRS = ("get_io", "get_style")
+
+
+def _is_io_source(node: ast.AST) -> bool:
+    """`imgui.get_io()` / `imgui.get_style()` 调用（全局 io/style 来源）。"""
+    return isinstance(node, ast.Call) and _imgui_call(node)[1] in _GLOBAL_FORBIDDEN_IO_ATTRS
+
+
+def global_imgui_state_writes(tree: ast.AST) -> list:
+    """扩展对宿主全局 imgui 状态的写入 → ["L<行> …"]（C11）。
+
+    禁止: `create_context` / `destroy_context` / `set_ini_filename`（任意位置, 含
+          `imgui.get_io().set_ini_filename(...)` 链式写法与 `io = imgui.get_io()`
+          别名写法）; `imgui.get_io().x = …` / `imgui.get_style().x = …` 赋值。
+    允许: 窗口内 `push_style_color / push_style_var`（局部作用域, 由宿主窗口包裹）;
+          纯导入与只读查询（`io.display_size` 之类）。
+    """
+    out: list[str] = []
+    nodes = list(ast.walk(tree))
+
+    # 第一遍: 收集指向 get_io()/get_style() 返回对象的变量名（别名流）
+    io_aliases: set[str] = set()
+    for node in nodes:
+        if isinstance(node, ast.Assign) and _is_io_source(node.value):
+            for tgt in node.targets:
+                if isinstance(tgt, ast.Name):
+                    io_aliases.add(tgt.id)
+
+    def _flag(lineno: int, what: str) -> None:
+        out.append(f"L{lineno} {what}")
+
+    # 第二遍: 检出禁用调用与全局状态赋值
+    for node in nodes:
+        if isinstance(node, ast.Call):
+            _base, attr = _imgui_call(node)
+            if attr in _GLOBAL_FORBIDDEN_CALLS:                 # imgui.create_context() …
+                _flag(node.lineno, f"{attr}()")
+                continue
+            fn = node.func
+            if isinstance(fn, ast.Attribute):
+                if _is_io_source(fn.value):                     # imgui.get_io().set_ini_filename(…)
+                    _flag(node.lineno, f"get_io()/get_style().{fn.attr}()")
+                    continue
+                if isinstance(fn.value, ast.Name) and fn.value.id in io_aliases:
+                    _flag(node.lineno, f"{fn.value.id}.{fn.attr}()")   # io = get_io(); io.font_…(…)
+                    continue
+        if isinstance(node, (ast.Assign, ast.AugAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for tgt in targets:
+                if not isinstance(tgt, ast.Attribute):
+                    continue
+                if _is_io_source(tgt.value):                    # imgui.get_io().x = …
+                    _flag(node.lineno, f"get_io()/get_style().{tgt.attr} = ...")
+                elif isinstance(tgt.value, ast.Name) and tgt.value.id in io_aliases:
+                    _flag(node.lineno, f"{tgt.value.id}.{tgt.attr} = ...")
+    return out
 
 
 class Report:
@@ -173,6 +348,64 @@ def review_extension(ext_dir: str) -> Report:
         rep.warn("C6", f"import Application.* 超出常用白名单（人工复核）: {sorted(set(offenders))}")
     else:
         rep.ok("C6", "Application.* import 均在白名单")
+
+    # C7: imgui 文本字形安全（图集外字符 → '?'）
+    try:
+        entry_tree = ast.parse(src)
+        bad_texts = []
+        for node in ast.walk(entry_tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            base = node.func.value
+            if not (isinstance(base, ast.Name) and base.id == "imgui"):
+                continue
+            for arg in node.args:
+                for sub in ast.walk(arg):
+                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                        bad = unsafe_chars(sub.value)
+                        if bad:
+                            bad_texts.append(f"L{sub.lineno} {bad} in {sub.value[:48]!r}")
+        if bad_texts:
+            extra = f" (+{len(bad_texts) - 2} more)" if len(bad_texts) > 2 else ""
+            rep.fail("C7", "imgui 文本含图集外字符（显示为 '?'）: " + "; ".join(bad_texts[:2]) + extra)
+        else:
+            rep.ok("C7", "imgui 文本字形安全")
+    except SyntaxError as e:  # noqa: BLE001
+        rep.warn("C7", f"entry 语法错误, 跳过字形检查: {e}")
+
+    # C8/C9/C10: imgui 窗口栈纪律（协议 §7.7 + ui_protocol §2.13 同源规则）
+    try:
+        tree8 = ast.parse(src)
+    except SyntaxError as e:  # noqa: BLE001
+        rep.warn("C8", f"entry 语法错误, 跳过窗口栈检查: {e}")
+        tree8 = None
+    if tree8 is not None:
+        gated = gated_begin_child(tree8)
+        if gated:
+            rep.fail("C8", "begin_child 被条件门控（全裁剪 0x0 返回 False → 漏 end_child 会腐蚀"
+                           "窗口栈, 之后任意 end 断言杀渲染循环; 用 try/finally 无条件配对）: "
+                     + "; ".join(gated[:2]))
+        else:
+            rep.ok("C8", "窗口栈配对纪律（begin_child 未被条件门控）")
+        loose = unguarded_scoped_ends(tree8)
+        if loose:
+            rep.warn("C9", "end_combo/end_tab_item 疑似无条件调用（应仅 begin 返回 True 时 end）: "
+                     + "; ".join(loose[:2]))
+        else:
+            rep.ok("C9", "combo/tab_item 反向规则 OK")
+        top = toplevel_context_calls(tree8)
+        if top:
+            rep.fail("C10", "顶层创建 imgui 上下文/窗口/GL（应放在窗口回调/运行时内）: "
+                     + "; ".join(top[:2]))
+        else:
+            rep.ok("C10", "无顶层 imgui 上下文/窗口/GL 创建（纯导入允许）")
+
+        global_writes = global_imgui_state_writes(tree8)
+        if global_writes:
+            rep.fail("C11", "触碰宿主全局 imgui 状态（会污染编辑器与其它扩展; 窗口内 "
+                            "push_style_* 才可以）: " + "; ".join(global_writes[:2]))
+        else:
+            rep.ok("C11", "无全局 imgui 状态写入")
 
     _review_files(rep, ext_dir)
     return rep

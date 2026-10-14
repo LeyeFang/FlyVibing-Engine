@@ -1,7 +1,7 @@
 """
 节点图静态检查 — L1 层（结构化条目输出）。
 
-规则与 Utils/User/NodeEditor/node_graph_validator.validate_static 保持一致（搬迁内化）:
+规则与 FlyVibing-User-And-Developer-Utils/packages/node-editor/node_graph_validator.validate_static 保持一致（搬迁内化）:
   1. 未知节点类型 / 缺失引脚 (optional 版本兼容 pin 除外) / Pin ID 冲突
   2. 连线端点存在性 / 方向（output→input）/ 重复连线
   3. 孤立节点（降级为 warning — 可能是刻意保留的模板/常量节点）

@@ -1,8 +1,9 @@
 # Device (Serial/Parallel) Extension — TODO（状态档案）
 
-> 状态: **partial + demo 交付**（监视面板 + `ext.device.*` ops 已交付 2026-10-11 → 官方示例扩展）
-> 开发规范: `Doc/ExtDev/extension_dev_protocol.md` · 架构: `Doc/Dev/extension_protocol.md`
-> manifest: `extension.json`（id=`device`; entry=extension.py; ops 前缀 `ext.device.*`）
+> 状态: **v0.2.0 — 监视面板 + 逻辑设备名（两级身份）+ 面板↔场景同步 已交付**
+> **接手入口: `HANDOFF.md`（交接书）+ `HANDOFF_PROMPT.md`（启动提示词）— 新维护者先读这两份**
+> 开发规范: `Doc/ExtDev/extension_dev_protocol.md` · 架构: `Doc/Dev/extension_protocol.md` · 设备协议: `Doc/Dev/device_io_protocol.md`（§12 = 逻辑设备名）
+> manifest: `extension.json`（id=`device`; entry=extension.py; ops 前缀 `ext.device.*`; capabilities `ops/nodes/ui/graph`）
 
 ## 0. 现状（已实现资产映射 — 复用来源）
 
@@ -28,6 +29,9 @@
 ### b) 发送节点（复用既有）
 - [ ] 迁移 Serial/Parallel Send 节点到扩展 Pack（type 名保持不变 — MI-SSSEP 场景兼容红线）
 - [x] `ext.device.*` ops: `status / list_ports / watch / send / monitor_snapshot / write_parallel`（agent 监视通道已通）
+- [x] **逻辑设备名（`@alias`）闭环（2026-10-12）**: `bind_alias` / `bind_nodes` + 面板 "Device names (@alias)" 段（Rebind / Unbind / Migrate N node(s)）+ `status` 别名视图；本机注册表 = `Application/Core/DeviceRegistry.py`（`device_io` §12）
+- [x] **面板 ↔ 场景同步示范（2026-10-12）**: 经 `ctx.graph`（capabilities 含 `graph`）读/写当前图节点 props；面板按钮与 agent 同一实现（动作单点）
+- [ ] **自动重绑（P0，下一步）**: 设备指纹 `hint`（`usb_serial` / `vid_pid`）+ `ext.device.autobind` + 面板 Auto-detect — 详见 `HANDOFF.md` §5
 
 ### c) 迁移形态
 - [x] 面板经 `ctx.ui.register_window`（M1 已实装 — 本扩展为首个消费者）
@@ -45,4 +49,8 @@
 - [x] 面板首启即注册（enable → 窗口出现 → disable → 窗口与 ops 同时清理; 测试 `test_extension_manager` + `test_extension_ui`）
 - [ ] 真实/虚拟串口回环: 发送 "hello\n" → 收字节可见（需硬件 — 实机截图证据入库 `Test/_runs/`）
 - [x] 配置持久化（`ctx.data_dir/settings.json`; 重开面板保持）
+- [x] 逻辑设备名闭环单测（`Test/Application/Functions/test_device_alias.py` 31 checks）+ 审查器 18 PASS / 0 FAIL + core 46/46
+- [x] 实机 e2e（`Test/_runs/e2e_device_alias/`: bind_alias → bind_nodes 迁移 → 面板截图）
+- [x] MI-SSSEP 设计工程 v1/v2 场景已迁到 `@SSSEP-Stimulator` 并成功导出（project + rst 成品，0 警告）
+- [ ] 自动重绑验收（P0 交付后补：伪造端口列表单测 + 实机拔插）
 - [ ] 迁移后 MI-SSSEP 场景加载/干跑零回归（节点迁移完成后）

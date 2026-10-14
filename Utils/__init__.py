@@ -1,4 +1,7 @@
-# Utils — 仓库工具层（按受众分层, 与 Doc/ 一致）
+# Utils — 仓库工具层（受众 × 分发命运；词表与 Doc/ 三分区同名）
 #
-#   Dev/  — 引擎开发与打包工具链（环境脚本/锁/轮子/运行时/安装器）
-#   User/ — 引擎使用侧工具（播放器启动器 / 编辑器 MCP / 节点图 MCP）
+#   Dev/    — 主团队内部：环境/测试/打包/安装器（不发布）
+#   ExtDev/ — 社区开发者工具链：EditorMcp / NodeEditor / ExtensionKit（要分发）
+#   User/   — 终端用户/实验员：随成品走的运行时辅助（player.bat）
+#
+# 守卫: Test/Application/Editor/test_utils_layout.py ；布局与放文件规则: Utils/README.md

@@ -99,7 +99,7 @@ load_scene_from_file` 以及 `ProjectManager._load_all_scenes` 都必须维护 `
 - [ ] 导出类功能：纯快照、幂等重写（manifest 保护）、逐条 warning；
 - [ ] 改 `_save()` / `save_project_as()` 后，用无头 temp 目录回环验证：
       `register → save_as#1 → save_as#2 → export → 重新解析所有路径存在`；
-- [ ] 回归：`Utils/User/NodeEditor/test_smoke.py`、`Test/Application/Functions/test_gtec_device.py` 不回归。
+- [ ] 回归：`FlyVibing-User-And-Developer-Utils/packages/node-editor/test_smoke.py`、`Test/Application/Functions/test_gtec_device.py` 不回归。
 
 ---
 

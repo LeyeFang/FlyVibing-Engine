@@ -103,7 +103,7 @@ flowchart LR
 | **L1' 工具门** | 同上 + 报告/骨架：`python Utils/Dev/i18n_tool.py check [--strict]`（退出码 0/1） | `Utils/Dev/i18n_tool.py` | ✅ CI |
 | **L2 字形** | 新语言必须证明字形就绪（Pillow 渲染 sample vs notdef 对比） — 防 `?` 现象的新语言版本 | 守卫扩展 + `LOCALE_FONTS` | [M1] |
 | **L3 场景/目视** | 逐语言渲染设置页 + 断言文本非 `?` 且不截断；伪本地化（`en-XA`）压布局 | `scenarios/i18n_smoke.py` | [M1] |
-| 扩展侧 | C8（扩展 imgui 字面量未经 `t()`/`ctx.i18n` 报错）+ M7（`locale/*.json` 校验） | `Utils/User/ExtensionKit/review_extension.py` | [M1] |
+| 扩展侧 | C8（扩展 imgui 字面量未经 `t()`/`ctx.i18n` 报错）+ M7（`locale/*.json` 校验） | `FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py` | [M1] |
 
 ### 6.1 棘轮口径（唯一算法 = `i18n_tool.count_ui_literals`）
 

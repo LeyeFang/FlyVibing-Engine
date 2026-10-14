@@ -35,7 +35,7 @@ REQUIREMENTS_RUNTIME = os.path.join(WHEELS, "requirements.runtime.txt")
 # 的运行时树扫描, Editor 与 Vulkan 目录除外）。wheelhouse 仍保留全量轮子用于重建。
 _EDITOR_ONLY = [
     "imgui-bundle",           # 编辑器 UI 全家桶
-    # MCP 工具链（Utils/User/NodeEditor mcp_server 专用）
+    # MCP 工具链（FlyVibing-User-And-Developer-Utils/packages/node-editor mcp_server 专用）
     "mcp", "starlette", "uvicorn", "sse-starlette",
     "httpx", "httpx-sse", "httpcore", "h11", "anyio",
     "pydantic", "pydantic-core", "pydantic-settings",

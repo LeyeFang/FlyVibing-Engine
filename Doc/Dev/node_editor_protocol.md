@@ -1,7 +1,7 @@
 # 节点编辑器业务逻辑开发协议
 
 > 适用：节点类型定义、求值器（evaluator）、图约束、执行引擎、图文档（agent 消费）、
-> 程序化构图（GraphBuilder）、agent 通道（CLI + MCP, Utils/User/NodeEditor）。
+> 程序化构图（GraphBuilder）、agent 通道（CLI + MCP, FlyVibing-User-And-Developer-Utils/packages/node-editor）。
 > UI 表现层协议见 `ui_protocol.md`；设备/IO 后端协议见 `device_io_protocol.md`。
 >
 > **位置约定（2026-09 迁移）**：运行时本体位于 `Application/Core/NodeGraph/**`
@@ -22,10 +22,10 @@
 | 图约束 | `Application/Core/NodeGraph/graph_constraints.py` | 跨节点联动（删除级联 + 静态校验函数）；纯数据、无 imgui |
 | 场景内嵌文档 | `Application/Core/NodeGraph/graph_rules.py` | `_NODE_GRAPH_RULES`，每次导出 scene 时附带（外部 agent 读） |
 | 编辑器交互层 | `Application/Editor/UI/panels/node_editor/**` | 画布渲染 / Add 菜单 / 内联控件 / 级联删除交互 / 自动布局（imgui） |
-| Agent 参考文档 | `Utils/User/NodeEditor/rules.md` | 构图 agent 参考（**按节读取**: get_rules(section=...) / CLI rules; 无参=目录）；含 build_graph Spec 节 |
-| Agent 通道 | `Utils/User/NodeEditor/mcp_server.py` + `cli.py` | MCP 4 工具（get_rules(分节) / get_scene_entities / build_graph / apply_graph；`validate_graph` 已移除）; CLI: `python -m Utils.User.NodeEditor.cli {rules,entities,build,apply}` |
-| 校验器（旧） | `Utils/User/NodeEditor/node_graph_validator.py` | L1 静态 + L2 干跑 — **已退场**（仅旧脚本/单元测试复用）；校验单一事实源 = 引擎内服务（`graph_validation_protocol.md`） |
-| 构图器 | `Utils/User/NodeEditor/graph_builder.py` | 程序化构图 + `validate()`；节点 helper（gtec_* / siggen_* / pool_* / epoch_* / fbscp_* / cca_* / show_media） |
+| Agent 参考文档 | `FlyVibing-User-And-Developer-Utils/packages/node-editor/rules.md` | 构图 agent 参考（**按节读取**: get_rules(section=...) / CLI rules; 无参=目录）；含 build_graph Spec 节 |
+| Agent 通道 | `FlyVibing-User-And-Developer-Utils/packages/node-editor/mcp_server.py` + `cli.py` | MCP 4 工具（get_rules(分节) / get_scene_entities / build_graph / apply_graph；`validate_graph` 已移除）; CLI: `python -m flyvibing_node_editor.cli {rules,entities,build,apply}` |
+| 校验器（旧） | `FlyVibing-User-And-Developer-Utils/packages/node-editor/node_graph_validator.py` | L1 静态 + L2 干跑 — **已退场**（仅旧脚本/单元测试复用）；校验单一事实源 = 引擎内服务（`graph_validation_protocol.md`） |
+| 构图器 | `FlyVibing-User-And-Developer-Utils/packages/node-editor/graph_builder.py` | 程序化构图 + `validate()`；节点 helper（gtec_* / siggen_* / pool_* / epoch_* / fbscp_* / cca_* / show_media） |
 
 > 旧路径 `Application/Editor/UI/controllers/node_editor/` 仅保留包级 re-export shim（弃用）；
 > 新代码一律使用上表路径。
@@ -66,8 +66,8 @@
    并在 `Application/Core/NodeGraph/__init__.py` 的 `from .evaluators import (...)` 中加模块名。
 8. 删除联动/校验（如涉及跨节点规则）：`graph_constraints.py` 增加纯函数；
    `panel._handle_deletion` 与 `node_graph_validator.validate_static` 各自接入。
-9. 文档：`graph_rules.py`（场景内嵌）+ `Utils/User/NodeEditor/rules.md`（MCP agent）+
-   `Utils/User/NodeEditor/graph_builder.py` helper（推荐）。
+9. 文档：`graph_rules.py`（场景内嵌）+ `FlyVibing-User-And-Developer-Utils/packages/node-editor/rules.md`（MCP agent）+
+   `FlyVibing-User-And-Developer-Utils/packages/node-editor/graph_builder.py` helper（推荐）。
 10. 测试：无头单元测试或干跑断言（见 §6）；引擎内校验必须通过（`engine_validate_graph` / `PlayerEntry --dry-run` / `test_graph_validation.py`）。
 
 > 兼容保留的旧节点：**保留注册但菜单不出现**，在定义文件注释说明替代关系

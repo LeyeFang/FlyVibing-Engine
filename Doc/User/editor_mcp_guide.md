@@ -30,7 +30,7 @@
 
    - 会写入 `.vscode/mcp.json`（**lite 档**，5 个精简工具）并把 Skill 拷到 `.github/skills/engine-editor/`；
    - **安装版**：`engine-editor-cli` / `engine-editor-mcp` 是安装目录内的命令（安装时勾选 PATH 任务即可直接使用；未勾选则写绝对路径 `<安装目录>\engine-editor-cli.cmd`）。**无需任何外部 Python 环境——Python 由引擎自带运行时提供**；
-   - **源码仓库（开发）**：`.venv-py314t\Scripts\python.exe Utils\User\EditorMcp\install_mcp.py`（默认 lite 档，可 `--profile full`）。
+   - **源码仓库（开发）**：`.venv-py314t\Scripts\python.exe FlyVibing-User-And-Developer-Utils\packages\editor-mcp\install_mcp.py`（默认 lite 档，可 `--profile full`）。
 
    不想用 MCP 的平台也可以只用命令行：`engine-editor-cli call sim.state`（见 §3.12）。
 3. **首次注册或工具更新后**：重载一次 VS Code 窗口（或 Command Palette → `MCP: List Servers → engine-editor-live → 重启`）；

@@ -25,6 +25,10 @@ import json
 import os
 from typing import Optional
 
+# 导出游戏包时 Utils/User 下要跳过的目录（构建产物/临时文件 — 成品里只留运行时辅助）。
+# 守卫: Test/Application/Editor/test_utils_layout.py::test_utils_export_selection
+UTILS_EXPORT_SKIP_DIRS = {"dist", "tmp"}
+
 
 class ProjectManager:
     """项目文件管理器 — 纯数据层，不依赖渲染/窗口。"""
@@ -425,10 +429,11 @@ class ProjectManager:
                 exclude_dirs={"wheels", "runtime"},
             )
 
-            # 5b-2. Utils 工具（仅 User 层 — Dev 工具链不进游戏包）
+            # 5b-2. Utils 工具（仅 User 层 — Dev/ExtDev 工具链不进游戏包）
             utils_files, utils_bytes = cls._copy_tree_for_export(
                 os.path.join(engine_root, "Utils", "User"),
                 os.path.join(out_dir, "Utils", "User"), warnings,
+                exclude_dirs=UTILS_EXPORT_SKIP_DIRS,
             )
             _utils_init = os.path.join(engine_root, "Utils", "__init__.py")
             if os.path.isfile(_utils_init):

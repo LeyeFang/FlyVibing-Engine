@@ -68,7 +68,7 @@
 14. **imgui 布局持久化永久禁用**（2026-10-12 实测裁决）：引擎侧 `EditorImguiLayer.OnAttach`
     以空串禁用 ini（`io.set_ini_filename("")`）—— 实测删文件 → 完整启停编辑器 → 文件不重现，
     即**第三方 ini 对我们完全惰性**（既不读也不写）。配套规则：
-    - 需要裸 imgui 上下文的测试/扩展自测**必须**走 `Utils/User/ExtensionKit/imgui_headless.py`
+    - 需要裸 imgui 上下文的测试/扩展自测**必须**走 `FlyVibing-User-And-Developer-Utils/packages/extension-kit/imgui_headless.py`
       的 `headless_imgui()`（自动禁用 ini）—— 裸 `create_context()` 会在 `destroy_context()`
       时把 `imgui.ini` 写进 CWD（2026-10-12 实测：扩展自测在仓库根留下 `imgui.ini`）；
     - **`set_ini_filename(None)` 会让进程原生崩溃**（exit `0xC0000005`，可复现）—— 禁用一律用空串；

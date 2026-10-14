@@ -1,7 +1,7 @@
 # 编辑器实时命令总线 / MCP 热注入协议（Editor Live）
 
 > 适用：`Application/Editor/Services/LiveCommandServer.py`（编辑器侧总线）、
-> `Utils/User/EditorMcp/**`（agent 侧 MCP 服务器 / 独立包 / 安装）、`Application/Editor/EditorLayer.py`（pump 接入点）、
+> `FlyVibing-User-And-Developer-Utils/packages/editor-mcp/**`（agent 侧 MCP 服务器 / 独立包 / 安装）、`Application/Editor/EditorLayer.py`（pump 接入点）、
 > `Application/Editor/EditorModule.py`（启停接入点; 原名 EditorPlugin, 2026-10-11 更名 — extension_protocol §2）。
 > 目标：让 agent 像操作 Fusion360 一样**实时操作运行中的编辑器**（热注入，非文件式）。
 
@@ -11,7 +11,7 @@
 
 ```mermaid
 flowchart LR
-    A[Agent / Copilot] -- "MCP stdio" --> B["Utils/User/EditorMcp/mcp_server.py<br/>(薄 shim → src/engine_editor_mcp, 纯 socket 客户端)"]
+    A[Agent / Copilot] -- "MCP stdio" --> B["FlyVibing-User-And-Developer-Utils/packages/editor-mcp/mcp_server.py<br/>(薄 shim → src/engine_editor_mcp, 纯 socket 客户端)"]
     B -- "NDJSON + 二进制尾帧 @ 127.0.0.1:8977" --> C["LiveCommandServer socket 线程<br/>(仅收 JSON → 入队)"]
     C -- "queue.Queue" --> D["主线程 pump<br/>EditorLayer.OnUpdate 每帧"]
     D -- "复用编辑器按钮同款 API" --> E["SimulationController / ViewportController / ..."]
@@ -144,11 +144,11 @@ UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 �
 
 ## 5. agent 通道（MCP / CLI / Skill — v0.4.0 混合形态）
 
-- **发布形态（独立分发; 收纳于 `Utils/User/EditorMcp/`）**：源码唯一维护于 `Utils/User/EditorMcp/src/engine_editor_mcp/`
-  （console scripts `engine-editor-mcp` + `engine-editor-cli`）；`Utils/User/EditorMcp/mcp_server.py` 为薄 shim（dev/E2E 入口, 同一源码）。
+- **发布形态（独立分发; 收纳于 `FlyVibing-User-And-Developer-Utils/packages/editor-mcp/`）**：源码唯一维护于 `FlyVibing-User-And-Developer-Utils/packages/editor-mcp/src/engine_editor_mcp/`
+  （console scripts `engine-editor-mcp` + `engine-editor-cli`）；`FlyVibing-User-And-Developer-Utils/packages/editor-mcp/mcp_server.py` 为薄 shim（dev/E2E 入口, 同一源码）。
   **纯 socket 客户端，不 import Application**（测试守卫已扩展到包源码）；
-  三方工作区：`pip install` wheel（零依赖构建: `python Utils/User/EditorMcp/build_wheel.py`）→
-  `engine-editor-cli setup --workspace <项目>`（拷贝 Skill + 合并 mcp.json, 默认 lite 档）；详见 `Utils/User/EditorMcp/README.md`。
+  三方工作区：`pip install` wheel（零依赖构建: `python FlyVibing-User-And-Developer-Utils/packages/editor-mcp/build_wheel.py`）→
+  `engine-editor-cli setup --workspace <项目>`（拷贝 Skill + 合并 mcp.json, 默认 lite 档）；详见 `FlyVibing-User-And-Developer-Utils/packages/editor-mcp/README.md`。
 - **op 注册表（单一事实源）**：`src/engine_editor_mcp/ops.py`（55 ops: 摘要/参数/分类/旧工具别名; 每 op 含 call_timeout）。
   **扩展 op**（`ext.<id>.*`）为运行期增量注册，不入本静态表 — 发现用 `extension.list`, 调用直接透传
   （见 `Doc/ExtDev/extension_dev_protocol.md` §9）。
@@ -170,7 +170,7 @@ UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 �
 - 抓帧目录：`<临时目录>\engine_editor_mcp\frames\frame_{editor|pie}_{时间戳}_g{gen}.png`
   （默认 `%TEMP%`; 环境变量 `MGE_MCP_FRAMES_DIR` 可覆盖）；**清理策略：入口进程启动时清空**（import 不清空）；
 - 编辑器未运行时返回人话错误：`编辑器未运行（127.0.0.1:8977 无监听）— 请先启动 startup.bat。`
-- 注册（dev 仓库）：`.venv-py314t\Scripts\python.exe Utils/User/EditorMcp/install_mcp.py [--profile lite|full]` →
+- 注册（dev 仓库）：`.venv-py314t\Scripts\python.exe FlyVibing-User-And-Developer-Utils/packages/editor-mcp/install_mcp.py [--profile lite|full]` →
   写 `.vscode/mcp.json`（名称 `engine-editor-live`）+ 同步 Skill → **重载 VS Code 生效**；卸载 `--uninstall`；
 - 注册（外部工作区）：`engine-editor-cli setup --workspace <dir>`；引擎侧无需任何配置。
 
@@ -233,7 +233,7 @@ UI 入口：Node Editor 工具栏 **Validate** 按钮（静态 / 360 帧 / 600 �
    `component.get` 附带 mesh/material 摘要 ✓；提示显隐两次截图（出现 120KB / 隐藏 95KB, 视觉确认消失）。
 7. v4 校验内化（2026-10-02 已通过, `e2e_mcp_validate_mi_sssep.py` 13/13）：`project.open`（Paradigm 的 MI-SSSEP 工程,
    4 场景）→ `scene.switch MI-SSSEP` → 画布 **141 nodes / 167 links** → 干跑校验 **静态 0E/0W · 运行时 0E ·
-   360 帧 / 15 事件 / 82.5 ms · ok=True** → 报告落盘 `Utils/User/EditorMcp/tmp/validation_mi_sssep.txt` →
+   360 帧 / 15 事件 / 82.5 ms · ok=True** → 报告落盘 `FlyVibing-User-And-Developer-Utils/packages/editor-mcp/tmp/validation_mi_sssep.txt` →
    `graph.export/import` 回灌一致。干跑语义注意: 实体查找（EntityGet）在干跑下查不到真实实体（副作用被跳过）,
    以 stdout 提示 `[EntityGet] 'x' not found` 但不计 error（图的防御写法不受影响）。
 

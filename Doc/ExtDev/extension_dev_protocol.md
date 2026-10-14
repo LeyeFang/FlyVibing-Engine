@@ -268,7 +268,7 @@ SettingsPanel.register_page(SettingsPage(
 2. 未继承而声明 ui → ExtensionManager 加载时拒载（capabilities↔基类一致性校验, 同为 broken）。
 
 **静态审查（三重保障之二）**: 提交前运行
-`python Utils/User/ExtensionKit/review_extension.py <扩展目录>` —
+`python FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py <扩展目录>` —
 C1/C2 检查基类与实现、C3 检查 close_policy 声明（检查项全表见工具头部）。
 
 **官方示例**: `Functions/SerialParallelDevice/extension.py`（监视面板 — 上述全部契约的活参考:
@@ -276,7 +276,11 @@ C1/C2 检查基类与实现、C3 检查 close_policy 声明（检查项全表见
 `close_policy="disable"` + `on_ui_event` 收尾示范; **面板 ↔ 场景 同步示范**（2026-10-12）:
 `bind_alias` / `bind_nodes` 两个 op + 面板 “Device names (@alias)” 段 — 面板按钮与 agent
 调用**同一个**操作实现（动作单点）, 经 `ctx.graph` 读/写当前图节点 props, 见
-`Doc/Dev/device_io_protocol.md` §12）；**第二个官方示例** =
+`Doc/Dev/device_io_protocol.md` §12）。
+> **接手维护该扩展的 agent 入口**: `Functions/SerialParallelDevice/HANDOFF.md`（交接书: 边界/裁决/坑/下一步/验收）
+> + `HANDOFF_PROMPT.md`（可直接粘给新会话的启动提示词）。
+
+**第二个官方示例** =
 `Functions/EEGDevice/Gtec/`（Gtec 实时监视面板 — 节流拉取实时数据管线 / 示波器绘制 /
 **观察 vs 采集分离（watch/record 会话两段式）** / 软件实时滤波（谐波陷波·频带预设·阶数） /
 **电极阻抗视图（空闲操作）** / 采集落盘 + `ext.gtec.*` **11 件套 op**;
@@ -368,9 +372,9 @@ C1/C2 检查基类与实现、C3 检查 close_policy 声明（检查项全表见
 5. **实机自动化**: 用 `extension.enable` / `extension.disable` op 驱动启停（等同菜单勾选语义）——
    菜单弹出层没有程序化点击入口, 不必为此写鼠标脚本。
 6. **无头 GUI 测试的唯一入口**（2026-10-12 — 实测踩坑）: 需要裸 imgui 上下文时**必须**用
-   `Utils.User.ExtensionKit.imgui_headless.headless_imgui()`（自动禁用布局持久化）:
+   `flyvibing_extension_kit.imgui_headless.headless_imgui()`（自动禁用布局持久化）:
    ```python
-   from Utils.User.ExtensionKit.imgui_headless import headless_imgui
+   from flyvibing_extension_kit.imgui_headless import headless_imgui
    with headless_imgui() as h:
        h.frames([(1280, 720), (0, 0), (1, 1), (1280, 720)], draw=my_panel_draw)
    ```
@@ -401,7 +405,7 @@ C1/C2 检查基类与实现、C3 检查 close_policy 声明（检查项全表见
       未 monkey-patch 任何核心类; 仅 import §3 白名单内的 `Application.*`
 - [ ] （UI 扩展）继承 `UIExtensionBase` + 声明 `close_policy` + 实现 `on_ui_event` 收尾;
       imgui 窗口栈配对纪律（`begin_child` 无条件配对 — §7 第 7 条）;
-      `python Utils/User/ExtensionKit/review_extension.py <扩展目录>` 无 FAIL
+      `python FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py <扩展目录>` 无 FAIL
 - [ ] `extension.enable` → `extension.list` 显示 enabled + ops 齐全 → 逐 op 实调通过
 - [ ] 自带测试按 `test_protocol.md` 契约全绿; 未破坏核心计数守卫
 - [ ] `TODO.md` 状态更新（maturity 与清单勾选）

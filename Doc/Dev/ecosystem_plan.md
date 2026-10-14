@@ -17,8 +17,23 @@
 
 ## 2. L0 具体项（本阶段）
 
-- [x] **文档三分区**（2026-10-11 完成）：`Doc/User`（用户）/ `Doc/ExtDev`（社区开发者，自包含）/
-      `Doc/Dev`（引擎内部）；扩展开发规范已迁 `Doc/ExtDev/extension_dev_protocol.md`。
+- [x] **文档三分区**（2026-10-11 完成）：`Doc/User`（用户）/ `Doc/ExtDev`（社区开发者，自包含）/`Doc/Dev`（引擎内部）；扩展开发规范已迁 `Doc/ExtDev/extension_dev_protocol.md`。
+- [x] **工具层分区对齐**（2026-10-13）：`Utils/{Dev, ExtDev, User}` 与文档分区**同名**；社区工具链
+  `EditorMcp / NodeEditor / ExtensionKit` 从 `Utils/User` 迁到 **`Utils/ExtDev`**；词表与放文件
+  规则 `Utils/README.md`；机器守卫 `Test/Application/Editor/test_utils_layout.py`（布局 / ExtDev 禁 import
+  编辑器内部 / 导出卫生 / skills 双副本一致）。
+  **顺带修掉的事故**：导出“只拷 Utils/User”但该目录装了工具链，成品游戏包里曾夹带 46 个文件
+  （两个旧 wheel + 调试截图 + `install_mcp.bat`）—— 现在源目录只留运行时辅助，且导出跳过 `dist/tmp/__pycache__`。
+- [x] **使用侧工具链外迁**（2026-10-14 完成）：`EditorMcp / NodeEditor / ExtensionKit` + 全部 agent skills
+  已迁至独立仓库 **FlyVibing-User-And-Developer-Utils**（`packages/editor-mcp`、`packages/node-editor`、
+  `packages/extension-kit`、`skills/`；构建入口 `scripts/build_tools.py`）。引擎仓库只保留
+  `Utils/Dev`（研发工具）与 `Utils/User`（随成品走的运行时辅助）；`.github/skills/` 是该仓库 skills 的本地副本，
+  由 `test_utils_layout.py` 校验一致性（权威源 = 工具仓库）。
+  引擎回归测试需要工具时按"我们也是使用者"的模式安装：`pip install -e <tools repo>/packages/*`。
+- [ ] **发布入口 `Utils/Dev/build_tools.py`**：~~一次产出 ExtDev 全部 wheel~~ → 已随工具仓库迁移
+  （`<tools repo>/scripts/build_tools.py` 产出三个 wheel + `CHECKSUMS.sha256`）。
+  **已知阻塞**：`NodeEditor/node_graph_validator.py` 依赖 `Application.Core.NodeGraph`（干跑校验复用引擎
+  实现，避免两套规则漂移）；独立分发前需“随包带无头 NodeGraph”或“降级为调引擎”—— 已登记在白名单里。
 - [ ] **SDK 目录** `SDK/`：
   - `SDK/ext-template/` — 扩展脚手架模板（现阶段 = 以 `Functions/SignalProcess` 为最小活模板，
     后续抽 cookiecutter 化）；

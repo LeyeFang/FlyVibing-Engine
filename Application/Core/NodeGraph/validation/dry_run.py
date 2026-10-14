@@ -1,7 +1,7 @@
 """
 节点图干跑 — L2 层（fake-time 确定性模拟）。
 
-内化自 Utils/User/NodeEditor/node_graph_validator.dry_run_simulation，并升级:
+内化自 FlyVibing-User-And-Developer-Utils/packages/node-editor/node_graph_validator.dry_run_simulation，并升级:
   - 无 print 副作用 — 全部事件走向结构化日志 (收集器)
   - 确定性: 固定 dt (默认 1/60) + 固定随机种子 (默认 0, 重置 evaluators.math 全局 RNG)
   - 取消支持: cancel_event 帧间检查

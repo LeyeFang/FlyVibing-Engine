@@ -5,3 +5,6 @@
 #   collect_wheels.py  重建 wheelhouse（Resource/wheels，从 PyPI）
 #   prepare_runtime.py 预制运行时镜像（Resource/runtime，安装器/导出游戏共用）
 #   Installer/         安装包构建（Inno Setup）
+#
+# [计划] build_tools.py — 发布入口: 一次产出 ExtDev 全部 wheel + CHECKSUMS
+#        （Doc/Dev/ecosystem_plan.md §2「发布脚本」）

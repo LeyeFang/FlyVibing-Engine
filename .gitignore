@@ -29,9 +29,12 @@ Resource/wheels/*
 Test/
 
 # Editor Live MCP 临时目录（E2E/报告产物；运行时生成）
-Utils/User/EditorMcp/tmp/
+FlyVibing-User-And-Developer-Utils/packages/editor-mcp/tmp/
 
 # Installer 临时探测目录（pypi probe 等）
 Utils/Dev/Installer/tmp/
 # imgui 布局持久化产物（引擎侧已禁用 ini; 扩展自测的裸上下文可能写出 — 勿入库）
 imgui.ini
+
+# ʹ�ò๤�����Ŀ������ӣ�junction -> FlyVibing-User-And-Developer-Utils������ �����ύ
+Utils/ExtDev/

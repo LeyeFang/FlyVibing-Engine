@@ -1,7 +1,7 @@
 # graph_validation_protocol.md — 节点图校验协议（引擎内服务）
 
 > 消费者：agent / 开发者。**改校验规则、干跑语义、报告格式、Validate UI、图导入导出时必读本文。**
-> 状态：2026-10-02 落地（v4）。离线校验（`Utils/User/NodeEditor/node_graph_validator` 链路）已退场。
+> 状态：2026-10-02 落地（v4）。离线校验（`FlyVibing-User-And-Developer-Utils/packages/node-editor/node_graph_validator` 链路）已退场。
 
 ---
 
@@ -24,7 +24,7 @@ validation/
 | MCP | `graph.validate.start/state/report/cancel`（LiveCommandServer）+ `editor_graph_validate` 等工具（full 档口径; lite 档用 `engine_validate_graph` / CLI `validate`） | 阻塞编排工具内部 start→poll→report |
 | 程序 | `run_validation(graph, options)`（同步） | `PlayerBootstrap.dry_run` 与无头测试使用 |
 
-**离线 `validate_graph` 已弃用**（`Utils/User/NodeEditor/mcp_server.py` 仅返回指引）；agent 干跑验证需要引擎运行中。
+**离线 `validate_graph` 已弃用**（`FlyVibing-User-And-Developer-Utils/packages/node-editor/mcp_server.py` 仅返回指引）；agent 干跑验证需要引擎运行中。
 
 ## 2. 输入源
 

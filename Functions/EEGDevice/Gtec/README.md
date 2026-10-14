@@ -96,7 +96,7 @@ Stop → session.stop(save=auto) → 录制 = 引擎侧落盘（npz/csv + 同名
 
 ```powershell
 .venv-py314t\Scripts\python.exe Test/Application/Extensions/test_gtec_extension.py   # 91 checks（无头）
-.venv-py314t\Scripts\python.exe Utils/User/ExtensionKit/review_extension.py Functions/EEGDevice/Gtec
+.venv-py314t\Scripts\python.exe FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py Functions/EEGDevice/Gtec
 # 实机: 先 startup.bat, 再:
 .venv-py314t\Scripts\python.exe Test/Application/Extensions/e2e_gtec_monitor_check.py
 ```

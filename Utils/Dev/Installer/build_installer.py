@@ -8,7 +8,7 @@ build_installer.py — MyGameEngine 离线安装包构建（staging + Inno Setup
          Dev 工具链不进安装包）
        - 引擎依赖补齐: pip --no-index -r Resource/wheels/requirements.export.txt
          --target <stage>/Resource/runtime/Lib/site-packages（安装版 = 开发版环境）
-       - 独立包: Utils/User/EditorMcp/src/engine_editor_mcp → runtime site-packages
+       - 独立包: FlyVibing-User-And-Developer-Utils/packages/editor-mcp/src/engine_editor_mcp → runtime site-packages
        - 启动器: <stage>/engine-editor-mcp.cmd（PATH 注册后可供 agent 工作区直接调用）
   3. ISCC 编译 installer.iss → Utils/Dev/Installer/dist/MyGameEngine-Setup-<ver>.exe
 
@@ -96,7 +96,7 @@ def _install_engine_deps() -> None:
 
 def _install_editor_mcp() -> None:
     """独立 MCP 包 → staged runtime site-packages + PATH 启动器。"""
-    src = os.path.join(ROOT, "Utils", "User", "EditorMcp", "src", "engine_editor_mcp")
+    src = os.path.join(ROOT, "Utils", "ExtDev", "EditorMcp", "src", "engine_editor_mcp")
     dst = os.path.join(STAGE, "Resource", "runtime", "Lib", "site-packages", "engine_editor_mcp")
     shutil.copytree(src, dst, dirs_exist_ok=True)
     cmd_path = os.path.join(STAGE, "engine-editor-mcp.cmd")

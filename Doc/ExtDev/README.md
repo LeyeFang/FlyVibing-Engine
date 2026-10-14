@@ -18,23 +18,25 @@
 | ⑤ 扩展 UI / 节点包 | §7 / §8（`[M1]` 设计约定） |
 | ⑥ agent 工具链（MCP / CLI / Skill） | §9 生态核心 + `../User/editor_mcp_guide.md` |
 | ⑦ 测试与提交检查单 | §12 / §14 |
-| ⑧ 静态审查（提交前必跑） | `python Utils/User/ExtensionKit/review_extension.py <扩展目录>`（manifest/代码/完备性全查） |
+| ⑧ 静态审查（提交前必跑） | `python FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py <扩展目录>`（manifest/代码/完备性全查） |
 
 ## 2. 官方示例扩展（对照学习 — 推荐先读源码）
 
 | 扩展 | 目录（本仓库） | 状态 | 示范内容 |
 |---|---|---|---|
 | SignalProcess | `Functions/SignalProcess/` | skeleton（可装载） | 最小 extension.py + `ext.sigproc.info` op 注册 |
-| SerialParallelDevice | `Functions/SerialParallelDevice/` | partial | **官方完整示例**：独立监视面板 + 设置管理 + `ext.device.*` ops（开发中） |
+| SerialParallelDevice | `Functions/SerialParallelDevice/` | v0.2.0 | **官方完整示例**：独立监视面板 + 逻辑设备名（`@alias` 跨机器）+ `ext.device.*` ops 八件套 + 面板↔场景同步 |
 | BCIAlgorithm | `Functions/BCIAlgorithm/` | partial | FBCSP/CCA 算法资产迁移规划 |
 | EEGDevice (Gtec) | `Functions/EEGDevice/Gtec/` | partial | 品牌设备进程架构（独立 env + 中介线程） |
 
 > 每个扩展目录内含 `TODO.md`（状态档案 + 落地清单），是本展示范。
+> **接手维护 SerialParallelDevice 的 agent**: 先读 `Functions/SerialParallelDevice/HANDOFF.md`（交接书，含已定裁决/坑/下一步/验收）
+> 与 `HANDOFF_PROMPT.md`（可直接粘给新会话的启动提示词）。
 
 ## 3. 获取方式与生态（过渡期 → 目标）
 
 - **当前（过渡期）**：扩展开发在引擎仓库内进行（`Functions/**`）；agent 工具链经
-  `Utils/User/EditorMcp` 的 wheel 安装（`engine-editor-cli setup` 可向任意工作区装配 skill + mcp.json）。
+  `FlyVibing-User-And-Developer-Utils/packages/editor-mcp` 的 wheel 安装（`engine-editor-cli setup` 可向任意工作区装配 skill + mcp.json）。
 - **目标（规划）**：SDK 包（类型存根 + 脚手架模板 + 文档）+ 一条安装命令的开发者体验；
   剥离路径与触发条件见 `../Dev/ecosystem_plan.md`。
 

@@ -1,24 +1,36 @@
 # FlyVibingEngine
 
-Python 3.14t（free-threaded）游戏引擎 + 可视化编辑器（Dear ImGui / OpenGL，支持 SDL2 窗口）。
-为**实验范式开发**而做：在编辑器里摆场景、连节点图、跑 PIE 预览，最后导出成可双击运行的成品。
+游戏引擎 + 可视化编辑器（Dear ImGui / OpenGL / SDL2）。为**实验范式开发**而做：在编辑器里摆场景、
+连节点图、跑 PIE 预览，最后导出成可双击运行的成品。
+
+**自带 Python 运行时**：装好即用 —— 使用者不需要装 Python、pip 或任何环境管理器。
 
 - 编辑器：场景/实体/组件、节点图、资源面板、设置（字号/语言）、Extensions 菜单
 - 运行时：`Application/Runtime` 可脱离编辑器跑（`player.bat` / 导出成品的 `run_game.cmd`）
 - 自动化：编辑器内置**实时命令总线**（回环 TCP），agent 可通过 MCP/CLI 全权操作（见下）
 
-## 快速开始
+## 安装与启动
+
+### 使用者
+
+跑 `FlyVibingEngine-Setup-*.exe` → 用开始菜单/桌面快捷方式启动。
+运行时与全部依赖随安装包交付（安装时用内置 pip + 离线 wheelhouse 就位），**不需求 uv、不需自备 Python**。
+
+> 从空工作区到实验成品的完整教学（配 AI agent）：工具仓库 [`docs/TUTORIAL.md`](https://github.com/LeyeFang/FlyVibing-User-And-Developer-Utils/blob/main/docs/TUTORIAL.md)。
+
+### 开发者（源码）
 
 ```powershell
-git clone <repo-url>
+git clone https://github.com/LeyeFang/FlyVibing-Engine
 cd FlyVibing-Engine
-Utils\Dev\setup_env.bat      # 一键：uv + Python 3.14t + .venv-py314t（按 uv-py314t.lock 同步依赖）
+Utils\Dev\setup_env.bat      # 开发环境（uv 管解释器与锁文件）→ .venv-py314t
 startup.bat                  # 启动编辑器
 ```
 
-唯一前提：装 [uv](https://docs.astral.sh/uv/)，其余自动完成。
+前置：装 [uv](https://docs.astral.sh/uv/) —— **仅开发者需要**（它负责把开发环境的解释器与依赖版本
+对齐到仓库里的锁文件 `uv-py314t.lock`；使用者那一侧由安装包内的运行时 + wheelhouse 对齐）。
 
-`startup.bat` 自动挑选解释器：开发机优先 `.venv-py314t`；安装版（无 venv）回退内置 `Resource/runtime`。
+`startup.bat` 自动挑解释器：开发机优先 `.venv-py314t`；安装版（无 venv）回退内置 `Resource/runtime`。
 
 ## 两个仓库
 

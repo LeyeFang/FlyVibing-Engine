@@ -1,7 +1,11 @@
 # 项目改名执行计划（Rebrand）
 
-> 状态：**立项（2026-10-11）— 待最终名拍板后执行**。
-> 现名 `MyGameEngine-Python` 为临时名（内部代号 MGE 随之弃用）。
+> 状态：**执行中（2026-10-14 拍板：产品名 FlyVibingEngine，仓库 FlyVibing-Engine）**。
+> 旧名 `MyGameEngine-Python`（内部代号 MGE）保留双读 ≥1 版本。
+> 已完成：pyproject 名 / 安装器（AppName、目录、Start Menu、文件关联、输出名）/ README 标题与仓库链接 /
+> 环境脚本文案 / 窗口标题与横幅 / **数据目录迁 FlyVibingEngine + 首用复制迁移** / **env 双读 `FVE_*` 优先回退 `MGE_*`**
+> （`Application/Core/AppIdentity.py`：`env_get()` / `data_dir()` / `migrate_legacy_data_dir()`）。
+> 未做：旧名仓库 URL 全量替换（文档内旧链接）、`MGE_GTEC_SERVICE` 等设备类 env 双读、改名后实机 e2e。
 > **核心原则：改「分发与标识面」，保留「技术面」** —— 波及面最小化，一次做完，
 > 借助"未发布 = 唯一零成本窗口"完成。
 
@@ -11,7 +15,7 @@
 
 | # | 项 | 建议 | 状态 |
 |---|---|---|---|
-| D1 | 最终名 | 产品名 **FlyVibe**（全称 FlyVibe Engine；缩写 FVE）；备选 FlyExpEngine | ⏳ 待拍板 |
+| D1 | 最终名 | ✅ **FlyVibingEngine**（仓库 `FlyVibing-Engine`、工具仓 `FlyVibing-User-And-Developer-Utils`；env 前缀 `FVE_`）— 2026-10-14 拍板 | 已执行 |
 | D2 | CLI / 包名前缀 | `fly` 已被 fly.io 占用 → `flyvibe`（console script、wheel 前缀） | ⏳ 待拍板 |
 | D3 | 数据目录迁移 | `%APPDATA%/MyGameEngine` → `%APPDATA%/FlyVibe`，首启动自动迁移（复制不删） | 默认执行 |
 

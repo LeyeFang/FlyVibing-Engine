@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+from Application.Core import AppIdentity
+
 import json
 import os
 
@@ -39,7 +41,7 @@ _loaded: bool = False
 
 def locale_dir() -> str:
     """目录位置（env `MGE_LOCALE_DIR` 覆盖 — 测试沙箱）。"""
-    return os.environ.get("MGE_LOCALE_DIR") or _LOCALE_DIR
+    return AppIdentity.env_get("LOCALE_DIR") or _LOCALE_DIR
 
 
 def _read_catalog(path: str):

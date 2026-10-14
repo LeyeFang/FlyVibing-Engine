@@ -38,7 +38,7 @@ class ProjectManager:
     _project_name: str = ""           # 项目名 (独立于文件路径)
     _data: dict = {}
     _is_saved: bool = False           # ★ 是否已保存到磁盘
-    _window_title_base: str = "MyGameEngine"
+    _window_title_base: str = "FlyVibingEngine"
     _engine_root: str = ""            # ★ 引擎根目录 (懒加载)
 
     # ════════════════════════════════════════════════════════════

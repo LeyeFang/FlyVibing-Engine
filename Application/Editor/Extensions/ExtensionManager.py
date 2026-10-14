@@ -18,6 +18,8 @@ M0 实装范围:
 
 from __future__ import annotations
 
+from Application.Core import AppIdentity
+
 import importlib.util
 import json
 import os
@@ -115,17 +117,17 @@ class ExtensionManager:
 
     @classmethod
     def _user_dir(cls) -> str:
-        return os.environ.get("MGE_EXTENSIONS_DIR") or os.path.join(
-            os.environ.get("APPDATA", os.path.expanduser("~")), "MyGameEngine", "extensions")
+        return AppIdentity.env_get("EXTENSIONS_DIR") or os.path.join(
+            os.environ.get("APPDATA", os.path.expanduser("~")), AppIdentity.APP_NAME, "extensions")
 
     @classmethod
     def _state_path(cls) -> str:
-        return os.environ.get("MGE_EXTENSIONS_STATE") or os.path.join(
+        return AppIdentity.env_get("EXTENSIONS_STATE") or os.path.join(
             cls._engine_root(), "Application", "Editor", "Config", "extensions.json")
 
     @classmethod
     def _data_dir(cls, ext_id: str) -> str:
-        base = os.environ.get("MGE_EXTENSIONS_DATA") or os.path.join(
+        base = AppIdentity.env_get("EXTENSIONS_DATA") or os.path.join(
             cls._engine_root(), "Application", "Editor", "Config", "extensions_data")
         return os.path.join(base, ext_id)
 

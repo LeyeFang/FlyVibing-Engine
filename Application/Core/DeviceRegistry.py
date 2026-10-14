@@ -19,6 +19,8 @@
 
 from __future__ import annotations
 
+from Application.Core import AppIdentity
+
 import json
 import os
 import re
@@ -41,11 +43,11 @@ _lock = threading.Lock()
 
 def path() -> str:
     """注册表文件路径（env `MGE_DEVICES_FILE` 覆盖 — 测试沙箱/便携部署）。"""
-    env = os.environ.get("MGE_DEVICES_FILE")
+    env = AppIdentity.env_get("DEVICES_FILE")
     if env:
         return env
     base = os.environ.get("APPDATA") or os.path.expanduser("~")
-    return os.path.join(base, "MyGameEngine", "devices.json")
+    return AppIdentity.data_dir("devices.json")
 
 
 def load(force: bool = False) -> dict:

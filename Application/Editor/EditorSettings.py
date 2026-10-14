@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+from Application.Core import AppIdentity
+
 import json
 import os
 import threading
@@ -71,7 +73,7 @@ class EditorSettings:
 
     @classmethod
     def path(cls) -> str:
-        env = os.environ.get("MGE_EDITOR_SETTINGS")
+        env = AppIdentity.env_get("EDITOR_SETTINGS")
         if env:
             return env
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), "Config", "settings.json")

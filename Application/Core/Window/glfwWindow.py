@@ -253,7 +253,7 @@ class glfwWindow(Window):
                 width, height = mode.size.width, mode.size.height
 
         # 4. 创建窗口
-        title = getattr(cls, '_window_title', 'MyGameEngine')
+        title = getattr(cls, '_window_title', 'FlyVibingEngine')
         glfw_window = glfw.create_window(
             width, height, title, use_monitor, None,
         )

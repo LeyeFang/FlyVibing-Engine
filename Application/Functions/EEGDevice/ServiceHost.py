@@ -183,7 +183,7 @@ def run_service(brand, mode, create_backend, cfg_from_fields, argv=None) -> int:
     """service.py 通用入口: --host/--port 解析 + serve_forever。"""
     import argparse
 
-    ap = argparse.ArgumentParser(description=f"MyGameEngine EEG service — {brand}")
+    ap = argparse.ArgumentParser(description=f"FlyVibingEngine EEG service — {brand}")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=0)
     args = ap.parse_args(argv)

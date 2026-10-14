@@ -100,7 +100,7 @@ class sdl2Window(Window):
         if renderer_type in ('OpenGL',):
             # OpenGL 需要 OpenGL 上下文
             cls.sdl2_window: SDL_Window = sdl2.SDL_CreateWindow(
-                b"MyGameEngine",
+                b"FlyVibingEngine",
                 sdl2.SDL_WINDOWPOS_UNDEFINED,
                 sdl2.SDL_WINDOWPOS_UNDEFINED,
                 width, height,
@@ -113,7 +113,7 @@ class sdl2Window(Window):
                 raise RuntimeError("OpenGL context creation failed")
         elif renderer_type == 'Vulkan':
             cls.sdl2_window: SDL_Window = sdl2.SDL_CreateWindow(
-                b"MyGameEngine",
+                b"FlyVibingEngine",
                 sdl2.SDL_WINDOWPOS_UNDEFINED,
                 sdl2.SDL_WINDOWPOS_UNDEFINED,
                 width, height,

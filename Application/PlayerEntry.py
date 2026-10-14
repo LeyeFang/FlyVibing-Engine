@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="PlayerEntry",
-        description="MyGameEngine 无编辑器播放器",
+        description="FlyVibingEngine 无编辑器播放器",
     )
     parser.add_argument("source", help="入口: game.json / 工程 .myproj / 场景 .scene")
     parser.add_argument("--dry-run", action="store_true",

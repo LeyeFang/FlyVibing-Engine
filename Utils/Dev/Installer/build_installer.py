@@ -1,5 +1,5 @@
 """
-build_installer.py — MyGameEngine 离线安装包构建（staging + Inno Setup 编译）。
+build_installer.py — FlyVibingEngine 离线安装包构建（staging + Inno Setup 编译）。
 
 流程:
   1. 校验 Resource/runtime/python3.14t.exe 存在（缺失 → 先运行 Utils/Dev/prepare_runtime.py）
@@ -10,7 +10,7 @@ build_installer.py — MyGameEngine 离线安装包构建（staging + Inno Setup
          --target <stage>/Resource/runtime/Lib/site-packages（安装版 = 开发版环境）
        - 独立包: FlyVibing-User-And-Developer-Utils/packages/editor-mcp/src/engine_editor_mcp → runtime site-packages
        - 启动器: <stage>/engine-editor-mcp.cmd（PATH 注册后可供 agent 工作区直接调用）
-  3. ISCC 编译 installer.iss → Utils/Dev/Installer/dist/MyGameEngine-Setup-<ver>.exe
+  3. ISCC 编译 installer.iss → Utils/Dev/Installer/dist/FlyVibingEngine-Setup-<ver>.exe
 
 用法:
   .venv-py314t\\Scripts\\python.exe Utils/Dev/Installer/build_installer.py [--skip-runtime] [--no-compile] [--keep-stage]
@@ -110,7 +110,7 @@ def _install_editor_mcp() -> None:
 
 def _write_quickstart(version: str) -> None:
     text = (
-        "MyGameEngine - Quick Start\r\n"
+        "FlyVibingEngine - Quick Start\r\n"
         "==========================\r\n"
         f"Version: {version}\r\n"
         "\r\n"
@@ -146,7 +146,7 @@ def _find_iscc() -> str | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build the MyGameEngine offline installer")
+    parser = argparse.ArgumentParser(description="Build the FlyVibingEngine offline installer")
     parser.add_argument("--skip-runtime", action="store_true",
                         help="layout test only (no bundled runtime in the package)")
     parser.add_argument("--no-compile", action="store_true", help="stage only, skip ISCC")
@@ -195,7 +195,7 @@ def main() -> int:
         [iscc, f"/DStageDir={STAGE}", f"/DAppVersion={version}", f"/DOutputDir={DIST}", ISS],
         check=True,
     )
-    exe = os.path.join(DIST, f"MyGameEngine-Setup-{version}.exe")
+    exe = os.path.join(DIST, f"FlyVibingEngine-Setup-{version}.exe")
     if os.path.isfile(exe):
         print(f"[installer] DONE: {exe}  ({os.path.getsize(exe) / 1e6:.0f} MB)")
         return 0

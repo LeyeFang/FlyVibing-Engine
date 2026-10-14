@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 :: ============================================================
-:: MyGameEngine — 开发者一键环境脚本 (Utils/Dev/setup_env.bat)
+:: FlyVibingEngine — 开发者一键环境脚本 (Utils/Dev/setup_env.bat)
 ::   新机器引导 / 日常修复 / 依赖更新 三合一
 ::
 :: 前置: uv (https://docs.astral.sh/uv/) — 其余自动
@@ -23,7 +23,7 @@ set "WHEELS=%ROOT%\Resource\wheels"
 set "IMGUI_WHEEL=%WHEELS%\imgui_bundle-1.92.5-cp314-cp314t-win_amd64.whl"
 
 echo ============================================
-echo   MyGameEngine - Dev Environment Setup
+echo   FlyVibingEngine - Dev Environment Setup
 echo   root: %ROOT%
 echo ============================================
 

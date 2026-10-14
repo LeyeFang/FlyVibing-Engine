@@ -1,6 +1,6 @@
 # Utils/Dev/Installer — 安装器（离线优先）
 
-MyGameEngine 的 **Windows GUI 安装包**（Inno Setup 6），内置 Python 运行时，
+FlyVibingEngine 的 **Windows GUI 安装包**（Inno Setup 6），内置 Python 运行时，
 用户机器零 Python 依赖、免联网。
 
 ## 决策记录（2026-10-02 与用户锁定）
@@ -25,7 +25,7 @@ MyGameEngine 的 **Windows GUI 安装包**（Inno Setup 6），内置 Python 运
 
 # 出安装包
 .venv-py314t\Scripts\python.exe Utils/Dev/Installer/build_installer.py
-#   → Utils/Dev/Installer/dist/MyGameEngine-Setup-<version>.exe
+#   → Utils/Dev/Installer/dist/FlyVibingEngine-Setup-<version>.exe
 ```
 
 选项：`--skip-runtime`（仅布局调试，包不可运行）、`--no-compile`（只做 staging）、`--keep-stage`（增量）。

@@ -1,5 +1,5 @@
 ; ============================================================
-;  MyGameEngine - Inno Setup script (offline installer, v1)
+;  FlyVibingEngine - Inno Setup script (offline installer, v1)
 ;  Build : Utils/Dev/Installer/build_installer.py (invokes ISCC with /D defines)
 ;  Docs  : Utils/Dev/Installer/README.md
 ;  Notes : ASCII-only (installer UI language = English; Chinese .isl later)
@@ -17,14 +17,14 @@
 
 [Setup]
 AppId={{7E3A9C4B-52D1-4F8E-9B2A-6C1D4E8F0A37}
-AppName=MyGameEngine
+AppName=FlyVibingEngine
 AppVersion={#AppVersion}
-AppVerName=MyGameEngine {#AppVersion}
-DefaultDirName={autopf}\MyGameEngine
-DefaultGroupName=MyGameEngine
+AppVerName=FlyVibingEngine {#AppVersion}
+DefaultDirName={autopf}\FlyVibingEngine
+DefaultGroupName=FlyVibingEngine
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
-OutputBaseFilename=MyGameEngine-Setup-{#AppVersion}
+OutputBaseFilename=FlyVibingEngine-Setup-{#AppVersion}
 Compression=lzma2/fast
 SolidCompression=yes
 WizardStyle=modern
@@ -46,26 +46,26 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 Name: "addtopath"; Description: "Add 'engine-editor-mcp' to PATH (for AI agent workspaces)"; GroupDescription: "Integration:"
-Name: "fileassoc"; Description: "Associate .myproj project files with MyGameEngine"; GroupDescription: "Integration:"
+Name: "fileassoc"; Description: "Associate .myproj project files with FlyVibingEngine"; GroupDescription: "Integration:"
 
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\MyGameEngine"; Filename: "{app}\startup.bat"; WorkingDir: "{app}"
-Name: "{group}\Uninstall MyGameEngine"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\MyGameEngine"; Filename: "{app}\startup.bat"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\FlyVibingEngine"; Filename: "{app}\startup.bat"; WorkingDir: "{app}"
+Name: "{group}\Uninstall FlyVibingEngine"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\FlyVibingEngine"; Filename: "{app}\startup.bat"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Registry]
 ; PATH entry (HKA = HKCU\Environment or HKLM\...\Environment per install mode)
 Root: HKA; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Tasks: addtopath; Check: NeedsAddPath('{app}')
 ; .myproj file association (opens the editor with the file path as argument)
-Root: HKA; Subkey: "Software\Classes\.myproj"; ValueType: string; ValueName: ""; ValueData: "MyGameEngine.Project"; Flags: uninsdeletekey; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\MyGameEngine.Project"; ValueType: string; ValueName: ""; ValueData: "MyGameEngine Project"; Flags: uninsdeletekey; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\MyGameEngine.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\startup.bat"" ""%1"""; Flags: uninsdeletekey; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\.myproj"; ValueType: string; ValueName: ""; ValueData: "FlyVibingEngine.Project"; Flags: uninsdeletekey; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\FlyVibingEngine.Project"; ValueType: string; ValueName: ""; ValueData: "FlyVibingEngine Project"; Flags: uninsdeletekey; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\FlyVibingEngine.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\startup.bat"" ""%1"""; Flags: uninsdeletekey; Tasks: fileassoc
 
 [Run]
-Filename: "{app}\startup.bat"; Description: "Launch MyGameEngine now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\startup.bat"; Description: "Launch FlyVibingEngine now"; Flags: nowait postinstall skipifsilent
 
 [Code]
 function EnvRegRoot(): Integer;

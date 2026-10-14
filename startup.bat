@@ -43,7 +43,7 @@ set "PYTHONDONTWRITEBYTECODE=1"
 :: Run entry point directly (no activate.bat needed - avoids PATH issues)
 :: ============================================
 echo Using Python: %PYTHON%
-echo Starting MyGameEngine...
+echo Starting FlyVibingEngine...
 "%PYTHON%" -Xgil=0 "%~dp0Application\EntryPoint.py" %*
 
 if %errorlevel% neq 0 (

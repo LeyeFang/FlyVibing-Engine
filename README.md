@@ -1,4 +1,4 @@
-# MyGameEngine
+# FlyVibingEngine
 
 Python 3.14t（free-threaded）游戏引擎 + 可视化编辑器（Dear ImGui / OpenGL，支持 SDL2 窗口）。
 为**实验范式开发**而做：在编辑器里摆场景、连节点图、跑 PIE 预览，最后导出成可双击运行的成品。
@@ -11,7 +11,7 @@ Python 3.14t（free-threaded）游戏引擎 + 可视化编辑器（Dear ImGui / 
 
 ```powershell
 git clone <repo-url>
-cd MyGameEngine-Python
+cd FlyVibing-Engine
 Utils\Dev\setup_env.bat      # 一键：uv + Python 3.14t + .venv-py314t（按 uv-py314t.lock 同步依赖）
 startup.bat                  # 启动编辑器
 ```
@@ -26,7 +26,7 @@ startup.bat                  # 启动编辑器
 
 | 仓库 | 内容 | 谁用 |
 |---|---|---|
-| **本仓库** `MyGameEngine-Python` | `Application/`（引擎+编辑器+运行时）、`Functions/`（内置扩展）、`Resource/`、`Doc/`、`Utils/Dev`（研发工具）、`Utils/User`（随成品分发） | 引擎研发；打包实验成品 |
+| **本仓库** `FlyVibing-Engine` | `Application/`（引擎+编辑器+运行时）、`Functions/`（内置扩展）、`Resource/`、`Doc/`、`Utils/Dev`（研发工具）、`Utils/User`（随成品分发） | 引擎研发；打包实验成品 |
 | **[FlyVibing-User-And-Developer-Utils](https://github.com/LeyeFang/FlyVibing-User-And-Developer-Utils)** | `editor-mcp`（编辑器实时 MCP/CLI）、`node-editor`（离线节点图）、`extension-kit`（扩展审查 + 无头测试）、`skills/` | 实验设计者、扩展作者，以及引擎团队自己 |
 
 在引擎仓库里干活时，把工具链链接进来即可（`Utils/ExtDev` 是**链接**，已 gitignore，内容不进本仓库）：

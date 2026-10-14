@@ -4,6 +4,7 @@
 
 > **FlyVibing-User-And-Developer-Utils** — https://github.com/LeyeFang/FlyVibing-User-And-Developer-Utils
 > 安装：`pip install -e <tools repo>/packages/*`（实验设计者、扩展开发者、引擎团队自己都用它）
+> 本机开发：`Utils\Dev\link_tools.bat` 把工具仓库链接进来（`Utils/ExtDev` 是链接，已 gitignore）
 
 ## 内容
 

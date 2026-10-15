@@ -406,6 +406,34 @@ class ProjectManager:
         res_out: dict[str, list] = {}
         res = cls._data.get("resources", {})
         id_keys = {"materials": "material_id", "prefabs": "prefab_id"}
+        # ★ 导出对齐不变量 (2026-10-16): 场景从内存态写出 → 引用是"当前会话活 id";
+        #   资源记录 id 必须同步取活 id, 否则导出包下次加载时 id_map 重映射落空
+        #   (典型触发: 会话中已加载过其他工程 → 活 id 空间漂移, 记录停在旧值。
+        #    注意: 进程内重复打开同一工程会让同一文件存在多条注册, 因此
+        #    "活 id" 以场景实际引用的 id 为准, 未被引用时才回退最近注册。)
+        from Application.Resource.ResourceManager import ResourceManager
+        live_ids: dict[str, dict[str, int]] = {"materials": {}, "prefabs": {}}
+        for _scene in EditorHost._scenes.values():
+            for _ed in _scene.entities.values():
+                _mr = _ed.components.get("MeshRenderer") if hasattr(_ed, "components") else None
+                if _mr is None:
+                    continue
+                _rid = _mr.get("material_id") if isinstance(_mr, dict) \
+                    else getattr(_mr, "material_id", None)
+                if not isinstance(_rid, int):
+                    continue
+                _m = ResourceManager.GetMaterial(_rid)
+                _fp = (getattr(_m, "_file_path", "") or "") if _m is not None else ""
+                if _fp:
+                    live_ids["materials"][cls._path_key(_fp)] = _rid
+        for _mid, _mat in ResourceManager.loaded_material.items():
+            _fp = getattr(_mat, "_file_path", "") or ""
+            if _fp:
+                live_ids["materials"].setdefault(cls._path_key(_fp), int(_mid))
+        for _pid, _pdata in ResourceManager.loaded_prefab.items():
+            _fp = _pdata.get("path", "") if isinstance(_pdata, dict) else ""
+            if _fp:
+                live_ids["prefabs"][cls._path_key(_fp)] = int(_pid)  # 最近注册优先
         copied = 0
         for category in ("materials", "shaders", "textures", "meshes", "prefabs"):
             res_out[category] = []
@@ -435,6 +463,11 @@ class ProjectManager:
                     warnings.append(f"{category}: copy failed ({e}): {abs_path}")
                     continue
                 item["path"] = dst_rel
+                # ★ 活 id 对齐: 场景引用 = 活 id ⇒ 记录 id 也取活 id (找不到时保留原值)
+                if id_key:
+                    _live = live_ids[category].get(cls._path_key(abs_path))
+                    if _live is not None:
+                        item[id_key] = _live
                 res_out[category].append(item)
                 files.append(dst_rel)
                 total_bytes += os.path.getsize(dst)

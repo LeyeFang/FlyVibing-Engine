@@ -31,7 +31,8 @@ Engine._render_loop (渲染线程)
           3. pick pass (OpenGLPickSystem: 独立 FBO + 专职 shader + glReadPixels)
           4. pre-overlay callbacks (FBO 重定向/模板预设; _scene_fbo_override)
           5. render_entities (OpenGLEntities: 排序→逐实体 uniform→draw)
-          6. post-process (OpenGLPostProcess: Highlight 轮廓 = MRT FBO + 边缘检测)
+          6. post-process (OpenGLPostProcess: Highlight 轮廓 = MRT FBO + 边缘检测;
+             Pass-1 场景色缓冲清屏色跟随渲染器当前清屏色 — 工程背景色贯通编辑器视口/PIE/播放器)
           7. overlays (OpenGLOverlays: Grid/Gizmo 等, 逐 drawable 状态标志)
   └─ Engine._render_one_frame: StartFrame → 层 OnRender → EndFrame
        → _maybe_capture (glReadPixels 后缓冲) → SwapBuffer → FrameProfiler.tick

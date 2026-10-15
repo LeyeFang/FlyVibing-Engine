@@ -49,14 +49,19 @@
 
 1. 同步活跃场景（esper → Scene）与节点图（panel → Scene.node_graph）；
 2. 逐场景写盘：有 `_file_path` → 写回原文件；无 → `<proj>/scenes/<name>.scene` 并记录落点；
+   （工程目录**之外**的场景跳过 — 见下「场景列表自包含」）
 3. 收集 `scenes` 列表（相对当前工程根）→ **startup_scene 按真实文件路径重映射**，失败回退首个场景；
 4. `_sync_prefabs_to_data()` 从 ResourceManager 重建 prefab 列表；
 5. `_canonicalize_resources()` 归一化资源路径；
 6. 写 `.myproj`。
 
 **Save As 的定位**：轻量"换根保存"，**不复制任何文件**——
-- 场景/资源仍在原位置，新工程通过相对路径（可能含 `..`）引用 → 同机器可解析；
-  整体迁移请用 §4 的 Export（自包含）。
+- 场景/资源仍在原位置；整体迁移请用 §4 的 Export（自包含）。
+- **场景列表自包含（数据隔离, 2026-10-15 起）**：工程目录**之外**的场景
+  （典型: 其他工程场景被会话加载后混入）不再写入 `scenes` 列表、也不重写其原文件；
+  加载时同样拒绝 `scenes` 中指向工程目录外的条目（旧污染自愈，记 WARNING）。
+  需要在多工程间携带场景 → 用 Export，或把 .scene 复制进工程目录。
+  资源（materials/prefabs/...）不受此限制，仍可相对/绝对引用。
 - 与旧行为差异（已修）：换根后不再残留旧根相对路径 / 绝对路径；startup 会重映射。
 
 **落点跟踪约定**：`EditorHost.save_active_scene_to_file / save_scene_to_file /

@@ -3,7 +3,9 @@ EEGDevice.ServiceClient — 引擎侧服务后端: 品牌进程 + 协议通信 (
 
 路由 (门面 EEGDevice._make_backend, 真实模式默认):
   - VirtualDevice → spawn_virtual(): 引擎自动拉起 (sys.executable, 引擎本体环境);
-  - Gtec          → connect_gtec():  连接外部服务 (自有环境; MGE_GTEC_SERVICE=host:port)。
+  - Gtec          → connect_gtec():  显式 MGE_GTEC_SERVICE → 连接外部服务;
+                    否则给出 (cfg.service_python / MGE_GTEC_PYTHON) python 时 → 自动拉起
+                    (自有环境进程, 动态端口); 都没有 → 连接默认 127.0.0.1:47810。
 
 数据模式 (服务 hello 声明):
   - pump: 虚拟/合成后端 — pump 命令同步返回块 (与进程内语义完全一致, 确定性);
@@ -32,12 +34,51 @@ from .Device import DeviceBackend
 from .ServiceProtocol import recv_message, send_message
 
 _DEFAULT_GTEC_ENDPOINT = "127.0.0.1:47810"
-_CONNECT_TIMEOUT_S = 20.0
+DEFAULT_GTEC_ENDPOINT = _DEFAULT_GTEC_ENDPOINT        # 公开别名（探针/文档用）
+_CONNECT_TIMEOUT_S = 20.0          # 自动拉起时的等待窗口（服务启动 + pygds 导入）
+_CONNECT_TIMEOUT_S_EXTERNAL = 3.0  # 外部/默认地址：连接拒绝时快速失败，不让用户干等
 _SERVICE_LOG_PREFIX = "mge_eeg_service_"
 
 
 class ServiceError(RuntimeError):
     """服务通信 / 远端执行失败。"""
+
+
+def probe_gtec_service(endpoint: Optional[str] = None, timeout: float = 1.5) -> dict:
+    """探测 Gtec 品牌服务（不建会话）: TCP 连接 + hello 握手。
+
+    Returns: {endpoint, source(arg|env|default), reachable, brand, mode, version,
+              detail, auto_launch, python}
+    """
+    env_ep = os.environ.get("MGE_GTEC_SERVICE", "").strip()
+    arg_ep = str(endpoint or "").strip()
+    ep = arg_ep or env_ep or _DEFAULT_GTEC_ENDPOINT
+    py = os.environ.get("MGE_GTEC_PYTHON", "").strip()
+    out = {"endpoint": ep, "source": "arg" if arg_ep else ("env" if env_ep else "default"),
+           "reachable": False, "brand": None, "mode": None, "version": None,
+           "detail": "", "auto_launch": bool(py), "python": py or None}
+    host, _, port_s = ep.partition(":")
+    try:
+        with socket.create_connection((host or "127.0.0.1", int(port_s or "0")),
+                                      timeout=timeout) as sock:
+            send_message(sock, {"cmd": "hello", "rid": 1})
+            sock.settimeout(timeout)
+            reply = recv_message(sock)
+    except OSError as e:
+        out["detail"] = f"not listening / connect failed: {e}"
+        return out
+    except Exception as e:  # noqa: BLE001 — 损坏响应等
+        out["detail"] = f"handshake error: {e!r}"
+        return out
+    if isinstance(reply, dict) and reply.get("ok") and reply.get("brand") == "gtec":
+        out.update(reachable=True, brand="gtec", mode=reply.get("mode"),
+                   version=reply.get("version"), detail="service ok")
+    elif isinstance(reply, dict):
+        out.update(reachable=True,
+                   detail=f"unexpected responder on port (brand={reply.get('brand')!r})")
+    else:
+        out.update(reachable=True, detail="unexpected responder on port")
+    return out
 
 
 def _repo_root() -> str:
@@ -52,11 +93,12 @@ class ServiceBackend(DeviceBackend):
     is_stub = False
 
     def __init__(self, brand: str, *, spawn: bool = False, module: str = "",
-                 endpoint: Optional[str] = None) -> None:
+                 endpoint: Optional[str] = None, python_exe: str = "") -> None:
         self.brand = brand
         self._spawn = spawn
         self._module = module
         self._endpoint = endpoint
+        self._python_exe = str(python_exe or "").strip()
         self._proc: Optional[subprocess.Popen] = None
         self._log_path: Optional[str] = None
         self._sock: Optional[socket.socket] = None
@@ -80,11 +122,20 @@ class ServiceBackend(DeviceBackend):
                    module="Application.Functions.EEGDevice.VirtualDevice.service")
 
     @classmethod
-    def connect_gtec(cls) -> "ServiceBackend":
-        """Gtec: 连接外部服务 (自有环境; push 模式)。"""
-        endpoint = os.environ.get("MGE_GTEC_SERVICE", "").strip() \
-            or _DEFAULT_GTEC_ENDPOINT
-        return cls("gtec", spawn=False, endpoint=endpoint)
+    def connect_gtec(cls, python_exe: Optional[str] = None) -> "ServiceBackend":
+        """Gtec: 显式 MGE_GTEC_SERVICE → 连接外部服务（设该项时不再自动拉起）;
+        否则给出 (参数 / env MGE_GTEC_PYTHON) python 时 → 自动拉起自有环境服务;
+        都没有 → 连接默认 127.0.0.1:47810（期望外部手动启动）。"""
+        endpoint = os.environ.get("MGE_GTEC_SERVICE", "").strip()
+        if endpoint:
+            return cls("gtec", spawn=False, endpoint=endpoint)
+        exe = str(python_exe or "").strip() \
+            or os.environ.get("MGE_GTEC_PYTHON", "").strip()
+        if exe:
+            return cls("gtec", spawn=True,
+                       module="Application.Functions.EEGDevice.Gtec.service",
+                       python_exe=exe)
+        return cls("gtec", spawn=False, endpoint=_DEFAULT_GTEC_ENDPOINT)
 
     # ── DeviceBackend 协议 ────────────────────────────────
 
@@ -190,10 +241,13 @@ class ServiceBackend(DeviceBackend):
         if self._spawn:
             self._spawn_service()
         host, port = self._parse_endpoint(self._endpoint)
-        deadline = time.time() + _CONNECT_TIMEOUT_S
+        deadline = time.time() + (_CONNECT_TIMEOUT_S if self._spawn else _CONNECT_TIMEOUT_S_EXTERNAL)
         while time.time() < deadline and self._sock is None:
+            remain = max(0.2, deadline - time.time())
             try:
-                self._sock = socket.create_connection((host, port), timeout=2.0)
+                # 单次尝试不超出剩余预算（部分机器对关闭端口是超时而非拒绝）
+                self._sock = socket.create_connection((host, port),
+                                                      timeout=min(2.0, remain))
             except OSError:
                 if self._proc is not None and self._proc.poll() is not None:
                     break   # 子进程已死 — 不再等待
@@ -202,10 +256,19 @@ class ServiceBackend(DeviceBackend):
             detail = f"cannot connect {self.brand} service @ {host}:{port}"
             if self._proc is not None and self._proc.poll() is not None:
                 detail += f" (service exited code={self._proc.returncode})"
-            if self.brand == "gtec" and not self._spawn:
-                detail += ("\n提示: Gtec 服务需在其自有环境中外部启动: "
-                           "python -m Application.Functions.EEGDevice.Gtec.service "
-                           "--port 47810 (或设 MGE_GTEC_SERVICE)")
+            if self._spawn:
+                detail += (f"\nauto-launch command: {self._python_exe or sys.executable} "
+                           f"-m {self._module} --port {port}")
+                detail += ("\n提示: 'Svc python' / MGE_GTEC_PYTHON 需指向装有 pygds 的 Python"
+                           "（Gtec 自有环境; 且该 python 需能访问本仓库）")
+            elif self.brand == "gtec":
+                detail += ("\nGtec 服务未运行（引擎连不上品牌服务进程 —— 与设备是否被 "
+                           "g.Recorder 等占用无关。\n"
+                           "  A) 自动拉起: 面板 'Svc python' 或环境变量 MGE_GTEC_PYTHON "
+                           "指向装有 pygds 的 python.exe, 再次 Open\n"
+                           "  B) 手动启动: <该 python> -m Application.Functions.EEGDevice.Gtec.service "
+                           "--port 47810\n"
+                           "  自定义地址: MGE_GTEC_SERVICE=host:port（设了该项时按它连接, 不自动拉起）")
             tail = self._read_log_tail()
             if tail:
                 detail += f"\n--- service log tail ---\n{tail}"
@@ -228,11 +291,18 @@ class ServiceBackend(DeviceBackend):
         creationflags = 0
         if os.name == "nt":
             creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        cmd = [sys.executable, "-m", self._module, "--port", str(port)]
+        exe = self._python_exe or sys.executable
+        cmd = [exe, "-m", self._module, "--port", str(port)]
         with open(self._log_path, "wb") as log:
-            self._proc = subprocess.Popen(
-                cmd, cwd=_repo_root(), stdout=log,
-                stderr=subprocess.STDOUT, creationflags=creationflags)
+            try:
+                self._proc = subprocess.Popen(
+                    cmd, cwd=_repo_root(), stdout=log,
+                    stderr=subprocess.STDOUT, creationflags=creationflags)
+            except OSError as e:
+                raise ServiceError(
+                    f"cannot spawn {self.brand} service: {e}\n"
+                    f"  python: {exe!r}\n"
+                    f"  （'Svc python' / MGE_GTEC_PYTHON 需指向真实存在的 python.exe）") from e
         self._endpoint = f"127.0.0.1:{port}"
 
     @staticmethod

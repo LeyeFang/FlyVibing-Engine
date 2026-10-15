@@ -213,6 +213,27 @@ def _draw_export_page() -> None:
     imgui.separator()
 
     # ── 模式 [自由度: L1 受控枚举] ──
+    # 工程背景色（测试性配置；存 .myproj，完整成品常用 skybox/内容填底）
+    from Application.Editor.ProjectManager import ProjectManager as _PM
+    if _PM.is_open():
+        imgui.text_disabled("Background (project)")
+        imgui.same_line()
+        _bg = list(_PM.background_color())
+        _c0 = imgui.drag_float("R##bg_r", _bg[0], 0.01, 0.0, 1.0, "%.2f")
+        imgui.same_line()
+        _c1 = imgui.drag_float("G##bg_g", _bg[1], 0.01, 0.0, 1.0, "%.2f")
+        imgui.same_line()
+        _c2 = imgui.drag_float("B##bg_b", _bg[2], 0.01, 0.0, 1.0, "%.2f")
+        if _c0[0] or _c1[0] or _c2[0]:
+            _PM.set_background_color(_c0[1], _c1[1], _c2[1])
+        imgui.same_line()
+        for _n, _rgb in (("White", (1, 1, 1)), ("Gray", (0.2, 0.2, 0.2)), ("Black", (0, 0, 0))):
+            if imgui.small_button(f"{_n}##bg_{_n}"):
+                _PM.set_background_color(*_rgb)
+    else:
+        imgui.text_disabled("Background (project) — open a project to edit")
+    imgui.separator()
+
     labels = [m[0] for m in _PIE_MODES]
     keys = [m[1] for m in _PIE_MODES]
     cur = keys.index(s["mode"]) if s["mode"] in keys else 0

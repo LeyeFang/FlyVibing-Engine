@@ -92,6 +92,16 @@ def channel_names_for(n_channels: int) -> list[str]:
     return names
 
 
+def saved_channel_names(cfg_channels: int, n_columns: int) -> list[str]:
+    """落盘列名: 模板名; 硬件附加列（如 g.HIamp trigger combine = +1 列）末尾补 "TRIG"。"""
+    names = channel_names_for(cfg_channels)
+    if n_columns == len(names) + 1:
+        names = names + ["TRIG"]
+    elif n_columns > len(names):
+        names += [f"ch{i + 1}" for i in range(len(names), n_columns)]
+    return names
+
+
 def classify_impedance(value_kohm, electrode_type: str = "passive") -> str:
     """阻抗值 (kΩ) → 'good' | 'medium' | 'bad' | 'n/a'（NaN/None/负值 = n/a）。"""
     if value_kohm is None:
@@ -158,6 +168,8 @@ class GtecConfig:
     export_format: str = "npz"     # npz / csv
     save_dir: str = "."            # 保存目录（默认当前目录）
     buffer_seconds: float = 10.0   # 窗口缓冲秒数 → (channels, 秒×采样率)
+    service_python: str = ""       # Gtec 服务自动拉起用 python（空 = 仅连接外部服务;
+                                   # env MGE_GTEC_PYTHON 亦可 — 需装有 pygds 的自有环境）
 
     # ── 构造 ────────────────────────────────────────────────
 
@@ -209,6 +221,7 @@ class GtecConfig:
             export_format=fmt,
             save_dir=str(props.get("save_dir", "")).strip() or ".",
             buffer_seconds=max(0.1, min(600.0, _f("buffer_seconds", 10.0))),
+            service_python=str(props.get("service_python", "")).strip(),
         )
 
     # ── 派生属性 ────────────────────────────────────────────
@@ -433,19 +446,25 @@ class RecordingSession:
     # ── 采集回调（后端线程调用） ────────────────────────────
 
     def _on_block(self, block: np.ndarray) -> None:
-        self.ring.push(block)
+        b = np.asarray(block, dtype=np.float32)
+        # 硬件附加通道（g.HIamp trigger combine = +1 列）: 显示/节点只用 EEG 主通道;
+        # 录制保留原样（落盘含 trigger 列, 名称补 "TRIG" — 见 saved_channel_names）。
+        if b.ndim == 2 and b.shape[1] == self.ring.channels + 1:
+            self.ring.push(b[:, :self.ring.channels])
+        else:
+            self.ring.push(b)
         with self._lock:
             if self.state != "recording":
                 return
             if self._record_full:
                 return
-            nbytes = int(block.size) * 4
+            nbytes = int(b.size) * 4
             if self._record_bytes + nbytes > MAX_RECORD_BYTES:
                 self._record_full = True
                 print(f"[Device] WARNING: session '{self.name}' full-recording memory cap "
                       f"({MAX_RECORD_BYTES / 1024**3:.1f} GiB) reached — only window buffer updates")
                 return
-            self._blocks.append(np.array(block, dtype=np.float32, copy=True))
+            self._blocks.append(np.array(b, dtype=np.float32, copy=True))
             self._record_bytes += nbytes
 
     # ── 生命周期 ────────────────────────────────────────────
@@ -539,7 +558,8 @@ class RecordingSession:
             raise RuntimeError(
                 f"stop streaming first (state={self.state}) — impedance "
                 f"measurement requires the device idle")
-        raw = list(self.backend.get_impedance(etype, bool(tms_box)))
+        raw_all = list(self.backend.get_impedance(etype, bool(tms_box)))
+        raw = raw_all[: self.cfg.channels]   # 设备可能回报全部内部通道 → 裁剪到会话通道
         ohm: list = []
         kohm: list = []
         for v in raw:
@@ -547,10 +567,11 @@ class RecordingSession:
                 fv = float(v)
             except (TypeError, ValueError):
                 fv = float("nan")
-            if math.isfinite(fv):
+            if math.isfinite(fv) and fv >= 0.0:
                 ohm.append(round(fv, 1))
                 kohm.append(round(fv / 1000.0, 3))
             else:
+                # 负值/NaN = 不可测（真机空采未接电极帽时常见 -9 哨兵）
                 ohm.append(None)
                 kohm.append(None)
         return {
@@ -559,6 +580,7 @@ class RecordingSession:
             "values_ohm": ohm,
             "values_kohm": kohm,
             "channels": self.cfg.channels,
+            "device_values": len(raw_all),
             "serial": self.backend_info.get("serial", self.cfg.serial),
             "stub": bool(self.backend.is_stub),
             "ts": _iso_now(),
@@ -594,10 +616,12 @@ class RecordingSession:
         result.written = True
         return result
 
-    def meta(self, save_scope: str, n_samples: int, duration_s: float, paths: list[str]) -> dict:
-        """导出元数据（与 GtecAPI 脚本的 JSON 风格对齐）。"""
+    def meta(self, save_scope: str, n_samples: int, duration_s: float, paths: list[str],
+             n_columns: int = None) -> dict:
+        """导出元数据（与 GtecAPI 脚本的 JSON 风格对齐; n_columns = 实际落盘列数）。"""
         f = self.cfg.effective_filters()
         info = self.backend.info()
+        n_cols = int(n_columns) if n_columns else int(self.cfg.channels)
         return {
             "source": "MyGameEngine.NodeEditor",
             "device": self.cfg.device,
@@ -607,8 +631,9 @@ class RecordingSession:
             "device_information": info.get("device_information", ""),
             "sampling_rate_hz": self.cfg.sampling_rate,
             "channels_acquired": self.cfg.channels,
+            "channels_saved": n_cols,
             "template": self.cfg.template,
-            "channel_names": channel_names_for(self.cfg.channels),
+            "channel_names": saved_channel_names(self.cfg.channels, n_cols),
             "notch_hz": f["notch_hz"],
             "notch_filter_index": info.get("notch_filter_index"),
             "bandpass_hz": [f["low"], f["high"]],
@@ -873,10 +898,10 @@ def _write_recording(session: RecordingSession, data: np.ndarray, base: str, sco
     try:
         os.makedirs(os.path.dirname(os.path.abspath(base)), exist_ok=True)
 
+        names = saved_channel_names(session.cfg.channels, int(data.shape[1]))
         fmt = session.cfg.export_format
         if fmt == "csv":
             data_path = f"{base}.csv"
-            names = channel_names_for(session.cfg.channels)
             header = ",".join(["sample"] + names)
             with open(data_path, "w", encoding="utf-8", newline="") as fh:
                 fh.write(header + "\n")
@@ -889,14 +914,15 @@ def _write_recording(session: RecordingSession, data: np.ndarray, base: str, sco
                 data_path,
                 data=data,
                 fs=session.cfg.sampling_rate,
-                channel_names=np.asarray(channel_names_for(session.cfg.channels)),
+                channel_names=np.asarray(names),
                 serial=session.backend_info.get("serial", session.cfg.serial),
                 duration_s=data.shape[0] / max(1, session.cfg.sampling_rate),
             )
         paths.append(data_path)
 
         meta = session.meta(scope, int(data.shape[0]),
-                            data.shape[0] / max(1, session.cfg.sampling_rate), [data_path])
+                            data.shape[0] / max(1, session.cfg.sampling_rate), [data_path],
+                            n_columns=int(data.shape[1]))
         json_path = f"{base}.json"
         with open(json_path, "w", encoding="utf-8") as fh:
             json.dump(meta, fh, indent=2, ensure_ascii=False)

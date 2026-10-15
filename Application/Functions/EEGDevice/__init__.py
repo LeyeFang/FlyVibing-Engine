@@ -16,6 +16,7 @@ EEGDevice — 设备层门面 (品牌目录化: Gtec / VirtualDevice / eCon; 进
     kill_device(name, pool)                   → (ok, detail)
     get_data(name, elapsed_s, pool)           → (result | None, detail)
     measure_impedance(name, electrode_type, tms_box, pool) → (result | None, detail)
+    probe_gtec_service(endpoint)              → dict   (Gtec 服务连通性探测, 不建会话)
     close_all()                               → int        (Runtime 停止保护)
     list_sessions()                           → list[str]
 
@@ -69,6 +70,7 @@ from .Device import (
     unregister_session,
 )
 from .VirtualDevice import SigGenConfig
+from .ServiceClient import probe_gtec_service
 
 __all__ = [
     "GtecConfig",
@@ -90,6 +92,7 @@ __all__ = [
     "start_record",
     "stop_record",
     "measure_impedance",
+    "probe_gtec_service",
     "kill_device",
     "get_data",
     "close_all",
@@ -142,7 +145,8 @@ def _make_backend(cfg, dry_run: bool) -> DeviceBackend:
 
     if device == "VIRTUAL":
         return ServiceBackend.spawn_virtual()
-    return ServiceBackend.connect_gtec()
+    return ServiceBackend.connect_gtec(
+        python_exe=getattr(cfg, "service_python", "") or None)
 
 
 # ═══════════════════════════════════════════════════════════════

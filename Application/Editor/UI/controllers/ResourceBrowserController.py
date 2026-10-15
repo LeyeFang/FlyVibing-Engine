@@ -54,7 +54,7 @@ class ResourceBrowserController:
         result = []
 
         if filter_type is None or filter_type == cls.TYPE_MESH:
-            for id_str, data in ResourceManager.loaded_mesh.items():
+            for id_str, data in list(ResourceManager.loaded_mesh.items()):
                 result.append({
                     'id': int(id_str),
                     'name': data.get('name', 'unnamed'),
@@ -63,7 +63,7 @@ class ResourceBrowserController:
                 })
 
         if filter_type is None or filter_type == cls.TYPE_SHADER:
-            for id_str, data in ResourceManager.loaded_shader.items():
+            for id_str, data in list(ResourceManager.loaded_shader.items()):
                 result.append({
                     'id': int(id_str),
                     'name': data.get('name', 'unnamed'),
@@ -72,7 +72,7 @@ class ResourceBrowserController:
                 })
 
         if filter_type is None or filter_type == cls.TYPE_TEXTURE:
-            for id_str, data in ResourceManager.loaded_texture.items():
+            for id_str, data in list(ResourceManager.loaded_texture.items()):
                 result.append({
                     'id': int(id_str),
                     'name': data.get('name', 'unnamed'),
@@ -81,7 +81,7 @@ class ResourceBrowserController:
                 })
 
         if filter_type is None or filter_type == cls.TYPE_MATERIAL:
-            for id_str, mat in ResourceManager.loaded_material.items():
+            for id_str, mat in list(ResourceManager.loaded_material.items()):
                 mid = int(id_str)
                 mat_name = getattr(mat, 'name', '') or f"Material #{mid}"
                 # ★ 过滤内部 clone（xxx_copy），只显示用户创建的材质
@@ -96,7 +96,7 @@ class ResourceBrowserController:
                 })
 
         if filter_type is None or filter_type == cls.TYPE_PREFAB:
-            for id_str, pdata in ResourceManager.loaded_prefab.items():
+            for id_str, pdata in list(ResourceManager.loaded_prefab.items()):
                 pid = int(id_str)
                 p_name = pdata.get('name', '') or f"Prefab #{pid}"
                 result.append({
@@ -192,7 +192,7 @@ class ResourceBrowserController:
     def get_mesh_options(cls) -> list[tuple[int, str]]:
         """返回 [(mesh_id, name), ...] 列表，供下拉选择用。"""
         result = []
-        for id_str, data in ResourceManager.loaded_mesh.items():
+        for id_str, data in list(ResourceManager.loaded_mesh.items()):
             result.append((int(id_str), data.get("name", "unnamed")))
         return result
 
@@ -200,7 +200,7 @@ class ResourceBrowserController:
     def get_material_options(cls) -> list[tuple[int, str]]:
         """返回 [(material_id, label), ...] 列表，供下拉选择用。过滤内部 clone。"""
         result = []
-        for id_str, data in ResourceManager.loaded_material.items():
+        for id_str, data in list(ResourceManager.loaded_material.items()):
             mid = int(id_str)
             mat_name = getattr(data, 'name', '') or f"Material #{mid}"
             if mat_name.endswith("_copy"):
@@ -212,7 +212,7 @@ class ResourceBrowserController:
     def get_shader_options(cls) -> list[tuple[int, str]]:
         """返回 [(shader_id, name), ...] 列表。"""
         result = []
-        for id_str, data in ResourceManager.loaded_shader.items():
+        for id_str, data in list(ResourceManager.loaded_shader.items()):
             result.append((int(id_str), data.get("name", "unnamed")))
         return result
 
@@ -220,7 +220,7 @@ class ResourceBrowserController:
     def get_texture_options(cls) -> list[tuple[int, str]]:
         """返回 [(texture_id, name), ...] 列表。"""
         result = []
-        for id_str, data in ResourceManager.loaded_texture.items():
+        for id_str, data in list(ResourceManager.loaded_texture.items()):
             result.append((int(id_str), data.get("name", "unnamed")))
         return result
 

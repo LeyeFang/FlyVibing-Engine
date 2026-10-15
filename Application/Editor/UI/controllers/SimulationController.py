@@ -318,12 +318,23 @@ class SimulationController:
         # ── 应用 PIE 窗口偏好 (Play 下方 Settings: 全屏 / 窗口化尺寸) ──
         cls._apply_pie_window_prefs(gt)
 
+        # ── 工程背景色 → PIE 清屏色 (Overlay 保持透明; 经 RuntimeHostBridge 注入) ──
+        _clear_color = None
+        if gt != GameType.OVERLAY:
+            try:
+                from Application.Editor.ProjectManager import ProjectManager
+                _bg = ProjectManager.background_color()
+                _clear_color = (float(_bg[0]), float(_bg[1]), float(_bg[2]), 1.0)
+            except Exception:  # noqa: BLE001 — 无工程上下文 → 用渲染器默认清屏色
+                _clear_color = None
+
         # ── 注册运行时宿主桥接 + 上下文钩子 (运行时对 Editor 零反向依赖) ──
         RuntimeNodeLayer.set_context_hooks(on_stop_request=cls.stop)
         GameRuntime.set_host_bridge(RuntimeHostBridge(
             frame_sync=EditorHost._frame_sync,
             sync_scene_from_host=cls._sync_scene_to_runtime,
             protected_entity_ids=cls._protected_runtime_entities,
+            clear_color=_clear_color,
         ))
 
         # ── 统一后端: PIE 使用与编辑器相同的窗口/渲染器类型 ──

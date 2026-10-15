@@ -233,9 +233,16 @@ class UpdateHighlightConfigCommand(RenderCommand):
 
 @dataclass
 class SetClearColorCommand(RenderCommand):
-    """设置清屏颜色 (RGBA)。
+    """设置清屏颜色 (RGBA) — 场景/窗口色缓冲的底色。
 
-    调用方: GameRuntime.start() — Overlay 模式设 alpha=0 实现透明背景
+    影响点: OpenGLCore.clear_frame + OpenGLPostProcess Pass-1 (MRT 场景色缓冲)
+      — 后处理激活时 Pass-1 读取渲染器当前清屏色, 命令效果对编辑器视口同样可见。
+
+    调用方:
+      - ProjectManager.apply_background_color  — 工程背景色 (打开/设置时)
+      - GameRuntime.start (经 RuntimeHostBridge.clear_color) — PIE 首帧前
+      - PlayerBootstrap.run                    — 独立播放器首帧前
+      - OverlayInputLayer.OnAttach             — Overlay 透明背景 (alpha=0)
     """
     r: float = 0.2
     g: float = 0.2

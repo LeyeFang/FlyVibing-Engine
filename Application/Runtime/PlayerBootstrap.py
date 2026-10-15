@@ -36,6 +36,7 @@ class PlayerSession:
     window_mode: str = "auto"        # auto | windowed | fullscreen | overlay
     output_dir: str = ""             # 数据输出目录（默认 <包根>/output）
     root: str = ""                   # bundle 根（= game.json 所在目录; 无则 CWD）
+    background_color: 'tuple[float, float, float, float] | None' = None
     warnings: list[str] = field(default_factory=list)
 
 
@@ -115,6 +116,12 @@ def _attach_project(s: PlayerSession, project_path: str, scene_override: str | N
 
     project = RuntimeProjectLoader.load_project(project_path)
     s.project = project
+    # 背景色（工程文件里的测试性配置）→ 会话携带; run() 时经 SetClearColorCommand 注入
+    try:
+        _bg = (getattr(project, "data", None) or {}).get("background_color") or (0.2, 0.2, 0.2)
+        s.background_color = (float(_bg[0]), float(_bg[1]), float(_bg[2]), 1.0)
+    except Exception:  # noqa: BLE001 — 坏值不影响加载
+        s.background_color = None
     rel = scene_override or project.startup_scene
     if not rel:
         raise ValueError(f"工程没有可用场景: {project_path}")
@@ -310,6 +317,13 @@ def run(source: str, max_frames: int = 0) -> int:
     from Application.Runtime.GameRuntime import GameRuntime
 
     GameRuntime.init()
+
+    # ── 工程背景色 → 渲染器清屏色（overlay 保持透明; 命令首帧前消费）──
+    if session.background_color is not None and not overlay:
+        _rend = GameRuntime.get_renderer()
+        if _rend is not None:
+            from Application.Core.Renderer.RenderCommand import SetClearColorCommand
+            _rend.enqueue(SetClearColorCommand(*session.background_color))
 
     # ── 资源 + 场景注入（顺序: init 之后 → renderer 可用）──
     activate_resources(session)

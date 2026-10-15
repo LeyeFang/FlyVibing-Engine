@@ -36,11 +36,14 @@ class RuntimeHostBridge:
       - frame_sync:            共享帧同步对象（PIE 与编辑器同步; 独立运行 None）
       - sync_scene_from_host:  启动前把宿主场景状态同步进运行时（PIE; 独立运行 None）
       - protected_entity_ids:  停止时保留的实体集合（编辑器拥有的摄像机等; None = 全部清理）
+      - clear_color:           运行首帧前注入的清屏色 (r,g,b,a) — 工程背景色;
+                               None = 渲染器默认 (Overlay 透明模式由 OverlayInputLayer 自行设置)
     """
 
     frame_sync: object | None = None
     sync_scene_from_host: Callable[[], None] | None = None
     protected_entity_ids: Callable[[], set] | None = None
+    clear_color: 'tuple[float, float, float, float] | None' = None
 
 
 class GameRuntime(Engine):
@@ -92,9 +95,18 @@ class GameRuntime(Engine):
         """非阻塞启动 (PIE 模式)。"""
         cls._state()['_logic_thread_enabled'] = True
         cls.init(window_type=window_type, renderer_type=renderer_type)
+        # ── 宿主注入的背景色: renderer_ready 后、首帧前入队 ──
+        #    PIE init 不阻塞 renderer_ready（避免 poll 回调死锁）→ 此处显式等待，
+        #    命令在首个 StartFrame 被消费 → 第一帧清屏色即正确。
+        bridge = cls._host_bridge
+        if bridge is not None and bridge.clear_color is not None:
+            cls._state()['renderer_ready'].wait(timeout=5.0)
+            if cls.renderer is not None:
+                from Application.Core.Renderer.RenderCommand import SetClearColorCommand
+                _cr, _cg, _cb, _ca = (float(c) for c in bridge.clear_color)
+                cls.renderer.enqueue(SetClearColorCommand(_cr, _cg, _cb, _ca))
         # ── 宿主桥接（PIE）: 启动前同步宿主场景 + 共享帧同步 ──
         #    独立运行无桥接 → 全部跳过（对 Editor 零反向依赖）
-        bridge = cls._host_bridge
         try:
             if bridge is not None and bridge.sync_scene_from_host is not None:
                 # ★ 章 T M2: 失败不再吞错 — 抛错→清理→调用方置错误态

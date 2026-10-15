@@ -86,6 +86,60 @@ class ProjectManager:
     # Project I/O
     # ════════════════════════════════════════════════════════════
 
+    # ── 背景色（测试性配置，存工程文件；完整成品常用 skybox/内容填底）──
+    DEFAULT_BACKGROUND_COLOR = (0.2, 0.2, 0.2)
+
+    @classmethod
+    def background_color(cls) -> tuple:
+        """工程背景色 [r,g,b]（0-1，越界钳位；坏值回退默认）。"""
+        try:
+            v = cls._data.get("background_color") or list(cls.DEFAULT_BACKGROUND_COLOR)
+            return tuple(max(0.0, min(1.0, float(v[i]))) for i in range(3))
+        except Exception:  # noqa: BLE001
+            return cls.DEFAULT_BACKGROUND_COLOR
+
+    @classmethod
+    def set_background_color(cls, r: float, g: float, b: float) -> None:
+        """写工程背景色并立即应用到渲染器（PIE 与编辑器共用）。"""
+        cls._data["background_color"] = [max(0.0, min(1.0, float(r))),
+                                          max(0.0, min(1.0, float(g))),
+                                          max(0.0, min(1.0, float(b)))]
+        cls.apply_background_color()
+
+    @classmethod
+    def apply_background_color(cls) -> None:
+        """把工程配色应用到渲染器清屏色（经 SetClearColorCommand 入队 — 主线程命令通道）。
+
+        无法取渲染器时静默跳过 —— 无头/未初始化环境。
+        """
+        try:
+            from Application.Editor.EditorHost import EditorHost
+            from Application.Core.Renderer.RenderCommand import SetClearColorCommand
+            r = EditorHost.get_editor_renderer()
+            if r is not None and hasattr(r, "enqueue"):
+                _cr, _cg, _cb = cls.background_color()
+                r.enqueue(SetClearColorCommand(_cr, _cg, _cb, 1.0))
+        except Exception:  # noqa: BLE001
+            pass
+
+    @classmethod
+    def _path_within_project(cls, abs_path: str) -> bool:
+        """路径是否位于当前工程目录内（工程数据自包含守卫 — 数据隔离）。
+
+        用于: 保存时拒绝将外工程场景写入本工程; 加载时拒绝外工程场景条目。
+        """
+        if not cls._project_path or not abs_path:
+            return False
+        proj_dir = os.path.normcase(os.path.abspath(os.path.dirname(cls._project_path)))
+        try:
+            target = os.path.normcase(os.path.abspath(abs_path))
+        except (OSError, ValueError):
+            return False
+        try:
+            return os.path.commonpath([target, proj_dir]) == proj_dir
+        except ValueError:  # 不同盘符
+            return False
+
     @classmethod
     def create_new(cls, name: str = "Untitled") -> None:
         """创建新项目（仅内存，不写盘）。标记为未保存。
@@ -99,6 +153,7 @@ class ProjectManager:
             "version": "0.1.0",
             "name": name,
             "startup_scene": "",
+            "background_color": [0.2, 0.2, 0.2],   # [r,g,b] 0-1; 测试性配置 (完整成品常用 skybox/内容填底)
             "scenes": [],
             "resources": {
                 "materials": [],
@@ -145,6 +200,7 @@ class ProjectManager:
             cls._project_name = cls._data.get("name", os.path.splitext(os.path.basename(path))[0])
             cls._is_saved = True
             cls._update_window_title()
+            cls.apply_background_color()   # 工程背景色（测试性配置）→ 清屏色
 
             # ★ 清空旧项目的场景列表，避免跨项目累积
             from Application.Editor.EditorHost import EditorHost
@@ -410,6 +466,7 @@ class ProjectManager:
                 "title": name,
                 "project": proj_file,
                 "startup_scene": startup_rel,
+                "background_color": list(data.get("background_color", [0.2, 0.2, 0.2])),
                 "window": {"mode": "auto"},
                 "output_dir": "output",
                 "engine": {
@@ -684,6 +741,11 @@ class ProjectManager:
         for sname, scene_obj in EditorHost._scenes.items():
             scene_path = getattr(scene_obj, '_file_path', None)
             if scene_path:
+                # ★ 数据隔离: 路径不在本工程目录内 → 外工程场景, 跳过
+                #   (不重写外工程文件, 也不进入本工程 scenes 列表)
+                if not cls._path_within_project(scene_path):
+                    print(f"[Project] Skipped foreign scene '{sname}' → {scene_path}")
+                    continue
                 # 已有路径 → 保存到原路径 (确保目录存在)
                 try:
                     os.makedirs(os.path.dirname(scene_path), exist_ok=True)
@@ -1080,6 +1142,10 @@ class ProjectManager:
             abs_path = cls._resolve_path(rel_path)
             if not os.path.isfile(abs_path):
                 print(f"[Project] WARNING: Scene not found: {abs_path}")
+                continue
+            # ★ 数据隔离: 拒绝工程目录之外的场景条目（历史污染/跨工程引用）
+            if not cls._path_within_project(abs_path):
+                print(f"[Project] WARNING: Skipped out-of-project scene entry: {rel_path}")
                 continue
             try:
                 scene = Scene.load_from_file(abs_path)

@@ -301,6 +301,11 @@ class Engine:
         cls.window._engine = cls  # 窗口知道谁拥有它，事件路由到正确的 Engine
         # 5. 启动渲染线程
         cls.run_state = True
+        # ★ 重建握手事件: stop() 不清事件 → 二次 init（PIE 重跑）会因残留 set
+        #   使 wait() 瞬时放行（渲染器尚未创建 / 层未挂载）。每次生命周期清零，
+        #   保证 renderer_ready / layers_attached 语义真实。
+        cls._state()['renderer_ready'].clear()
+        cls._state()['layers_attached'].clear()
         cls.renderer_thread = Thread(target=cls._render_loop, daemon=True)
         cls.renderer_thread.start()
         # 5b. 如果启用逻辑线程模式，一并启动

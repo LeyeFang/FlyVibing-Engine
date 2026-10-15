@@ -78,10 +78,12 @@ class OpenGLPostProcess(PostProcess):
         gl.glViewport(0, 0, vp_w, vp_h)
 
         # attachment 0 (rgba8) + attachment 1 (r32ui) + depth
-        gl.glClearColor(0.2, 0.2, 0.2, 1.0)
+        # ★ 场景色缓冲清屏色 = 渲染器当前清屏色 (SetClearColorCommand / set_clear_color)。
+        #   不再硬编码 — 否则 highlight 常驻时编辑器视口/PIE 都看不到工程背景色。
+        _cc = getattr(self._renderer._core, "_clear_color", (0.2, 0.2, 0.2, 1.0))
+        gl.glClearColor(*_cc)
         gl.glClearBufferuiv(gl.GL_COLOR, 1, (ctypes.c_uint * 4)(0, 0, 0, 0))
-        gl.glClearBufferfv(gl.GL_COLOR, 0,
-                           (ctypes.c_float * 4)(0.2, 0.2, 0.2, 1.0))
+        gl.glClearBufferfv(gl.GL_COLOR, 0, (ctypes.c_float * 4)(*_cc))
         gl.glClear(gl.GL_DEPTH_BUFFER_BIT)
         gl.glEnable(gl.GL_DEPTH_TEST)
         gl.glDepthFunc(gl.GL_LESS)

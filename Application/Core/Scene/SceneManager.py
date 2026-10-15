@@ -415,7 +415,14 @@ class SceneManager:
     def SetEntityTexture(self, entity_id: int, texture_id: int, slot: int = 0) -> None:
         st = self
         from Application.Resource.ResourceManager import ResourceManager
-        mr = esper.component_for_entity(entity_id, MeshRenderer)
+        try:
+            mr = esper.component_for_entity(entity_id, MeshRenderer)
+        except KeyError:
+            # 临时防护（P0 2026-10-15）: TextDisplay 目标实体缺 MeshRenderer → 告警并跳过，
+            # 不让整个编辑器崩（分类体系待重整：渲染载体不应靠隐式约定）。
+            print(f"[Text] entity {entity_id} has no MeshRenderer — "
+                  f"TextDisplay needs a mesh carrier; texture set skipped")
+            return
         SceneManager._ensure_unique_material(st, entity_id, mr)
         material = ResourceManager.GetMaterial(mr.material_id)
         while len(material.texture_id_list) <= slot:

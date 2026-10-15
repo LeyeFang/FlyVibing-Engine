@@ -9,7 +9,8 @@
       close_policy="disable": 窗口 X = 停用扩展（Extensions 菜单勾选同步消失）,
       on_ui_event("closed") 即时收尾（停采集/落盘/释放设备）
   §9  agent 通道: ext.gtec.{status, open, close, watch, record, start(=record 别名),
-      stop, filters, display, impedance, snapshot}（参数/返回全 JSON 友好; 无 UI 环境同样可调）
+      stop, filters, display, impedance, service, snapshot}
+      （参数/返回全 JSON 友好; 无 UI 环境同样可调）
   §11 设置: ctx.data_dir/settings.json 持久化（重开面板保持上次配置）
 
 模式（mode）:
@@ -62,6 +63,7 @@ from Application.Functions.EEGDevice import (
     init_session,
     kill_device,
     measure_impedance,
+    probe_gtec_service,
     start_record,
 )
 
@@ -126,7 +128,7 @@ class GtecMonitorExtension(UIExtensionBase):
 
     id = "gtec"
     name = "Gtec Device"
-    version = "0.3.0"
+    version = "0.3.1"
 
     _WINDOW_NAME = "Gtec Monitor"
 
@@ -140,6 +142,7 @@ class GtecMonitorExtension(UIExtensionBase):
             "sampling_rate": 512,
             "buffer_seconds": 15.0,
             "serial": "",
+            "svc_python": "",            # Gtec 服务自动拉起用 python（空 = 仅连接外部服务）
             "save_dir": "",              # 空 = ctx.data_dir/recordings
             "export_format": "npz",
             # 设备滤波（Open 时下发 — g.HIamp 硬件预设）
@@ -248,8 +251,8 @@ class GtecMonitorExtension(UIExtensionBase):
                      summary="{} panel/session state (mode, recording, filters, last save)")
         ops.register("open", self._op_open,
                      summary="{mode?=sim|device|virtual, sampling_rate?, buffer_seconds?, "
-                             "template?, serial?, save_dir?, export_format?, notch?, "
-                             "filter_type?, low_cut?, high_cut?, sim_*} open a session")
+                             "template?, serial?, service_python?, save_dir?, export_format?, "
+                             "notch?, filter_type?, low_cut?, high_cut?, sim_*} open a session")
         ops.register("close", self._op_close,
                      summary="{save?=true} stop (save if recording) and close the session")
         ops.register("watch", self._op_watch,
@@ -270,6 +273,9 @@ class GtecMonitorExtension(UIExtensionBase):
         ops.register("impedance", self._op_impedance,
                      summary="{measure?=true, electrode_type?=passive|active, tms_box?=false} "
                              "electrode impedance (kOhm + good/medium/bad; device open & idle)")
+        ops.register("service", self._op_service,
+                     summary="{probe?=true} probe the Gtec brand service endpoint "
+                             "(reachability + auto-launch config; no session needed)")
         ops.register("snapshot", self._op_snapshot,
                      summary="{preview?=true, preview_channels?=3, points?=128, max_channels?=16} "
                              "waveform stats + numeric preview")
@@ -319,7 +325,8 @@ class GtecMonitorExtension(UIExtensionBase):
                 notch=str(s["notch"]), filter_type=str(s["filter_type"]),
                 low_cut=float(s["low_cut"]), high_cut=float(s["high_cut"]),
                 export_format=str(s["export_format"]), save_dir=save_dir,
-                buffer_seconds=float(s["buffer_seconds"]))
+                buffer_seconds=float(s["buffer_seconds"]),
+                service_python=str(s["svc_python"] or "").strip())
             dry = (mode == "sim")
 
         session, detail = init_session(name, cfg, dry_run=dry)
@@ -450,7 +457,8 @@ class GtecMonitorExtension(UIExtensionBase):
         if not name:
             return "no session open"
         if get_session(name) is None:
-            return f"session '{name}' not found (service may have exited)"
+            return (f"session '{name}' not found — closed/reset "
+                    f"(e.g. PIE start/stop resets devices; or service exited)")
         return ""
 
     # ════════════════════════════════════════════════════════════
@@ -684,6 +692,17 @@ class GtecMonitorExtension(UIExtensionBase):
                 raise ValueError(self._last_error)
         return self._impedance_dict()
 
+    def _op_service(self, args) -> dict:
+        """Gtec 品牌服务连通性探针（不建会话 — 排障入口）。"""
+        out = probe_gtec_service()
+        out["panel_python"] = str(self._settings.get("svc_python") or "")
+        if not out.get("reachable"):
+            out["hint"] = ("service not running - set 'Svc python' (panel) or MGE_GTEC_PYTHON "
+                           "to a python with pygds, then Open auto-launches it; or start it "
+                           "manually: <python> -m Application.Functions.EEGDevice.Gtec.service "
+                           "--port 47810")
+        return out
+
     def _op_snapshot(self, args) -> dict:
         args = args or {}
         self._refresh()                 # 节流拉取（冻结时保持冻结帧 — 所见即所得）
@@ -844,6 +863,8 @@ class GtecMonitorExtension(UIExtensionBase):
                                                _as_float(args["buffer_seconds"], 15.0) or 15.0))
         if "serial" in args:
             s["serial"] = str(args["serial"] or "").strip()
+        if "service_python" in args:
+            s["svc_python"] = str(args["service_python"] or "").strip()
         if "save_dir" in args:
             s["save_dir"] = str(args["save_dir"] or "").strip()
         if "export_format" in args:
@@ -1054,6 +1075,14 @@ class GtecMonitorExtension(UIExtensionBase):
                 changed, v = imgui.input_text("Serial##gtec_serial", str(s["serial"]), 64)
                 if changed:
                     s["serial"] = v
+                if s["mode"] == "device":
+                    imgui.set_next_item_width(280)
+                    changed, v = imgui.input_text("Svc python##gtec_svcpy",
+                                                  str(s["svc_python"]), 256)
+                    if changed:
+                        s["svc_python"] = v
+                    imgui.text_disabled("auto-launch: python with pygds "
+                                        "(blank = use an already running service)")
 
             self._combo("Rate (Hz)", s["sampling_rate"],
                         tuple(SUPPORTED_RATES), "sampling_rate")

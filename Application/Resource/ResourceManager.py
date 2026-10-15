@@ -471,6 +471,9 @@ class ResourceManager:
         new_mat._is_saved = False
         # ★ 克隆体不是内置材质 — 否则会被 _ensure_unique_material 视为模板反复克隆
         new_mat.builtin_name = None
+        # ★ 克隆体不继承源材质的文件落点 — 它是新的身份, 由保存流程落盘
+        #   (否则 _persist_referenced_materials 会把它当成"已有文件"而跳过)
+        new_mat._file_path = ""
         cls.material_count += 1
         new_id = cls.material_count
         cls.loaded_material[f"{new_id}"] = new_mat

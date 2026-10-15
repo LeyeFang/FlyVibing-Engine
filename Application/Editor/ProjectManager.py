@@ -40,6 +40,7 @@ class ProjectManager:
     _is_saved: bool = False           # ★ 是否已保存到磁盘
     _window_title_base: str = "FlyVibingEngine"
     _engine_root: str = ""            # ★ 引擎根目录 (懒加载)
+    _last_missing_assets: list = []   # ★ 最近一次扫描到的缺失资产 (外改断链识别)
 
     # ════════════════════════════════════════════════════════════
     # 引擎根目录 & 内置资源判断
@@ -216,6 +217,8 @@ class ProjectManager:
             startup = cls._data.get("startup_scene", "")
             if startup:
                 cls._activate_scene(startup)
+            # ★ 缺失资产识别 (记录在案但磁盘缺失 → 集中报告, 不静默断链)
+            cls._report_missing_assets("open")
             return True
         except Exception as e:
             print(f"[Project] Failed to open: {e}")
@@ -247,6 +250,15 @@ class ProjectManager:
         cls._project_path = os.path.abspath(path)
         cls._project_name = os.path.splitext(os.path.basename(path))[0]
         cls._data["name"] = cls._project_name
+        # ★ 工程文件夹提交点 (2026-10-15): 凝固当前编辑器已加载内容 —
+        #   工程目录外的场景重指入列; 资源拷入 <proj>/assets/<类别>/;
+        #   记录改指新文件; id 表在随后的 _save 刷新为活 id
+        try:
+            summary = cls._consolidate_into_project_dir()
+            print(f"[Project] Consolidate: scenes_repointed={summary.get('scenes', 0)} "
+                  f"assets_copied={summary.get('assets', 0)}")
+        except Exception as e:  # noqa: BLE001
+            print(f"[Project] Consolidate failed: {e}")
         cls._save_scene_if_needed()
         cls._save()
         cls._is_saved = True
@@ -796,6 +808,12 @@ class ProjectManager:
 
         # ── 收集用户 prefab ──
         cls._sync_prefabs_to_data()
+        # ── ★ 编辑器内资产更改的持久化: 场景引用的无文件材质 (编辑克隆) 落盘 + 登记 ──
+        cls._persist_referenced_materials()
+        # ── ★ 材料记录刷新为活 id (对齐不变量: 记录 == 场景引用 == 活 id) ──
+        cls._sync_material_records_to_live()
+        # ── ★ 缺失资产识别 (记录在案但磁盘缺失 → 集中报告) ──
+        cls._report_missing_assets("save")
         # ── 资源路径规范化: 旧绝对路径/旧相对写法 → 相对当前项目目录 ──
         cls._canonicalize_resources()
 
@@ -816,6 +834,265 @@ class ProjectManager:
             if rel:
                 prefabs.append({"path": rel, "prefab_id": int(pid_str)})
         cls._data.setdefault("resources", {})["prefabs"] = prefabs
+
+    # ════════════════════════════════════════════════════════════
+    # 工程文件夹提交点 / 材质记录同步 / 缺失资产识别 (2026-10-15)
+    # ════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _sanitize_name(name: str) -> str:
+        """文件名净化 — 去除路径分隔符与违规字符。"""
+        for ch in '\\/:*?"<>|':
+            name = name.replace(ch, "_")
+        name = name.strip().rstrip(".")
+        return name or "asset"
+
+    @classmethod
+    def _point_record_at(cls, category: str, old_abs: str, new_abs: str) -> None:
+        """将 category 记录中指向 old_abs 的条目改指 new_abs (保留 id 等字段)。
+
+        前置: save_project_as 已调用 _denormalize_paths_to_absolute, 记录均为绝对路径。
+        无匹配条目时追加新条目 (id 由后续 _sync_material_records_to_live 补齐)。
+        """
+        entries: list = cls._data.setdefault("resources", {}).setdefault(category, [])
+        old_key = cls._path_key(old_abs)
+        for idx, entry in enumerate(entries):
+            rel = entry if isinstance(entry, str) else entry.get("path", "")
+            if rel and cls._path_key(cls._resolve_path(rel)) == old_key:
+                if isinstance(entry, dict):
+                    entry["path"] = new_abs
+                else:
+                    entries[idx] = {"path": new_abs}
+                cls._mark_dirty()
+                return
+        entries.append({"path": new_abs})
+        cls._mark_dirty()
+
+    @classmethod
+    def _consolidate_into_project_dir(cls) -> dict:
+        """工程文件夹提交点 — 把当前编辑器已加载内容凝固进新工程目录。
+
+        触发: save_project_as (首次保存 / 另存为)。
+        - 场景: 目录外的 → 重指 `<proj>/scenes/<basename>` (由 _save 携带内存态写入,
+          原文件不动 = fork 语义)
+        - 资源: 目录外且有文件的 materials/shaders/textures/meshes/prefabs →
+          拷入 `<proj>/assets/<类别>/`; 材料从内存态重存 (含未落盘编辑)
+        - 记录: 同步改指新文件 (id 保留; _save 随后刷新为活 id)
+        - builtin:// 与已在工程目录内的文件不动; 幂等 (重复另存为不重复拷贝)
+        """
+        import shutil
+
+        from Application.Editor.EditorHost import EditorHost
+        from Application.Resource.ResourceManager import ResourceManager
+
+        if not cls._project_path:
+            return {"scenes": 0, "assets": 0}
+        proj_dir = os.path.dirname(os.path.abspath(cls._project_path))
+        repointed = 0
+        copied = 0
+
+        # ── 1. 场景归位 (重指路径; 内容由 _save 从内存态写入) ──
+        scene_dir = os.path.join(proj_dir, "scenes")
+        used: set[str] = set()
+        for scene in EditorHost._scenes.values():
+            fp = getattr(scene, "_file_path", "") or ""
+            if fp and cls._path_within_project(fp):
+                used.add(os.path.basename(fp).lower())
+        startup_abs = cls._resolve_path(cls._data.get("startup_scene", ""))
+        for sname, scene in EditorHost._scenes.items():
+            fp = getattr(scene, "_file_path", "") or ""
+            if fp and cls._path_within_project(fp):
+                continue  # 已在工程目录内
+            base = os.path.basename(fp) if fp else \
+                cls._sanitize_name(sname) + ".scene"
+            stem, ext = os.path.splitext(base)
+            if not ext:
+                ext = ".scene"
+            cand, i = base, 2
+            while cand.lower() in used:
+                cand = f"{stem}_{i}{ext}"
+                i += 1
+            used.add(cand.lower())
+            dst = os.path.join(scene_dir, cand)
+            if fp and startup_abs and cls._path_key(fp) == cls._path_key(startup_abs):
+                # 启动场景跟随重指 (绝对路径; _save 再相对化)
+                cls._data["startup_scene"] = dst
+            scene._file_path = dst
+            repointed += 1
+            print(f"[Project] Scene '{sname}' → {cls._to_relative(dst)}")
+
+        # ── 2. 资源归位 (拷入 assets/<类别>/; 材料从内存态重存) ──
+        def _place(category: str, name: str, ext: str) -> str:
+            d = os.path.join(proj_dir, "assets", category)
+            os.makedirs(d, exist_ok=True)
+            stem = cls._sanitize_name(name)
+            cand, i = f"{stem}{ext}", 2
+            while os.path.exists(os.path.join(d, cand)):
+                cand = f"{stem}_{i}{ext}"
+                i += 1
+            return os.path.join(d, cand)
+
+        for mid_str, mat in sorted(
+            ResourceManager.loaded_material.items(),
+            key=lambda kv: int(kv[0]) if str(kv[0]).isdigit() else 0,
+        ):
+            if getattr(mat, "builtin_name", None):
+                continue
+            fp = getattr(mat, "_file_path", "") or ""
+            if not fp or not os.path.isfile(fp) or cls._path_within_project(fp):
+                continue
+            stem = os.path.splitext(os.path.basename(fp))[0] or getattr(mat, "name", "")
+            dst = _place("materials", stem, ".mat")
+            mat.save_to_file(dst)          # 内存态写出 + 更新 _file_path/_is_saved
+            cls._point_record_at("materials", fp, dst)
+            copied += 1
+            print(f"[Project] Material '{mat.name}' → {cls._to_relative(dst)}")
+
+        for category, table in (
+            ("shaders", ResourceManager.loaded_shader),
+            ("textures", ResourceManager.loaded_texture),
+            ("meshes", ResourceManager.loaded_mesh),
+            ("prefabs", ResourceManager.loaded_prefab),
+        ):
+            for _rid, info in list(table.items()):
+                if not isinstance(info, dict) or info.get("builtin_name"):
+                    continue
+                fp = info.get("path", "") or ""
+                if not fp or not os.path.isfile(fp) or cls._path_within_project(fp):
+                    continue
+                ext = os.path.splitext(fp)[1]
+                stem = os.path.splitext(os.path.basename(fp))[0] or category
+                dst = _place(category, stem, ext)
+                shutil.copy2(fp, dst)
+                info["path"] = dst
+                cls._point_record_at(category, fp, dst)
+                copied += 1
+
+        return {"scenes": repointed, "assets": copied}
+
+    @classmethod
+    def _persist_referenced_materials(cls) -> list:
+        """编辑器内材质更改的持久化 — 场景引用但无文件落点的材质 (编辑克隆) 落盘。
+
+        - 目标: `<proj>/assets/materials/<name>[_N].mat`, 并登记记录 (活 id)
+        - 跳过: builtin 模板 / 已有文件落点 / 已在记录中
+        - 孤儿引用 (id 无对应材质) 仅告警, 不阻断保存
+        """
+        from Application.Editor.EditorHost import EditorHost
+        from Application.Resource.ResourceManager import ResourceManager
+
+        if not cls._project_path:
+            return []
+        proj_dir = os.path.dirname(os.path.abspath(cls._project_path))
+
+        # 收集场景引用的材质 id (组件可能是 dict 或对象两种形态)
+        refs: set[int] = set()
+        for scene in EditorHost._scenes.values():
+            for ed in scene.entities.values():
+                comp = ed.components.get("MeshRenderer") if hasattr(ed, "components") else None
+                if comp is None:
+                    continue
+                mid = comp.get("material_id") if isinstance(comp, dict) \
+                    else getattr(comp, "material_id", None)
+                if isinstance(mid, int):
+                    refs.add(mid)
+
+        written: list = []
+        mat_dir = os.path.join(proj_dir, "assets", "materials")
+        for mid in sorted(refs):
+            mat = ResourceManager.GetMaterial(mid)
+            if mat is None:
+                print(f"[Project] WARNING: scene references missing material #{mid} (orphan ref)")
+                continue
+            if getattr(mat, "builtin_name", None):
+                continue
+            fp = getattr(mat, "_file_path", "") or ""
+            if fp and os.path.isfile(fp):
+                continue  # 已有落点
+            os.makedirs(mat_dir, exist_ok=True)
+            name = cls._sanitize_name(getattr(mat, "name", "") or f"material_{mid}")
+            dst, i = os.path.join(mat_dir, f"{name}.mat"), 2
+            while os.path.exists(dst):
+                dst = os.path.join(mat_dir, f"{name}_{i}.mat")
+                i += 1
+            mat.save_to_file(dst)
+            cls.register_material(dst, mid)
+            written.append(dst)
+            print(f"[Project] Persisted edited material '{mat.name}' → {cls._to_relative(dst)}")
+        return written
+
+    @classmethod
+    def _sync_material_records_to_live(cls) -> int:
+        """材料记录的 material_id 刷新为当前活 id。
+
+        对齐不变量: 记录 id == 场景引用 id == 运行时活 id (同一会话内),
+        从而下次加载的 id_map 重映射必然命中 (镜像 _sync_prefabs_to_data 的语义)。
+        按文件真实路径匹配; 活表中找不到对应对象时保留原值。
+        """
+        from Application.Resource.ResourceManager import ResourceManager
+
+        entries = cls._data.get("resources", {}).get("materials", [])
+        live: dict[str, int] = {}
+        for mid_str, mat in ResourceManager.loaded_material.items():
+            fp = getattr(mat, "_file_path", "") or ""
+            if fp:
+                live.setdefault(cls._path_key(fp), int(mid_str))
+        changed = 0
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            rel = entry.get("path", "")
+            if not rel or rel.startswith("builtin://"):
+                continue
+            mid = live.get(cls._path_key(cls._resolve_path(rel)))
+            if mid is not None and entry.get("material_id") != mid:
+                entry["material_id"] = mid
+                changed += 1
+                cls._mark_dirty()
+        return changed
+
+    @classmethod
+    def collect_missing_assets(cls) -> list:
+        """识别"记录在案但磁盘缺失"的资产 (编辑器外改动/移动 → 断链不静默)。
+
+        返回 [{"category": ..., "path": ...}] — 记录保持原样 (不删除),
+        供 UI/日志提示用户修复或重新定位。
+        """
+        out: list = []
+        if not cls._project_path:
+            return out
+        res = cls._data.get("resources", {})
+        for category in ("materials", "shaders", "textures", "meshes", "prefabs"):
+            for entry in res.get(category, []):
+                rel = entry if isinstance(entry, str) else entry.get("path", "")
+                if not rel or str(rel).startswith("builtin://"):
+                    continue
+                abs_path = cls._resolve_path(rel)
+                if not abs_path or not os.path.isfile(abs_path):
+                    out.append({"category": category, "path": rel})
+        for rel in cls._data.get("scenes", []):
+            abs_path = cls._resolve_path(rel)
+            if not abs_path or not os.path.isfile(abs_path):
+                out.append({"category": "scenes", "path": rel})
+        return out
+
+    @classmethod
+    def get_missing_assets(cls) -> list:
+        """返回最近一次 open/save 扫描到的缺失资产 (供面板/脚本查询)。"""
+        return list(cls._last_missing_assets)
+
+    @classmethod
+    def _report_missing_assets(cls, stage: str) -> list:
+        """扫描并集中报告缺失资产 (open/save 均调用)。"""
+        missing = cls.collect_missing_assets()
+        cls._last_missing_assets = missing
+        if missing:
+            print(f"[Project] MISSING assets ({len(missing)}) @{stage}:")
+            for m in missing[:10]:
+                print(f"  - [{m['category']}] {m['path']}")
+            if len(missing) > 10:
+                print(f"  ... ({len(missing) - 10} more)")
+        return missing
 
     @classmethod
     def _save_scene_if_needed(cls) -> None:

@@ -41,7 +41,6 @@ from .evaluators import (  # noqa: F401
     flow,
     action,
     io,
-    gtec,
     siggen,
     device_pool,
     epoch,

@@ -5,7 +5,7 @@ panel.py 调用 draw_node_widgets(nid, inst, canvas) 自动分发。
 子模块在末尾统一导入 —— import 即注册，新增节点类型只需在对应子模块加 @register 函数：
   flow_io       通用/流程节点（IO·逻辑·计时·变量·常量）
   entity_comp   实体/组件节点
-  device_siggen / device_gtec / device_pool   IO 设备节点
+  device_siggen / device_pool   IO 设备节点
   epoch         Epoch 数据集节点
   algorithm     BCI Algorithm（FBCSP/CCA）节点
   media         动态媒体节点（ShowMedia — PIE 播放驱动）
@@ -25,7 +25,6 @@ from . import flow_io  # noqa: F401,E402
 from . import entity_comp  # noqa: F401,E402
 from . import device_common  # noqa: F401,E402
 from . import device_siggen  # noqa: F401,E402
-from . import device_gtec  # noqa: F401,E402
 from . import device_pool  # noqa: F401,E402
 from . import epoch  # noqa: F401,E402
 from . import algorithm  # noqa: F401,E402

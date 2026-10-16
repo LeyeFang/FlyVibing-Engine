@@ -1,6 +1,6 @@
 {
-  "generated": "2026-10-15",
-  "total": 285,
+  "generated": "2026-10-16",
+  "total": 270,
   "note": "棘轮基线（协议 Doc/Dev/i18n_protocol.md 6）：未迁移的可见 UI 文案字面量数只减不增；新 UI 文案必须走 t()，确实不该翻译的（imgui 内部 id 等）须带 reason 加进 exempt。",
   "exclude_files": [
     "Application/Editor/UI/panels/MenuBarPanel.py"
@@ -19,7 +19,6 @@
     "Application/Editor/UI/panels/node_editor/widgets/device_siggen.py": 20,
     "Application/Editor/UI/panels/ResourcePanel.py": 19,
     "Application/Editor/UI/panels/node_editor/widgets/algorithm.py": 15,
-    "Application/Editor/UI/panels/node_editor/widgets/device_gtec.py": 15,
     "Application/Editor/UI/UIManager.py": 13,
     "Application/Editor/UI/panels/node_editor/widgets/entity_comp.py": 9,
     "Application/Editor/Extensions/ExtensionMenu.py": 7,

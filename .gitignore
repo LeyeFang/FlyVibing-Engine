@@ -36,9 +36,9 @@ Utils/Dev/Installer/tmp/
 # imgui 布局持久化产物（引擎侧已禁用 ini; 扩展自测的裸上下文可能写出 — 勿入库）
 imgui.ini
 
-# ʹ�ò๤�����Ŀ������ӣ�junction -> FlyVibing-User-And-Developer-Utils������ �����ύ
+# 使用侧工具链的开发链接（junction -> FlyVibing-User-And-Developer-Utils）—— 不得提交
 Utils/ExtDev/
 
 # EEGDevice content shield (2026-10-16, license review; local files kept, untracked on purpose)
-Application/Functions/EEGDevice/
-Functions/EEGDevice/
+Application/Functions/EEGDevice/*
+Functions/EEGDevice/*

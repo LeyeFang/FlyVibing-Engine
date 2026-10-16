@@ -523,7 +523,7 @@ class NodeEditorPanel(BasePanel):
             _del_node_count = 0
             _del_link_count = 0
 
-            # ── 设备 Init ⇄ Kill 强制配对: 删除级联 (Gtec/SigGen) ──
+            # ── 设备 Init ⇄ Kill 强制配对: 删除级联 (SigGen 等) ──
             _sel_nids = [sn.id() for sn in _sel_nodes if sn.id() in canvas.nodes]
             _expand = device_cascade_deletes(canvas, _sel_nids)
             for _extra in sorted(_expand - set(_sel_nids)):
@@ -1095,8 +1095,6 @@ class NodeEditorPanel(BasePanel):
             "ComponentAdd", "SetComponent", "GetComponent", "ComponentRemove",
             "ParallelSend", "SerialSend", "PathVar", "TextFileWrite",
             "TimeGetDate",
-            "InitGtecDevice", "StartGtecRecord", "StopGtecRecord",
-            "KillGtecDevice", "GetGtecData",
             "InitSigGenDevice", "StartSigGenRecord", "StopSigGenRecord",
             "KillSigGenDevice", "GetSigGenData",
             "ShowMedia", "SetText",

@@ -121,8 +121,12 @@ class GameRuntime(Engine):
             from Application.Functions.SerialParallelDevice import start as spd_start
             spd_start()
             # ── 清理上次运行可能残留的 EEG 会话（异常退出保护）──
-            from Application.Functions.EEGDevice import close_all as gtec_close_all
-            gtec_close_all()
+            try:  # 设备层缺省时跳过（可选组件）
+                from Application.Functions.EEGDevice import close_all
+
+                close_all()
+            except Exception:  # noqa: BLE001
+                pass
             # ── 清理上次运行可能残留的 epoch 数据集（同一安全网）──
             try:
                 from Application.Functions.BCIAlgorithm import reset_all as epoch_reset
@@ -216,12 +220,16 @@ class GameRuntime(Engine):
         cls._frame_sync = None
         cls._is_frame_sync_master = False
         # ── 最后的安全网: 关闭所有仍存活的 EEG 会话（不保存）──
-        #    图内 StopGtecRecord/KillGtecDevice 已在 OnGameStop 链路执行完毕;
+        #    图内 Stop/Kill 设备节点已在 OnGameStop 链路执行完毕;
         #    此处兜底处理图里没有 Kill 节点 / 异常路径的情况。
-        from Application.Functions.EEGDevice import close_all as gtec_close_all
-        _closed = gtec_close_all()
-        if _closed:
-            print(f"[GameRuntime] Gtec safety: closed {_closed} leftover session(s)")
+        try:  # 设备层缺省时跳过（可选组件）
+            from Application.Functions.EEGDevice import close_all
+
+            _closed = close_all()
+            if _closed:
+                print(f"[GameRuntime] device safety: closed {_closed} leftover session(s)")
+        except Exception:  # noqa: BLE001
+            pass
         # ── epoch 数据集安全网（同一兜底语义）──
         try:
             from Application.Functions.BCIAlgorithm import reset_all as epoch_reset

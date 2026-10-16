@@ -39,15 +39,14 @@ class ScenePanel(_TreeMixin, _InspectorMixin, _SceneIOMixin, BasePanel): ...
 | `flow_io.py` | PrintString … StringConst（含 ScalarMath/Compare/Timer*/Var*）（现 L170-699） | ~530 |
 | `entity_comp.py` | EntitySpawn/Get / Component* / VecMath（现 L701-967） | ~265 |
 | `device_siggen.py` | IO▸SigGen 家族（现 L970-1136） | ~167 |
-| `device_gtec.py` | IO▸Gtec 家族（现 L1138-1265） | ~128 |
 | `device_pool.py` | IO▸Pool 家族（现 L1267-1330） | ~64 |
 | `epoch.py` | Epoch 家族（现 L1332-1444） | ~113 |
 | `algorithm.py` | FBCSP/CCA 家族（现 L1446-1626） | ~181 |
 
 （`flow_io.py` 仍偏大 — 执行时可把 Timer 组再切出 `timers.py`。）
 
-**执行结果（2026-10-05）**：已按上表完成（`_device_name_field` 抽为 `device_common.py` 供 gtec/siggen 共用）。
-实际行数：core 165 / flow_io 542 / entity_comp 276 / algorithm 190 / device_gtec 137 / device_siggen 124 /
+**执行结果（2026-10-05）**：已按上表完成（`_device_name_field` 抽为 `device_common.py` 供设备节点共用）。
+实际行数：core 165 / flow_io 542 / entity_comp 276 / algorithm 190 / device_siggen 124 /
 epoch 121 / device_pool 72 / device_common 59 / `__init__` 29（原 1626）——注册表守恒 46 个 @register，
 `panel.py` 导入面不变（`from .widgets import draw_node_widgets`）。
 **顺带修复**：加强后的 `node_editor_smoke`（7 子模块各画一个代表节点）暴露 `EpochCount/Clear/Save` widget

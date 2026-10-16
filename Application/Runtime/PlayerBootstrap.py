@@ -377,11 +377,11 @@ def run(source: str, max_frames: int = 0) -> int:
     except Exception:
         pass
     try:
-        from Application.Functions.EEGDevice import close_all as gtec_close_all
+        from Application.Functions.EEGDevice import close_all
 
-        _closed = gtec_close_all()
+        _closed = close_all()
         if _closed:
-            print(f"[Player] Gtec safety: closed {_closed} leftover session(s)")
+            print(f"[Player] device safety: closed {_closed} leftover session(s)")
     except Exception:
         pass
     try:

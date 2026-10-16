@@ -6,14 +6,14 @@
   2. 连线端点存在性 / 方向（output→input）/ 重复连线
   3. 孤立节点（降级为 warning — 可能是刻意保留的模板/常量节点）
   4. 必连引脚（Branch.Condition）
-  5. Gtec Init/Kill 强制配对（graph_constraints 同一规则）
-  6. SigGen Init/Kill 强制配对（同一规则）
-  7. 设备池: Create/Kill 配对 + Add/设备引用池校验
-  8. 设备池: AddToDevicePool.device pin 连线检查（未连 / 来源 / 单池成员制）
-  9. Epoch 数据集: Count/Clear/Save 引用校验
-  10. Epoch 数据集: EpochAppend 必需数据引脚（Data / Label）
-  11. BCI 算法: Init/Train/Test 模型与数据集引用校验 + TestCCA 频率组 ≥2
-  12. 媒体: ShowMedia — Entity 引脚必需连线 + exec_in 警示
+  5. SigGen Init/Kill 强制配对（graph_constraints 同一规则）
+  6. 设备池: Create/Kill 配对 + Add/设备引用池校验
+  7. 设备池: AddToDevicePool.device pin 连线检查（未连 / 来源 / 单池成员制）
+  8. Epoch 数据集: Count/Clear/Save 引用校验
+  9. Epoch 数据集: EpochAppend 必需数据引脚（Data / Label）
+  10. BCI 算法: Init/Train/Test 模型与数据集引用校验 + TestCCA 频率组 ≥2
+  11. 媒体: ShowMedia — Entity 引脚必需连线 + exec_in 警示
+  12. 设备别名: props 中 `@name` 引用必须在本机已绑定（跨机器迁移提示）
 
 差异（相对离线版）:
   - 输出结构化条目 dict: {level, code, message, node_id}
@@ -198,20 +198,7 @@ def static_check_graph(scene_data: dict) -> list[dict]:
                     _safe_int(nid_str),
                 ))
 
-    # 6. Gtec Init/Kill 强制配对（与编辑器删除级联同一规则）
-    try:
-        from ..graph_constraints import gtec_pairing_errors
-
-        for msg in gtec_pairing_errors(nodes):
-            node_id = None
-            m = _NODE_ID_RE.match(msg)
-            if m:
-                node_id = int(m.group(1))
-            entries.append(_entry("error", "gtec_pairing", msg, node_id))
-    except Exception as e:  # noqa: BLE001 — 约束模块失败不应让整个检查崩溃
-        entries.append(_entry("error", "gtec_pairing", f"gtec pairing check failed: {e}"))
-
-    # 7. SigGen Init/Kill 强制配对（与 Gtec 同一规则）
+    # 6. SigGen Init/Kill 强制配对（设备族同一规则）
     try:
         from ..graph_constraints import siggen_pairing_errors
 
@@ -224,7 +211,7 @@ def static_check_graph(scene_data: dict) -> list[dict]:
     except Exception as e:  # noqa: BLE001 — 约束模块失败不应让整个检查崩溃
         entries.append(_entry("error", "siggen_pairing", f"siggen pairing check failed: {e}"))
 
-    # 8. 设备池: Create/Kill 配对 + Add/设备引用池校验
+    # 7. 设备池: Create/Kill 配对 + Add/设备引用池校验
     try:
         from ..graph_constraints import pool_pairing_errors, pool_reference_errors
 
@@ -243,7 +230,7 @@ def static_check_graph(scene_data: dict) -> list[dict]:
     except Exception as e:  # noqa: BLE001 — 约束模块失败不应让整个检查崩溃
         entries.append(_entry("error", "pool_pairing", f"pool check failed: {e}"))
 
-    # 9. 设备池: AddToDevicePool.device pin 连线检查 (需 links)
+    # 8. 设备池: AddToDevicePool.device pin 连线检查 (需 links)
     try:
         from ..graph_constraints import DEVICE_INIT_PREFIX as _INIT_TYPES
         from ..graph_constraints import POOL_ADD as _POOL_ADD
@@ -307,7 +294,7 @@ def static_check_graph(scene_data: dict) -> list[dict]:
     except Exception as e:  # noqa: BLE001
         entries.append(_entry("error", "device_pin", f"device pin check failed: {e}"))
 
-    # 10. Epoch 数据集: 引用校验 + EpochAppend 必需数据引脚 (Data / Label)
+    # 9. Epoch 数据集: 引用校验 + EpochAppend 必需数据引脚 (Data / Label)
     try:
         from ..graph_constraints import EPOCH_APPEND as _EPOCH_APPEND
         from ..graph_constraints import epoch_reference_errors
@@ -336,7 +323,7 @@ def static_check_graph(scene_data: dict) -> list[dict]:
         entries.append(_entry("error", "epoch_reference",
                               f"epoch check failed: {e}"))
 
-    # 11. BCI 算法: 模型/数据集引用 + TestCCA 频率组
+    # 10. BCI 算法: 模型/数据集引用 + TestCCA 频率组
     try:
         from ..graph_constraints import bci_reference_errors
 
@@ -350,7 +337,7 @@ def static_check_graph(scene_data: dict) -> list[dict]:
         entries.append(_entry("error", "bci_reference",
                               f"bci check failed: {e}"))
 
-    # 12. 媒体: ShowMedia — Entity 引脚必需连线; exec_in 未连降为 warning
+    # 11. 媒体: ShowMedia — Entity 引脚必需连线; exec_in 未连降为 warning
     try:
         from ..graph_constraints import SHOW_MEDIA as _SHOW_MEDIA
 
@@ -378,7 +365,7 @@ def static_check_graph(scene_data: dict) -> list[dict]:
         entries.append(_entry("error", "media_reference",
                               f"media check failed: {e}"))
 
-    # 13. 设备别名: props 中以 "@" 开头的引用必须在**本机**已绑定
+    # 12. 设备别名: props 中以 "@" 开头的引用必须在**本机**已绑定
     #     （跨机器迁移的第一道提示 —— 换电脑后 PIE 之前就能看见, 协议 device_io_protocol §12）
     entries.extend(_check_device_aliases(nodes))
 

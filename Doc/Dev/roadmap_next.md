@@ -16,7 +16,7 @@
 | `LiveCommandServer` accept + 每客户端线程 | `Editor/Services` | agent 热注入 | 主线程 pump 消费 |
 | 校验 worker | `NodeGraph/validation/service.py` | 干跑任务 | 单活动任务槽 |
 | `bci-<name>` | `Functions/BCIAlgorithm/Jobs.py` | 训练同步等待 | 锁保护结果槽 |
-| `gtec-acq` / `spd-io` / ServiceClient reader | `Functions/**` | 设备采集 | 各自队列/锁 |
+| `spd-io` / ServiceClient reader | `Functions/**` | 设备采集 | 各自队列/锁 |
 
 已有纪律：`runtime_packaging_protocol.md` §3.1（"就绪标记最后赋值" + 类级默认值）；先例回归
 `test_runtime_node_layer_race.py`（受控阻塞点，确定性复现半初始化窗口）。
@@ -110,7 +110,7 @@
 2. **M2 音频**：`PlaySound` / `PlayTone`（波形生成走 scipy/numpy）+ 设备枚举/延迟参数；
    评估 **sounddevice**（低延迟回调、回环测试友好）vs **SDL2 音频**（零新依赖）二选一（见评审问题 Q4）。
 3. **M3 视频**：`PlayVideo`（解码帧流 → 同一 Texture2D 更新通道；循环/区域/音量）；
-   解码器选型见下表；**帧时间戳 → 事件触发器对齐**（BCI 刺激范式的核心需求，与 Gtec/SigGen 触发同帧域）。
+   解码器选型见下表；**帧时间戳 → 事件触发器对齐**（BCI 刺激范式的核心需求，与设备触发同帧域）。
 4. **测试**：解码确定性（帧数/时间戳）、场景截图（GIF/视频帧上屏，视觉证据）、音频单测（波形/时长）+
    人工听感清单；实机 e2e：媒体节点图 → 截图对比（沿用 `view.set_grid` 验收模板）。
 

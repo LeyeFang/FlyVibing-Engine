@@ -1,4 +1,4 @@
-"""设备节点共用 widget 助手（gtec/siggen 共享） — widgets 包（注册表见 core.py）。"""
+"""设备节点共用 widget 助手（SigGen 等设备节点共享） — widgets 包（注册表见 core.py）。"""
 
 from __future__ import annotations
 

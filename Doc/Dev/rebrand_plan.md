@@ -5,7 +5,7 @@
 > 已完成：pyproject 名 / 安装器（AppName、目录、Start Menu、文件关联、输出名）/ README 标题与仓库链接 /
 > 环境脚本文案 / 窗口标题与横幅 / **数据目录迁 FlyVibingEngine + 首用复制迁移** / **env 双读 `FVE_*` 优先回退 `MGE_*`**
 > （`Application/Core/AppIdentity.py`：`env_get()` / `data_dir()` / `migrate_legacy_data_dir()`）。
-> 未做：旧名仓库 URL 全量替换（文档内旧链接）、`MGE_GTEC_SERVICE` 等设备类 env 双读、改名后实机 e2e。
+> 未做：旧名仓库 URL 全量替换（文档内旧链接）、设备类 env 双读、改名后实机 e2e。
 > **核心原则：改「分发与标识面」，保留「技术面」** —— 波及面最小化，一次做完，
 > 借助"未发布 = 唯一零成本窗口"完成。
 
@@ -30,7 +30,7 @@
 | 窗口标题 / 启动横幅 | `[glfwWindow]` 等 | 终名 | |
 | 安装包 | MyGameEngine-Setup-0.1.0.exe | FlyVibe-Setup-*.exe | **Inno AppId 变更 = 系统视为新应用**（旧版需先卸载） |
 | 文件关联 | MyGameEngine.Project（.myproj） | FlyVibe.Project | 迁移期可双关联 |
-| 环境变量 | `MGE_*`（EXTENSIONS_DIR/STATE/DATA、MCP_FRAMES_DIR、GTEC_SERVICE、EEG_TRANSPORT、TEST_TMP） | `FVE_*` | **双读兼容 ≥1 版本**（见 §3） |
+| 环境变量 | `MGE_*`（EXTENSIONS_DIR/STATE/DATA、MCP_FRAMES_DIR、EEG_TRANSPORT、TEST_TMP） | `FVE_*` | **双读兼容 ≥1 版本**（见 §3） |
 | 用户数据目录 | `%APPDATA%/MyGameEngine`（extensions 等） | `%APPDATA%/FlyVibe` | 迁移逻辑：旧目录存在 → 复制迁移 |
 | wheel / import 名 | engine_editor_mcp | flyvibe_mcp（待 D2） | console script 同步改名；仓库内引用一次全改（Test/E2E 自持） |
 | 文档标题 | 各 README / 协议头部 | 终名 | |

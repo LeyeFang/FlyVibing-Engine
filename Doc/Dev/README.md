@@ -33,13 +33,11 @@
 | `../..` → **`Utils/README.md`** | `Utils/**`（工具层布局：受众 × 分发命运） | **往 Utils/ 放任何东西前必读**：三层词表（Dev/ExtDev/User 与 Doc 三分区同名）、依赖资格（ExtDev 禁 import 编辑器内部）、导出卫生（游戏包只带 `Utils/User`） |
 | `ui_protocol.md` | `Application/Editor/UI/**`（Panel / Widget / 样式 / 菜单 / FileDialog） | 改编辑器 UI、加内联控件、调 Add 菜单、改删除交互 |
 | `i18n_protocol.md` | `Application/Editor/I18n.py` + `Application/Editor/Locale/**` + `Utils/Dev/i18n_tool.py` + `Doc/Dev/i18n_baseline.json` | **写任何 UI 文案 / 加菜单项 / 新增语言前必读**：角色分工、键规范与可提取性、不翻译边界表（agent 面=中文不随语言变化）、运行时回退链、**守卫三层与棘轮口径**、新增语言 Runbook（全量适配门槛）、扩展侧约定 |
-| `upstream_imgui_beginchild_fullclip.md` | —（外部依赖 imgui/imgui_bundle 的可用性档案；复现脚本 `Utils/Dev/repro_imgui_child_clipping.py`） | 遇到 `Must call EndChild() and not End()` / 最小化后渲染循环被杀 / 准备向上游提交同类 issue 时读：现象链、4 条语义实测、官方原文、三条文档改进建议 |
-| `community_feedback_gtec_2026-10-12.md` | 扩展示例 `Functions/EEGDevice/Gtec/` 开发实录（社区反馈存档） | 评估 **ExtDev 文档自包含性与工具链缺口** 时读：A1–A5（需引擎/上游信息）+ B1–B4（口径不一致）+ C1 + **§6 引擎侧消化记录**（已合并/已裁决/待办） |
 | `node_editor_protocol.md` | `Application/Core/NodeGraph/**`（运行时）+ `Application/Editor/UI/panels/node_editor/**`（编辑器交互）+ `FlyVibing-User-And-Developer-Utils/packages/node-editor/**` | 新增/修改节点类型、求值器、图约束、图校验、MCP 文档 |
 | `device_io_protocol.md` | `Application/Functions/**`（SerialParallelDevice / EEGDevice） | 设备集成、真实/空跑双后端、线程与数据落盘 |
 | `bci_algorithm_protocol.md` | `Application/Functions/BCIAlgorithm/**` + `node_types/evaluators {epoch,bci_algorithm}` + 对应 widgets | epoch 数据集、FBCSP/CCA 节点、打包 list 超参、训练同步语义、模型注册、空采验证 |
 | `project_export_protocol.md` | `Application/Editor/ProjectManager.py` + EditorHost 场景 I/O + UI/UIManager 主菜单 + UI/FileDialog | 项目保存/另存/导出、资源路径、主菜单 File 项、迁移与打包 |
-| `runtime_packaging_protocol.md` | `Application/PlayerEntry.py` + `Application/Runtime/PlayerBootstrap.py` + `Application/Core/Project/**` + `Utils/Dev/**`（打包流水线） | 播放器/独立运行、Python 环境打包、wheelhouse、run_game.cmd、gtec fork 轮子策略、运行时线程纪律（§3.1） |
+| `runtime_packaging_protocol.md` | `Application/PlayerEntry.py` + `Application/Runtime/PlayerBootstrap.py` + `Application/Core/Project/**` + `Utils/Dev/**`（打包流水线） | 播放器/独立运行、Python 环境打包、wheelhouse、run_game.cmd、运行时线程纪律（§3.1） |
 | `editor_live_protocol.md` | `Application/Editor/Services/LiveCommandServer.py` + `FlyVibing-User-And-Developer-Utils/packages/editor-mcp/**` | 实时命令总线（agent 热注入）、实体/组件/场景/资源编辑 ops（v3 §4.1）、校验/导入导出/工程 ops（v4 §4.2）、新增 op、容器补全跟进（§10）、agent 通道（MCP lite/full 档、CLI、Skill）与故障排查 |
 | `graph_validation_protocol.md` | `Application/Core/NodeGraph/validation/**` + Node Editor 面板 Validate + `graph.validate.*` / `graph.export/import` ops | 改校验规则/干跑语义/报告格式、改 Validate UI 或图导入导出 |
 | `test_protocol.md` | `Test/**` + `Utils/Dev/test_runner.py` + `Test/Application/Editor/ui_scenario.py` + `_ui_boot.py` | 新增/修改测试、UI 场景回放、排查测试互相干扰时必读：档位 / 沙箱 / 输出契约 / 重置清单 |
@@ -72,7 +70,7 @@
 2. **实现**（同域内一次改全：类型定义 / 控件 / 求值器 / 菜单 / 文档 / 测试）。
 3. **Pylance 零错误**（IDE 诊断必须干净）。
 4. **MCP 空跑验证**（**所有节点/图相关改动必须通过**，见 §3）。
-5. **相关测试脚本通过**：`Test/` 下对应脚本（如设备层 → `Test/Application/Functions/test_gtec_device.py`）。
+5. **相关测试脚本通过**：`Test/` 下对应脚本（如设备层 → `Test/Application/Functions/test_siggen_device.py`）。
 6. **文档同步**：本目录 + `FlyVibing-User-And-Developer-Utils/packages/node-editor/rules.md` + `graph_rules.py`（若涉及节点）。
 
 ---
@@ -86,13 +84,13 @@
 - **所有副作用节点必须支持 dry_run**：分支 `if ctx.dry_run: ctx.emit_log(...); return`，
   参数与真实路径一致（只记录不执行）。
 - **设备类开发必须附带"空跑后端"**：无硬件、无落盘、无线程、结果确定性（同样输入 → 同样输出）。
-  真实设备在干跑中**绝不**被触碰。示例见 `Application/Functions/EEGDevice/GtecStub.py`。
-- 模块 import 不得拉起重依赖（matplotlib / pygds / DLL）—— 重依赖在真实路径内**懒导入**。
+  真实设备在干跑中**绝不**被触碰。
+- 模块 import 不得拉起重依赖（matplotlib / 设备 SDK / DLL）—— 重依赖在真实路径内**懒导入**。
 - 验收命令（无 UI、无硬件即可跑）：
 
 ```powershell
-# 单元测试（设备层示例，48 项断言：stub 会话 + 干跑全链路 + 约束）
-.venv-py314t\Scripts\python.exe Test/Application/Functions/test_gtec_device.py
+# 单元测试（设备层示例：SigGen 会话 + 干跑全链路 + 约束）
+.venv-py314t\Scripts\python.exe Test/Application/Functions/test_siggen_device.py
 # 图工具冒烟（构建器）
 .venv-py314t\Scripts\python.exe FlyVibing-User-And-Developer-Utils/packages/node-editor/test_smoke.py
 # NodeEditor agent 通道离线套件（MCP 分节/构建/应用 + CLI）
@@ -105,8 +103,7 @@
 
 - 引擎 venv：`.venv-py314t`（Python 3.14 自由线程）；启动：`startup.bat`（内部 `python -Xgil=0`）。
 - **自由线程注意**：不存在 GIL 保护，跨线程共享的可变结构必须加锁（见 `device_io_protocol.md`）。
-- 设备层可选依赖（pygds 等）只装在引擎 venv 时才对真实采集生效；缺失时节点给出明确错误日志，**不崩溃、不伪造数据**。
-- 外部参考资料（本机）：`C:\WorkSpace\FLY\GtecAPI\`（g.HIamp 测试脚本 + API 摘要 + 离线 wheel）。
+- 设备层可选依赖（设备 SDK 等）只装在引擎 venv 时才对真实采集生效；缺失时节点给出明确错误日志，**不崩溃、不伪造数据**。
 
 ---
 

@@ -16,6 +16,6 @@ engine-editor-cli doc show dev/extension_protocol#<节号|标题片段>      # �
 engine-editor-cli doc search <关键词>                    # 跨主题检索
 ```
 
-章节：1 三层高度模型（依赖方向铁律） · 2 Plugin 审计与重构决议 · 3 切入架构 — 三档侵入模型 · 4 兼容与破坏面削减机制（跨扩展兼容性） · 5 贡献点目录（开发者能力面） · 6 守卫与验收（计划） · 7 分期对接（与扩展蓝图 M0-M3） · 8 拍板记录（2026-10-11）
+章节：1 三层高度模型（依赖方向铁律） · 2 Plugin 审计与重构决议 · 3 切入架构 — 三档侵入模型 · 4 兼容与破坏面削减机制（跨扩展兼容性） · 5 贡献点目录（开发者能力面） · 6 守卫与验收（计划） · 7 分期对接（与扩展蓝图 M0-M3） · 8 拍板记录（2026-10-11） · 9 扩展边界执行细则（2026-10-16 — 事故复盘后定稿）
 
 内容权威（唯一）：工具仓 `packages/editor-mcp/src/engine_editor_mcp/docs_content/dev/extension_protocol.md`。

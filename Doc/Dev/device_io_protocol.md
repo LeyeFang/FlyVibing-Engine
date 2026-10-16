@@ -133,23 +133,29 @@
   `push`（真实硬件——start 后采集线程持续推送，引擎接收线程写会话环形缓冲）。
 - **保存仍在引擎侧**：服务只提供数据；npz/csv/元数据落盘逻辑与进程内完全一致。
 - **生命周期**：VirtualDevice 引擎自动拉起（`sys.executable`，引擎环境，动态端口，日志在系统 temp）；
-  Gtec 外部启动（自有环境；`MGE_GTEC_SERVICE=host:port`，默认 127.0.0.1:47810）；
+  Gtec **三级路由**（2026-10-15）: `MGE_GTEC_SERVICE=host:port` 显式连接 →
+  `MGE_GTEC_PYTHON` / 设备配置 `service_python`（自有环境 python）**自动拉起**（动态端口，断开回收子进程）→
+  否则直连默认 127.0.0.1:47810（**3s 快速失败** + 启动指引）；
   客户端断开 → 服务退出（引擎崩溃自动清理）；`kill/close` 发 shutdown 并回收子进程。
-- **连通失败诊断**：报错含启动提示 + 服务日志尾部（自动拉起场景）。
-- 验证：`Test/Application/Functions/test_eeg_service.py`（往返（含 `impedance` 命令）/确定性/端到端保存/逃生门/进程清理 +
-  Gtec 3.9 跨版本握手——不触硬件）。
-- 待办：Gtec 实机联调（自有环境启动服务 + 硬件会话）、阻抗实机验证（电极帽）、PIE E2E 复跑、品牌目录随环境打包（规划见 §7）。
+- **连通失败诊断**：报错含启动提示 + 服务日志尾部（自动拉起场景）；
+  两阶段失败点显式区分（2026-10-15 实战教训）——`cannot connect ...` = 服务没起（A: 自动拉起 / B: 手动启动），
+  `init failed ...` = 服务已起但设备被占用（如 g.Recorder），两者文案各不相同。
+- **服务探针**：`probe_gtec_service()`（1.5s 只读探测）+ `ext.gtec.service` op（面板/agent 排障入口）。
+- 验证：`Test/Application/Functions/test_eeg_service.py`（26 checks: 往返（含 `impedance` 命令）/确定性/
+  端到端保存/逃生门/进程清理 + Gtec 3.9 跨版本握手 + probe/自动拉起链——不触硬件）。
+- 已验（2026-10-15 实机）: g.HIamp 自动拉起服务 → 观察/采集/落盘（65 列含 TRIG）/阻抗 → 释放 全链通过。
+- 待办：电极帽阻抗质量数据（实机链路已通）、PIE start/stop 的 `close_all` 与会话联动政策、品牌目录随环境打包（规划见 §7）。
 
 ---
 
 ## 9. 测试
 
 ```powershell
-.venv-py314t\Scripts\python.exe Test/Application/Functions/test_gtec_device.py        # 设备层 + 干跑 + 约束 (48 checks)
+.venv-py314t\Scripts\python.exe Test/Application/Functions/test_gtec_device.py        # 设备层 + 干跑 + 约束 + 真机 TRIG 列 (57 checks)
 .venv-py314t\Scripts\python.exe Test/Application/Functions/test_siggen_device.py      # 虚拟信号发生器 (配置/会话/落盘/干跑/配对)
 .venv-py314t\Scripts\python.exe Test/Application/Functions/test_serial_parallel_device.py
-.venv-py314t\Scripts\python.exe Test/Application/Extensions/test_gtec_extension.py    # 监视面板扩展 (DSP/ops/watch-record/阻抗/全裁剪栈平衡, 91 checks)
-# 实机 (需引擎运行中): Test/Application/Extensions/e2e_gtec_monitor_check.py          # watch/record 拆分 + 滤波 + 阻抗 + virtual 录制, 35 checks
+.venv-py314t\Scripts\python.exe Test/Application/Extensions/test_gtec_extension.py    # 监视面板扩展 (DSP/ops/watch-record/阻抗/探针/全裁剪栈平衡, 92 checks)
+# 实机 (需引擎运行中): Test/Application/Extensions/e2e_gtec_monitor_check.py          # watch/record + 滤波 + 阻抗 + virtual 录制 + 真实 g.HIamp 段, 47 checks
 ```
 
 - 干跑用例必须断言：静态校验零错误、`events_by_type` 覆盖全链路节点、干跑后注册表为空。
@@ -188,15 +194,17 @@
   （环形缓冲锁内只读拷贝）→ 显示滤波（因果 IIR，滑窗+预热余量，无跨帧状态）
   → min/max 抽取列 → 绘制（点列按版本缓存）。面板**绝不直接触碰设备 API**。
 - **三种模式**: `sim`（进程内 GtecStub — 确定性合成，窗口容量封顶，不落盘）/ `device`
-  （外部 Gtec 服务，push — 真实 g.HIamp）/ `virtual`（引擎自动拉起 VIRTUAL 服务 — 连续合成，
-  Stop 真实落盘；无硬件环境下验证完整录制链路的推荐通道）。连接失败 = 显式报错
-  （含服务启动指引），绝不静默回退 stub。
+  （Gtec 服务 — **自动拉起**（面板 Svc python / `MGE_GTEC_PYTHON`，动态端口）或连接外部已运行
+  服务（`MGE_GTEC_SERVICE` / 默认 47810），push — 真实 g.HIamp）/ `virtual`（引擎自动拉起
+  VIRTUAL 服务 — 连续合成，Stop 真实落盘；无硬件环境下验证完整录制链路的推荐通道）。
+  连接失败 = 显式报错（服务没起 vs 设备占用两阶段区分 + 启动指引），绝不静默回退 stub。
 - **电极阻抗**（`ext.gtec.impedance` + 面板 Impedance 视图页）: 门面 `measure_impedance`
   → 后端 `get_impedance`（真机 = pygds `GetImpedanceEx(etype, tms_box, first=True)`，单位 Ω;
   sim/virtual = 确定性合成演示值，`simulated` 标记）。**空闲操作**: 流式采集中会话层拒绝。
   阈值（`classify_impedance`，来源 GtecAPI docs/api_summary）: 被动 <7.5 / 7.5–20 / >20 kΩ,
   主动 <65 / 65–200 / >200 kΩ; 通道 1 恒 NaN（硬件特例）→ n/a。服务协议新增 `impedance` 命令
-  （ServiceHost/ServiceClient; 真实硬件验证待做）。
+  （ServiceHost/ServiceClient; 实机验证 2026-10-15 通过 — 设备返回 256 值裁剪至会话通道、
+  负值/NaN 哨兵 → n/a; 电极帽质量数据待做）。
 - **显示滤波选项 v2**: 陷波 `off|50|60|50+100|60+120`（谐波组合 = 成级联）; 频带预设
   （broadband 0.5-45/0.5-100, delta/theta/alpha/beta/gamma, hp/lp）或 custom; IIR 阶数 2/4。
   显示滤波 ≠ 设备滤波: 前者 = 面板软件链（随时可改，即时生效）；后者 = g.HIamp 硬件预设
@@ -204,15 +212,20 @@
   `Functions/SignalProcess`）。
 - **落盘**: Stop(save) → 引擎侧 npz/csv + json 元数据 — 与节点族完全同一条实现
   （`session/buffer` scope 可选；sim 模式为干跑语义，只算路径不写盘）。
+- **真机 TRIG 列**（2026-10-15）: 硬件数据块 = (samples, 65)（64 EEG + 触发合成列 TRIG）；
+  环形缓冲只留 EEG（显示/节点行为不变），**录制保留 TRIG**（npz 65 列 + `channel_names` 含 TRIG +
+  `channels_saved` 元数据）。
 - **agent 通道**: `ext.gtec.{status, open, close, watch, record, start, stop, filters, display,
-  impedance, snapshot}` — 全程 JSON、无 UI 可调；`snapshot` 返回 per-channel mean/rms/ptp +
+  impedance, service, snapshot}` — 全程 JSON、无 UI 可调；`service` = 服务连通探针（排障）;
+  `snapshot` 返回 per-channel mean/rms/ptp +
   等间隔数值预览（干跑/实机数值断言通道）；`freeze` 冻结显示（不拉新数据，设置变更仅重渲染冻结帧）。
 - **UI 纪律**: 面板绘制在渲染线程帧内、只读快照（dev protocol §7）；imgui 窗口栈配对
   纪律见 `ui_protocol.md` §2.13（最小化 0×0 全裁剪时 `BeginChild`=False — `EndChild`
   仍必须调用，否则渲染循环断言崩溃）。
-- 测试: `Test/Application/Extensions/test_gtec_extension.py`（91 checks 无头, 含 watch/record/
-  阻抗/全裁剪）+ GUI 场景 `scenarios/gtec_panel_smoke.py` + 实机 `e2e_gtec_monitor_check.py`
-  （截图产物在 `Test/_runs/gtec_monitor_demo/`）；服务协议阻抗闭环在 `test_eeg_service.py`。
+- 测试: `Test/Application/Extensions/test_gtec_extension.py`（92 checks 无头, 含 watch/record/
+  阻抗/探针/全裁剪）+ GUI 场景 `scenarios/gtec_panel_smoke.py` + 实机 `e2e_gtec_monitor_check.py`
+  （47 checks: sim/virtual/真实 g.HIamp 三段 + 截图产物在 `Test/_runs/gtec_monitor_demo/`;
+  无 GtecAPI 环境时实机段自动 SKIP）；服务协议阻抗闭环在 `test_eeg_service.py`。
 
 ---
 

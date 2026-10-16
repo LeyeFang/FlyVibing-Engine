@@ -1076,13 +1076,11 @@ class GtecMonitorExtension(UIExtensionBase):
                 if changed:
                     s["serial"] = v
                 if s["mode"] == "device":
-                    imgui.set_next_item_width(280)
-                    changed, v = imgui.input_text("Svc python##gtec_svcpy",
-                                                  str(s["svc_python"]), 256)
+                    imgui.text_disabled("Svc python (auto-launch; blank = external service)")
+                    imgui.set_next_item_width(-1)
+                    changed, v = imgui.input_text("##gtec_svcpy", str(s["svc_python"]), 256)
                     if changed:
                         s["svc_python"] = v
-                    imgui.text_disabled("auto-launch: python with pygds "
-                                        "(blank = use an already running service)")
 
             self._combo("Rate (Hz)", s["sampling_rate"],
                         tuple(SUPPORTED_RATES), "sampling_rate")

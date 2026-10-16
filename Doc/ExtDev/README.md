@@ -27,7 +27,7 @@
 | SignalProcess | `Functions/SignalProcess/` | skeleton（可装载） | 最小 extension.py + `ext.sigproc.info` op 注册 |
 | SerialParallelDevice | `Functions/SerialParallelDevice/` | v0.2.0 | **官方完整示例**：独立监视面板 + 逻辑设备名（`@alias` 跨机器）+ `ext.device.*` ops 八件套 + 面板↔场景同步 |
 | BCIAlgorithm | `Functions/BCIAlgorithm/` | partial | FBCSP/CCA 算法资产迁移规划 |
-| EEGDevice (Gtec) | `Functions/EEGDevice/Gtec/` | partial | 品牌设备进程架构（独立 env + 中介线程） |
+| EEGDevice (Gtec) | `Functions/EEGDevice/Gtec/` | partial | 品牌设备进程架构（独立 env + 中介线程 + 服务自动拉起）; 监视面板（watch/record 分离 / DSP / 阻抗 / 12 件套 ops） |
 
 > 每个扩展目录内含 `TODO.md`（状态档案 + 落地清单），是本展示范。
 > **接手维护 SerialParallelDevice 的 agent**: 先读 `Functions/SerialParallelDevice/HANDOFF.md`（交接书，含已定裁决/坑/下一步/验收）

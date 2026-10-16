@@ -31,8 +31,10 @@
 1. 编辑器 **Extensions** 菜单勾选 `Gtec Device`（或 `engine-editor-cli call extension.enable id=gtec`）。
 2. 面板 `Gtec Monitor` 中选 **Mode** → `Simulated`（无硬件, 确定性合成, 不落盘）→ Open →
    **Watch**（只看波形, 不写文件）或 **Record**（采集 + 落盘; 监视中可随时升级）。
-3. 真实硬件: 先在 Gtec 自有环境启动服务（`python -m Application.Functions.EEGDevice.Gtec.service
-   --port 47810`），面板选 `Device (g.HIamp service)` → Open → Watch/Record。
+3. 真实硬件: 面板选 `Device (g.HIamp service)` → **Svc python** 填 Gtec 自有环境 python
+   （如 `C:\WorkSpace\FLY\GtecAPI\.venv\Scripts\python.exe`，一次填入即持久化）→ Open 时
+   自动拉起服务（动态端口，断开回收）。留空 = 连接已运行服务（`MGE_GTEC_SERVICE` 或默认
+   127.0.0.1:47810）；也可手动启动: `<python> -m Application.Functions.EEGDevice.Gtec.service --port 47810`。
 4. `Simulator (VIRTUAL service)` = 引擎自动拉起的虚拟信号发生器（连续合成 + Stop 真实落盘）—
    用于无硬件环境下验证完整录制链路。
 5. **Impedance** 视图页（右栏）: Open 后（未在采集中）点 Measure → 逐通道阻抗表
@@ -43,8 +45,10 @@
 | mode | 后端 | 数据 | Stop 落盘 |
 |---|---|---|---|
 | `sim` | 进程内 Gtec stub（确定性） | 合成（窗口容量封顶） | dry-run — 只算路径不写文件 |
-| `device` | 外部 Gtec 服务（自有环境, push） | 真实 g.HIamp | npz/csv + json |
+| `device` | Gtec 服务（自动拉起* / 外部已运行, push） | 真实 g.HIamp | npz/csv + json |
 | `virtual` | VIRTUAL 服务（引擎自动拉起, pump） | 合成（连续） | npz/csv + json |
+
+\* 自动拉起 = 面板 **Svc python** 指定自有环境 python（留空则连接已运行服务）。
 
 ## agent 通道（ops, `ext.<id>.` 前缀由宿主强制）
 
@@ -60,6 +64,7 @@
 | `ext.gtec.filters` | `enabled?, preset?, order?=2\|4, notch?=off\|50\|60\|50+100\|60+120, band_type?, low?, high?` | 显示滤波链（实时软件滤波） |
 | `ext.gtec.display` | `window_s?, amplitude_uv?(0=auto), channel_start?, channel_count?, freeze?` | 视口设置 |
 | `ext.gtec.impedance` | `measure?=true, electrode_type?=passive\|active, tms_box?=false` | 电极阻抗测量（kΩ + 分类; 设备需 Open 且空闲） |
+| `ext.gtec.service` | `probe?=true` | 服务连通探针（endpoint/reachable/hint; 排障用, 不开会话） |
 | `ext.gtec.snapshot` | `preview?=true, preview_channels?=3, points?=128, max_channels?=16` | 波形统计（mean/rms/ptp）+ 数值预览（agent 验证用） |
 
 ```powershell
@@ -70,6 +75,13 @@ engine-editor-cli call ext.gtec.snapshot max_channels=4
 engine-editor-cli call ext.gtec.stop scope=session    # 落盘
 engine-editor-cli call ext.gtec.impedance electrode_type=passive
 ```
+
+## 故障排查（2026-10-15 实机教训）
+
+- `cannot connect gtec service @ ...` = **服务没起**（与 g.Recorder 占用无关）:
+  ① 面板 Svc python 填好自有环境 python → Open 自动拉起; ② 手动起服务; ③ `ext.gtec.service` 看 hint。
+- `init failed ...` = 服务已起但对设备初始化失败 — 这时才需检查设备是否被 **g.Recorder** 等占用。
+- 观察中报 session not found: PIE start/stop 会重置全部设备会话（close_all）— 重新 Open 即可。
 
 ## 数据通路（与节点图同一条）
 
@@ -89,14 +101,17 @@ Stop → session.stop(save=auto) → 录制 = 引擎侧落盘（npz/csv + 同名
 - 阻抗测量是**设备空闲操作**: 流式采集中拒绝（先 Stop 再 Measure）; 通道 1 恒 NaN 为硬件特例;
   sim/virtual 返回确定性合成演示值（`simulated` 标记）; TMS box 校正参数直接透传 pygds。
 - `sim` 合成量封顶一个窗口容量（干跑确定性设计）; 连续演示请用 `virtual`。
-- 节点族仍在核心（迁移红线保护 MI-SSSEP）; 阻抗实机验证（需电极帽）待做。
+- 真机数据块含**触发合成列 TRIG**（65 列）: 显示只取 EEG（行为与节点一致）; 录制 npz 保留
+  TRIG 列 + `channel_names`/`channels_saved` 元数据。
+- 节点族仍在核心（迁移红线保护 MI-SSSEP）; 阻抗**实机链路已验证**（2026-10-15: 256 值裁剪至
+  会话通道、负值哨兵 → n/a）; 电极帽质量数据（阈值分类校验）待做。
 - UI 文本全程 ASCII / FontAwesome（字形图集约束 — `Doc/Dev/ui_protocol.md` §12）。
 
 ## 验证
 
 ```powershell
-.venv-py314t\Scripts\python.exe Test/Application/Extensions/test_gtec_extension.py   # 91 checks（无头）
+.venv-py314t\Scripts\python.exe Test/Application/Extensions/test_gtec_extension.py   # 92 checks（无头）
 .venv-py314t\Scripts\python.exe FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py Functions/EEGDevice/Gtec
-# 实机: 先 startup.bat, 再:
-.venv-py314t\Scripts\python.exe Test/Application/Extensions/e2e_gtec_monitor_check.py
+# 实机（需引擎运行中; 含真实 g.HIamp 段 — 无 GtecAPI 环境时自动 SKIP）:
+.venv-py314t\Scripts\python.exe Test/Application/Extensions/e2e_gtec_monitor_check.py   # 47 checks
 ```

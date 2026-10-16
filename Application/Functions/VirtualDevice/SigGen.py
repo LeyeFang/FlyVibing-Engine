@@ -55,6 +55,7 @@ class SigGenConfig:
     save_dir: str = "."            # 保存目录 (默认当前目录)
     buffer_seconds: float = 10.0   # 窗口缓冲秒数
     serial: str = "VIRTUAL"        # 元数据占位 (无真实串口)
+    trigger_every_s: float = 0.0   # 合成触发脉冲周期 (s; 0 = 关闭 — 供 trigger 链路验证)
 
     # ── 构造 ────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ class SigGenConfig:
         step = max(0.0, min(_f("freq_step", 2.0), rate / 2.0))
         amp = max(0.0, _f("amplitude_uv", 50.0))
         noise = max(0.0, _f("noise_uv", 0.0))
+        trig = max(0.0, min(60.0, _f("trigger_every_s", 0.0)))
         fmt = str(props.get("export_format", "npz"))
         if fmt not in ("npz", "csv"):
             fmt = "npz"
@@ -99,6 +101,7 @@ class SigGenConfig:
             export_format=fmt,
             save_dir=str(props.get("save_dir", "")).strip() or ".",
             buffer_seconds=max(0.1, min(600.0, _f("buffer_seconds", 10.0))),
+            trigger_every_s=trig,
         )
 
     # ── 派生属性 ────────────────────────────────────────────
@@ -127,6 +130,7 @@ class SigGenConfig:
             f"noise={self.noise_uv}uV seed={self.seed} "
             f"buffer={self.buffer_seconds}s({self.buffer_capacity()}) "
             f"export={self.export_format} dir={self.save_dir or '.'}"
+            + (f" trig={self.trigger_every_s}s" if self.trigger_every_s > 0 else "")
         )
 
 
@@ -200,6 +204,17 @@ class VirtualSigGenBackend(DeviceBackend):
         if cfg.noise_uv > 0.0 and self._rng is not None:
             wave = wave + self._rng.normal(0.0, cfg.noise_uv,
                                            size=(count, cfg.channels))
+        if cfg.trigger_every_s > 0.0 and cfg.sampling_rate > 0:
+            # 合成触发: 每 trigger_every_s 一个 10ms 脉冲, 码值 1..4 循环
+            # （模拟"16 线合并"附加通道 — 供采集/显示/导出全链验证）
+            fs = max(1, int(cfg.sampling_rate))
+            period = max(1, int(round(cfg.trigger_every_s * fs)))
+            width = max(1, int(round(0.01 * fs)))
+            stride = start + np.arange(count, dtype=np.int64)
+            pulse = (stride % period) < width
+            codes = ((stride // period) % 4 + 1).astype(np.float32)
+            trig = np.where(pulse, codes, np.float32(0.0))
+            wave = np.concatenate([wave, trig[:, None]], axis=1)
         return wave.astype(np.float32)
 
     # ── 阻抗（合成 — 演示/无硬件验证） ─────────────────────

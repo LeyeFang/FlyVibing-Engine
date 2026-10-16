@@ -5,8 +5,8 @@ VirtualDevice.ServiceClient — 引擎侧服务后端: 品牌进程 + 协议通�
   - VirtualDevice → spawn_virtual(): 引擎自动拉起 (sys.executable, 引擎本体环境);
   - 外部品牌       → connect_brand():  显式 MGE_EEG_SERVICE → 连接外部服务;
                     否则给出 (cfg.service_python / MGE_EEG_SERVICE_PYTHON) python +
-                    品牌服务模块时 → 自动拉起 (自有环境进程, 动态端口);
-                    都没有 → 连接默认端点。
+                    (cfg.service_module / MGE_EEG_SERVICE_MODULE) 品牌服务模块时 →
+                    自动拉起 (自有环境进程, 动态端口); 都没有 → 连接默认端点。
 
 数据模式 (服务 hello 声明):
   - pump: 虚拟/合成后端 — pump 命令同步返回块 (与进程内语义完全一致, 确定性);
@@ -126,13 +126,16 @@ class ServiceBackend(DeviceBackend):
     def connect_brand(cls, python_exe: Optional[str] = None,
                       module: str = "") -> "ServiceBackend":
         """外部品牌: 显式 MGE_EEG_SERVICE → 连接外部服务（设该项时不再自动拉起）;
-        否则给出 (参数 / env MGE_EEG_SERVICE_PYTHON) python + 品牌服务模块时 →
-        自动拉起自有环境服务; 都没有 → 连接默认端点（期望外部手动启动）。"""
+        否则给出 (参数 / env MGE_EEG_SERVICE_PYTHON) python + (参数 / env
+        MGE_EEG_SERVICE_MODULE) 品牌服务模块时 → 自动拉起自有环境服务;
+        都没有 → 连接默认端点（期望外部手动启动）。"""
         endpoint = os.environ.get("MGE_EEG_SERVICE", "").strip()
         if endpoint:
             return cls("external", spawn=False, endpoint=endpoint)
         exe = str(python_exe or "").strip() \
             or os.environ.get("MGE_EEG_SERVICE_PYTHON", "").strip()
+        module = str(module or "").strip() \
+            or os.environ.get("MGE_EEG_SERVICE_MODULE", "").strip()
         if exe and module:
             return cls("external", spawn=True, module=module, python_exe=exe)
         return cls("external", spawn=False, endpoint=_DEFAULT_BRAND_ENDPOINT)

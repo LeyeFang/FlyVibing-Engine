@@ -19,6 +19,7 @@ VirtualDevice — 设备层门面（虚拟信号发生器设备族的完整模�
     kill_device(name, pool)                   → (ok, detail)
     get_data(name, elapsed_s, pool)           → (result | None, detail)
     measure_impedance(name, electrode_type, tms_box, pool) → (result | None, detail)
+    get_trigger_events(name, start, pool)      → (dict | None, detail)  触发事件快照
     probe_brand_service(endpoint)              → dict   (品牌服务连通性探测, 不建会话)
     close_all()                               → int        (Runtime 停止保护)
     list_sessions()                           → list[str]
@@ -96,6 +97,7 @@ __all__ = [
     "start_record",
     "stop_record",
     "measure_impedance",
+    "get_trigger_events",
     "probe_brand_service",
     "kill_device",
     "get_data",
@@ -145,7 +147,8 @@ def _make_backend(cfg, dry_run: bool) -> DeviceBackend:
     if device == "VIRTUAL":
         return ServiceBackend.spawn_virtual()
     return ServiceBackend.connect_brand(
-        python_exe=getattr(cfg, "service_python", "") or None)
+        python_exe=getattr(cfg, "service_python", "") or None,
+        module=getattr(cfg, "service_module", "") or "")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -246,6 +249,14 @@ def stop_record(name: str, save_scope: str = "session", elapsed_s: float = 0.0,
                   f"would save {result.samples} samples ({result.duration_s:.2f}s, "
                   f"scope={save_scope}) → {where}")
     return True, detail
+
+
+def get_trigger_events(name: str, start: int = 0, pool: Optional[str] = None):
+    """触发事件（附加通道沿变提取 — 线程安全快照; start = 起始下标）。"""
+    session, why = resolve_session(name, pool=pool)
+    if session is None:
+        return None, why
+    return session.get_trigger_events(start), ""
 
 
 def kill_device(name: str, pool: Optional[str] = None):

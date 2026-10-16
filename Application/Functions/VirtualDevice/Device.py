@@ -168,6 +168,7 @@ class DeviceConfig:
     buffer_seconds: float = 10.0   # 窗口缓冲秒数 → (channels, 秒×采样率)
     service_python: str = ""       # 品牌服务自动拉起用 python（空 = 仅连接外部服务;
                                    # env MGE_EEG_SERVICE_PYTHON 亦可 — 需品牌自有环境）
+    service_module: str = ""       # 品牌服务模块（-m 目标; 与 service_python 同时给出才自动拉起）
 
     # ── 构造 ────────────────────────────────────────────────
 
@@ -220,6 +221,7 @@ class DeviceConfig:
             save_dir=str(props.get("save_dir", "")).strip() or ".",
             buffer_seconds=max(0.1, min(600.0, _f("buffer_seconds", 10.0))),
             service_python=str(props.get("service_python", "")).strip(),
+            service_module=str(props.get("service_module", "")).strip(),
         )
 
     # ── 派生属性 ────────────────────────────────────────────
@@ -440,6 +442,11 @@ class RecordingSession:
         self._blocks: list[np.ndarray] = []
         self._record_bytes = 0
         self._record_full = False  # 内存保护触发标记
+        # 触发事件（硬件附加通道提取; push/pump 两类后端共用）
+        self._trig_events: list[dict] = []
+        self._trig_prev: float = 0.0
+        self._sample_count: int = 0
+        self._record_start_sample: int = 0
 
     # ── 采集回调（后端线程调用） ────────────────────────────
 
@@ -447,10 +454,14 @@ class RecordingSession:
         b = np.asarray(block, dtype=np.float32)
         # 硬件附加通道（触发合成 = +1 列未保真的布局）: 显示/节点只用 EEG 主通道;
         # 录制保留原样（落盘含 trigger 列, 名称补 "TRIG" — 见 saved_channel_names）。
+        # 触发事件: 从附加列提取沿变（0 -> 非 0 或码值变化）— 面板标记 / 导出元数据。
+        n_rows = int(b.shape[0]) if b.ndim == 2 else 0
         if b.ndim == 2 and b.shape[1] == self.ring.channels + 1:
+            self._extract_trigger_events(b[:, -1])
             self.ring.push(b[:, :self.ring.channels])
         else:
             self.ring.push(b)
+        self._sample_count += n_rows
         with self._lock:
             if self.state != "recording":
                 return
@@ -465,6 +476,51 @@ class RecordingSession:
             self._blocks.append(np.array(b, dtype=np.float32, copy=True))
             self._record_bytes += nbytes
 
+    def _extract_trigger_events(self, col: np.ndarray) -> None:
+        """附加触发列 -> 事件列表 [{sample, t_s, code}]（沿变检出, 确定性）。"""
+        c = np.asarray(col, dtype=np.float64)
+        if c.size == 0:
+            return
+        prev = self._trig_prev
+        changed = np.empty(c.size, dtype=bool)
+        changed[0] = c[0] != prev
+        changed[1:] = c[1:] != c[:-1]
+        idx = np.nonzero(changed & (c != 0.0))[0]
+        if idx.size:
+            fs = max(1, int(self.cfg.sampling_rate))
+            base = self._sample_count
+            with self._lock:
+                room = max(0, 100000 - len(self._trig_events))
+                for i in idx[:room]:
+                    self._trig_events.append({
+                        "sample": int(base + int(i)),
+                        "t_s": round((base + int(i)) / fs, 6),
+                        "code": int(c[int(i)]),
+                    })
+        self._trig_prev = float(c[-1])
+
+    def get_trigger_events(self, start: int = 0) -> dict:
+        """触发事件快照（线程安全; start = 起始下标 — 供面板增量拉取）。"""
+        with self._lock:
+            total = len(self._trig_events)
+            start = max(0, min(int(start or 0), total))
+            events = [dict(e) for e in self._trig_events[start:]]
+        return {"total": total, "events": events}
+
+    @property
+    def sample_count(self) -> int:
+        """已接收样本总数（绝对索引 — 触发事件/窗口定位用）。"""
+        return int(self._sample_count)
+
+    def trigger_events_for_scope(self, scope: str) -> list:
+        """按保存 scope 截取（session = 录制段; buffer = 当前窗口）。"""
+        if scope == "session":
+            lo = self._record_start_sample
+        else:
+            lo = max(0, self._sample_count - self.ring.capacity)
+        with self._lock:
+            return [dict(e) for e in self._trig_events if int(e["sample"]) >= lo]
+
     # ── 生命周期 ────────────────────────────────────────────
 
     def start(self, elapsed_s: float = 0.0, record: bool = True) -> None:
@@ -475,6 +531,9 @@ class RecordingSession:
             self._blocks.clear()
             self._record_bytes = 0
             self._record_full = False
+            self._trig_events.clear()
+        self._trig_prev = 0.0
+        self._record_start_sample = self._sample_count if record else 0
         self.backend.start(self._on_block)
         # 空跑后端: 在 start 后锚定仿真起点 (真实后端 pump 为 no-op)
         self.backend.pump(elapsed_s, self._on_block)
@@ -492,6 +551,7 @@ class RecordingSession:
             self._record_full = False
         self.started_iso = _iso_now()
         self.state = "recording"
+        self._record_start_sample = self._sample_count
 
     def stop(self, save_scope: str = "session", elapsed_s: float = 0.0,
              save: bool = True) -> SaveResult:
@@ -620,6 +680,7 @@ class RecordingSession:
         f = self.cfg.effective_filters()
         info = self.backend.info()
         n_cols = int(n_columns) if n_columns else int(self.cfg.channels)
+        trig_events = self.trigger_events_for_scope(save_scope)
         return {
             "source": "MyGameEngine.NodeEditor",
             "device": self.cfg.device,
@@ -638,6 +699,8 @@ class RecordingSession:
             "bandpass_filter_index": info.get("bandpass_filter_index"),
             "filter_note": f["note"],
             "trigger": "enabled (16 lines combined into one extra channel)",
+            "trigger_events": trig_events,
+            "trigger_events_count": len(trig_events),
             "buffer_seconds": self.cfg.buffer_seconds,
             "buffer_capacity_samples": self.ring.capacity,
             "save_scope": save_scope,

@@ -15,7 +15,7 @@
   - Watch（只观察波形, 不写文件） vs Record（显示 + 落盘; 监视中可随时升级）;
   - ~25 Hz 节流拉取会话环形缓冲快照（只读拷贝）→ 显示滤波 → min/max 抽取 → 绘制;
   - 显示滤波 + 设备滤波概念分离: 虚拟设备无硬件滤波; 显示滤波 = 面板软件链（随时可改）;
-  - 面板绝不直接触碰设备 API —— 一律经设备门面 Application.Functions.EEGDevice。
+  - 面板绝不直接触碰设备 API —— 一律经设备门面 Application.Functions.VirtualDevice。
 
 模式（mode）:
   sim      进程内虚拟后端（确定性合成、不落盘 — 演示与无头验证; 合成量封顶一个窗口）
@@ -40,7 +40,7 @@ import virtual_display as vd
 import virtual_scope as vs
 
 # 引擎设备门面（应用层领域模块 — 扩展白名单内, 见审查器 C6）
-from Application.Functions.EEGDevice import (
+from Application.Functions.VirtualDevice import (
     SigGenConfig,
     get_data,
     get_session,

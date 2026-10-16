@@ -5,7 +5,7 @@
 
 ## 面对什么问题
 
-适用：SerialParallelDevice（串口/并口）、EEGDevice（EEG 设备族：品牌服务进程 + 虚拟信号发生器等）等硬件集成。
+适用：SerialParallelDevice（串口/并口）、VirtualDevice（EEG 设备模块：服务进程 + 虚拟信号发生器等）等硬件集成。
 
 ## 去哪获得内容（逐级深入 —— 先索引后内容）
 

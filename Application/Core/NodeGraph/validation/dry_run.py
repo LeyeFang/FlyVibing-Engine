@@ -59,7 +59,7 @@ def _cleanup_dry_sessions() -> list[str]:
     """清理干跑命名空间下的残留设备会话与设备池（真实会话/池不受影响）。"""
     removed: list[str] = []
     try:
-        from Application.Functions.EEGDevice import (
+        from Application.Functions.VirtualDevice import (
             destroy_pool,
             kill_device,
             list_pools,

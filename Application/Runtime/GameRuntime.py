@@ -122,7 +122,7 @@ class GameRuntime(Engine):
             spd_start()
             # ── 清理上次运行可能残留的 EEG 会话（异常退出保护）──
             try:  # 设备层缺省时跳过（可选组件）
-                from Application.Functions.EEGDevice import close_all
+                from Application.Functions.VirtualDevice import close_all
 
                 close_all()
             except Exception:  # noqa: BLE001
@@ -223,7 +223,7 @@ class GameRuntime(Engine):
         #    图内 Stop/Kill 设备节点已在 OnGameStop 链路执行完毕;
         #    此处兜底处理图里没有 Kill 节点 / 异常路径的情况。
         try:  # 设备层缺省时跳过（可选组件）
-            from Application.Functions.EEGDevice import close_all
+            from Application.Functions.VirtualDevice import close_all
 
             _closed = close_all()
             if _closed:

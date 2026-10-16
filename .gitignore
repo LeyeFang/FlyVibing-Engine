@@ -39,6 +39,10 @@ imgui.ini
 # 使用侧工具链的开发链接（junction -> FlyVibing-User-And-Developer-Utils）—— 不得提交
 Utils/ExtDev/
 
-# EEGDevice + Gtec content shield (2026-10-16, license review; local files kept, untracked on purpose)
-Application/Functions/EEGDevice/*
-Application/Functions/Gtec/*
+# 内置扩展跟踪策略（白名单式, 2026-10-16）: Application/Functions 默认整体忽略 —
+# 仅官方扩展显式放行; Gtec（社区插件本地夹具）不在白名单 → 天然忽略。
+Application/Functions/*
+!Application/Functions/SignalProcess/
+!Application/Functions/BCIAlgorithm/
+!Application/Functions/SerialParallelDevice/
+!Application/Functions/VirtualDevice/

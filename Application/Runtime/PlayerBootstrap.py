@@ -377,7 +377,7 @@ def run(source: str, max_frames: int = 0) -> int:
     except Exception:
         pass
     try:
-        from Application.Functions.EEGDevice import close_all
+        from Application.Functions.VirtualDevice import close_all
 
         _closed = close_all()
         if _closed:

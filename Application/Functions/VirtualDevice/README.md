@@ -7,7 +7,7 @@
 
 类经典信号工具的实时观察面板: **自由启停 / 实时波形观察 / 软件实时滤波 / 采集落盘**，
 外加 agent（CLI / MCP）控制通道 `ext.virtual.*`。面板绝不直接触碰设备 API —— 一切经设备门面
-（`Application.Functions.EEGDevice`）与会话注册表。
+（`Application.Functions.VirtualDevice`）与会话注册表。
 
 两个正交概念:
 
@@ -25,8 +25,8 @@
 | `virtual_scope.py` | 示波器绘制（imgui draw_list 包络 / 网格 / 悬停读数 / 统计表） |
 | `TODO.md` | 状态档案与待办 |
 
-> 运行侧（虚拟信号发生后端 + 服务进程）位于 `Application/Functions/EEGDevice/VirtualDevice/`
-> —— 本目录只放**编辑器侧扩展贡献**; 游戏运行时不装载扩展（ExtensionManager 仅编辑器侧）。
+> 本目录 = 完整设备模块（单目录自包含）: 面板扩展 + 后端（`SigGen.py`）+ 服务（`service.py`）
+> + 会话核心（`Device.py` / `Service*.py`）; 游戏运行时不装载扩展（ExtensionManager 仅编辑器侧）。
 
 ## 使用
 

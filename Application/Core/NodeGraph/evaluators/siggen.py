@@ -2,7 +2,7 @@
 Evaluators: SigGen 节点 (InitSigGenDevice / StartSigGenRecord / StopSigGenRecord /
 KillSigGenDevice / GetSigGenData)。
 
-后端路由 (EEGDevice 门面按 cfg.device=VIRTUAL 选择 VirtualSigGenBackend):
+后端路由 (VirtualDevice 门面按 cfg.device=VIRTUAL 选择 VirtualSigGenBackend):
   - ctx.dry_run=True  → 虚拟后端干跑模式 (确定性合成; 不落盘 — MCP 干跑验证路径)
   - ctx.dry_run=False → 虚拟后端真实模式 (合成 + 落盘 npz/csv)
 
@@ -16,12 +16,12 @@ from __future__ import annotations
 from typing import Any
 
 from ..evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
-from Application.Functions.EEGDevice import SigGenConfig
-from Application.Functions.EEGDevice import get_data as _sg_get_data
-from Application.Functions.EEGDevice import init_session as _sg_init
-from Application.Functions.EEGDevice import kill_device as _sg_kill
-from Application.Functions.EEGDevice import start_record as _sg_start
-from Application.Functions.EEGDevice import stop_record as _sg_stop
+from Application.Functions.VirtualDevice import SigGenConfig
+from Application.Functions.VirtualDevice import get_data as _sg_get_data
+from Application.Functions.VirtualDevice import init_session as _sg_init
+from Application.Functions.VirtualDevice import kill_device as _sg_kill
+from Application.Functions.VirtualDevice import start_record as _sg_start
+from Application.Functions.VirtualDevice import stop_record as _sg_stop
 
 
 # ── 辅助 ─────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ def _ref_name(inst, ctx=None) -> str:
     if str(inst.props.get("pool", "")).strip():
         return ""
     try:
-        from Application.Functions.EEGDevice import list_sessions
+        from Application.Functions.VirtualDevice import list_sessions
 
         dry = [n for n in list_sessions() if n.startswith(_DRY_PREFIX)]
         if len(dry) == 1:

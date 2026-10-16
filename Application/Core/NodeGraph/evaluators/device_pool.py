@@ -1,7 +1,7 @@
 """
 Evaluators: Device Pool 节点 (CreateDevicePool / AddToDevicePool / KillDevicePool)。
 
-门面: Application.Functions.EEGDevice 池注册表 (create_pool / destroy_pool / add_to_pool)。
+门面: Application.Functions.VirtualDevice 池注册表 (create_pool / destroy_pool / add_to_pool)。
 干跑: 池与会话共用 "dryrun#" 命名空间（结束后由校验服务一并清理）。
 
 时序 (CRITICAL): AddToDevicePool 读取 'device' 输入 pin 的会话键（同帧由 Init 评估器写入），
@@ -41,7 +41,7 @@ def _kill_key(node_id: int, inst, ctx, g: GraphEvaluator) -> tuple[str, str]:
 
 def _eval_create_pool(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     """CreateDevicePool — 注册一个设备池（幂等）。"""
-    from Application.Functions.EEGDevice import create_pool
+    from Application.Functions.VirtualDevice import create_pool
 
     inst = g._canvas.nodes[node_id]
     ok, detail = create_pool(_create_key(node_id, inst, ctx))
@@ -50,7 +50,7 @@ def _eval_create_pool(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
 
 def _eval_add_to_pool(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     """AddToDevicePool — 读取 device pin 的会话键并加入所选池。"""
-    from Application.Functions.EEGDevice import add_to_pool
+    from Application.Functions.VirtualDevice import add_to_pool
 
     inst = g._canvas.nodes[node_id]
     pool = str(inst.props.get("pool_name", "")).strip()
@@ -74,7 +74,7 @@ def _eval_add_to_pool(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
 
 def _eval_kill_pool(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     """KillDevicePool — 注销池（成员回落 global; 设备生命周期由各自 Kill 节点管理）。"""
-    from Application.Functions.EEGDevice import destroy_pool
+    from Application.Functions.VirtualDevice import destroy_pool
 
     inst = g._canvas.nodes[node_id]
     key, err = _kill_key(node_id, inst, ctx, g)

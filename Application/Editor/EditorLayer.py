@@ -112,7 +112,7 @@ class EditorLayer(Layer):
         # ── 文字预览: 编辑器编辑即光栅化并刷新纹理 (无时钟维度 — 与媒体的
         #    "编辑器=模板"有意偏差; PIE 中由 SetText 节点驱动; text_protocol.md) ──
         from Application.Editor.EditorHost import EditorHost
-        from Application.Functions.Text import TextSystem
+        from Application.Core.Text import TextSystem
         TextSystem.tick(EditorHost)
 
         # ── 检测 RuntimeWindow 关闭 (用户点 X) ──

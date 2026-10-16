@@ -11,7 +11,7 @@
 |---|---|---|
 | 设备 API | `Application/Functions/SerialParallelDevice/api.py`（+ `__init__` 门面） | 串口/并口打开/写/读; 线程 `spd-io`（已在 ThreadRegistry 注册） |
 | 监视能力 | `Application/Functions/SerialParallelDevice/monitor.py`（新 2026-10-11） | 端口枚举 / RX poll（io_thread ≤50ms）/ 事件环缓 (500) / 统计 |
-| 扩展本体 | `Functions/SerialParallelDevice/extension.py`（新 2026-10-11） | 监视面板（Serial/Parallel 页） + `ext.device.*` ops + 设置持久化 |
+| 扩展本体 | `Application/Functions/SerialParallelDevice/extension.py`（新 2026-10-11） | 监视面板（Serial/Parallel 页） + `ext.device.*` ops + 设置持久化 |
 | IO 线程 | `Application/Functions/SerialParallelDevice/io_thread.py` | 委托线程（thread boundary 白名单 delegated） |
 | 节点族 | `Core/NodeGraph/node_types` 设备页（Serial/Parallel Send/…） | 图驱动发送（MI-SSSEP 实验在用） |
 | 协议 | `Doc/Dev/device_io_protocol.md` | 设备集成/双后端/线程纪律 |

@@ -29,7 +29,7 @@ class SignalProcessExtension(ExtensionBase):
                 "BadChannelDetect",      # e) 坏道
                 "ICA",                   # f) 独立成分分析
             ],
-            "note": "迁移与落地清单见 Functions/SignalProcess/TODO.md",
+            "note": "迁移与落地清单见 Application/Functions/SignalProcess/TODO.md",
         }
 
 

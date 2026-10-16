@@ -1,6 +1,6 @@
 """SerialParallelDevice — 监视能力（端口枚举 / 收发事件流 / 统计）。
 
-供扩展面板（`Functions/SerialParallelDevice/extension.py` — 官方示例）与
+供扩展面板（`Application/Functions/SerialParallelDevice/extension.py` — 官方示例）与
 agent（`ext.device.monitor_snapshot` op）消费。
 
 设计要点:

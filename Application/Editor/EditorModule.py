@@ -15,7 +15,7 @@ EditorModule — 编辑器宿主装配模块（L0 EngineModule 实现）。
     └── EditorModule.on_unload()
 
 架构定位: 见 Doc/Dev/extension_protocol.md §1/§2 — 本文件属于 L0 宿主装配层,
-不是对外扩展（Extension）机制; 扩展请使用 Functions/** + extension.json（Doc/ExtDev/extension_dev_protocol.md）。
+不是对外扩展（Extension）机制; 扩展请使用 Application/Functions/** + extension.json（Doc/ExtDev/extension_dev_protocol.md）。
 
 历史: 原名 EditorPlugin（2026-10-11 更名; EditorPlugin.py 为过渡别名 shim）。
 """

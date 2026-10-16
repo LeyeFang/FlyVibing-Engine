@@ -5,7 +5,7 @@
   - Application/Editor/UI/panels/MenuBarPanel.py        (保留文件, 未注册)
 
 职责（对应 Doc/ExtDev/extension_dev_protocol.md §5/§9）:
-  - 列出全部扩展（ExtensionManager.list_infos, 来源 = 内置 Functions/** + 用户目录）
+  - 列出全部扩展（ExtensionManager.list_infos, 来源 = 内置 Application/Functions/** + 用户目录）
   - broken           → 红色禁用项 + 错误 tooltip
   - planned/未实现    → 灰色"计划中" + 目录/描述 tooltip
   - 可装载           → 复选菜单项, 点击 = ExtensionManager.toggle

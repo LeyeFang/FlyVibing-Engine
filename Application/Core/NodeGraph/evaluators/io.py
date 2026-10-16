@@ -5,7 +5,7 @@ SerialSend   — 通过串口发送信号，支持 Manual / Pin 双模式，Stri
 ParallelSend — 通过并口发送 uint8 值 (1–255)，Manual / Pin 双模式，5ms 后自动复位。
 PathVar      — 输出文件/目录路径字符串。
 TextFileWrite — 将内容写入文本文件，支持 Manual / Pin 双模式，w/a 模式，分隔符。
-实际 I/O 由 Functions/SerialParallelDevice 线程池执行，本求值器只做入队。
+实际 I/O 由 Application/Functions/SerialParallelDevice 线程池执行，本求值器只做入队。
 """
 
 import os
@@ -39,7 +39,7 @@ def _eval_serial_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
     Port / BaudRate / Format 始终从节点属性读取（实验级配置）。
     Value 从上游数据 pin 读入（动态值）。
 
-    实际写入由 Functions/SerialParallelDevice 的独立 I/O 线程执行，
+    实际写入由 Application/Functions/SerialParallelDevice 的独立 I/O 线程执行，
     本函数仅做参数读取 + 编码 + 入队 — 不阻塞逻辑线程。
     """
     inst = g._canvas.nodes[node_id]
@@ -91,7 +91,7 @@ def _eval_parallel_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) 
     Manual 模式: Address / Value 全部从节点属性读取。
     Pin 模式:    Address / Value 全部从上游连线读取。
 
-    实际写入由 Functions/SerialParallelDevice 的独立 I/O 线程执行，
+    实际写入由 Application/Functions/SerialParallelDevice 的独立 I/O 线程执行，
     写入后 5ms 自动复位为零。本函数仅做参数读取 + 入队 — 不阻塞逻辑线程。
     """
     inst = g._canvas.nodes[node_id]

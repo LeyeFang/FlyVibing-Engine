@@ -8,10 +8,10 @@
 
 | 资产 | 位置 | 说明 |
 |---|---|---|
-| FBCSP（CSP + LDA/SVM） | `Functions/BCIAlgorithm/FBCSP.py` + `CSP.py` + `Jobs.py` | 闭式 LDA + scipy.optimize 线性 SVM; SyncJob 同步等待语义 |
-| CCA（SSVEP） | `Functions/BCIAlgorithm/CCA.py` | 训练无关（sin/cos 参考）; 12Hz 锁定 ρ=0.96 已验证 |
-| Epoch 数据集 | `Functions/BCIAlgorithm/EpochDataset.py` | (epochs, channels, samples) + 标签 + npz 存取 |
-| 模型注册表 | `Functions/BCIAlgorithm/ModelRegistry.py` | 训练产物管理 |
+| FBCSP（CSP + LDA/SVM） | `Application/Functions/BCIAlgorithm/FBCSP.py` + `CSP.py` + `Jobs.py` | 闭式 LDA + scipy.optimize 线性 SVM; SyncJob 同步等待语义 |
+| CCA（SSVEP） | `Application/Functions/BCIAlgorithm/CCA.py` | 训练无关（sin/cos 参考）; 12Hz 锁定 ρ=0.96 已验证 |
+| Epoch 数据集 | `Application/Functions/BCIAlgorithm/EpochDataset.py` | (epochs, channels, samples) + 标签 + npz 存取 |
+| 模型注册表 | `Application/Functions/BCIAlgorithm/ModelRegistry.py` | 训练产物管理 |
 | 节点族 | `Core/NodeGraph/node_types/bci_algorithm.py` + `evaluators/bci_algorithm.py` + widgets | Init/Train/Test × FBCSP + TestCCA（五注册点已齐） |
 | 协议 | `Doc/Dev/bci_algorithm_protocol.md` | 超参/同步等待/空采验证语义 |
 
@@ -20,8 +20,8 @@
 ### A. 迁移到 Extension 形态（保持兼容）
 - [ ] 节点 Pack 化: 用 `ctx.nodes.register_pack`（M1 实装）替代 core 五注册点直注册;
       **节点 type 名保持不变**（已保存场景的图引用兼容——.scene 里带 `TrainFBCSP` 等字符串）
-- [ ] 实现文件平移: `Functions/BCIAlgorithm/**` 保留为扩展私有实现; `evaluators/bci_algorithm.py`
-      改为薄转发或整体迁入扩展目录（求值器注册协议不变）
+- [ ] 实现文件归位: 实现保持在 `Application/Functions/BCIAlgorithm/**`（内迁后与扩展壳同目录）; `evaluators/bci_algorithm.py`
+      改薄转发或整体迁入（求值器注册协议不变）
 - [ ] `ext.bci.*` ops: `train` / `test` / `model.list` / `model.load`（把训练入口开放给 agent 渠道）
 - [ ] InitFBCSP 等 widgets 的扩展命名空间（沿用 widgets 注册表, key 加前缀）
 

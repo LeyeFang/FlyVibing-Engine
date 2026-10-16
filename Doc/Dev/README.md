@@ -42,13 +42,13 @@
 | `graph_validation_protocol.md` | `Application/Core/NodeGraph/validation/**` + Node Editor 面板 Validate + `graph.validate.*` / `graph.export/import` ops | 改校验规则/干跑语义/报告格式、改 Validate UI 或图导入导出 |
 | `test_protocol.md` | `Test/**` + `Utils/Dev/test_runner.py` + `Test/Application/Editor/ui_scenario.py` + `_ui_boot.py` | 新增/修改测试、UI 场景回放、排查测试互相干扰时必读：档位 / 沙箱 / 输出契约 / 重置清单 |
 | `threading_protocol.md` | `Application/Core/ThreadRegistry.py` + 全体线程启动点 + `Utils/Dev/thread_probe.py` | **新开线程/跨线程通信/服务进程集成前必读**：三通道纪律、心跳注册四步、实时探针、检查单 |
-| `media_protocol.md` | `Application/Functions/Media/**` + `ShowMedia` 节点 + `MediaPlayer` 组件 + `TextureUpdateCommand` 链 | 改动态媒体（GIF/视频/音频）、媒体节点、动态纹理上传：架构决议 **v2**（编辑器=模板 / PIE 唯一由 GameRuntime 控制 / 节点建图才生效）、数据流、注册点、验收证据 |
+| `media_protocol.md` | `Application/Core/Media/**` + `ShowMedia` 节点 + `MediaPlayer` 组件 + `TextureUpdateCommand` 链 | 改动态媒体（GIF/视频/音频）、媒体节点、动态纹理上传：架构决议 **v2**（编辑器=模板 / PIE 唯一由 GameRuntime 控制 / 节点建图才生效）、数据流、注册点、验收证据 |
 | `rendering_protocol.md` | `Application/Core/Renderer/**` + `Resource/Shaders/**` + `Test/Application/Renderer/**` | 改渲染器/渲染命令/shader/纹理上传/overlay，或需要像素级验证时必读：后端现状（OpenGL 一等公民）、线程纪律、资源模型、**验证体系**（GL 像素探针 + 金标准）、agent 工具（`renderer.snapshot` / CLI `probe`）、**§7 渲染目标(RT)**、**§8 光照体系** |
 | `shader_protocol.md` | `Resource/Shaders/**` + `Application/Resource/Material.py` + 渲染器 uniform 注入 | 新增/修改 shader、调整材质 uniform 系统、变换光照/帧级注入 uniform 前必读：顶点属性契约（STD_LAYOUT）、uniform 归属总表（矩阵/材质/**渲染器注入**）、材质默认值与「切 shader 重置」语义、光照模型与数值锁定表、新增 shader 检查单 |
-| `text_protocol.md` | `Application/Functions/Text/**` + `TextDisplay` 组件 + `SetText` 节点 + ScenePanel 通用组件检视 | 改文字显示/光栅化/字体/动态纹理绑定前必读：**两种形态**（有色画布 vs 浮空文字=透明底+alpha 混合）、auto 画布热更策略、合成粗体/斜体、字段表、驱动通道矩阵（编辑器预览/检查器/MCP/节点）、注册点清单与验收证据 |
+| `text_protocol.md` | `Application/Core/Text/**` + `TextDisplay` 组件 + `SetText` 节点 + ScenePanel 通用组件检视 | 改文字显示/光栅化/字体/动态纹理绑定前必读：**两种形态**（有色画布 vs 浮空文字=透明底+alpha 混合）、auto 画布热更策略、合成粗体/斜体、字段表、驱动通道矩阵（编辑器预览/检查器/MCP/节点）、注册点清单与验收证据 |
 | `ui_refactor_plan.md` | `Application/Editor/UI/**` 大文件（widgets.py / panel.py / ScenePanel.py） | 执行 UI 文件拆分/搬迁时读：目标结构（mixin/注册表两种拆法）+ 验证顺序 |
 | `doc_cli_plan.md` | 文档交付链（Doc CLI 化）: `engine-editor-cli doc` + `doclib.py` + `docs_content/**` | 迁移文档到 CLI / 新增 CLI 文档主题时读：架构、指针 stub 纪律、守卫、批量 runbook、待决事项 |
-| `extension_protocol.md` | 三层模型（EngineModule / Extension / Mod）+ `Functions/**` 扩展区 + `Application/Editor/Extensions/**` | **Functions 功能模块化、扩展体系开发前必读**：Plugin 审计与改名（已执行）、三档侵入模型（T0 声明式 / T1 Hooks / T2 进程外）、依赖方向铁律、兼容与遏制机制（SDK 门面 / 命名空间 / 冲突检测 / 能力声明）、节点包与设计面板贡献点 |
+| `extension_protocol.md` | 三层模型（EngineModule / Extension / Mod）+ `Application/Functions/**` 扩展区 + `Application/Editor/Extensions/**` | **Functions 功能模块化、扩展体系开发前必读**：Plugin 审计与改名（已执行）、三档侵入模型（T0 声明式 / T1 Hooks / T2 进程外）、依赖方向铁律、兼容与遏制机制（SDK 门面 / 命名空间 / 冲突检测 / 能力声明）、节点包与设计面板贡献点 |
 | `roadmap_next.md` | 全局（线程治理 / 资源管线 / 动态媒体 三章蓝图, 待评估草案） | 开工前评估三大愿景方向、依赖取舍与里程碑顺序 |
 
 > **社区开发者（第三方扩展作者）的外部文档已独立**：规范全文 `Doc/ExtDev/extension_dev_protocol.md`、

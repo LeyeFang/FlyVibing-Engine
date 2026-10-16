@@ -8,9 +8,9 @@
 
 | 资产 | 位置 | 说明 |
 |---|---|---|
-| 可装载骨架 | `Functions/SignalProcess/extension.py` | 生命周期 + ops 样例（增量扫描链路验证） |
+| 可装载骨架 | `Application/Functions/SignalProcess/extension.py` | 生命周期 + ops 样例（增量扫描链路验证） |
 | 依赖技术 | `scipy`（既有依赖）· `numpy` | 滤波/变换实现基础 |
-| 参考先例 | `Functions/BCIAlgorithm/CSP`（Butterworth SOS 带通）、`Media/Text` 节点族五注册点 | 复用工程模式 |
+| 参考先例 | `Application/Functions/BCIAlgorithm`（CSP / Butterworth SOS 带通）、`Application/Core/{Media,Text}` 节点族五注册点 | 复用工程模式 |
 
 ## 1. TODO（按功能域）
 

@@ -35,7 +35,7 @@
   **已知阻塞**：`NodeEditor/node_graph_validator.py` 依赖 `Application.Core.NodeGraph`（干跑校验复用引擎
   实现，避免两套规则漂移）；独立分发前需“随包带无头 NodeGraph”或“降级为调引擎”—— 已登记在白名单里。
 - [ ] **SDK 目录** `SDK/`：
-  - `SDK/ext-template/` — 扩展脚手架模板（现阶段 = 以 `Functions/SignalProcess` 为最小活模板，
+  - `SDK/ext-template/` — 扩展脚手架模板（现阶段 = 以 `Application/Functions/SignalProcess` 为最小活模板，
     后续抽 cookiecutter 化）；
   - `SDK/stubs/` — `ExtensionBase` / `ExtensionContext` / ctx 能力的 `.pyi` 存根
     （开发者不在引擎仓也有 IDE 补全）；

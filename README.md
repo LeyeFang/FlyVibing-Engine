@@ -38,7 +38,7 @@ startup.bat                  # 启动编辑器
 
 | 仓库 | 内容 | 谁用 |
 |---|---|---|
-| **本仓库** `FlyVibing-Engine` | `Application/`（引擎+编辑器+运行时）、`Functions/`（内置扩展）、`Resource/`、`Doc/`、`Utils/Dev`（研发工具）、`Utils/User`（随成品分发） | 引擎研发；打包实验成品 |
+| **本仓库** `FlyVibing-Engine` | `Application/`（引擎+编辑器+运行时；内置扩展在 `Application/Functions/`）、`Resource/`、`Doc/`、`Utils/Dev`（研发工具）、`Utils/User`（随成品分发） | 引擎研发；打包实验成品 |
 | **[FlyVibing-User-And-Developer-Utils](https://github.com/LeyeFang/FlyVibing-User-And-Developer-Utils)** | `editor-mcp`（编辑器实时 MCP/CLI）、`node-editor`（离线节点图）、`extension-kit`（扩展审查 + 无头测试）、`skills/` | 实验设计者、扩展作者，以及引擎团队自己 |
 
 在引擎仓库里干活时，把工具链链接进来即可（`Utils/ExtDev` 是**链接**，已 gitignore，内容不进本仓库）：
@@ -53,7 +53,7 @@ pip install -e ..\FlyVibing-User-And-Developer-Utils\packages\editor-mcp
 | 路径 | 内容 |
 |---|---|
 | `Application/` | 引擎与编辑器源码（Core / Editor / Runtime / Functions 门面） |
-| `Functions/` | 内置扩展（`device` 串并口、`sigproc`、`bci`…） |
+| `Application/Functions/` | 功能模块与内置扩展（`device` 串并口、`sigproc`、`bci`、`virtual`…） |
 | `Resource/` | 资源与预制体；`runtime/`、`wheels/` 为本地生成物（不进 git） |
 | `Utils/Dev/` | 研发工具：环境脚本、测试入口 `test_runner.py`、轮子收集、运行时镜像、安装器 |
 | `Utils/User/` | 随成品分发的一层：`player.bat`（导出游戏包只带这一层） |

@@ -5,7 +5,7 @@
 
 ## 面对什么问题
 
-改 Application/Functions/Media/**（MediaSystem）、MediaPlayer 组件、ShowMedia 节点、TextureUpdateCommand 链前必读。
+改 Application/Core/Media/**（MediaSystem）、MediaPlayer 组件、ShowMedia 节点、TextureUpdateCommand 链前必读。
 
 ## 去哪获得内容（逐级深入 —— 先索引后内容）
 
@@ -16,6 +16,6 @@ engine-editor-cli doc show dev/media_protocol#<节号|标题片段>      # 单�
 engine-editor-cli doc search <关键词>                    # 跨主题检索
 ```
 
-章节：1 架构决议（v2） · 2 数据流（PIE） · 3 ShowMedia 节点（IO ▸ Media） · 4 MediaSystem API（`Application/Functions/Media/MediaSystem.py`） · 5 组件与注册 · 6 渲染命令链（与 v1 相同） · 7 测试与验收（v2 已通过） · 8 已知边界 / 后续 · 9 文件地图（v2）
+章节：1 架构决议（v2） · 2 数据流（PIE） · 3 ShowMedia 节点（IO ▸ Media） · 4 MediaSystem API（`Application/Core/Media/MediaSystem.py`） · 5 组件与注册 · 6 渲染命令链（与 v1 相同） · 7 测试与验收（v2 已通过） · 8 已知边界 / 后续 · 9 文件地图（v2）
 
 内容权威（唯一）：工具仓 `packages/editor-mcp/src/engine_editor_mcp/docs_content/dev/media_protocol.md`。

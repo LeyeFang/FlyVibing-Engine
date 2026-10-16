@@ -8,7 +8,7 @@ EngineModule — 宿主装配模块（L0 引擎层）。
 
 架构定位（见 Doc/Dev/extension_protocol.md §1 三层高度模型）:
   L0 EngineModule — 宿主如何装配自己的骨架（本文件）
-  L1 Extension    — 编辑器应用层的功能模块（Functions/**，对外开发者接口）
+  L1 Extension    — 编辑器应用层的功能模块（Application/Functions/**，对外开发者接口）
   L2 Mod          — 运行时内容层（parked）
   ★ "Plugin" 一词已让位给对外扩展体系（Extension）；本层禁止被扩展代码实现/使用。
 

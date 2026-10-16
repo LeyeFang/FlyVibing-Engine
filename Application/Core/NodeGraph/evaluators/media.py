@@ -28,7 +28,7 @@ def _eval_show_media(node_id: int, ctx: ExecutionContext,
     if engine is None:
         return
 
-    from Application.Functions.Media import MediaSystem
+    from Application.Core.Media import MediaSystem
     MediaSystem.advance(engine, eid, float(getattr(ctx, "delta_time", 0.0)))
 
 

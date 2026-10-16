@@ -1,6 +1,6 @@
 """ExtensionGraph — 宿主提供给扩展的**受限图访问**（`ctx.graph`）。
 
-为什么需要它: 扩展代码位于 `Functions/**`（扩展区），**不允许 import Editor 层**; 但
+为什么需要它: 扩展代码位于 `Application/Functions/**`（扩展区），**不允许 import Editor 层**; 但
 "面板 ↔ 场景节点"是官方示范的核心体验（例: 设备别名绑定后，把场景里的裸 `COMx`
 一键迁到 `@别名`）。本桥接是唯一合法途径，且刻意保持**最小面**:
 

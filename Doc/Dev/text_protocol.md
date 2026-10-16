@@ -5,7 +5,7 @@
 
 ## 面对什么问题
 
-改 Application/Functions/Text/**、TextDisplay 组件、SetText 节点、文字光栅化/动态纹理绑定路径前必读。
+改 Application/Core/Text/**、TextDisplay 组件、SetText 节点、文字光栅化/动态纹理绑定路径前必读。
 
 ## 去哪获得内容（逐级深入 —— 先索引后内容）
 

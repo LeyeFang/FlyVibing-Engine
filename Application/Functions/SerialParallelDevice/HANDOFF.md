@@ -8,7 +8,7 @@
 
 ## 1. 这个扩展是什么（边界，先划清）
 
-- 身份: 官方示例扩展之一，`id = device`，目录 `Functions/SerialParallelDevice/`，入口 `extension.py:create_extension`，
+- 身份: 官方示例扩展之一，`id = device`，目录 `Application/Functions/SerialParallelDevice/`，入口 `extension.py:create_extension`，
   `DeviceExtension(UIExtensionBase)`，manifest `extension.json`（capabilities `["ops","nodes","ui","graph"]`，ops 前缀 `ext.device.*`）。
 - 两个消费者（都要照顾好，不能只顾一边）:
   1. **实验场景里的节点** — `SerialSend` / `ParallelSend`（图里发字节，MI-SSSEP 实验在用）；
@@ -20,7 +20,7 @@
 
 | 能力 | 实现位置 | 权威文档 |
 |---|---|---|
-| 面板（Serial/Parallel 页 + Device names 段） | `Functions/SerialParallelDevice/extension.py` | ExtDev §7（UI 契约）/ §11（自由度标注） |
+| 面板（Serial/Parallel 页 + Device names 段） | `Application/Functions/SerialParallelDevice/extension.py` | ExtDev §7（UI 契约）/ §11（自由度标注） |
 | `ext.device.*` 8 件 op | 同上 `_register_ops` | ExtDev §9（agent 生态）；`engine-editor-cli call ext.device.status` |
 | 串口/并口 IO + 线程 | `Application/Functions/SerialParallelDevice/{api,state,io_thread,tasks}.py` | `Doc/Dev/device_io_protocol.md` §2–§7 |
 | 端口枚举 / 事件环缓 / watch | `.../monitor.py`（`state._events` 环缓 500） | device_io §11 |
@@ -84,7 +84,7 @@
 # 全量回归（动了引擎侧任何一处都跑）
 .venv-py314t\Scripts\python.exe Utils/Dev/test_runner.py --tier core
 # 提交前静态审查（必须 0 fail）
-.venv-py314t\Scripts\python.exe FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py Functions/SerialParallelDevice
+.venv-py314t\Scripts\python.exe FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py Application/Functions/SerialParallelDevice
 ```
 
 ```powershell

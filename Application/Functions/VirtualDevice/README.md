@@ -2,7 +2,7 @@
 
 > 状态: **partial**（波形监视面板已交付; 见 `TODO.md`）
 > 规范: `Doc/ExtDev/extension_dev_protocol.md` · 设备域协议: `Doc/Dev/device_io_protocol.md`
-> 角色: **设备族面板扩展的官方示例**（沿用 Gtec 监视面板的设计语言, 代码为干净重写）
+> 角色: **设备族面板扩展的官方示例**（沿用社区设备监视面板的设计语言, 代码为干净重写）
 > 设计参考: 归档 `Test/_gtec_archive_20261016/`（本地留档; 不随仓库分发）
 
 类经典信号工具的实时观察面板: **自由启停 / 实时波形观察 / 软件实时滤波 / 采集落盘**，
@@ -26,7 +26,7 @@
 | `TODO.md` | 状态档案与待办 |
 
 > 运行侧（虚拟信号发生后端 + 服务进程）位于 `Application/Functions/EEGDevice/VirtualDevice/`
-> —— 本目录只放**编辑器侧扩展贡献**; 顶层 `Functions/` 不进游戏导出包。
+> —— 本目录只放**编辑器侧扩展贡献**; 游戏运行时不装载扩展（ExtensionManager 仅编辑器侧）。
 
 ## 使用
 
@@ -80,7 +80,7 @@ Stop -> session.stop(save=auto) -> 录制 = 引擎侧落盘（npz/csv + 同名 j
 
 - 显示滤波为**因果 IIR、非零相位**（实时工具语义; 离线分析请用离线工具链）。
 - 虚拟设备**无硬件滤波/阻抗语义** —— 面板不提供这些视图; 真机厂商复制本示例时,
-  按需在面板加"设备专属视图页"（设计参考: Gtec 归档的 Impedance 视图页）。
+  按需在面板加"设备专属视图页"（设计参考: 归档 `Test/_gtec_archive_20261016/` 的 Impedance 视图页）。
 - `sim` 合成量封顶一个窗口容量（干跑确定性设计）; 连续演示请用 `virtual` 服务模式。
 - 会话参数（channels/rate/…）在 **Open 时生效**; 流式中修改需先 Close。
 - UI 文本全程 ASCII / FontAwesome（字形图集约束 — `Doc/Dev/ui_protocol.md` §12）。
@@ -97,5 +97,5 @@ Stop -> session.stop(save=auto) -> 录制 = 引擎侧落盘（npz/csv + 同名 j
 
 ```powershell
 .venv-py314t\Scripts\python.exe Test/Application/Extensions/test_virtual_panel.py   # 无头（沙箱 + ops + DSP + 绘制烟测）
-.venv-py314t\Scripts\python.exe FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py Functions/VirtualDevice
+.venv-py314t\Scripts\python.exe FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py Application/Functions/VirtualDevice
 ```

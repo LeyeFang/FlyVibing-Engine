@@ -4,7 +4,7 @@
 开发规范: Doc/ExtDev/extension_dev_protocol.md
 
 M0 实装范围:
-  - 发现: 内置 `Functions/**/extension.json` + 用户目录（env `MGE_EXTENSIONS_DIR` 或
+  - 发现: 内置 `Application/Functions/**/extension.json` + 用户目录（env `MGE_EXTENSIONS_DIR` 或
     %APPDATA%/MyGameEngine/extensions）
   - manifest 校验（id / api_version / entry; 非法 → broken 隔离展示）
   - 启停: 持久化到 `Application/Editor/Config/extensions.json`（env `MGE_EXTENSIONS_STATE` 可覆盖;
@@ -165,7 +165,7 @@ class ExtensionManager:
         """发现并解析全部扩展; 自动装载已启用者。"""
         root = Path(cls._engine_root())
         paths: list[Path] = []
-        funcs = root / "Functions"
+        funcs = root / "Application" / "Functions"
         if funcs.is_dir():
             paths += sorted(funcs.glob("**/extension.json"))
         user = Path(cls._user_dir())

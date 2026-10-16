@@ -8,16 +8,16 @@
 
 | 资产 | 位置 | 说明 |
 |---|---|---|
-| **监视面板（本扩展）** | `Functions/VirtualDevice/{extension, virtual_display, virtual_scope}.py` | 实时波形 / 显示滤波 / watch·record / 落盘（2026-10-16 交付） |
+| **监视面板（本扩展）** | `Application/Functions/VirtualDevice/{extension, virtual_display, virtual_scope}.py` | 实时波形 / 显示滤波 / watch·record / 落盘（2026-10-16 交付） |
 | 虚拟设备后端 + 服务 | `Application/Functions/EEGDevice/VirtualDevice/`（SigGen.py / service.py） | 进程内后端 + VIRTUAL 服务（引擎自动拉起; pump 模式） |
 | 设备门面 | `Application/Functions/EEGDevice/`（Device.py / ServiceClient.py） | 会话注册表 / 环形缓冲 / 落盘 / 服务协议 |
 | 节点族 | 核心 `SigGen` 节点（Init/Start/Stop/Kill/Get + 设备池） | 面板与其共用同一条数据通路（facade） |
-| 设计参考 | `Test/_gtec_archive_20261016/`（本地留档, 非分发内容） | Gtec 监视面板设计语言（干净重写为目标） |
+| 设计参考 | `Test/_gtec_archive_20261016/`（本地留档, 非分发内容） | 社区设备监视面板设计语言（干净重写为目标） |
 
 ## 1. TODO
 
 ### a) 面板增强（可选）
-- [ ] 视图页框架（当前仅波形页; 真机厂商按需加"设备专属视图页", 参考 Gtec Impedance 页设计）
+- [ ] 视图页框架（当前仅波形页; 真机厂商按需加"设备专属视图页", 参考归档 Impedance 页设计）
 - [ ] 长窗口/大通道绘制预算观测（当前 64ch 以内 × 抽到 ≤480 列; 如需再降抽取列数）
 - [ ] 频谱小窗（FFT 概览 — 仅在做版本标注后开启）
 

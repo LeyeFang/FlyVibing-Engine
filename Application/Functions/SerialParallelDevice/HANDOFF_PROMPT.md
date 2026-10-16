@@ -6,14 +6,14 @@
 === 提示词开始 ===
 
 你现在**接手维护** MyGameEngine-Python（Python 3.14 free-threaded 游戏引擎）的一个**已上线官方扩展**：
-串并口扩展 `Functions/SerialParallelDevice/`（`id = device`，ops 前缀 `ext.device.*`）。
+串并口扩展 `Application/Functions/SerialParallelDevice/`（`id = device`，ops 前缀 `ext.device.*`）。
 
 **先按顺序读完这 4 份，再动手**（不要凭猜测改）:
 
-1. `Functions/SerialParallelDevice/HANDOFF.md` — 交接书（边界 / 资产地图 / 已定裁决 / 坑 / 下一步 / 验收）**必读**
+1. `Application/Functions/SerialParallelDevice/HANDOFF.md` — 交接书（边界 / 资产地图 / 已定裁决 / 坑 / 下一步 / 验收）**必读**
 2. `Doc/Dev/device_io_protocol.md` §11 与 **§12（两级设备身份，通读）**
 3. `Doc/ExtDev/extension_dev_protocol.md` §6（ctx 能力）/ §7（UI 契约）/ §9（agent op 生态）/ §14（提交检查单）
-4. `Functions/SerialParallelDevice/extension.py` + `Application/Core/DeviceRegistry.py`（源码即规范）
+4. `Application/Functions/SerialParallelDevice/extension.py` + `Application/Core/DeviceRegistry.py`（源码即规范）
 
 **红线（违反即返工）**:
 

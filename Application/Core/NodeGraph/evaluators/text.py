@@ -54,7 +54,7 @@ def _eval_set_text(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> No
 
     engine = getattr(ctx.scene, 'app', None)
     if engine is not None:
-        from Application.Functions.Text import TextSystem
+        from Application.Core.Text import TextSystem
         TextSystem.refresh(engine, eid)
 
 

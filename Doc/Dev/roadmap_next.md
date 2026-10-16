@@ -15,8 +15,8 @@
 | `Engine._logic_loop` | `Core/Engine.py` | 每帧全 Layer.OnUpdate | 与 OnAttach **并发** |
 | `LiveCommandServer` accept + 每客户端线程 | `Editor/Services` | agent 热注入 | 主线程 pump 消费 |
 | 校验 worker | `NodeGraph/validation/service.py` | 干跑任务 | 单活动任务槽 |
-| `bci-<name>` | `Functions/BCIAlgorithm/Jobs.py` | 训练同步等待 | 锁保护结果槽 |
-| `spd-io` / ServiceClient reader | `Functions/**` | 设备采集 | 各自队列/锁 |
+| `bci-<name>` | `Application/Functions/BCIAlgorithm/Jobs.py` | 训练同步等待 | 锁保护结果槽 |
+| `spd-io` / ServiceClient reader | `Application/Functions/**` | 设备采集 | 各自队列/锁 |
 
 已有纪律：`runtime_packaging_protocol.md` §3.1（"就绪标记最后赋值" + 类级默认值）；先例回归
 `test_runtime_node_layer_race.py`（受控阻塞点，确定性复现半初始化窗口）。
@@ -104,7 +104,7 @@
 
 ### M.2 蓝图（按"零新依赖 → 低风险新依赖"推进）
 
-1. **M1 图像/GIF（零新依赖）**：`Functions/Media/` 可选扩展（对齐品牌策略：`AssetedMedia` 独立文件夹 +
+1. **M1 图像/GIF（零新依赖）**：`Application/Core/Media/`（2026-10-16 由 Functions 归位 Core; 旧可选扩展口径作废）（对齐品牌策略：`AssetedMedia` 独立文件夹 +
    `[project.optional-dependencies] media = [...]`）；节点 IO▸Media：`ShowImage` / `ShowGif`
    （Pillow seek 帧 → Texture2D 逐帧更新）；渲染侧新增 `TextureUpdateCommand`。
 2. **M2 音频**：`PlaySound` / `PlayTone`（波形生成走 scipy/numpy）+ 设备枚举/延迟参数；
@@ -138,7 +138,7 @@
 
 ### M.4 归属 / 里程碑
 
-- 归属：`Application/Functions/Media/**`（新, 可选扩展）、`Core/Renderer`（TextureUpdateCommand）、
+- 归属：`Application/Core/Media/**`（2026-10-16 归位）、`Core/Renderer`（TextureUpdateCommand）、
   节点族（node_types/evaluators/widgets 的 media 子模块——正好接 widgets 拆包后的结构）、
   `Test/Application/Media/`、时间对齐文档进 `device_io_protocol.md`（触发域）。
 - M1 GIF/图像（含节点+测试）→ M2 音频 → M3 视频+触发对齐 → M4 文档/e2e/打包评测（wheelhouse 增补）。

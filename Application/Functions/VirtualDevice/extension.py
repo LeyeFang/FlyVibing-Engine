@@ -1,4 +1,4 @@
-"""Virtual Device — 波形监视面板扩展（官方示例; 沿用 Gtec 监视面板的设计语言, 代码为干净重写）。
+"""Virtual Device — 波形监视面板扩展（官方示例; 沿用社区设备监视面板的设计语言, 代码为干净重写）。
 
 规范对照（Doc/ExtDev/extension_dev_protocol.md）:
   §2  文件形态: extension.json + extension.py（+ 同目录私有模块 virtual_display / virtual_scope）
@@ -11,7 +11,7 @@
   §9  agent 通道: ext.virtual.{status, open, close, watch, record, stop, filters, display, snapshot}
   §11 设置: ctx.data_dir/settings.json 持久化（重开面板保持上次配置）
 
-设计要点（取自 Gtec 监视面板设计语言）:
+设计要点（取自社区设备监视面板设计语言）:
   - Watch（只观察波形, 不写文件） vs Record（显示 + 落盘; 监视中可随时升级）;
   - ~25 Hz 节流拉取会话环形缓冲快照（只读拷贝）→ 显示滤波 → min/max 抽取 → 绘制;
   - 显示滤波 + 设备滤波概念分离: 虚拟设备无硬件滤波; 显示滤波 = 面板软件链（随时可改）;

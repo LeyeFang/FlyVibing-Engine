@@ -1,120 +1,21 @@
 # 测试协议（Test Protocol）— 隔离 / 档位 / 输出契约 / 场景回放
 
-> 适用：`Test/**`（测试资产）、`Utils/Dev/test_runner.py`（统一运行器）、
-> `Test/Application/Editor/ui_scenario.py`（UI 场景回放）。
-> 目标：**测试独立、互不干扰；agent 一次命令看懂结果，只在必要时读日志**（省 token）。
-> 修改/新增测试前必读本文；UI 交互细节另见 `Test/Application/Editor/测试需知.md`。
+> ★ 本页正文已 CLI 化（2026-10-16）。markdown 只做**大方向指引** —— 回答"这份文档面对什么问题 /
+> 内容去哪获得"；具体内容按节走 CLI（避免整篇加载）。方案与进度：`Doc/Dev/doc_cli_plan.md`。
 
----
+## 面对什么问题
 
-## 1. 运行方式（agent 默认入口）
+适用：Test/**（测试资产）、Utils/Dev/test_runner.py（统一运行器）、Test/Application/Editor/ui_scenario.py（UI 场景回放）。
+
+## 去哪获得内容（逐级深入 —— 先索引后内容）
 
 ```powershell
-# core 档（无 GUI，默认）— 一次跑完，紧凑摘要
-python Utils/Dev/test_runner.py
-
-# 只看清单（含档位）
-python Utils/Dev/test_runner.py --list
-
-# 过滤 / 其它档位
-python Utils/Dev/test_runner.py --only editor
-python Utils/Dev/test_runner.py --tier gui
-python Utils/Dev/test_runner.py --tier all --json     # 末行 JSON 摘要（机器读）
-
-# UI 场景回放（真实面板 + 快照 PNG）
-python Test/Application/Editor/ui_scenario.py scenarios/panels_smoke.py
-python Test/Application/Editor/ui_scenario.py --preview          # 交互预览（ESC 退出）
+engine-editor-cli doc                                   # 全部主题两级索引（先在这找）
+engine-editor-cli doc outline dev/test_protocol                   # 本章节索引（标题 + 一行预览）
+engine-editor-cli doc show dev/test_protocol#<节号|标题片段>      # 单节内容
+engine-editor-cli doc search <关键词>                    # 跨主题检索
 ```
 
-运行器输出示例（agent 只读这几行 + 失败行）：
+章节：1 运行方式（agent 默认入口） · 2 档位（tier） · 3 输出契约（每个测试必须遵守） · 4 隔离规则（运行时） · 5 UI 场景回放（ui_scenario） · 6 e2e（live 档）纪律 · 7 测试地图（按域） · 8 新增测试清单
 
-```
-[  1/12] PASS  test_graph_io (1.2s)
-[  3/12] FAIL  test_x (0.4s)  first_error: [FAIL] xxx  log: Test/_runs/run_xxx/logs/test_x.log
-SUMMARY: 11/12 passed in 84s | failed: test_x | tier=core | skipped=5 | runs: Test/_runs/run_xxx
-```
-
-## 2. 档位（tier）
-
-| 档位 | 含义 | 运行环境 | 进默认批次 |
-|---|---|---|---|
-| `core` | 无 GUI / 无硬件 / 无网络; 秒级~分钟级 | venv | ✅ |
-| `gui` | 需要 GL 窗口（面板/ gizmo / 网格视觉） | venv + 显卡 | ❌ |
-| `heavy` | 重 IO（导出包等，分钟级） | venv | ❌ |
-| `live` | 需要**运行中的编辑器**（e2e；可能启停引擎进程） | 编辑器 + venv | ❌ |
-| `manual` | 交互式工具（人工使用，不进批次） | 人 | ❌ |
-
-- 文件头声明：`# TIER: core`（60 行内任意位置）；未声明按文件名启发式（`e2e_*`→live, `*gizmo*/*grid*/*outliner*`→gui, `*live_ui*`/`*node_runtime*`→manual, `*export_game_bundle*`→heavy, 其余 core）。
-- 运行器只默认扫描 `Test/Application/**`；其他目录（Device/RHI 等）按需 `--only` + `--tier all`。
-
-## 3. 输出契约（每个测试必须遵守）
-
-1. **最后一行**输出：`RESULT: OK (n)` 或 `RESULT: FAIL (k): <名字列表>` 或 `RESULT: <m>/<n> passed, <k> failed`（运行器据此判定; 缺失或格式未识别时按退出码判定并打 `[no RESULT line]`/`unrecognized RESULT format` 标记）。
-2. 过程行允许详细，但**失败行**以 `[FAIL] ...` 开头（运行器提取首条做 `first_error`）。
-3. 退出码：0 通过 / 非 0 失败。不要用 `pause`/`input()`（会挂死批次）。
-4. 长输出（逐帧日志、大 diff）**写日志文件**或 `MGE_TEST_TMP` 沙箱，不要刷 stdout。
-
-## 4. 隔离规则（运行时）
-
-| 规则 | 说明 |
-|---|---|
-| 一进程一测试 | 运行器永远子进程执行; 测试不得依赖执行顺序、不得假设前一个测试的残留状态 |
-| 沙箱目录 | 用 `os.environ.get("MGE_TEST_TMP")` 作为写盘根（运行器已按测试创建）; 禁止写仓库路径（示例: 不要往 `Test/Application/Editor/` 落 `imgui.ini` 之类产物） |
-| 全局单例清理 | 涉及下列全局态时，测试开头/结尾显式复位（能 `finally` 就 `finally`）:<br>· `ControllerRegistry.reset()`（Mock 注入后必须）<br>· 设备池 / epoch 数据集 / 模型注册表: `reset_pools()` / `reset_all()` / 注册表 reset<br>· 画布/场景: 用局部 `NodeCanvas()`; 需要 `EditorHost.scene` 时用 `_ui_boot`（最小引导） |
-| imgui 持久化 | 任何 imgui 测试必须 `io.set_ini_filename("")`（`_ui_boot` 已内置）——禁止生成/依赖 `imgui.ini` |
-| 端口/句柄 | 服务测试用 ephemeral 端口（`port=0` + 读回）; 启动的进程/窗口必须关闭（`finally`） |
-| 设备/网络 | 真实硬件只在 `test_gtec_device.py` 这类显式测试中; 其余一律 stub/dry-run |
-| 干跑命名空间 | 引擎内校验/干跑统一 `dryrun#` 前缀（既有机制，勿绕开） |
-
-## 5. UI 场景回放（ui_scenario）
-
-- 结构：`Test/Application/Editor/scenarios/*.py`，协议 `NAME` + `def run(ctx)`；
-  ctx 提供 `frames(n)` / `snapshot(name)` / `expect(cond,msg)` / `key/mouse_move/click` / `ctrl(name)` / `panel(name)`。
-- **快照 = glReadPixels 后缓冲（swap 前）→ PNG，含完整 ImGui 界面**（已验证；隐藏窗口同样可拍）。
-- 快照落在 `Test/_runs/ui_<ts>/<scenario>/`；失败退出码 1；agent 可直接看图（或人工审核）。
-- 原则：**行为断言走 Controller/action（快、稳）；只有"看起来对不对"才用快照**。
-  像素级 diff 暂不做（先人/agent 目检）; 需要时再加。
-- `--preview` 为交互预览（替代旧 `test_live_ui.py` 的日常用法）; `test_live_ui.py` 使用同一引导 `_ui_boot.py`。
-
-## 6. e2e（live 档）纪律
-
-- 脚本必须：用唯一名字前缀（实体/计时器/数据集）→ 不假设空场景; `finally` 清理; 只在自己启动了编辑器时才 `editor.quit`（提供 `--keep` 开关）。
-- 端口走 `MGE_EDITOR_MCP_PORT` 默认值; 失败时保留截图/日志路径供排查。
-- 运行入口：`python Utils/Dev/test_runner.py --tier live`（或手工单跑脚本）。
-- 验收模板（新 op 实机验证）：`view.set_grid` on/off 截图对比（`Test/_runs/e2e_grid/`）—— 行为断言走 core 回环 + scenario，视觉证据走 e2e 截图。
-- 线程探针：`python Utils/Dev/thread_probe.py --assert-alive <name,...>`（协议 `threading_protocol.md` §4）。
-
-## 7. 测试地图（按域）
-
-| 域 | 位置 | 档位 | 备注 |
-|---|---|---|---|
-| 图数据/校验/IO | `Test/Application/NodeGraph/` | core | `test_graph_validation` / `test_graph_io` / `test_entity_group_visible`（组可见性节点: 单批下发原子显隐）；`Test/Application/Editor/test_node_runtime.py` 为交互演示（manual） |
-| 设备/算法/Functions | `Test/Application/Functions/` | core | gtec / siggen / pool / epoch / bci（stub 后端） |
-| 扩展体系 | `Test/Application/Extensions/` | core | `test_extension_manager`（发现/启停/隔离/持久化）+ `test_extension_ui`（窗口注册/purge/quarantine/close_policy）+ `test_extension_review`（审查器静态规则）+ `test_gtec_extension`（**Gtec 监视面板**: DSP/ops/会话/录制/**全裁剪栈平衡回归**）; 协议 `Doc/ExtDev/extension_dev_protocol.md` |
-| 动态媒体 | `Test/Application/Media/` | core | `test_media_system`（解码/时钟/引擎帧去重/错误遏制）+ `test_media_node`（ShowMedia 注册/静态检查/干跑惰性/节点驱动 + PIE 模板白名单）; 协议 `media_protocol.md` |
-| 文字显示 | `Test/Application/Text/` | core | `test_text_system`（24 checks: 注册链 / 两形态角落像素 / auto 画布 / 同尺寸热更 / 合成粗斜体 / auto_scale / SetText 节点）; 协议 `text_protocol.md` |
-| 渲染器 | `Test/Application/Renderer/` | core | `test_render_commands`（16 命令 dispatch 契约 + CommandQueue 并发/**原子批**）+ `test_vertex_layout`（布局不变式 + shader 一致性快照）+ `test_gl_pixels`（隐藏窗真 GL 像素: 映射/深度/纹理/动态重传/混合排序; 夹具 `_gl_probe.py`）+ `test_gl_lighting`（平面光/点光数值锁定 + 点光衰减三档 + **无灯满亮回退**）+ `test_gl_render_targets`（RT 生命周期）；`test_material_isolation`（Core/ — 内置材质模板保护）; 协议 `rendering_protocol.md` + `shader_protocol.md` |
-| 编辑器服务（回环） | `Test/Application/Editor/test_live_command_server.py` | core | 含边界扫描; 无 GUI |
-| PIE 设置 / 光位图标 | `Test/Application/Editor/test_pie_settings.py` + `test_light_gizmo.py` | core | PIE 设置持久化/尺寸钳位/窗口映射/Overlay 回退（UI 位置 = Settings 面板 ▸ Export — `ui_protocol.md` §9/§13）; 光图标(+平面光方向射线)查询/overlay 语义/眼图标联动/方向公式钉死/点光 direction=(0,0,0)（均无 GL）; 协议 `rendering_protocol.md` §8 |
-| 设置体系（Settings 面板） | `Test/Application/Editor/test_editor_settings.py` | core | 服务（默认/落盘往返/clamp/枚举回退/未知键 KeyError/损坏 JSON 容错）+ pending 应用模型（只应用一次）+ `I18n` 三级回退 + 页面注册表（重名/空 id/owner 清理/排序）+ `settings.*` op 行为链；协议 `ui_protocol.md` §13 |
-| i18n 目录与文案棘轮 | `Test/Application/Editor/test_i18n_coverage.py` | core | 目录完备（en 源语言）/ 代码键 ⊆ en / 可提取性 / 键集与占位符跨语言一致 / 键规范 / **棘轮（总量+每文件预算，只减不增）** / 新语言并入沙箱（语言表→设置枚举→面板选项→切换 自动跟随）/ 扩展目录注册卸载；工具 `Utils/Dev/i18n_tool.py check --strict`；协议 `i18n_protocol.md` |
-| imgui 窗口栈配对 | `Test/Application/Editor/test_imgui_stack_pairing.py` | core | 反模式静态拦截（`begin_child` 被条件门控 → 全裁剪 0×0 漏 `EndChild` 杀渲染循环）：规则自检（合成片段）+ `Application/Editor/**` 与 `Functions/**` 同源扫描 + 文件级配对计数（早退补偿）+ 顶层上下文创建；规则单一权威 = `FlyVibing-User-And-Developer-Utils/packages/extension-kit/review_extension.py` C8/C9/C10；协议 `ui_protocol.md` §2.13 + `ExtDev` §7.7 |
-| imgui 卫生（ini/入口） | `Test/Application/Editor/test_imgui_hygiene.py` | core | 无头上下文唯一入口 `FlyVibing-User-And-Developer-Utils/packages/extension-kit/imgui_headless.py`（禁用 ini）功能验证 + `Test/**` 禁裸 `create_context`（白名单自证禁用 ini）+ 全仓禁 `set_ini_filename(None)`（原生崩溃）+ 防回归（引擎仍禁用 ini）；协议 `ui_protocol.md` §2.14 + `ExtDev` §12.6 |
-| 设备别名（跨机器迁移） | `Test/Application/Functions/test_device_alias.py` | core | 两级设备身份：`DeviceRegistry` 增删改查/原子落盘/损坏容错/名称校验 + `resolve_port`（`@name`→物理 / 未绑定显式错 / 空端口 ValueError）+ `send`/`start_watch` 入队前解析 + `SerialSend` 求值器（空端口/未绑定别名 → 显式 error 日志，不再默认 COM1）+ 校验规则 13 warning + `ext.device.{bind_alias,bind_nodes}`（面板按钮同一实现，dry_run）；注册表用 `MGE_DEVICES_FILE` 沙箱；协议 `device_io_protocol.md` §12 |
-| Utils 布局（受众×分发命运） | `Test/Application/Editor/test_utils_layout.py` | core | 顶层白名单（Dev/ExtDev/User）+ `Utils/User` 登记制（运行时最小面）+ **ExtDev 禁 import `Application.Editor`**（`Application.*` 仅白名单 `Application.Core.NodeGraph`）+ **导出行为断言**（`dist/tmp/__pycache__` 不进游戏包 — 真调 `_copy_tree_for_export`）+ 工具 README 齐备 + **skills 双副本字节一致**；词表 `Utils/README.md` |
-| 组件字段钳制 | `Test/Application/Core/test_component_clamps.py` | core | `FIELD_CLAMPS` 单元（标量/tuple/int/bool/无规则）+ Inspector(`SceneBrowserController.set_component_field`)/MCP(`_op_component_set`) 两条写入路径 + 旧名迁移 (`get/add/set`)；单一权威 `ComponentRegistry.FIELD_CLAMPS`（Light/Camera/Transform/MediaPlayer/TextDisplay） |
-| Action 契约（GUI↔op） | `Test/Application/Editor/test_action_contract.py` | core | `ui_protocol.md` §10 映射表 ↔ `ops.py` ↔ `LiveCommandServer._register_ops()` 三方集合相等（55; 解析器在下一章标题处停止）+ 映射行列完整性 + 选中链行为（gizmo 状态机/自动选中/级联清理/场景切换清选中）；背景: `select_with_gizmo` 静默 NameError 修复（2026-10-08） |
-| agent 通道包 | `Test/Application/Editor/{test_editor_mcp_package,test_node_editor_mcp}.py` | core | wheel/CLI/注册表 |
-| UI 场景回放 | `Test/Application/Editor/scenarios/` | gui | 快照 + 行为断言（panels_smoke / menu_smoke / node_editor_smoke / gtec_panel_smoke） |
-| ~~UI 面板/gizmo（遗留交互 demo）~~ | ~~`test_*_{opengl,zengl}.py`~~ | — | **2026-10-05 已清理**（18 个交互 demo 删除; 覆盖转入 scenarios + e2e） |
-| 实机 E2E | `Test/Application/Editor/e2e_*.py` + `Test/Application/Extensions/e2e_*.py` | live | 需编辑器运行中（例: `e2e_renderer_check` — 渲染快照 + 裸帧像素采样；`e2e_gtec_monitor_check` — 监视面板 sim 观察/滤波 + virtual 录制） |
-| 线程压力/边界 | `Test/Application/stress/` + `Core/test_thread_boundary.py` | core | `--stress N` 放大; 协议 `threading_protocol.md` |
-| 导出包 | `test_export_game_bundle.py` | heavy | 分钟级重 IO |
-
-## 8. 新增测试清单
-
-1. 归入对应目录 + `test_` 前缀; 文件头声明 `# TIER: ...`。
-2. 遵守 §3 输出契约（末行 RESULT + 失败 `[FAIL]`）。
-3. 写盘只用 `MGE_TEST_TMP`; 全局态按 §4 复位。
-4. 跑一次：`python Utils/Dev/test_runner.py --only <你的文件名>` 确认摘要正常。
-5. 若是 UI：优先写"行为断言"测试（core）；只有视觉结果需要固定时再加 scenario + 快照。
+内容权威（唯一）：工具仓 `packages/editor-mcp/src/engine_editor_mcp/docs_content/dev/test_protocol.md`。

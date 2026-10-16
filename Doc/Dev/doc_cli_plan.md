@@ -30,8 +30,8 @@
 - **CLI**：`engine-editor-cli doc [list|outline|show|search] <topic[#节号|标题片段]>`
 - **指针 stub**：引擎仓 `Doc/Dev|ExtDev/<name>.md` = "面对什么问题" + "去哪获得内容"
   （CLI 命令块 + 章节清单 + 内容权威路径）。
-- **容量红线（②层次级标题）**：每主题 ≤ 9 节（`##` 级）；超限先并节——索引的可用性上限是
-  "一屏扫完"，不是存储上限。
+- **容量参考线（②层次级标题）**：每主题建议 ≤ 12 节；超出先并节或拆主题（现状：最大 ui_protocol 13 节；
+  全量索引 15 主题 ≈ 180 行 / 5.4k 字符 —— 字典索引层仍属可扫读量级）。
 - **守卫**：`test_editor_mcp_package.py::test_doc` —— 每个 docs_content 主题必须有对应 stub 且
   stub 含 `doc show <topic>`；wheel 载荷含 docs_content。
 - **同步纪律**：工具仓为权威源（skill 同款三副本纪律 + 本次新增 MI-SSSEP 部署副本）。
@@ -44,20 +44,29 @@
   wheel 载荷含 docs_content；包测试 + 引擎套件通过。
 - 索引质量项（本次打磨）：目的行在句号处收尾（防截断半句）；`_normalize_text` 清理中文折行伪影
   （CJK 间空格、标点后空格）；预览去 `- [ ]`/`- ` 列表标记。
+- 批量迁移（同日完成）：见 §4；`_doc_title` 去文件名前缀（`xxx.md — 标题` → `标题`）；目的行超长加 `…` 标记。
 
-## 4. 批量迁移 Runbook（待执行）
+## 4. 批量迁移 — 执行记录（2026-10-16）
 
-1. 复制 `Doc/<area>/<name>.md` → `docs_content/<area>/<name>.md`（内容不改）。
-2. 引擎侧替换为 stub（现用 `Test/_runs/doc_cli/stub_it.py`；批量阶段抽成工具仓 `scripts/sync_docs.py`，
-   生成 stub 时保留章节清单）。
-3. 跑 `Test/Application/Editor/test_editor_mcp_package.py`（stub 守卫 + wheel 载荷）。
-4. 重建 wheel + 重装：`python Utils/ExtDev/EditorMcp/build_wheel.py` → `pip install --force-reinstall …whl`。
+工具：`scripts/sync_docs.py`（工具仓根；复用 doclib 提取器生成 stub，与 CLI 索引同源）：
 
-建议批次（按 agent 使用频率）：
-- ① `extdev/extension_dev_protocol` + `extdev/README`（社区开发者主入口）
-- ② `dev/editor_live_protocol` · `dev/node_editor_protocol` · `dev/graph_validation_protocol`（agent 工作流）
-- ③ 各协议正文（rendering / text / shader / media / device_io / i18n / test / …）
-- ④ 历史记录类（roadmap / community_feedback / upstream_imgui / *_plan）——**不迁移**（记录不是知识，留 md）
+```powershell
+python scripts/sync_docs.py dev/<name> ...   # 迁移（复制正文 + 生成 stub；对已是 stub 的文件拒绝重跑）
+python scripts/sync_docs.py --restub dev/x   # 仅重生成 stub（模板/提取器更新后）
+python scripts/sync_docs.py --check          # 校验 docs_content <-> 引擎 stub 指针一致性
+```
+
+流程：迁移 → `test_editor_mcp_package.py`（stub 守卫 + wheel 载荷）→ 重建 wheel + 重装 → `--check`。
+
+**已迁移（14 份 dev 协议 + project_export 试点 = 15 主题）**：
+  bci_algorithm · editor_live · extension · graph_validation · i18n · media · node_editor ·
+  rendering · runtime_packaging · shader · test · text · threading · ui
+
+**缓迁（阻塞：用户未提交的在途编辑 — 提交后按同流程执行）**：
+  `dev/device_io_protocol`、`extdev/README`、`extdev/extension_dev_protocol`
+
+**不迁移（记录不是知识，保留正文 md）**：
+  `roadmap_next` / `community_feedback_*` / `upstream_imgui_*` / `*_plan` / `README`（导航层）
 
 ## 5. 待决事项（拍板后执行）
 

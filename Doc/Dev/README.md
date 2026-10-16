@@ -5,9 +5,11 @@
 >
 > 写作要求：只写被代码验证过的事实；用表格/清单/精确路径；不要写"可能/大概"。
 >
-> **★ Doc CLI 化（2026-10-16 起）**：部分协议正文已迁入 `engine-editor-cli doc`（按节读取、省 token；
-> `doc list` / `doc show <topic>#节号`）；本目录对应 md 只留指针 stub（文件头注明用法）。
-> 方案与批量迁移 runbook：`doc_cli_plan.md`。
+> **★ Doc CLI 化（2026-10-16）**：dev 区**知识类协议**正文已全部迁入 `engine-editor-cli doc`
+> （按节读取、省 token；`doc` 总索引 → `doc outline <topic>` 章节索引 → `doc show <topic>#节号` 正文）；
+> 对应 md 只留指针 stub（"面对什么问题 / 去哪获得内容"）。记录/计划类（roadmap / *_plan / feedback /
+> upstream）保留正文 md。缓迁：`device_io_protocol.md` 与 `Doc/ExtDev/**`（在途编辑提交后迁）。
+> 方案与进度：`doc_cli_plan.md`。
 
 ---
 
@@ -109,6 +111,8 @@
 
 ## 5. 文档消费约定（给 agent）
 
+- **先索引后内容**：查协议走 `engine-editor-cli doc`（主题 + 次级标题两级索引）→ `doc outline <topic>`
+  （章节 + 一行预览）→ `doc show <topic>#节`（只在确定要哪节时才拉正文）。md stub 只回答"面对什么问题 / 去哪获得"。
 - 本目录文档描述的是**约定与坑**，代码是最终事实源；发现不一致 → 以代码为准并**回写文档**。
 - 新增节点 / 新设备 / 新交互前，先查对应协议中的"清单"，避免重复踩坑。
 - 本文档集不得收录敏感信息（密钥、token）；运行时数据路径用示例占位。

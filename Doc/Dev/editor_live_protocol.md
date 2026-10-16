@@ -58,7 +58,7 @@ flowchart LR
 
 | op | MCP 工具 | args | 语义（等价的人工操作） | 响应 |
 |---|---|---|---|---|
-| `sim.play` | `editor_run_pie` | — | 点 **Run**（帧末消费） | `{requested, state}` |
+| `sim.play` | `editor_run_pie` | — | 点 **Run**（帧末消费）；★ 可运行性检查（2026-10-16）：场景有 MeshRenderer 实体但节点图无 `EntitySpawn` 生成器时附加 `warning`（模板语义 — PIE 只渲染图生成内容） | `{requested, state, warning?}` |
 | `sim.stop` | `editor_stop_pie` | — | 点 **Stop**（帧末消费） | `{requested, state}` |
 | `sim.state` | `editor_sim_state` | — | 只读（状态机 + PIE 线程存活） | `{state, runtime_alive}` |
 | `view.set_mode` | `editor_switch_2d` / `editor_set_scene_type` | `{"mode": "2d"\|"3d"\|"overlay"}` | **Scene Type 按钮完整语义**：`set_game_type`（决定 PIE 用哪台摄像机）+ 视口切换 | `{mode, label, game_type}` |

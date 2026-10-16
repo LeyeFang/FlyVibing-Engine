@@ -355,6 +355,40 @@ class LiveCommandServer:
         }
 
     @staticmethod
+    def _pie_runnability_warning() -> str | None:
+        """PIE 可运行性检查 (2026-10-16): 场景有 MeshRenderer 实体但节点图里
+        没有任何 EntitySpawn 生成器 → 运行时画面将是空的。
+
+        语义依据: 编辑器实体只是"模板"; PIE/成品只渲染节点图生成的内容
+        (graph_rules §PIE 模板语义)。该检查专门拦截"建完场景直接 Play,
+        画面什么都没有"的误判 — 检查自身任何失败都不影响 play。
+        """
+        try:
+            import esper
+            from Application.Core.Scene.BasicComponents import MeshRenderer
+
+            mesh_count = sum(1 for _eid, _mr in esper.get_component(MeshRenderer))
+            if mesh_count == 0:
+                return None
+            canvas = None
+            try:
+                canvas = _node_canvas()
+            except Exception:  # noqa: BLE001 — 面板未创建 (无头) → 回退场景内图
+                scene = _editor_host().get_active_scene()
+                canvas = getattr(scene, "node_graph", None) if scene is not None else None
+            if canvas is not None:
+                for _nid, inst in (canvas.nodes.items() if hasattr(canvas, "nodes") else []):
+                    if getattr(inst, "node_type", None) == "EntitySpawn":
+                        return None
+            return ("scene has %d MeshRenderer entit%s but the node graph has no "
+                    "EntitySpawn node — PIE will render nothing (editor entities are "
+                    "templates; runtime content is spawned by the graph, e.g. "
+                    "OnGameStart -> EntitySpawn(template=<entity name>))"
+                    % (mesh_count, "y" if mesh_count == 1 else "ies"))
+        except Exception:  # noqa: BLE001 — 检查失败不阻塞 play
+            return None
+
+    @staticmethod
     def _op_sim_play(args: dict) -> dict:
         """Run 按钮语义 — 请求 PIE 启动（主线程帧末由 SimulationController 消费）。"""
         from Application.Editor.UI.controllers.SimulationController import (
@@ -368,8 +402,14 @@ class LiveCommandServer:
                 "state": SimulationController.get_state_label(),
                 "note": "already running/paused",
             }
+        warning = LiveCommandServer._pie_runnability_warning()
+        if warning:
+            print(f"[Live] WARNING: {warning}")
         SimulationController.play()
-        return {"requested": True, "state": "pending_start"}
+        result: dict = {"requested": True, "state": "pending_start"}
+        if warning:
+            result["warning"] = warning
+        return result
 
     @staticmethod
     def _op_view_set_mode(args: dict) -> dict:

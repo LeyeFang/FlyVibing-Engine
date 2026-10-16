@@ -58,15 +58,20 @@ python scripts/sync_docs.py --check          # 校验 docs_content <-> 引擎 st
 
 流程：迁移 → `test_editor_mcp_package.py`（stub 守卫 + wheel 载荷）→ 重建 wheel + 重装 → `--check`。
 
-**已迁移（14 份 dev 协议 + project_export 试点 = 15 主题）**：
-  bci_algorithm · editor_live · extension · graph_validation · i18n · media · node_editor ·
-  rendering · runtime_packaging · shader · test · text · threading · ui
+**已迁移（dev 16 + extdev 2 = 18 主题 — 2026-10-16 全部完成）**：
 
-**缓迁（阻塞：用户未提交的在途编辑 — 提交后按同流程执行）**：
-  `dev/device_io_protocol`、`extdev/README`、`extdev/extension_dev_protocol`
+```
+dev:     bci_algorithm · device_io · editor_live · extension · graph_validation · i18n · media ·
+         node_editor · project_export · rendering · runtime_packaging · shader · test · text · threading · ui
+extdev:  README · extension_dev_protocol
+```
 
 **不迁移（记录不是知识，保留正文 md）**：
-  `roadmap_next` / `community_feedback_*` / `upstream_imgui_*` / `*_plan` / `README`（导航层）
+  `roadmap_next` / `community_feedback_*` / `upstream_imgui_*` / `*_plan` / `Doc/Dev/README`（导航层）
+
+**开发工具索引（2026-10-16）**：`engine-editor-cli doc tools` / `doc tool <名>` 覆盖引擎仓
+  `Utils/Dev/**`（py + bat + `Installer/`）—— 索引=docstring / 头部注释，用法=实跑 `--help`
+  （无 argparse 的脚本只给静态概要 — 防误执行）；数据源=工具文件本身，无新文档文件。
 
 ## 5. 待决事项（拍板后执行）
 

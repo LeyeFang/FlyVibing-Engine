@@ -5,11 +5,12 @@
 >
 > 写作要求：只写被代码验证过的事实；用表格/清单/精确路径；不要写"可能/大概"。
 >
-> **★ Doc CLI 化（2026-10-16）**：dev 区**知识类协议**正文已全部迁入 `engine-editor-cli doc`
-> （按节读取、省 token；`doc` 总索引 → `doc outline <topic>` 章节索引 → `doc show <topic>#节号` 正文）；
-> 对应 md 只留指针 stub（"面对什么问题 / 去哪获得内容"）。记录/计划类（roadmap / *_plan / feedback /
-> upstream）保留正文 md。缓迁：`device_io_protocol.md` 与 `Doc/ExtDev/**`（在途编辑提交后迁）。
-> 方案与进度：`doc_cli_plan.md`。
+> **★ Doc CLI 化（2026-10-16）**：dev 区**知识类协议** + `Doc/ExtDev/**` 正文已全部迁入
+> `engine-editor-cli doc`（按节读取、省 token；`doc` 总索引 → `doc outline <topic>` 章节索引 →
+> `doc show <topic>#节号` 正文）；对应 md 只留指针 stub（"面对什么问题 / 去哪获得内容"）。
+> 记录/计划类（roadmap / *_plan / feedback / upstream）保留正文 md。
+> 开发工具（`Utils/Dev/**`：test_runner / thread_probe / i18n_tool …）走 `doc tools` / `doc tool <名>`
+> （数据源=工具文件本身，无单独文档）。方案与进度：`doc_cli_plan.md`。
 
 ---
 

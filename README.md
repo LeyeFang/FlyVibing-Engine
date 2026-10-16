@@ -53,7 +53,7 @@ pip install -e ..\FlyVibing-User-And-Developer-Utils\packages\editor-mcp
 | 路径 | 内容 |
 |---|---|
 | `Application/` | 引擎与编辑器源码（Core / Editor / Runtime / Functions 门面） |
-| `Functions/` | 内置扩展（`device` 串并口、`gtec` 脑电监视、`sigproc`、`bci`…） |
+| `Functions/` | 内置扩展（`device` 串并口、`sigproc`、`bci`…） |
 | `Resource/` | 资源与预制体；`runtime/`、`wheels/` 为本地生成物（不进 git） |
 | `Utils/Dev/` | 研发工具：环境脚本、测试入口 `test_runner.py`、轮子收集、运行时镜像、安装器 |
 | `Utils/User/` | 随成品分发的一层：`player.bat`（导出游戏包只带这一层） |

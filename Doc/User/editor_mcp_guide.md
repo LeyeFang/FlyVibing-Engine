@@ -152,7 +152,8 @@
 
 > 也可以直接在 Node Editor 面板点 **Validate** 按钮：完成后面板自动弹「Validation Report」窗口，
 > 点报告里的条目能直接跳转到对应节点；支持复制摘要 / 导出 JSON。
-> **注意**：图校验现在在引擎内执行 —— 需要编辑器运行中（旧版"离线校验"已停用）。
+> **注意**：离线 L1 校验可用 `python -m flyvibing_node_editor.node_graph_validator <scene>`（不需引擎）；
+> 面板 Validate / MCP `engine_validate_graph` 需要编辑器运行中 —— 两者走**同一实现**。
 
 ### 3.12 终端命令行 `engine-editor-cli`（省 token 推荐）
 

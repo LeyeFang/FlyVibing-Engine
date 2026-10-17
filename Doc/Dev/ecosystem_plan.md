@@ -32,8 +32,10 @@
   引擎回归测试需要工具时按"我们也是使用者"的模式安装：`pip install -e <tools repo>/packages/*`。
 - [ ] **发布入口 `Utils/Dev/build_tools.py`**：~~一次产出 ExtDev 全部 wheel~~ → 已随工具仓库迁移
   （`<tools repo>/scripts/build_tools.py` 产出三个 wheel + `CHECKSUMS.sha256`）。
-  **已知阻塞**：`NodeEditor/node_graph_validator.py` 依赖 `Application.Core.NodeGraph`（干跑校验复用引擎
-  实现，避免两套规则漂移）；独立分发前需“随包带无头 NodeGraph”或“降级为调引擎”—— 已登记在白名单里。
+  **已知阻塞**：`NodeEditor/node_graph_validator.py` 需要 `Application.Core.NodeGraph` 的节点类型
+  注册表 / 图约束 / 求值器才能跑校验（规则本身已单源化到离线包，引擎侧 `validation/checks.py`
+  为薄适配器）；独立分发前需“随包带无头 NodeGraph”或“降级为调引擎”—— 已登记在白名单里。
+  反方向已处理：导出游戏包会把 `flyvibing_node_editor` 随运行时镜像带上（`player.bat --dry-run` 可用）。
 - [ ] **SDK 目录** `SDK/`：
   - `SDK/ext-template/` — 扩展脚手架模板（现阶段 = 以 `Application/Functions/SignalProcess` 为最小活模板，
     后续抽 cookiecutter 化）；

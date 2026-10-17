@@ -10,13 +10,21 @@
   - UI:   Node Editor 面板 "Validate" 按钮
   - MCP:  graph.validate.start / state / report / cancel（LiveCommandServer）
   - 程序: run_validation()（PlayerBootstrap 干跑 / 无头测试 / 算法验证复用）
+
+L1 规则实现在工具仓库 `flyvibing_node_editor.node_graph_validator.check_graph`
+（离线设计期与在线校验同源）；本包的 `checks` 只是薄适配器。
 """
 
-from .checks import extract_graph_data, static_check_graph
+from .checks import (
+    ValidationBackendUnavailable,
+    extract_graph_data,
+    static_check_graph,
+)
 from .dry_run import DRY_RUN_SESSION_PREFIX, DEFAULT_DT, DEFAULT_FRAMES, run_dry_run
 from .service import ValidationService, get_service, run_validation
 
 __all__ = [
+    "ValidationBackendUnavailable",
     "extract_graph_data",
     "static_check_graph",
     "run_dry_run",

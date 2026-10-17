@@ -558,6 +558,24 @@ class ProjectManager:
                     "will not be standalone"
                 )
 
+            # 5c-2. 离线校验后端（节点图校验单一实现）随包分发 —
+            #       PlayerEntry --dry-run / 成品自检需要它；纯 Python、零第三方依赖。
+            validator_files = 0
+            if runtime_info["included"]:
+                pkg_src = cls._locate_python_package("flyvibing_node_editor")
+                if pkg_src:
+                    validator_files, _vb = cls._copy_tree_for_export(
+                        pkg_src,
+                        os.path.join(out_dir, "runtime", "Lib", "site-packages",
+                                     "flyvibing_node_editor"),
+                        warnings,
+                    )
+                else:
+                    warnings.append(
+                        "离线校验后端 flyvibing-node-editor 未安装 — 成品包 "
+                        "--dry-run 将不可用（pip install -e <tools>/packages/node-editor）"
+                    )
+
             # 5d. wheelhouse（离线重建材料, 双轨制备轨）
             wh_files, wh_bytes = 0, 0
             wheels_src = os.path.join(engine_root, "Resource", "wheels")
@@ -595,13 +613,14 @@ class ProjectManager:
                 "application_files": app_files,
                 "resource_files": res_files,
                 "utils_files": utils_files,
+                "validator_files": validator_files,
                 "wheelhouse_files": wh_files,
                 "engine_bytes": app_bytes + res_bytes + utils_bytes,
                 "wheelhouse_bytes": wh_bytes,
             }
             print(
                 f"[Export]   game layer: App {app_files}f / Resource {res_files}f / "
-                f"Utils {utils_files}f / "
+                f"Utils {utils_files}f / validator {validator_files}f / "
                 f"runtime {'yes' if runtime_info['included'] else 'MISSING'} / "
                 f"wheelhouse {wh_files}f"
             )
@@ -637,6 +656,24 @@ class ProjectManager:
         for w in warnings:
             print(f"[Export]   WARNING: {w}")
         return summary
+
+    @staticmethod
+    def _locate_python_package(name: str) -> str | None:
+        """定位已安装/可导入的 Python 包目录（导出随包分发用）。"""
+        import importlib.util
+
+        try:
+            spec = importlib.util.find_spec(name)
+        except Exception:  # noqa: BLE001 — 环境异常时静默降级为“未安装”
+            return None
+        if spec is None:
+            return None
+        for loc in (spec.submodule_search_locations or []):
+            if os.path.isdir(loc):
+                return loc
+        if spec.origin:
+            return os.path.dirname(spec.origin)
+        return None
 
     @staticmethod
     def _copy_tree_for_export(src: str, dst: str, warnings: list[str],

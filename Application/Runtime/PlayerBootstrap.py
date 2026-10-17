@@ -220,9 +220,20 @@ def dry_run(source: str, frames: int = 0, verbose: bool = False) -> int:
     with open(session.scene_path, "r", encoding="utf-8") as fh:
         scene_json = json.load(fh)
 
-    from Application.Core.NodeGraph.validation import run_validation, static_check_graph
+    from Application.Core.NodeGraph.validation import (
+        ValidationBackendUnavailable,
+        run_validation,
+        static_check_graph,
+    )
 
-    static_entries = static_check_graph(scene_json)
+    try:
+        static_entries = static_check_graph(scene_json)
+    except ValidationBackendUnavailable as exc:
+        print("[Player] ERROR: validation backend unavailable")
+        for line in str(exc).splitlines():
+            print(f"  {line}")
+        print(f"  (scene: {session.scene_path})")
+        return 1
     static_errors = [e for e in static_entries if e["level"] == "error"]
     static_warnings = [e for e in static_entries if e["level"] == "warning"]
     if static_errors:

@@ -1,7 +1,11 @@
 """
-节点图干跑 — L2 层（fake-time 确定性模拟）。
+节点图干跑 — L2 层（fake-time 确定性模拟）。**唯一实现**。
 
-内化自 FlyVibing-User-And-Developer-Utils/packages/node-editor/node_graph_validator.dry_run_simulation，并升级:
+离线工具包的 `flyvibing_node_editor.node_graph_validator.dry_run_simulation` 是本函数的
+薄包装（保留旧返回结构）；离线 CLI / GraphBuilder / 在线 Validate / PlayerEntry --dry-run
+全部走这里 —— 干跑语义只有一份。
+
+特性:
   - 无 print 副作用 — 全部事件走向结构化日志 (收集器)
   - 确定性: 固定 dt (默认 1/60) + 固定随机种子 (默认 0, 重置 evaluators.math 全局 RNG)
   - 取消支持: cancel_event 帧间检查

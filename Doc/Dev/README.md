@@ -57,7 +57,9 @@
 职责边界（与代码一致，不得跨层）：
 - UI 层只负责**编辑 props 和渲染**；业务逻辑在 evaluators；设备/IO 在 `Application/Functions`。
 - evaluators 不得 `import imgui`；设备层不得反向依赖 Engine / Editor。
-- MCP 工具（`FlyVibing-User-And-Developer-Utils/packages/node-editor`）只做构建/应用图（图校验已内化为引擎服务 — 见 `graph_validation_protocol.md`），不引入 UI 依赖。
+- MCP 工具（`FlyVibing-User-And-Developer-Utils/packages/node-editor`）只做构建/应用图；
+  L1 校验规则唯一实现在该包的 `node_graph_validator.check_graph`（引擎 `validation/checks.py`
+  是薄适配器，见 `graph_validation_protocol.md`），不引入 UI 依赖。
 - **开发过程临时产物（截图/演示场景/实验脚本/日志）只允许放 `Test/**` 下 — 禁止在仓库根新增目录**；产品资源入 `Resource/**`，协议文档入 `Doc/**`。
 
 ---
@@ -77,7 +79,7 @@
 
 ## 3. MCP 空跑验证（硬性验收条件）
 
-工具链：`FlyVibing-User-And-Developer-Utils/packages/node-editor/`（MCP 4 工具 + CLI + `rules.md` 分节规则）；图校验已内化为引擎服务（见 `graph_validation_protocol.md`），agent 侧实时校验经 `FlyVibing-User-And-Developer-Utils/packages/editor-mcp`（lite `engine_validate_graph` / CLI validate / v4 `graph.validate.*`）。
+工具链：`FlyVibing-User-And-Developer-Utils/packages/node-editor/`（MCP 4 工具 + CLI + `rules.md` 分节规则 + 校验唯一实现 `node_graph_validator`）；引擎侧校验服务调用该实现（见 `graph_validation_protocol.md`），agent 侧实时校验经 `FlyVibing-User-And-Developer-Utils/packages/editor-mcp`（lite `engine_validate_graph` / CLI validate / v4 `graph.validate.*`）。
 
 - 校验入口：引擎内服务 `Application/Core/NodeGraph/validation`（MCP `engine_validate_graph` / CLI `validate` / 无头 `PlayerEntry --dry-run`）。
   干跑将 `ctx.dry_run=True`，从 `OnGameStart` → N 帧 `OnFrameUpdate` → `OnGameStop` 全链路执行。

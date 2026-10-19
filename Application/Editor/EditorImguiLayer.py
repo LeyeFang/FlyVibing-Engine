@@ -31,11 +31,12 @@ class EditorImguiLayer(Layer):
 
     FONT_SIZE: float = 17
     FONT_CANDIDATES: list[str] = [
+        "Resource/Fonts/Roboto-Regular.ttf",
         "Resource/Fonts/Inter-Regular.ttf",
         "C:/Windows/Fonts/segoeui.ttf",
         "C:/Windows/Fonts/arial.ttf",
     ]
-    # CJK 系统字体候选（中文 UI / 用户数据字形 — 经 merge_to_last_font 合并）
+    # CJK 兜底候选（旧目录未声明 `_meta.fonts` 时使用；正常路径见 I18n.font_candidates）
     CJK_FONT_CANDIDATES: list[str] = [
         "C:/Windows/Fonts/msyh.ttc",            # 微软雅黑（Windows）
         "/System/Library/Fonts/PingFang.ttc",  # 苹方（macOS）
@@ -131,9 +132,10 @@ class EditorImguiLayer(Layer):
         font_loaded = False
 
         _font_candidates = [
+            "Fonts/Roboto-Regular.ttf",
             "Fonts/Inter-Regular.ttf",
-            "Fonts/segoeui.ttf",
-            "Fonts/arial.ttf",
+            "C:/Windows/Fonts/segoeui.ttf",
+            "C:/Windows/Fonts/arial.ttf",
         ]
         for rel_path in _font_candidates:
             if _hi.asset_exists(rel_path):
@@ -146,19 +148,24 @@ class EditorImguiLayer(Layer):
             io.fonts.add_font_default()
             print(
                 "[Font] No bundled font found. Using ImGui default.\n"
-                "       Place a .ttf in Resource/Fonts/, e.g. Inter-Regular.ttf"
+                "       Place a .ttf in Resource/Fonts/, e.g. Roboto-Regular.ttf"
             )
 
         cls._merge_cjk_font(_hi)
 
     @classmethod
     def _merge_cjk_font(cls, hi) -> None:
-        """合并 CJK 系统字体（中文 UI / 用户数据字形）。
+        """合并各语言目录声明的字体（中文/日文/用户数据字形）。
 
-        1.92 动态字体按需光栅化 → 合并几乎零成本（不渲染的汉字不 bake）;
-        无候选（精简系统）→ 跳过提示（中文将显示为 '?' — 见 ui_protocol §12）。
+        `Locale/<lang>.json` 的 `_meta.fonts` 是唯一语言字体表；新增语言只加字体路径，
+        不改本层代码。字体列表按所有已装载目录（含草稿）收集，因为即使用户数据是中文、
+        UI 仍可能是英文。1.92 动态字体按需光栅化，合并成本低。
         """
-        for path in cls.CJK_FONT_CANDIDATES:
+        from Application.Editor.I18n import font_candidates
+
+        candidates = font_candidates() or cls.CJK_FONT_CANDIDATES
+        merged = 0
+        for path in candidates:
             if not os.path.isfile(path):
                 continue
             try:
@@ -169,10 +176,12 @@ class EditorImguiLayer(Layer):
                 # 查找 → "assetFileFullPath failed"; 实测 2026-10-12)
                 params.inside_assets = False
                 _hi.load_font(path, cls.FONT_SIZE, params)
-                print(f"[Font] Merged CJK: {path}")
+                print(f"[Font] Merged locale font: {path}")
+                merged += 1
             except Exception as e:  # noqa: BLE001 — 合并失败不阻塞启动
-                print(f"[Font] CJK merge failed ({path}): {e!r}")
-            return
+                print(f"[Font] locale font merge failed ({path}): {e!r}")
+        if not merged:
+            print("[Font] No locale font found — CJK/user text may render as '?'")
 
     @classmethod
     def apply_font_scale(cls, scale: float) -> None:

@@ -19,7 +19,7 @@ FlyVibingEngine 的 **Windows GUI 安装包**（Inno Setup 6），内置 Python 
 ## 构建
 
 ```powershell
-# 一次性（wheels 不进 git — 先重建 wheelhouse, 再准备内置运行时）
+# 一次性（先重建 wheelhouse，再准备内置运行时）
 .venv-py314t\Scripts\python.exe Utils/Dev/collect_wheels.py        # 从 PyPI 补全 Resource/wheels
 .venv-py314t\Scripts\python.exe Utils/Dev/prepare_runtime.py       # 若 Resource/runtime 缺失
 

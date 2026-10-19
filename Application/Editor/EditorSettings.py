@@ -36,7 +36,7 @@ CLAMPS: dict = {
     "ui.font_scale": (0.7, 1.6),
 }
 CHOICES: dict = {
-    "ui.language": ("en", "zh"),   # 兜底值; 运行期由语言目录动态推导（_allowed_choices）
+    "ui.language": ("en",),   # 兜底值; 运行期由已发布语言目录动态推导（_allowed_choices）
 }
 
 

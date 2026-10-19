@@ -52,6 +52,7 @@ class ExtensionInfo:
     entry: str = ""
     capabilities: list = field(default_factory=list)
     requires: list = field(default_factory=list)
+    export: bool = True               # 是否随 Project Export 游戏层分发（manifest export:false 可关）
     dir: str = ""
     manifest_path: str = ""
     loadable: bool = False             # entry 存在且 manifest 合法
@@ -75,6 +76,7 @@ class ExtensionInfo:
             "enabled": self.enabled, "loaded": self.loaded, "loadable": self.loadable,
             "error": self.error, "dir": self.dir, "ops": list(self.ops),
             "capabilities": list(self.capabilities), "requires": list(self.requires),
+            "export": bool(self.export),
         }
 
 
@@ -219,6 +221,7 @@ class ExtensionManager:
             info.entry = str(data.get("entry") or "")
             info.capabilities = list(data.get("capabilities") or [])
             info.requires = list(data.get("requires") or [])
+            info.export = bool(data.get("export", True))
             if not _ID_RE.match(info.id):
                 raise ValueError(f"invalid id {info.id!r} (expect [a-z][a-z0-9_]*)")
             if not info.api_version or not info.api_version.startswith(_API_MAJOR):

@@ -62,6 +62,10 @@ class NodeInstance:
     pos: tuple[float, float] = (0.0, 0.0)
     props: dict = field(default_factory=dict)
     pin_ids: dict[str, int] = field(default_factory=dict)
+    # 人可读别名（工具链/flow/搜索用; 运行时忽略）。空 = 未命名。
+    alias: str = ""
+    # 人/agent 可读描述（编辑器展开查看; MCP/CLI 可读写; 运行时忽略）。
+    description: str = ""
 
 
 @dataclass

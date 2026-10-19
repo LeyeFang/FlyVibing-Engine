@@ -249,14 +249,18 @@ class LiveCommandServer:
             "sim.state": cls._op_sim_state,
             "view.set_mode": cls._op_view_set_mode,
             "view.set_grid": cls._op_view_set_grid,
+            "ui.panels": cls._op_ui_panels,
+            "ui.panel": cls._op_ui_panel,
             "camera.get": cls._op_camera_get,
             "camera.set": cls._op_camera_set,
             "graph.list": cls._op_graph_list,
             "graph.add": cls._op_graph_add,
             "graph.link": cls._op_graph_link,
             "graph.set_props": cls._op_graph_set_props,
+            "graph.set_description": cls._op_graph_set_description,
             "graph.export": cls._op_graph_export,
             "graph.import": cls._op_graph_import,
+            "graph.fit": cls._op_graph_fit,
             "graph.validate.start": cls._op_graph_validate_start,
             "graph.validate.state": cls._op_graph_validate_state,
             "graph.validate.report": cls._op_graph_validate_report,
@@ -454,6 +458,56 @@ class LiveCommandServer:
         state = Grid.set_visible(bool(args.get("visible")))
         return {"visible": state}
 
+    # ── 界面面板（打开/关闭闭环 — 与 View 菜单同路径: 写 panel.visible） ──
+
+    @staticmethod
+    def _panel_state(panel) -> dict:
+        ext_id = getattr(panel, "ext_id", "")
+        return {
+            "name": str(getattr(panel, "name", "")),
+            "visible": bool(getattr(panel, "visible", False)),
+            "kind": "extension" if ext_id else "builtin",
+            "ext_id": str(ext_id or ""),
+            "title_key": str(getattr(panel, "title_key", "") or ""),
+        }
+
+    @classmethod
+    def _op_ui_panels(cls, args: dict) -> dict:
+        """列出编辑器面板（内置 + 扩展窗口）及其可见性 — agent 侧发现入口。"""
+        from Application.Editor.UI.UIManager import UIManager
+
+        panels = [cls._panel_state(p) for p in list(UIManager._panels)
+                  if not str(getattr(p, "name", "")).startswith("##")]
+        return {"panels": panels, "count": len(panels),
+                "visible": sum(1 for p in panels if p["visible"])}
+
+    @staticmethod
+    def _op_ui_panel(args: dict) -> dict:
+        """单个面板的读/写（闭环）: 省略 visible/toggle = 只读; 两者都省略也能查状态。
+
+        ``visible=true`` 等同 View 菜单勾选（打开）; ``visible=false`` 关闭;
+        ``toggle=true`` 取反。返回写入后的真实状态（下一渲染帧生效）。
+        """
+        from Application.Editor.UI.UIManager import UIManager
+
+        name = str(args.get("name", "")).strip()
+        if not name:
+            names = [str(p.name) for p in list(UIManager._panels)]
+            raise ValueError(f"name is required; available panels: {names}")
+        panel = UIManager.find(name)
+        if panel is None:
+            names = [str(p.name) for p in list(UIManager._panels)]
+            raise ValueError(f"unknown panel {name!r}; available panels: {names}")
+
+        before = bool(panel.visible)
+        if "visible" in args:
+            panel.visible = bool(args.get("visible"))
+        elif bool(args.get("toggle")):
+            panel.visible = not panel.visible
+        state = LiveCommandServer._panel_state(panel)
+        state["changed"] = bool(panel.visible) != before
+        return state
+
     @staticmethod
     def _op_sim_stop(args: dict) -> dict:
         """Stop 按钮语义 — 请求 PIE 停止（主线程帧末由 SimulationController 消费）。"""
@@ -543,22 +597,59 @@ class LiveCommandServer:
 
     @staticmethod
     def _op_graph_list(args: dict) -> dict:
-        """节点图只读快照（nodes: id/type/props/pins; links: from_pin/to_pin）。"""
+        """节点图只读快照（nodes: id/type/alias/props/pins; links; node_groups 摘要）。"""
         canvas = _node_canvas()
-        nodes = [
-            {
+        nodes = []
+        for nid, inst in canvas.nodes.items():
+            item = {
                 "id": int(nid),
                 "type": inst.node_type,
                 "props": dict(inst.props),
                 "pins": {str(name): int(pid) for name, pid in inst.pin_ids.items()},
             }
-            for nid, inst in canvas.nodes.items()
-        ]
+            alias = str(getattr(inst, "alias", "") or "")
+            if alias:
+                item["alias"] = alias
+            description = str(getattr(inst, "description", "") or "")
+            if description:
+                item["description"] = description
+            nodes.append(item)
         links = [
             {"id": int(lid), "from_pin": int(lk.from_pin), "to_pin": int(lk.to_pin)}
             for lid, lk in canvas.links.items()
         ]
-        return {"nodes": nodes, "links": links}
+        result = {"nodes": nodes, "links": links}
+        groups = getattr(canvas, "node_groups", None) or {}
+        if groups:
+            result["node_groups"] = {
+                str(gid): {
+                    "type": str(grp.get("type", "")),
+                    "alias": str(grp.get("alias", "")),
+                    "version": int(grp.get("version", 1)),
+                    "arms": [str(a.get("id")) for a in
+                             (grp.get("params", {}).get("arms") or [])],
+                    "members": len(grp.get("members") or []),
+                    "slots": {
+                        str(name): (int(pin) if pin is not None else None)
+                        for name, pin in (grp.get("slots") or {}).items()
+                    },
+                    "parent": str(grp.get("parent") or ""),
+                    "children": [str(c) for c in (grp.get("children") or [])],
+                }
+                for gid, grp in groups.items()
+            }
+        return result
+
+    @staticmethod
+    def _op_graph_fit(args: dict) -> dict:
+        """视图适配全部节点（下一渲染帧执行 — 与节点编辑器工具栏 Fit 按钮同路径）。"""
+        from Application.Editor.UI.UIManager import UIManager
+
+        panel = UIManager.find("Node Editor")
+        if panel is None:
+            raise ValueError("Node Editor panel is not registered")
+        setattr(panel, "_fit_requested", True)
+        return {"requested": True, "panel": "Node Editor"}
 
     @staticmethod
     def _op_graph_add(args: dict) -> dict:
@@ -574,7 +665,11 @@ class LiveCommandServer:
         props = args.get("props") or {}
         if props:
             canvas.nodes[nid].props.update(dict(props))
-        return {"node_id": nid, "type": type_name, "props": dict(canvas.nodes[nid].props)}
+        description = args.get("description")
+        if description is not None:
+            canvas.nodes[nid].description = str(description)
+        return {"node_id": nid, "type": type_name, "props": dict(canvas.nodes[nid].props),
+                "description": str(canvas.nodes[nid].description or "")}
 
     @staticmethod
     def _op_graph_set_props(args: dict) -> dict:
@@ -587,6 +682,18 @@ class LiveCommandServer:
         props = args.get("props") or {}
         inst.props.update(dict(props))
         return {"node_id": nid, "props": dict(inst.props)}
+
+    @staticmethod
+    def _op_graph_set_description(args: dict) -> dict:
+        """读写节点描述（省略 description = 读取; 空串 = 清除）。args: node, description(可选)。"""
+        canvas = _node_canvas()
+        nid = int(args.get("node", -1))
+        inst = canvas.nodes.get(nid)
+        if inst is None:
+            raise ValueError(f"node {nid} not found")
+        if "description" in args and args.get("description") is not None:
+            inst.description = str(args.get("description") or "")
+        return {"node_id": nid, "description": str(inst.description or "")}
 
     @staticmethod
     def _op_graph_link(args: dict) -> dict:
@@ -1055,14 +1162,36 @@ class LiveCommandServer:
 
     @staticmethod
     def _op_entity_delete(args: dict) -> dict:
-        """删除实体及其子实体（等同面板 Delete; 删除选中者会清除选中）。"""
-        from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
+        """删除实体（scope: one/tree/list；默认 tree，与面板 Delete 一致）。
 
-        eid, extras = _resolve_entity(args)
-        ok = SceneBrowserController.delete_entity(eid)
-        if not ok:
-            raise ValueError(f"delete failed: entity {eid} not found")
-        return {"deleted": True, "entity_id": eid}
+        - ``tree`` / ``list``: 每个根按子树删除；
+        - ``one``: 只删目标；有子实体时默认重挂到父级（``reparent_children=true``）。
+        """
+        from Application.Core.Scene.EntityTargets import delete_scope
+        from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
+        from Application.Editor.UI.controllers.SelectionController import SelectionController
+
+        scene = _require_editor_scene()
+        roots = _entity_roots(args)
+        scope = str(args.get("scope") or "tree")
+        reparent = bool(args.get("reparent_children", True))
+        res = delete_scope(scene, roots, scope, reparent_children=reparent)
+        if not res["deleted"]:
+            raise ValueError(f"delete failed: {roots} not found")
+
+        selected = SelectionController.get_selected()
+        if selected is not None:
+            try:
+                if not scene.EntityExists(selected):
+                    SelectionController.clear()
+            except Exception:  # noqa: BLE001 — 选中清理失败不阻断删除
+                pass
+        deleted_ids = res.pop("deleted")
+        res["deleted_ids"] = deleted_ids
+        res["deleted"] = bool(deleted_ids)
+        res["deleted_count"] = len(deleted_ids)
+        res["deleted_entity"] = bool(deleted_ids)
+        return res
 
     @staticmethod
     def _op_entity_transform(args: dict) -> dict:
@@ -1086,25 +1215,39 @@ class LiveCommandServer:
 
     @staticmethod
     def _op_entity_visible(args: dict) -> dict:
-        """编辑器视口可见性（眼图标）与渲染可见性（MeshRenderer.visible）。"""
+        """实体可见性（scope: one/tree/list；domain: editor/render）。
+
+        - ``editor``: 默认 scope=tree（与 ScenePanel 眼图标一致；仅编辑器视口）
+        - ``render``: 默认 scope=one（与 Inspector Visible 一致；MeshRenderer.visible）
+        - 多实体 render 统一走 ``SetEntitiesRenderVisible`` 单批命令。
+        """
+        from Application.Core.Scene.EntityTargets import resolve_scope
         from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
 
-        eid, extras = _resolve_entity(args)
-        changed = False
-        if args.get("editor") is not None:
-            SceneBrowserController.set_editor_visible(eid, bool(args["editor"]))
-            changed = True
-        if args.get("render") is not None:
-            SceneBrowserController.set_entity_render_visible(eid, bool(args["render"]))
-            changed = True
-        if not changed:
+        scene = _require_editor_scene()
+        roots = _entity_roots(args)
+        scope_arg = args.get("scope")
+        if args.get("editor") is None and args.get("render") is None:
             raise ValueError("nothing to set — provide editor and/or render")
-        info = SceneBrowserController.get_entity_info(eid) or {}
-        return {
-            "entity_id": eid,
-            "editor_visible": SceneBrowserController.is_editor_visible(eid),
-            "render_visible": bool(info.get("render_visible", False)),
-        }
+
+        result: dict = {"entity_id": roots[0], "targets": roots}
+        if args.get("editor") is not None:
+            scope = str(scope_arg or "tree")
+            eids = resolve_scope(scene, roots, scope)
+            for eid in eids:
+                SceneBrowserController.set_editor_visible(eid, bool(args["editor"]))
+            result["editor"] = {"scope": scope, "ids": eids, "count": len(eids)}
+        if args.get("render") is not None:
+            scope = str(scope_arg or "one")
+            eids = resolve_scope(scene, roots, scope)
+            if eids:
+                scene.SetEntitiesRenderVisible(eids, visible=bool(args["render"]))
+            result["render"] = {"scope": scope, "ids": eids, "count": len(eids)}
+
+        info = SceneBrowserController.get_entity_info(roots[0]) or {}
+        result["editor_visible"] = SceneBrowserController.is_editor_visible(roots[0])
+        result["render_visible"] = bool(info.get("render_visible", False))
+        return result
 
     @staticmethod
     def _op_entity_reparent(args: dict) -> dict:
@@ -1600,6 +1743,17 @@ def _entity_id_from_value(value) -> int:
     if eid < 0:
         raise ValueError(f"entity not found: {value!r}")
     return int(eid)
+
+
+def _entity_roots(args: dict) -> list[int]:
+    """实体目标集合: args.ids（id/name 列表）优先，否则 id/name 单实体。"""
+    raw = args.get("ids")
+    if raw is not None:
+        if not isinstance(raw, (list, tuple)) or not raw:
+            raise ValueError("ids must be a non-empty list of entity ids/names")
+        return [_entity_id_from_value(v) for v in raw]
+    eid, _extras = _resolve_entity(args)
+    return [int(eid)]
 
 
 def _get_component_by_name(entity_id: int, type_name: str):

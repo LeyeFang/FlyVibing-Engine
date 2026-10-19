@@ -1,0 +1,2408 @@
+{
+  "version": "0.1.0",
+  "scene": {
+    "name": "MI",
+    "game_type": "2d",
+    "ambient_color": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "lighting_fallback": true,
+    "entities": {
+      "4": {
+        "name": "Cross",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          }
+        }
+      },
+      "5": {
+        "name": "row",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 0.5,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 3.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.5
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 1,
+            "visible": true
+          }
+        },
+        "parent_id": 4
+      },
+      "6": {
+        "name": "col",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 0.5,
+            "scale_y": 1.0,
+            "scale_z": 3.0,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 0.5,
+            "local_scl_y": 1.0,
+            "local_scl_z": 3.0
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 1,
+            "visible": true
+          }
+        },
+        "parent_id": 4
+      },
+      "7": {
+        "name": "LeftCue",
+        "components": {
+          "Transform": {
+            "position_x": -2.5,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": -2.5,
+            "local_pos_y": 0.0,
+            "local_pos_z": 4.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          }
+        }
+      },
+      "8": {
+        "name": "L_arrow_body",
+        "components": {
+          "Transform": {
+            "position_x": 2.799999952316284,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 0.25,
+            "local_pos_x": 2.799999952316284,
+            "local_pos_y": 0.0,
+            "local_pos_z": 0.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 3.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.25
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 3,
+            "visible": false
+          }
+        },
+        "parent_id": 7
+      },
+      "9": {
+        "name": "L_arrow_head",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0.0,
+            "rotation_y": -1.5707963267948966,
+            "rotation_z": 0.0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": -0.0,
+            "local_rot_x": 0.0,
+            "local_rot_y": -1.5707963267948966,
+            "local_rot_z": -0.0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "MeshRenderer": {
+            "mesh_id": 2,
+            "material_id": 3,
+            "visible": false
+          }
+        },
+        "parent_id": 7
+      },
+      "10": {
+        "name": "RightCue",
+        "components": {
+          "Transform": {
+            "position_x": 2.5,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0.0,
+            "rotation_y": 0.0,
+            "rotation_z": -0.0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 2.5,
+            "local_pos_y": 0.0,
+            "local_pos_z": 4.0,
+            "local_rot_x": 0.0,
+            "local_rot_y": 0.0,
+            "local_rot_z": -0.0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          }
+        }
+      },
+      "11": {
+        "name": "R_arrow_head",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0.0,
+            "rotation_y": 1.5707963267948966,
+            "rotation_z": -0.0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0.0,
+            "local_rot_y": 1.5707963267948966,
+            "local_rot_z": -0.0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "MeshRenderer": {
+            "mesh_id": 2,
+            "material_id": 3,
+            "visible": false
+          }
+        },
+        "parent_id": 10
+      },
+      "12": {
+        "name": "R_arrow_body",
+        "components": {
+          "Transform": {
+            "position_x": -0.2999999523162842,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 0.25,
+            "local_pos_x": -2.799999952316284,
+            "local_pos_y": 0.0,
+            "local_pos_z": -0.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 3.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.25
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 3,
+            "visible": false
+          }
+        },
+        "parent_id": 10
+      },
+      "13": {
+        "name": "TaskCue",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 6.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 4.0,
+            "scale_y": 1.0,
+            "scale_z": 0.30000001192092896,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 6.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 4.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.30000001192092896
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 4,
+            "visible": false
+          }
+        }
+      },
+      "14": {
+        "name": "NullCue",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1.0,
+            "scale_y": 1.0,
+            "scale_z": 1.0,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 4.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 1.0
+          }
+        }
+      },
+      "15": {
+        "name": "part1",
+        "components": {
+          "Transform": {
+            "position_x": -1.7999999523162842,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1.2000000476837158,
+            "scale_y": 1.0,
+            "scale_z": 0.3499999940395355,
+            "local_pos_x": -1.7999999523162842,
+            "local_pos_y": 0.0,
+            "local_pos_z": -0.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1.2000000476837158,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.3499999940395355
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 3,
+            "visible": false
+          }
+        },
+        "parent_id": 14
+      },
+      "16": {
+        "name": "part2",
+        "components": {
+          "Transform": {
+            "position_x": 1.7999999523162842,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1.2000000476837158,
+            "scale_y": 1.0,
+            "scale_z": 0.3499999940395355,
+            "local_pos_x": 1.7999999523162842,
+            "local_pos_y": 0.0,
+            "local_pos_z": -0.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1.2000000476837158,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.3499999940395355
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 3,
+            "visible": false
+          }
+        },
+        "parent_id": 14
+      }
+    },
+    "main_camera_entity_id": null,
+    "next_eid": 17,
+    "node_graph": {
+      "version": "0.1.0",
+      "nodes": {
+        "161": {
+          "id": 161,
+          "node_type": "OnGameStart",
+          "pos": [
+            80,
+            80
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 162
+          },
+          "alias": "start",
+          "description": "Game start: spawn templates and arm the trial timer."
+        },
+        "163": {
+          "id": 163,
+          "node_type": "OnFrameUpdate",
+          "pos": [
+            80,
+            280
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 164,
+            "delta": 165
+          },
+          "alias": "tick",
+          "description": "Frame update: evaluate the phase timeline."
+        },
+        "166": {
+          "id": 166,
+          "node_type": "OnGameStop",
+          "pos": [
+            80,
+            480
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 167
+          },
+          "alias": "stop",
+          "description": "Game stop hook (no actions in this example)."
+        },
+        "200": {
+          "id": 200,
+          "node_type": "EntitySpawn",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "template": "Cross"
+          },
+          "pin_ids": {
+            "exec_in": 10000,
+            "exec_out": 10001,
+            "Entity": 10002
+          },
+          "alias": "spawn_cross",
+          "description": "Spawn template 'Cross' and all of its children."
+        },
+        "201": {
+          "id": 201,
+          "node_type": "EntitySpawn",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "template": "LeftCue"
+          },
+          "pin_ids": {
+            "exec_in": 10003,
+            "exec_out": 10004,
+            "Entity": 10005
+          },
+          "alias": "spawn_left",
+          "description": "Spawn template 'LeftCue' and all of its children."
+        },
+        "202": {
+          "id": 202,
+          "node_type": "EntitySpawn",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "template": "RightCue"
+          },
+          "pin_ids": {
+            "exec_in": 10006,
+            "exec_out": 10007,
+            "Entity": 10008
+          },
+          "alias": "spawn_right",
+          "description": "Spawn template 'RightCue' and all of its children."
+        },
+        "203": {
+          "id": 203,
+          "node_type": "EntitySpawn",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "template": "NullCue"
+          },
+          "pin_ids": {
+            "exec_in": 10009,
+            "exec_out": 10010,
+            "Entity": 10011
+          },
+          "alias": "spawn_null",
+          "description": "Spawn template 'NullCue' and all of its children."
+        },
+        "204": {
+          "id": 204,
+          "node_type": "EntitySpawn",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "template": "TaskCue"
+          },
+          "pin_ids": {
+            "exec_in": 10012,
+            "exec_out": 10013,
+            "Entity": 10014
+          },
+          "alias": "spawn_task",
+          "description": "Spawn template 'TaskCue' and all of its children."
+        },
+        "205": {
+          "id": 205,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "LeftCue"
+          },
+          "pin_ids": {
+            "exec_in": 10015,
+            "exec_out": 10016,
+            "Name": 10017,
+            "Entity": 10018
+          },
+          "alias": "hide_cues_entry",
+          "description": "Exec entry for hiding every cue part."
+        },
+        "206": {
+          "id": 206,
+          "node_type": "EntityGetTree",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity": 10019,
+            "Entities": 10020,
+            "Count": 10021
+          },
+          "alias": "tree_left",
+          "description": "Left cue root plus its two arrow meshes."
+        },
+        "207": {
+          "id": 207,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "RightCue"
+          },
+          "pin_ids": {
+            "exec_in": 10022,
+            "exec_out": 10023,
+            "Name": 10024,
+            "Entity": 10025
+          },
+          "alias": "get_right",
+          "description": "Resolve the runtime RightCue instance."
+        },
+        "208": {
+          "id": 208,
+          "node_type": "EntityGetTree",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity": 10026,
+            "Entities": 10027,
+            "Count": 10028
+          },
+          "alias": "tree_right",
+          "description": "Right cue root plus its two arrow meshes."
+        },
+        "209": {
+          "id": 209,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "NullCue"
+          },
+          "pin_ids": {
+            "exec_in": 10029,
+            "exec_out": 10030,
+            "Name": 10031,
+            "Entity": 10032
+          },
+          "alias": "get_null",
+          "description": "Resolve the runtime NullCue instance."
+        },
+        "210": {
+          "id": 210,
+          "node_type": "EntityGetTree",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity": 10033,
+            "Entities": 10034,
+            "Count": 10035
+          },
+          "alias": "tree_null",
+          "description": "Null cue root plus its two parts."
+        },
+        "211": {
+          "id": 211,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "TaskCue"
+          },
+          "pin_ids": {
+            "exec_in": 10036,
+            "exec_out": 10037,
+            "Name": 10038,
+            "Entity": 10039
+          },
+          "alias": "get_task",
+          "description": "Resolve the runtime TaskCue instance."
+        },
+        "212": {
+          "id": 212,
+          "node_type": "EntityGetTree",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity": 10040,
+            "Entities": 10041,
+            "Count": 10042
+          },
+          "alias": "tree_task",
+          "description": "Task cue tree (root only has a mesh)."
+        },
+        "213": {
+          "id": 213,
+          "node_type": "EntityListMerge",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "A": 10043,
+            "B": 10044,
+            "Entities": 10045,
+            "Count": 10046
+          },
+          "alias": "merge_left_right",
+          "description": "Merge the left and right cue part lists."
+        },
+        "214": {
+          "id": 214,
+          "node_type": "EntityListMerge",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "A": 10047,
+            "B": 10048,
+            "Entities": 10049,
+            "Count": 10050
+          },
+          "alias": "merge_left_right_null",
+          "description": "Add the null cue parts."
+        },
+        "215": {
+          "id": 215,
+          "node_type": "EntityListMerge",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "A": 10051,
+            "B": 10052,
+            "Entities": 10053,
+            "Count": 10054
+          },
+          "alias": "merge_all_cues",
+          "description": "Merge every cue part into one list."
+        },
+        "216": {
+          "id": 216,
+          "node_type": "EntityListSetVisible",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10055,
+            "Entities": 10056,
+            "Visible": 10057,
+            "exec_out": 10058
+          },
+          "alias": "hide_all",
+          "description": "Hide all cue roots and their mesh children in one batch."
+        },
+        "217": {
+          "id": 217,
+          "node_type": "Constant",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "value": 0.0
+          },
+          "pin_ids": {
+            "Result": 10059
+          }
+        },
+        "218": {
+          "id": 218,
+          "node_type": "NewTimer",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "mode": "manual",
+            "timer_name": "trial_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10060,
+            "exec_out": 10061,
+            "Name": 10062
+          },
+          "alias": "trial_timer",
+          "description": "Named timer used by all phase triggers."
+        },
+        "219": {
+          "id": 219,
+          "node_type": "SetTimer",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "operate": "set_time",
+            "mode": "manual",
+            "timer_name": "trial_phase",
+            "value": 0.0
+          },
+          "pin_ids": {
+            "exec_in": 10063,
+            "exec_out": 10064,
+            "Value": 10065
+          },
+          "alias": "trial_timer_start",
+          "description": "Start the trial phase timer at 0 s."
+        },
+        "220": {
+          "id": 220,
+          "node_type": "Sequence",
+          "pos": [
+            320.0,
+            2260.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10066,
+            "out_0": 10067,
+            "out_1": 10068,
+            "out_2": 10069,
+            "out_3": 10070,
+            "out_4": 10071
+          },
+          "alias": "phase",
+          "description": "Fan out the per-frame timeline to the phase triggers."
+        },
+        "221": {
+          "id": 221,
+          "node_type": "TimeTrigger",
+          "pos": [
+            540.0,
+            2260.0
+          ],
+          "props": {
+            "mode": "manual",
+            "time": 0,
+            "timer": "trial_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10072,
+            "Time": 10073,
+            "Elapsed": 10074,
+            "out_0": 10075,
+            "out_1": 10076,
+            "out_2": 10077,
+            "out_3": 10078,
+            "out_4": 10079,
+            "out_5": 10080,
+            "out_6": 10081,
+            "out_7": 10082
+          },
+          "alias": "tt_cue",
+          "description": "0 s: present the randomly selected motor-imagery cue."
+        },
+        "223": {
+          "id": 223,
+          "node_type": "TimeTrigger",
+          "pos": [
+            760.0,
+            2260.0
+          ],
+          "props": {
+            "mode": "manual",
+            "time": 6,
+            "timer": "trial_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10094,
+            "Time": 10095,
+            "Elapsed": 10096,
+            "out_0": 10097,
+            "out_1": 10098,
+            "out_2": 10099,
+            "out_3": 10100,
+            "out_4": 10101,
+            "out_5": 10102,
+            "out_6": 10103,
+            "out_7": 10104
+          },
+          "alias": "tt_rest",
+          "description": "6 s: hide cues and enter the inter-trial interval."
+        },
+        "224": {
+          "id": 224,
+          "node_type": "TimeTrigger",
+          "pos": [
+            100.0,
+            2440.0
+          ],
+          "props": {
+            "mode": "manual",
+            "time": 10,
+            "timer": "trial_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10105,
+            "Time": 10106,
+            "Elapsed": 10107,
+            "out_0": 10108,
+            "out_1": 10109,
+            "out_2": 10110,
+            "out_3": 10111,
+            "out_4": 10112,
+            "out_5": 10113,
+            "out_6": 10114,
+            "out_7": 10115
+          },
+          "alias": "tt_next",
+          "description": "10 s: reset the phase timer and start the next trial."
+        },
+        "231": {
+          "id": 231,
+          "node_type": "SetTimer",
+          "pos": [
+            320.0,
+            2440.0
+          ],
+          "props": {
+            "operate": "set_time",
+            "mode": "manual",
+            "timer_name": "trial_phase",
+            "value": -0.02
+          },
+          "pin_ids": {
+            "exec_in": 10134,
+            "exec_out": 10135,
+            "Value": 10136
+          },
+          "alias": "next_trial",
+          "description": "Rewind the phase timer so the 0 s trigger fires again."
+        },
+        "242": {
+          "node_type": "EntityGet",
+          "pos": [
+            540.0,
+            460.0
+          ],
+          "props": {
+            "entity_name": "L_arrow_body"
+          },
+          "pin_ids": {
+            "exec_in": 10166,
+            "exec_out": 10167,
+            "Name": 10168,
+            "Entity": 10169
+          },
+          "description": "Resolve runtime entity 'L_arrow_body' (spawned from its scene template)."
+        },
+        "243": {
+          "node_type": "EntityGet",
+          "pos": [
+            760.0,
+            460.0
+          ],
+          "props": {
+            "entity_name": "L_arrow_head"
+          },
+          "pin_ids": {
+            "exec_in": 10170,
+            "exec_out": 10171,
+            "Name": 10172,
+            "Entity": 10173
+          },
+          "description": "Resolve runtime entity 'L_arrow_head' (spawned from its scene template)."
+        },
+        "244": {
+          "node_type": "ParallelSend",
+          "pos": [
+            540.0,
+            640.0
+          ],
+          "props": {
+            "mode": "pin",
+            "address": 16376
+          },
+          "pin_ids": {
+            "exec_in": 10174,
+            "exec_out": 10175,
+            "Address": 10176,
+            "Value": 10177
+          },
+          "description": "Send cue code 3 to parallel address 16376."
+        },
+        "245": {
+          "node_type": "Constant",
+          "pos": [
+            760.0,
+            640.0
+          ],
+          "props": {
+            "value": 3
+          },
+          "pin_ids": {
+            "Result": 10178
+          },
+          "description": "Cue code 3 for arm 'left'."
+        },
+        "246": {
+          "node_type": "EntityPack",
+          "pos": [
+            100.0,
+            640.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity1": 10179,
+            "Entity2": 10180,
+            "Entity3": 10181,
+            "Entity4": 10182,
+            "Entities": 10183,
+            "Count": 10184
+          },
+          "description": "Pack arm 'left' mesh entities into one list."
+        },
+        "247": {
+          "node_type": "EntityListSetVisible",
+          "pos": [
+            320.0,
+            640.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10185,
+            "Entities": 10186,
+            "Visible": 10187,
+            "exec_out": 10188
+          },
+          "description": "Show all parts of arm 'left' in one atomic batch."
+        },
+        "248": {
+          "node_type": "EntityGet",
+          "pos": [
+            100.0,
+            820.0
+          ],
+          "props": {
+            "entity_name": "R_arrow_head"
+          },
+          "pin_ids": {
+            "exec_in": 10189,
+            "exec_out": 10190,
+            "Name": 10191,
+            "Entity": 10192
+          },
+          "description": "Resolve runtime entity 'R_arrow_head' (spawned from its scene template)."
+        },
+        "249": {
+          "node_type": "EntityGet",
+          "pos": [
+            320.0,
+            820.0
+          ],
+          "props": {
+            "entity_name": "R_arrow_body"
+          },
+          "pin_ids": {
+            "exec_in": 10193,
+            "exec_out": 10194,
+            "Name": 10195,
+            "Entity": 10196
+          },
+          "description": "Resolve runtime entity 'R_arrow_body' (spawned from its scene template)."
+        },
+        "250": {
+          "node_type": "ParallelSend",
+          "pos": [
+            100.0,
+            1000.0
+          ],
+          "props": {
+            "mode": "pin",
+            "address": 16376
+          },
+          "pin_ids": {
+            "exec_in": 10197,
+            "exec_out": 10198,
+            "Address": 10199,
+            "Value": 10200
+          },
+          "description": "Send cue code 4 to parallel address 16376."
+        },
+        "251": {
+          "node_type": "Constant",
+          "pos": [
+            320.0,
+            1000.0
+          ],
+          "props": {
+            "value": 4
+          },
+          "pin_ids": {
+            "Result": 10201
+          },
+          "description": "Cue code 4 for arm 'right'."
+        },
+        "252": {
+          "node_type": "EntityPack",
+          "pos": [
+            540.0,
+            820.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity1": 10202,
+            "Entity2": 10203,
+            "Entity3": 10204,
+            "Entity4": 10205,
+            "Entities": 10206,
+            "Count": 10207
+          },
+          "description": "Pack arm 'right' mesh entities into one list."
+        },
+        "253": {
+          "node_type": "EntityListSetVisible",
+          "pos": [
+            760.0,
+            820.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10208,
+            "Entities": 10209,
+            "Visible": 10210,
+            "exec_out": 10211
+          },
+          "description": "Show all parts of arm 'right' in one atomic batch."
+        },
+        "254": {
+          "node_type": "EntityGet",
+          "pos": [
+            540.0,
+            1000.0
+          ],
+          "props": {
+            "entity_name": "part1"
+          },
+          "pin_ids": {
+            "exec_in": 10212,
+            "exec_out": 10213,
+            "Name": 10214,
+            "Entity": 10215
+          },
+          "description": "Resolve runtime entity 'part1' (spawned from its scene template)."
+        },
+        "255": {
+          "node_type": "EntityGet",
+          "pos": [
+            760.0,
+            1000.0
+          ],
+          "props": {
+            "entity_name": "part2"
+          },
+          "pin_ids": {
+            "exec_in": 10216,
+            "exec_out": 10217,
+            "Name": 10218,
+            "Entity": 10219
+          },
+          "description": "Resolve runtime entity 'part2' (spawned from its scene template)."
+        },
+        "256": {
+          "node_type": "ParallelSend",
+          "pos": [
+            540.0,
+            1180.0
+          ],
+          "props": {
+            "mode": "pin",
+            "address": 16376
+          },
+          "pin_ids": {
+            "exec_in": 10220,
+            "exec_out": 10221,
+            "Address": 10222,
+            "Value": 10223
+          },
+          "description": "Send cue code 5 to parallel address 16376."
+        },
+        "257": {
+          "node_type": "Constant",
+          "pos": [
+            760.0,
+            1180.0
+          ],
+          "props": {
+            "value": 5
+          },
+          "pin_ids": {
+            "Result": 10224
+          },
+          "description": "Cue code 5 for arm 'rest'."
+        },
+        "258": {
+          "node_type": "EntityPack",
+          "pos": [
+            100.0,
+            1180.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity1": 10225,
+            "Entity2": 10226,
+            "Entity3": 10227,
+            "Entity4": 10228,
+            "Entities": 10229,
+            "Count": 10230
+          },
+          "description": "Pack arm 'rest' mesh entities into one list."
+        },
+        "259": {
+          "node_type": "EntityListSetVisible",
+          "pos": [
+            320.0,
+            1180.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10231,
+            "Entities": 10232,
+            "Visible": 10233,
+            "exec_out": 10234
+          },
+          "description": "Show all parts of arm 'rest' in one atomic batch."
+        },
+        "260": {
+          "node_type": "Random",
+          "pos": [
+            100.0,
+            100.0
+          ],
+          "props": {
+            "distribution": "discrete",
+            "min": 1,
+            "max": 3
+          },
+          "pin_ids": {
+            "Min": 10235,
+            "Max": 10236,
+            "Mean": 10237,
+            "StdDev": 10238,
+            "Result": 10239
+          },
+          "description": "Group entry: pick one of 3 cue arms uniformly."
+        },
+        "261": {
+          "node_type": "Constant",
+          "pos": [
+            320.0,
+            100.0
+          ],
+          "props": {
+            "value": 1
+          },
+          "pin_ids": {
+            "Result": 10240
+          },
+          "description": "Arm 'left' selector value (1)."
+        },
+        "262": {
+          "node_type": "Compare",
+          "pos": [
+            540.0,
+            100.0
+          ],
+          "props": {
+            "operation": "eq"
+          },
+          "pin_ids": {
+            "A": 10241,
+            "B": 10242,
+            "C": 10243,
+            "Result": 10244
+          },
+          "description": "Check whether the random draw equals arm 'left'."
+        },
+        "263": {
+          "node_type": "Branch",
+          "pos": [
+            760.0,
+            100.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10245,
+            "Condition": 10246,
+            "True": 10247,
+            "False": 10248
+          },
+          "description": "If arm 'left' was selected, run its cue actions."
+        },
+        "264": {
+          "node_type": "Constant",
+          "pos": [
+            100.0,
+            280.0
+          ],
+          "props": {
+            "value": 2
+          },
+          "pin_ids": {
+            "Result": 10249
+          },
+          "description": "Arm 'right' selector value (2)."
+        },
+        "265": {
+          "node_type": "Compare",
+          "pos": [
+            320.0,
+            280.0
+          ],
+          "props": {
+            "operation": "eq"
+          },
+          "pin_ids": {
+            "A": 10250,
+            "B": 10251,
+            "C": 10252,
+            "Result": 10253
+          },
+          "description": "Check whether the random draw equals arm 'right'."
+        },
+        "266": {
+          "node_type": "Branch",
+          "pos": [
+            540.0,
+            280.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10254,
+            "Condition": 10255,
+            "True": 10256,
+            "False": 10257
+          },
+          "description": "If arm 'right' was selected, run its cue actions."
+        },
+        "267": {
+          "node_type": "Constant",
+          "pos": [
+            760.0,
+            280.0
+          ],
+          "props": {
+            "value": 3
+          },
+          "pin_ids": {
+            "Result": 10258
+          },
+          "description": "Arm 'rest' selector value (3)."
+        },
+        "268": {
+          "node_type": "Compare",
+          "pos": [
+            100.0,
+            460.0
+          ],
+          "props": {
+            "operation": "eq"
+          },
+          "pin_ids": {
+            "A": 10259,
+            "B": 10260,
+            "C": 10261,
+            "Result": 10262
+          },
+          "description": "Check whether the random draw equals arm 'rest'."
+        },
+        "269": {
+          "node_type": "Branch",
+          "pos": [
+            320.0,
+            460.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10263,
+            "Condition": 10264,
+            "True": 10265,
+            "False": 10266
+          },
+          "description": "If arm 'rest' was selected, run its cue actions."
+        },
+        "270": {
+          "node_type": "TimeGetElapsed",
+          "pos": [
+            100.0,
+            1360.0
+          ],
+          "props": {
+            "timer": "trial_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10267,
+            "exec_out": 10268,
+            "Elapsed": 10269
+          },
+          "description": "Window clock 'trial_phase' (empty = global time)."
+        },
+        "271": {
+          "node_type": "Constant",
+          "pos": [
+            320.0,
+            1360.0
+          ],
+          "props": {
+            "value": 2.0
+          },
+          "pin_ids": {
+            "Result": 10270
+          },
+          "description": "Window start 2s."
+        },
+        "272": {
+          "node_type": "Constant",
+          "pos": [
+            540.0,
+            1360.0
+          ],
+          "props": {
+            "value": 6.0
+          },
+          "pin_ids": {
+            "Result": 10271
+          },
+          "description": "Window end 6s."
+        },
+        "273": {
+          "node_type": "Compare",
+          "pos": [
+            760.0,
+            1360.0
+          ],
+          "props": {
+            "operation": "gte"
+          },
+          "pin_ids": {
+            "A": 10272,
+            "B": 10273,
+            "C": 10274,
+            "Result": 10275
+          },
+          "description": "elapsed >= start"
+        },
+        "274": {
+          "node_type": "Compare",
+          "pos": [
+            100.0,
+            1540.0
+          ],
+          "props": {
+            "operation": "lt"
+          },
+          "pin_ids": {
+            "A": 10276,
+            "B": 10277,
+            "C": 10278,
+            "Result": 10279
+          },
+          "description": "elapsed < end"
+        },
+        "275": {
+          "node_type": "Compare",
+          "pos": [
+            320.0,
+            1540.0
+          ],
+          "props": {
+            "operation": "and"
+          },
+          "pin_ids": {
+            "A": 10280,
+            "B": 10281,
+            "C": 10282,
+            "Result": 10283
+          },
+          "description": "Window active (start <= elapsed < end)."
+        },
+        "276": {
+          "node_type": "EntityGet",
+          "pos": [
+            540.0,
+            1540.0
+          ],
+          "props": {
+            "entity_name": "TaskCue"
+          },
+          "pin_ids": {
+            "exec_in": 10284,
+            "exec_out": 10285,
+            "Name": 10286,
+            "Entity": 10287
+          },
+          "description": "Resolve runtime entity 'TaskCue'."
+        },
+        "277": {
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            760.0,
+            1540.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10288,
+            "EntityID": 10289,
+            "Visible": 10290,
+            "exec_out": 10291
+          },
+          "description": "Write visibility every frame (group owns enter/exit)."
+        },
+        "278": {
+          "node_type": "EntityGet",
+          "pos": [
+            100.0,
+            1720.0
+          ],
+          "props": {
+            "entity_name": "LeftCue"
+          },
+          "pin_ids": {
+            "exec_in": 10292,
+            "exec_out": 10293,
+            "Name": 10294,
+            "Entity": 10295
+          },
+          "description": "Resolve runtime entity 'LeftCue'."
+        },
+        "279": {
+          "node_type": "EntityGetTree",
+          "pos": [
+            320.0,
+            1720.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity": 10296,
+            "Entities": 10297,
+            "Count": 10298
+          },
+          "description": "Collect 'LeftCue' and all descendants."
+        },
+        "280": {
+          "node_type": "EntityGet",
+          "pos": [
+            540.0,
+            1720.0
+          ],
+          "props": {
+            "entity_name": "RightCue"
+          },
+          "pin_ids": {
+            "exec_in": 10299,
+            "exec_out": 10300,
+            "Name": 10301,
+            "Entity": 10302
+          },
+          "description": "Resolve runtime entity 'RightCue'."
+        },
+        "281": {
+          "node_type": "EntityGetTree",
+          "pos": [
+            760.0,
+            1720.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity": 10303,
+            "Entities": 10304,
+            "Count": 10305
+          },
+          "description": "Collect 'RightCue' and all descendants."
+        },
+        "282": {
+          "node_type": "EntityGet",
+          "pos": [
+            100.0,
+            1900.0
+          ],
+          "props": {
+            "entity_name": "NullCue"
+          },
+          "pin_ids": {
+            "exec_in": 10306,
+            "exec_out": 10307,
+            "Name": 10308,
+            "Entity": 10309
+          },
+          "description": "Resolve runtime entity 'NullCue'."
+        },
+        "283": {
+          "node_type": "EntityGetTree",
+          "pos": [
+            320.0,
+            1900.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity": 10310,
+            "Entities": 10311,
+            "Count": 10312
+          },
+          "description": "Collect 'NullCue' and all descendants."
+        },
+        "284": {
+          "node_type": "EntityGet",
+          "pos": [
+            540.0,
+            1900.0
+          ],
+          "props": {
+            "entity_name": "TaskCue"
+          },
+          "pin_ids": {
+            "exec_in": 10313,
+            "exec_out": 10314,
+            "Name": 10315,
+            "Entity": 10316
+          },
+          "description": "Resolve runtime entity 'TaskCue'."
+        },
+        "285": {
+          "node_type": "EntityGetTree",
+          "pos": [
+            760.0,
+            1900.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity": 10317,
+            "Entities": 10318,
+            "Count": 10319
+          },
+          "description": "Collect 'TaskCue' and all descendants."
+        },
+        "286": {
+          "node_type": "EntityListMerge",
+          "pos": [
+            100.0,
+            2080.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "A": 10320,
+            "B": 10321,
+            "Entities": 10322,
+            "Count": 10323
+          },
+          "description": "Merge entity tree lists."
+        },
+        "287": {
+          "node_type": "EntityListMerge",
+          "pos": [
+            320.0,
+            2080.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "A": 10324,
+            "B": 10325,
+            "Entities": 10326,
+            "Count": 10327
+          },
+          "description": "Merge entity tree lists."
+        },
+        "288": {
+          "node_type": "EntityListMerge",
+          "pos": [
+            540.0,
+            2080.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "A": 10328,
+            "B": 10329,
+            "Entities": 10330,
+            "Count": 10331
+          },
+          "description": "Merge entity tree lists."
+        },
+        "289": {
+          "node_type": "Constant",
+          "pos": [
+            760.0,
+            2080.0
+          ],
+          "props": {
+            "value": 0.0
+          },
+          "pin_ids": {
+            "Result": 10332
+          },
+          "description": "Visible=0 for this group."
+        },
+        "290": {
+          "node_type": "EntityListSetVisible",
+          "pos": [
+            100.0,
+            2260.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10333,
+            "Entities": 10334,
+            "Visible": 10335,
+            "exec_out": 10336
+          },
+          "description": "Apply visibility to the whole entity tree in one batch."
+        }
+      },
+      "links": {
+        "500": {
+          "id": 500,
+          "from_pin": 162,
+          "to_pin": 10000
+        },
+        "501": {
+          "id": 501,
+          "from_pin": 10001,
+          "to_pin": 10003
+        },
+        "502": {
+          "id": 502,
+          "from_pin": 10004,
+          "to_pin": 10006
+        },
+        "503": {
+          "id": 503,
+          "from_pin": 10007,
+          "to_pin": 10009
+        },
+        "504": {
+          "id": 504,
+          "from_pin": 10010,
+          "to_pin": 10012
+        },
+        "505": {
+          "id": 505,
+          "from_pin": 10018,
+          "to_pin": 10019
+        },
+        "506": {
+          "id": 506,
+          "from_pin": 10025,
+          "to_pin": 10026
+        },
+        "507": {
+          "id": 507,
+          "from_pin": 10032,
+          "to_pin": 10033
+        },
+        "508": {
+          "id": 508,
+          "from_pin": 10039,
+          "to_pin": 10040
+        },
+        "509": {
+          "id": 509,
+          "from_pin": 10020,
+          "to_pin": 10043
+        },
+        "510": {
+          "id": 510,
+          "from_pin": 10027,
+          "to_pin": 10044
+        },
+        "511": {
+          "id": 511,
+          "from_pin": 10045,
+          "to_pin": 10047
+        },
+        "512": {
+          "id": 512,
+          "from_pin": 10034,
+          "to_pin": 10048
+        },
+        "513": {
+          "id": 513,
+          "from_pin": 10049,
+          "to_pin": 10051
+        },
+        "514": {
+          "id": 514,
+          "from_pin": 10041,
+          "to_pin": 10052
+        },
+        "515": {
+          "id": 515,
+          "from_pin": 10053,
+          "to_pin": 10056
+        },
+        "516": {
+          "id": 516,
+          "from_pin": 10059,
+          "to_pin": 10057
+        },
+        "517": {
+          "id": 517,
+          "from_pin": 10013,
+          "to_pin": 10015
+        },
+        "518": {
+          "id": 518,
+          "from_pin": 10016,
+          "to_pin": 10022
+        },
+        "519": {
+          "id": 519,
+          "from_pin": 10023,
+          "to_pin": 10029
+        },
+        "520": {
+          "id": 520,
+          "from_pin": 10030,
+          "to_pin": 10036
+        },
+        "521": {
+          "id": 521,
+          "from_pin": 10037,
+          "to_pin": 10055
+        },
+        "522": {
+          "id": 522,
+          "from_pin": 10061,
+          "to_pin": 10063
+        },
+        "523": {
+          "id": 523,
+          "from_pin": 10058,
+          "to_pin": 10060
+        },
+        "524": {
+          "id": 524,
+          "from_pin": 164,
+          "to_pin": 10066
+        },
+        "525": {
+          "id": 525,
+          "from_pin": 10067,
+          "to_pin": 10072
+        },
+        "527": {
+          "id": 527,
+          "from_pin": 10069,
+          "to_pin": 10094
+        },
+        "528": {
+          "id": 528,
+          "from_pin": 10070,
+          "to_pin": 10105
+        },
+        "537": {
+          "id": 537,
+          "from_pin": 10108,
+          "to_pin": 10134
+        },
+        "549": {
+          "from_pin": 10167,
+          "to_pin": 10170
+        },
+        "550": {
+          "from_pin": 10178,
+          "to_pin": 10177
+        },
+        "551": {
+          "from_pin": 10169,
+          "to_pin": 10179
+        },
+        "552": {
+          "from_pin": 10173,
+          "to_pin": 10180
+        },
+        "553": {
+          "from_pin": 10171,
+          "to_pin": 10185
+        },
+        "554": {
+          "from_pin": 10183,
+          "to_pin": 10186
+        },
+        "555": {
+          "from_pin": 10188,
+          "to_pin": 10174
+        },
+        "556": {
+          "from_pin": 10190,
+          "to_pin": 10193
+        },
+        "557": {
+          "from_pin": 10201,
+          "to_pin": 10200
+        },
+        "558": {
+          "from_pin": 10192,
+          "to_pin": 10202
+        },
+        "559": {
+          "from_pin": 10196,
+          "to_pin": 10203
+        },
+        "560": {
+          "from_pin": 10194,
+          "to_pin": 10208
+        },
+        "561": {
+          "from_pin": 10206,
+          "to_pin": 10209
+        },
+        "562": {
+          "from_pin": 10211,
+          "to_pin": 10197
+        },
+        "563": {
+          "from_pin": 10213,
+          "to_pin": 10216
+        },
+        "564": {
+          "from_pin": 10224,
+          "to_pin": 10223
+        },
+        "565": {
+          "from_pin": 10215,
+          "to_pin": 10225
+        },
+        "566": {
+          "from_pin": 10219,
+          "to_pin": 10226
+        },
+        "567": {
+          "from_pin": 10217,
+          "to_pin": 10231
+        },
+        "568": {
+          "from_pin": 10229,
+          "to_pin": 10232
+        },
+        "569": {
+          "from_pin": 10234,
+          "to_pin": 10220
+        },
+        "570": {
+          "from_pin": 10239,
+          "to_pin": 10241
+        },
+        "571": {
+          "from_pin": 10240,
+          "to_pin": 10242
+        },
+        "572": {
+          "from_pin": 10244,
+          "to_pin": 10246
+        },
+        "573": {
+          "from_pin": 10239,
+          "to_pin": 10250
+        },
+        "574": {
+          "from_pin": 10249,
+          "to_pin": 10251
+        },
+        "575": {
+          "from_pin": 10253,
+          "to_pin": 10255
+        },
+        "576": {
+          "from_pin": 10248,
+          "to_pin": 10254
+        },
+        "577": {
+          "from_pin": 10239,
+          "to_pin": 10259
+        },
+        "578": {
+          "from_pin": 10258,
+          "to_pin": 10260
+        },
+        "579": {
+          "from_pin": 10262,
+          "to_pin": 10264
+        },
+        "580": {
+          "from_pin": 10257,
+          "to_pin": 10263
+        },
+        "581": {
+          "from_pin": 10247,
+          "to_pin": 10166
+        },
+        "582": {
+          "from_pin": 10256,
+          "to_pin": 10189
+        },
+        "583": {
+          "from_pin": 10265,
+          "to_pin": 10212
+        },
+        "584": {
+          "from_pin": 10075,
+          "to_pin": 10245
+        },
+        "585": {
+          "from_pin": 10268,
+          "to_pin": 10284
+        },
+        "586": {
+          "from_pin": 10269,
+          "to_pin": 10272
+        },
+        "587": {
+          "from_pin": 10269,
+          "to_pin": 10276
+        },
+        "588": {
+          "from_pin": 10270,
+          "to_pin": 10273
+        },
+        "589": {
+          "from_pin": 10271,
+          "to_pin": 10277
+        },
+        "590": {
+          "from_pin": 10275,
+          "to_pin": 10280
+        },
+        "591": {
+          "from_pin": 10279,
+          "to_pin": 10281
+        },
+        "592": {
+          "from_pin": 10285,
+          "to_pin": 10288
+        },
+        "593": {
+          "from_pin": 10287,
+          "to_pin": 10289
+        },
+        "594": {
+          "from_pin": 10283,
+          "to_pin": 10290
+        },
+        "595": {
+          "from_pin": 10295,
+          "to_pin": 10296
+        },
+        "596": {
+          "from_pin": 10302,
+          "to_pin": 10303
+        },
+        "597": {
+          "from_pin": 10293,
+          "to_pin": 10299
+        },
+        "598": {
+          "from_pin": 10309,
+          "to_pin": 10310
+        },
+        "599": {
+          "from_pin": 10300,
+          "to_pin": 10306
+        },
+        "600": {
+          "from_pin": 10316,
+          "to_pin": 10317
+        },
+        "601": {
+          "from_pin": 10307,
+          "to_pin": 10313
+        },
+        "602": {
+          "from_pin": 10297,
+          "to_pin": 10320
+        },
+        "603": {
+          "from_pin": 10304,
+          "to_pin": 10321
+        },
+        "604": {
+          "from_pin": 10322,
+          "to_pin": 10324
+        },
+        "605": {
+          "from_pin": 10311,
+          "to_pin": 10325
+        },
+        "606": {
+          "from_pin": 10326,
+          "to_pin": 10328
+        },
+        "607": {
+          "from_pin": 10318,
+          "to_pin": 10329
+        },
+        "608": {
+          "from_pin": 10314,
+          "to_pin": 10333
+        },
+        "609": {
+          "from_pin": 10330,
+          "to_pin": 10334
+        },
+        "610": {
+          "from_pin": 10332,
+          "to_pin": 10335
+        },
+        "611": {
+          "from_pin": 10068,
+          "to_pin": 10267
+        },
+        "612": {
+          "from_pin": 10097,
+          "to_pin": 10292
+        }
+      },
+      "next_id": 10236,
+      "node_groups": {
+        "g1": {
+          "type": "cue_n_way",
+          "version": 2,
+          "alias": "class_cue",
+          "params": {
+            "addr": 16376,
+            "arms": [
+              {
+                "id": "left",
+                "entities": [
+                  "L_arrow_body",
+                  "L_arrow_head"
+                ],
+                "code": 3
+              },
+              {
+                "id": "right",
+                "entities": [
+                  "R_arrow_head",
+                  "R_arrow_body"
+                ],
+                "code": 4
+              },
+              {
+                "id": "rest",
+                "entities": [
+                  "part1",
+                  "part2"
+                ],
+                "code": 5
+              }
+            ]
+          },
+          "members": [
+            260,
+            261,
+            262,
+            263,
+            264,
+            265,
+            266,
+            267,
+            268,
+            269,
+            242,
+            243,
+            246,
+            247,
+            244,
+            245,
+            248,
+            249,
+            252,
+            253,
+            250,
+            251,
+            254,
+            255,
+            258,
+            259,
+            256,
+            257
+          ],
+          "chain_members": [
+            260,
+            261,
+            262,
+            263,
+            264,
+            265,
+            266,
+            267,
+            268,
+            269
+          ],
+          "arm_members": {
+            "left": {
+              "get": [
+                242,
+                243
+              ],
+              "pack": [
+                246
+              ],
+              "merge": [],
+              "set": 247,
+              "send": 244,
+              "code": 245,
+              "entities": [
+                "L_arrow_body",
+                "L_arrow_head"
+              ]
+            },
+            "right": {
+              "get": [
+                248,
+                249
+              ],
+              "pack": [
+                252
+              ],
+              "merge": [],
+              "set": 253,
+              "send": 250,
+              "code": 251,
+              "entities": [
+                "R_arrow_head",
+                "R_arrow_body"
+              ]
+            },
+            "rest": {
+              "get": [
+                254,
+                255
+              ],
+              "pack": [
+                258
+              ],
+              "merge": [],
+              "set": 259,
+              "send": 256,
+              "code": 257,
+              "entities": [
+                "part1",
+                "part2"
+              ]
+            }
+          },
+          "slots": {
+            "entry": 10245,
+            "done": null
+          },
+          "parent": "g4"
+        },
+        "g2": {
+          "type": "cue_window",
+          "version": 1,
+          "alias": "task_cue",
+          "params": {
+            "clock": "trial_phase",
+            "start": 2.0,
+            "end": 6.0,
+            "entity": "TaskCue",
+            "visible": true,
+            "include_end": false
+          },
+          "members": [
+            270,
+            271,
+            272,
+            273,
+            274,
+            275,
+            276,
+            277
+          ],
+          "chain_members": [
+            270,
+            271,
+            272,
+            273,
+            274,
+            275,
+            276,
+            277
+          ],
+          "slots": {
+            "entry": 10267,
+            "done": 10291
+          },
+          "parent": "g4"
+        },
+        "g3": {
+          "type": "hide_group",
+          "version": 1,
+          "alias": "rest_cue",
+          "params": {
+            "entities": [
+              "LeftCue",
+              "RightCue",
+              "NullCue",
+              "TaskCue"
+            ],
+            "visible": false
+          },
+          "members": [
+            278,
+            279,
+            280,
+            281,
+            282,
+            283,
+            284,
+            285,
+            286,
+            287,
+            288,
+            289,
+            290
+          ],
+          "chain_members": [
+            278,
+            279,
+            280,
+            281,
+            282,
+            283,
+            284,
+            285,
+            286,
+            287,
+            288,
+            289,
+            290
+          ],
+          "slots": {
+            "entry": 10292,
+            "done": 10336
+          },
+          "parent": "g4"
+        },
+        "g4": {
+          "type": "container",
+          "version": 1,
+          "alias": "trial",
+          "params": {
+            "children": [
+              "g1",
+              "g2",
+              "g3"
+            ],
+            "entry": [
+              "phase",
+              "exec_in"
+            ],
+            "done": [
+              "next_trial",
+              "exec_out"
+            ]
+          },
+          "members": [
+            260,
+            261,
+            262,
+            263,
+            264,
+            265,
+            266,
+            267,
+            268,
+            269,
+            242,
+            243,
+            246,
+            247,
+            244,
+            245,
+            248,
+            249,
+            252,
+            253,
+            250,
+            251,
+            254,
+            255,
+            258,
+            259,
+            256,
+            257,
+            270,
+            271,
+            272,
+            273,
+            274,
+            275,
+            276,
+            277,
+            278,
+            279,
+            280,
+            281,
+            282,
+            283,
+            284,
+            285,
+            286,
+            287,
+            288,
+            289,
+            290,
+            220,
+            221,
+            223,
+            224,
+            231
+          ],
+          "children": [
+            "g1",
+            "g2",
+            "g3"
+          ],
+          "slots": {
+            "entry": 10066,
+            "done": 10135
+          }
+        }
+      }
+    }
+  }
+}

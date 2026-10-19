@@ -28,6 +28,7 @@ from Application.Editor.Services.ControllerRegistry import (
 )
 from Application.Editor.UI.FileDialog import FileDialog
 from Application.Editor.Services.ImportService import ImportService
+from Application.Editor.I18n import t
 
 
 # ── 资源类型 → FA6 图标映射 ──────────────────────────────────
@@ -58,6 +59,37 @@ _TYPE_COLOR = {
 # ── 类型顺序 (用于排序) ──
 _TYPE_ORDER = ["mesh", "shader", "texture", "material", "prefab"]
 
+
+def _type_label(rtype: str) -> str:
+    """资源类型显示名（显式分支 = 静态可提取键）。"""
+    if rtype == "mesh":
+        return t("resource.type.mesh")
+    if rtype == "shader":
+        return t("resource.type.shader")
+    if rtype == "texture":
+        return t("resource.type.texture")
+    if rtype == "material":
+        return t("resource.type.material")
+    if rtype == "prefab":
+        return t("resource.type.prefab")
+    return rtype
+
+
+def _type_count_label(rtype: str, count: int) -> str:
+    """状态栏计数（单/复数分键；中文同形）。"""
+    one = count == 1
+    if rtype == "mesh":
+        return t("resource.count.mesh_one", count=count) if one else t("resource.count.mesh", count=count)
+    if rtype == "shader":
+        return t("resource.count.shader_one", count=count) if one else t("resource.count.shader", count=count)
+    if rtype == "texture":
+        return t("resource.count.texture_one", count=count) if one else t("resource.count.texture", count=count)
+    if rtype == "material":
+        return t("resource.count.material_one", count=count) if one else t("resource.count.material", count=count)
+    if rtype == "prefab":
+        return t("resource.count.prefab_one", count=count) if one else t("resource.count.prefab", count=count)
+    return str(count)
+
 # ── 未知类型的占位符 ──
 _UNKNOWN_ICON = "?"   # fa.ICON_FA_QUESTION 实际是 ASCII '?'，直接用字符串
 
@@ -66,6 +98,7 @@ class ResourcePanel(BasePanel):
     """资产浏览器面板 — 网格视图展示已注册资源，支持 CRUD。"""
 
     name = "Resources"
+    title_key = "panel.resources"
     flags = imgui.WindowFlags_.none
 
     CARD_W = 82.0             # 卡片宽度
@@ -133,30 +166,30 @@ class ResourcePanel(BasePanel):
 
         # ── Import 按钮 ──
         import_w = av * 0.18
-        if imgui.button(f"{fa.ICON_FA_FOLDER_OPEN}  Import", (import_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_FOLDER_OPEN}  " + t("resource.import"), (import_w, 0)):
             imgui.open_popup("##import_popup")
         # Hover 提示
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Import Mesh / Shader / Texture from disk")
+            imgui.set_tooltip(t("resource.import_tip"))
 
         if imgui.begin_popup("##import_popup"):
-            imgui.text_disabled("Import Asset")
+            imgui.text_disabled(t("resource.import_asset"))
             imgui.separator()
-            if imgui.menu_item(f"{fa.ICON_FA_CUBE}  Mesh...", "", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_CUBE}  " + t("resource.mesh"), "", False, True)[0]:
                 FileDialog.open_mesh(ImportService.load_mesh)
                 imgui.close_current_popup()
-            if imgui.menu_item(f"{fa.ICON_FA_FILE_CODE}  Shader...", "", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_FILE_CODE}  " + t("resource.shader"), "", False, True)[0]:
                 FileDialog.open_shader(ImportService.load_shader)
                 imgui.close_current_popup()
-            if imgui.menu_item(f"{fa.ICON_FA_IMAGE}  Texture...", "", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_IMAGE}  " + t("resource.texture"), "", False, True)[0]:
                 FileDialog.open_texture(ImportService.load_texture)
                 imgui.close_current_popup()
             imgui.separator()
-            if imgui.menu_item(f"{fa.ICON_FA_CIRCLE}  Material...", "", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_CIRCLE}  " + t("resource.material"), "", False, True)[0]:
                 FileDialog.open_mat(callback=self._on_import_material)
                 imgui.close_current_popup()
             imgui.separator()
-            if imgui.menu_item(f"{fa.ICON_FA_CUBE}  Prefab...", "", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_CUBE}  " + t("resource.prefab"), "", False, True)[0]:
                 FileDialog.open_prefab(callback=self._on_import_prefab)
                 imgui.close_current_popup()
             imgui.end_popup()
@@ -167,14 +200,14 @@ class ResourcePanel(BasePanel):
         new_mat_w = av * 0.24
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*SUCCESS_GREEN, 1.00))
-        if imgui.button(f"{fa.ICON_FA_PLUS}  New Material", (new_mat_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_PLUS}  " + t("resource.new_material"), (new_mat_w, 0)):
             mid = self._resource_ctrl.new_material()
             self._selected_type = "material"
             self._selected_id = mid
             print(f"[Resource] Created Material #{mid}")
         imgui.pop_style_color(1)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Create a new Material (based on default Shader)")
+            imgui.set_tooltip(t("resource.new_material_tip"))
 
         imgui.same_line()
 
@@ -183,7 +216,7 @@ class ResourcePanel(BasePanel):
         imgui.set_cursor_pos_x(av - search_w - 24)
         imgui.push_item_width(search_w)
         changed, self._search_filter = imgui.input_text_with_hint(
-            "##resource_search", f"{fa.ICON_FA_MAGNIFYING_GLASS}  Filter...",
+            "##resource_search", f"{fa.ICON_FA_MAGNIFYING_GLASS}  " + t("resource.filter"),
             self._search_filter, 128,
         )
         imgui.pop_item_width()
@@ -197,7 +230,7 @@ class ResourcePanel(BasePanel):
             self._selected_id = None
             self._selected_type = None
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Clear selection")
+            imgui.set_tooltip(t("resource.clear_selection"))
         if not can_clear:
             imgui.end_disabled()
 
@@ -208,12 +241,12 @@ class ResourcePanel(BasePanel):
     def _draw_category_tabs(self) -> None:
         """绘制分类标签页: All | Meshes | Shaders | Textures | Materials"""
         tab_defs = [
-            ("",                       "All"),
-            (fa.ICON_FA_CUBES,       "Meshes"),
-            (fa.ICON_FA_FILE_CODE,   "Shaders"),
-            (fa.ICON_FA_IMAGE,       "Textures"),
-            (fa.ICON_FA_CIRCLE,      "Materials"),
-            (fa.ICON_FA_CUBE,        "Prefabs"),
+            ("",                     t("resource.tab.all")),
+            (fa.ICON_FA_CUBES,       t("resource.tab.meshes")),
+            (fa.ICON_FA_FILE_CODE,   t("resource.tab.shaders")),
+            (fa.ICON_FA_IMAGE,       t("resource.tab.textures")),
+            (fa.ICON_FA_CIRCLE,      t("resource.tab.materials")),
+            (fa.ICON_FA_CUBE,        t("resource.tab.prefabs")),
         ]
         tab_count = len(tab_defs)
         av = imgui.get_content_region_avail().x
@@ -256,7 +289,7 @@ class ResourcePanel(BasePanel):
         if not resources:
             imgui.spacing()
             imgui.spacing()
-            hint = "No assets loaded. Use File -> Import or click 'Import'."
+            hint = t("resource.no_assets")
             hint_w = imgui.calc_text_size(hint).x
             imgui.set_cursor_pos_x(
                 imgui.get_cursor_pos_x()
@@ -268,9 +301,9 @@ class ResourcePanel(BasePanel):
 
         # ── 右键空白区域 ──
         if imgui.begin_popup_context_window("##grid_ctx", 1):
-            if imgui.menu_item(f"{fa.ICON_FA_FOLDER_OPEN}  Import...", "", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_FOLDER_OPEN}  " + t("resource.import_dots"), "", False, True)[0]:
                 imgui.open_popup("##import_popup")
-            if imgui.menu_item(f"{fa.ICON_FA_PLUS}  New Material", "", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_PLUS}  " + t("resource.new_material"), "", False, True)[0]:
                 mid = self._resource_ctrl.new_material()
                 self._selected_type = "material"
                 self._selected_id = mid
@@ -306,7 +339,7 @@ class ResourcePanel(BasePanel):
         )
 
         icon = _TYPE_ICON.get(rtype, _UNKNOWN_ICON)
-        type_label = _TYPE_LABEL.get(rtype, rtype)
+        type_label = _type_label(rtype)
         type_color = _TYPE_COLOR.get(rtype, (0.5, 0.5, 0.5))
 
         # ── 名称截断 ──
@@ -342,14 +375,14 @@ class ResourcePanel(BasePanel):
             )
             imgui.separator()
             if rtype == "prefab":
-                if imgui.menu_item(f"{fa.ICON_FA_PLUS}  Add to Scene", "", False, True)[0]:
+                if imgui.menu_item(f"{fa.ICON_FA_PLUS}  " + t("resource.add_to_scene"), "", False, True)[0]:
                     from Application.Editor.UI.controllers.ResourceBrowserController import ResourceBrowserController
                     eids = ResourceBrowserController.instantiate_prefab(rid)
                     if eids:
                         print(f"[Resource] Added Prefab '{rname}' → {len(eids)} entities")
                     imgui.close_current_popup()
                 imgui.separator()
-            if imgui.menu_item(f"{fa.ICON_FA_TRASH}  Delete", "", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_TRASH}  " + t("resource.delete"), "", False, True)[0]:
                 ok = self._resource_ctrl.delete_resource(rtype, rid)
                 if ok:
                     if is_selected:
@@ -362,11 +395,9 @@ class ResourcePanel(BasePanel):
 
         # ── Hover 提示: 显示完整信息 ──
         if imgui.is_item_hovered():
-            imgui.set_tooltip(
-                f"{type_label} #{rid}\n"
-                f"Name: {rname}\n"
-                f"Path: {res.get('path', '(none)')}"
-            )
+            imgui.set_tooltip(t(
+                "resource.card_tooltip", type=type_label, id=rid, name=rname,
+                path=res.get('path', t("resource.none"))))
 
         # ── 单击选中 ──
         if selected:
@@ -395,9 +426,7 @@ class ResourcePanel(BasePanel):
         for rtype in _TYPE_ORDER:
             count = counts.get(rtype, 0)
             icon = _TYPE_ICON.get(rtype, _UNKNOWN_ICON)
-            label = _TYPE_LABEL.get(rtype, rtype)
-            s = "s" if count != 1 else ""
-            parts.append(f"{icon}  {count} {label}{s}")
+            parts.append(f"{icon}  " + _type_count_label(rtype, count))
 
         text = "    ".join(parts)
         imgui.text_disabled(text)
@@ -405,8 +434,7 @@ class ResourcePanel(BasePanel):
         # ── 选中信息 ──
         if self._selected_id is not None and self._selected_type is not None:
             icon = _TYPE_ICON.get(self._selected_type, _UNKNOWN_ICON)
-            type_label = _TYPE_LABEL.get(
-                self._selected_type, self._selected_type)
+            type_label = _type_label(self._selected_type)
             imgui.same_line()
             imgui.text_colored(
                 imgui.ImVec4(*BLENDER_ORANGE, 1.00),
@@ -433,6 +461,7 @@ class ResourcePanel(BasePanel):
                 r for r in resources
                 if search in r['name'].lower()
                 or search in _TYPE_LABEL.get(r['type'], r['type']).lower()
+                or search in _type_label(r['type']).lower()
             ]
 
         # ── 排序: 类型顺序 → ID ──

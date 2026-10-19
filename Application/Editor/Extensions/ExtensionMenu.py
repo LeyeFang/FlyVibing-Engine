@@ -18,45 +18,48 @@
 
 from imgui_bundle import imgui
 
+from Application.Editor.I18n import t
+
 
 def draw_extensions_menu() -> None:
     """绘制 'Extensions' 顶级菜单（须在 begin_main_menu_bar 块内调用）。"""
-    if not imgui.begin_menu("Extensions", True):
+    if not imgui.begin_menu(t("extension.menu.title"), True):
         return
     try:
         from Application.Editor.Extensions.ExtensionManager import ExtensionManager
         infos = ExtensionManager.list_infos()
     except Exception as e:  # noqa: BLE001 — 菜单不得因扩展体系异常而崩
         infos = []
-        imgui.text_disabled(f"(extension system error: {e!r})")
+        imgui.text_disabled(t("extension.system_error", error=repr(e)))
     if not infos:
-        imgui.menu_item("(no extensions found)", "", False, False)
+        imgui.menu_item(t("extension.none"), "", False, False)
     for info in infos:
         label = f"{info.get('name') or info.get('id')}"
         status = info.get("status", "planned")
         if status == "broken":
             imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.85, 0.35, 0.30, 1.0))
-            imgui.menu_item(f"{label} — broken", "", False, False)
+            imgui.menu_item(t("extension.broken", name=label), "", False, False)
             imgui.pop_style_color(1)
             if imgui.is_item_hovered():
                 imgui.set_tooltip(str(info.get("error", "")))
         elif not info.get("loadable"):
-            imgui.menu_item(f"{label} — planned ({info.get('maturity', 'planned')})", "", False, False)
+            imgui.menu_item(t("extension.planned", name=label,
+                              maturity=info.get("maturity", "planned")), "", False, False)
             if imgui.is_item_hovered():
                 imgui.set_tooltip(f"{info.get('dir', '')}\n{info.get('description', '')}")
         else:
             changed, val = imgui.menu_item(label, "", bool(info.get("enabled")), True)
             if imgui.is_item_hovered():
-                imgui.set_tooltip(
-                    f"{info.get('id')} v{info.get('version')} [{info.get('maturity')}]\n"
-                    f"{info.get('dir', '')}")
+                imgui.set_tooltip(t(
+                    "extension.tooltip", id=info.get("id"), version=info.get("version"),
+                    maturity=info.get("maturity"), dir=info.get("dir", "")))
             if changed:
                 try:
                     ExtensionManager.toggle(info["id"], val)
                 except Exception as e:  # noqa: BLE001
                     print(f"[Extensions] toggle failed: {e!r}")
     imgui.separator()
-    if imgui.menu_item("Rescan", "", False, True)[0]:
+    if imgui.menu_item(t("extension.rescan"), "", False, True)[0]:
         try:
             ExtensionManager.rescan()
         except Exception as e:  # noqa: BLE001

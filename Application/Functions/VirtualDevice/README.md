@@ -57,7 +57,7 @@
 | `ext.virtual.snapshot` | `points?, preview_channels?, max_channels?` | 波形统计（mean/rms/ptp）+ 数值预览（agent 验证用） |
 
 ```powershell
-engine-editor-cli call ext.virtual.open mode=sim sampling_rate=512 save_dir=Test/_runs/virtual_demo
+engine-editor-cli call ext.virtual.open mode=sim sampling_rate=512 save_dir=output/virtual_demo
 engine-editor-cli call ext.virtual.watch          # 只看波形
 engine-editor-cli call ext.virtual.record         # 升级为采集
 engine-editor-cli call ext.virtual.snapshot preview_channels=2

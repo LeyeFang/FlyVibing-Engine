@@ -20,6 +20,33 @@ from Application.Editor.Services.ControllerRegistry import (
 from imgui_bundle import icons_fontawesome_6 as fa
 
 from Application.Editor.UI.FileDialog import FileDialog
+from Application.Editor.I18n import t
+from Application.Editor.DisplayLabels import component_label
+
+
+def _color_label(name: str) -> str:
+    """颜色预设显示名（静默 key — 词条表新增颜色时在此补分支）。"""
+    if name == "White":
+        return t("scene.color.white")
+    if name == "Red":
+        return t("scene.color.red")
+    if name == "Green":
+        return t("scene.color.green")
+    if name == "Blue":
+        return t("scene.color.blue")
+    if name == "Yellow":
+        return t("scene.color.yellow")
+    if name == "Cyan":
+        return t("scene.color.cyan")
+    if name == "Magenta":
+        return t("scene.color.magenta")
+    if name == "Black":
+        return t("scene.color.black")
+    if name == "Gray":
+        return t("scene.color.gray")
+    if name == "Orange":
+        return t("scene.color.orange")
+    return name
 
 
 class ScenePanel(BasePanel):
@@ -31,6 +58,7 @@ class ScenePanel(BasePanel):
     """
 
     name = "Scene"
+    title_key = "panel.scene"
     flags = imgui.WindowFlags_.none
 
     def __init__(
@@ -141,20 +169,20 @@ class ScenePanel(BasePanel):
     ) -> None:
         """四区域布局 — 橙色标题 + separator 分隔，区域内无线条。"""
         # ── 区域 1: Scene Information ──
-        self._draw_section_title("Scene Information")
+        self._draw_section_title(t("scene.section.info"))
         self._draw_header()
         self._draw_controls()
 
         # ── 区域 2: Scene Type ──
         imgui.spacing()
         imgui.separator()
-        self._draw_section_title("Scene Type")
+        self._draw_section_title(t("scene.section.type"))
         self._draw_viewport_mode()
 
         # ── 区域 3: Entities ──
         imgui.spacing()
         imgui.separator()
-        self._draw_section_title("Entities")
+        self._draw_section_title(t("scene.section.entities"))
         self._draw_entity_tree()
 
         # ── 区域 4: Inspector (含实体名) ──
@@ -164,7 +192,7 @@ class ScenePanel(BasePanel):
             entity_name = (info.get('name', '') if info else '') or f"Entity #{selected}"
             imgui.spacing()
             imgui.separator()
-            self._draw_section_title(f"Inspector  —  \"{entity_name}\"")
+            self._draw_section_title(t("scene.section.inspector", name=entity_name))
             self._draw_entity_summary(selected)
 
     # ============================================================
@@ -178,7 +206,7 @@ class ScenePanel(BasePanel):
         scene_names = self._browser_ctrl.get_scene_names()
         current_name = self._browser_ctrl.get_active_scene_name()
 
-        imgui.text("Scene:")
+        imgui.text(t("scene.header"))
         imgui.same_line()
         # 为 [+] [💾] [📂] 三个按钮预留宽度
         imgui.set_next_item_width(imgui.get_content_region_avail().x - 120)
@@ -205,11 +233,11 @@ class ScenePanel(BasePanel):
 
         if imgui.begin_popup("new_scene_popup"):
             imgui.text_colored(
-                imgui.ImVec4(*BLENDER_ORANGE, 0.90), "New Scene")
+                imgui.ImVec4(*BLENDER_ORANGE, 0.90), t("scene.new"))
             imgui.spacing()
             imgui.push_item_width(180)
             changed, self._new_scene_name = imgui.input_text_with_hint(
-                "##new_scene_input", "name...", self._new_scene_name, 64,
+                "##new_scene_input", t("scene.name_hint"), self._new_scene_name, 64,
             )
             imgui.pop_item_width()
             imgui.same_line()
@@ -218,7 +246,7 @@ class ScenePanel(BasePanel):
             )
             if not name_ok:
                 imgui.begin_disabled(True)
-            if imgui.button("Create") or (
+            if imgui.button(t("scene.create")) or (
                 name_ok and imgui.is_key_pressed(imgui.Key.enter)
             ):
                 name = self._new_scene_name.strip()
@@ -241,7 +269,7 @@ class ScenePanel(BasePanel):
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*SUCCESS_GREEN, 1.00))
         imgui.begin_disabled(not self._sim_ctrl.is_stopped())
-        if imgui.button(f"{fa.ICON_FA_PLAY}  Run", (btn_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_PLAY}  " + t("scene.run"), (btn_w, 0)):
             self._sim_ctrl.play()
         imgui.end_disabled()
         imgui.pop_style_color(1)
@@ -252,7 +280,7 @@ class ScenePanel(BasePanel):
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*WARNING_AMBER, 1.00))
         imgui.begin_disabled(not self._sim_ctrl.is_running())
-        if imgui.button(f"{fa.ICON_FA_PAUSE}  Pause", (btn_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_PAUSE}  " + t("scene.pause"), (btn_w, 0)):
             self._sim_ctrl.pause()
         imgui.end_disabled()
         imgui.pop_style_color(1)
@@ -263,7 +291,7 @@ class ScenePanel(BasePanel):
         imgui.push_style_color(
             imgui.Col_.text, imgui.ImVec4(*ERROR_RED, 1.00))
         imgui.begin_disabled(self._sim_ctrl.is_stopped())
-        if imgui.button(f"{fa.ICON_FA_STOP}  Stop", (btn_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_STOP}  " + t("scene.stop"), (btn_w, 0)):
             self._sim_ctrl.stop()
         imgui.end_disabled()
         imgui.pop_style_color(1)
@@ -310,7 +338,7 @@ class ScenePanel(BasePanel):
         if is_3d:
             imgui.push_style_color(
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
-        if imgui.button("3D", (btn_w, 0)):
+        if imgui.button(t("scene.mode.3d"), (btn_w, 0)):
             self._browser_ctrl.set_game_type("3d")
             self._viewport_ctrl.switch_to_3d()
         if is_3d:
@@ -322,7 +350,7 @@ class ScenePanel(BasePanel):
         if is_2d:
             imgui.push_style_color(
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
-        if imgui.button("2D", (btn_w, 0)):
+        if imgui.button(t("scene.mode.2d"), (btn_w, 0)):
             self._browser_ctrl.set_game_type("2d")
             self._viewport_ctrl.switch_to_2d()
         if is_2d:
@@ -334,7 +362,7 @@ class ScenePanel(BasePanel):
         if is_overlay:
             imgui.push_style_color(
                 imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.60))
-        if imgui.button("Overlay", (btn_w, 0)):
+        if imgui.button(t("scene.mode.overlay"), (btn_w, 0)):
             self._browser_ctrl.set_game_type("overlay")
             self._viewport_ctrl.switch_to_overlay()
         if is_overlay:
@@ -355,7 +383,7 @@ class ScenePanel(BasePanel):
         root_ids = self._browser_ctrl.get_root_entities()
         if not root_ids:
             imgui.text_colored(
-                imgui.ImVec4(0.400, 0.400, 0.400, 1.00), "(empty scene)"
+                imgui.ImVec4(0.400, 0.400, 0.400, 1.00), t("scene.empty")
             )
             if imgui.begin_drag_drop_target():
                 payload = imgui.accept_drag_drop_payload_py_id("ENTITY")
@@ -405,7 +433,7 @@ class ScenePanel(BasePanel):
         btn_w = (av - spacing * 2) / 3.0
 
         # ✨ New
-        if imgui.button(f"{fa.ICON_FA_PLUS}  New", (btn_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_PLUS}  " + t("scene.entity.new"), (btn_w, 0)):
             self._browser_ctrl.add_entity()
         imgui.same_line()
 
@@ -414,7 +442,7 @@ class ScenePanel(BasePanel):
         save_disabled = (selected is None)
         if save_disabled:
             imgui.begin_disabled(True)
-        if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  Save", (btn_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_FLOPPY_DISK}  " + t("scene.entity.save"), (btn_w, 0)):
             self._save_selected_as_prefab(selected)
         if save_disabled:
             imgui.end_disabled()
@@ -423,7 +451,7 @@ class ScenePanel(BasePanel):
         # 🗑 Delete — 仅选中时可用
         if selected is None:
             imgui.begin_disabled(True)
-        if imgui.button(f"{fa.ICON_FA_TRASH}  Delete", (btn_w, 0)):
+        if imgui.button(f"{fa.ICON_FA_TRASH}  " + t("scene.entity.delete"), (btn_w, 0)):
             self._browser_ctrl.delete_selected()
             self._selection_ctrl.clear()
         if selected is None:
@@ -457,7 +485,7 @@ class ScenePanel(BasePanel):
         info = self._browser_ctrl.get_entity_info(entity_id)
         if info is None:
             return
-        name = info.get('name', '') or f"Entity #{entity_id}"
+        name = info.get('name', '') or t("scene.entity.default_name", id=entity_id)
 
         # ── 眼图标: 在 entity label 左侧 ──
         eye_visible = self._browser_ctrl.is_editor_visible(entity_id)
@@ -470,7 +498,7 @@ class ScenePanel(BasePanel):
         if not eye_visible:
             imgui.pop_style_color(1)
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"Toggle editor visibility of '{name}' and its children")
+            imgui.set_tooltip(t("scene.entity.visibility_tip", name=name))
         imgui.same_line()
 
         # ── 构建标签: 图标标记 ──
@@ -513,7 +541,8 @@ class ScenePanel(BasePanel):
         if imgui.begin_drag_drop_source():
             imgui.set_drag_drop_payload_py_id("ENTITY", entity_id)
             imgui.text_colored(
-                imgui.ImVec4(*BLENDER_ORANGE, 1.00), f"Entity #{entity_id}"
+                imgui.ImVec4(*BLENDER_ORANGE, 1.00),
+                t("scene.entity.default_name", id=entity_id)
             )
             imgui.end_drag_drop_source()
 
@@ -543,19 +572,19 @@ class ScenePanel(BasePanel):
         作用于「上一个提交的 item」。
         """
         if imgui.begin_popup_context_item(
-            f"entity_ctx_{entity_id}",
+            f"##entity_ctx_{entity_id}",
             imgui.PopupFlags_.mouse_button_right,
         ):
             # ★ 选中该实体 (右键操作通常期望以该实体为目标)
             self._selection_ctrl.select(entity_id)
 
-            if imgui.menu_item(f"{fa.ICON_FA_COPY}  Copy", "Ctrl+C", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_COPY}  " + t("scene.entity.copy"), "Ctrl+C", False, True)[0]:
                 self._browser_ctrl.copy_entity(entity_id)
                 imgui.close_current_popup()
 
             imgui.separator()
 
-            if imgui.menu_item(f"{fa.ICON_FA_FLOPPY_DISK}  Save as Prefab", "", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_FLOPPY_DISK}  " + t("scene.entity.save_prefab"), "", False, True)[0]:
                 self._save_selected_as_prefab(entity_id)
                 imgui.close_current_popup()
 
@@ -564,7 +593,7 @@ class ScenePanel(BasePanel):
             # ★ Delete 使用红色文字
             imgui.push_style_color(
                 imgui.Col_.text, imgui.ImVec4(*ERROR_RED, 1.00))
-            if imgui.menu_item(f"{fa.ICON_FA_TRASH}  Delete", "Del", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_TRASH}  " + t("scene.entity.delete"), "Del", False, True)[0]:
                 self._browser_ctrl.delete_entity(entity_id)
                 self._selection_ctrl.clear()
                 imgui.close_current_popup()
@@ -578,11 +607,11 @@ class ScenePanel(BasePanel):
         使用 begin_popup_context_window 实现右键点击窗口空白区域弹出菜单。
         """
         if imgui.begin_popup_context_window(
-            "entity_list_empty_ctx",
+            "##entity_list_empty_ctx",
             imgui.PopupFlags_.mouse_button_right
             | imgui.PopupFlags_.no_open_over_items,
         ):
-            if imgui.menu_item(f"{fa.ICON_FA_PLUS}  New Entity", "", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_PLUS}  " + t("scene.entity.new_entity"), "", False, True)[0]:
                 eid = self._browser_ctrl.add_entity()
                 self._selection_ctrl.select(eid)
                 imgui.close_current_popup()
@@ -593,7 +622,7 @@ class ScenePanel(BasePanel):
             has_clip = self._browser_ctrl.has_clipboard()
             if not has_clip:
                 imgui.begin_disabled(True)
-            if imgui.menu_item(f"{fa.ICON_FA_PASTE}  Paste", "Ctrl+V", False, True)[0]:
+            if imgui.menu_item(f"{fa.ICON_FA_PASTE}  " + t("scene.entity.paste"), "Ctrl+V", False, True)[0]:
                 eid = self._browser_ctrl.paste_entity()
                 if eid is not None:
                     self._selection_ctrl.select(eid)
@@ -615,7 +644,7 @@ class ScenePanel(BasePanel):
         use_local = self._transform_local
         summary = self._browser_ctrl.get_summary(entity_id, use_local=use_local)
         if summary is None:
-            imgui.text_disabled("(failed to load entity info)")
+            imgui.text_disabled(t("scene.entity.info_failed"))
             return
 
         # ── 实体名称（可编辑）+ ID（灰色） ──
@@ -627,11 +656,11 @@ class ScenePanel(BasePanel):
             self._browser_ctrl.set_name(entity_id, new_name)
         if not summary.name:
             imgui.same_line()
-            imgui.text_disabled("(click to name)")
+            imgui.text_disabled(t("scene.entity.name_hint"))
         imgui.same_line()
         imgui.text_disabled("—")
         imgui.same_line()
-        imgui.text_disabled(f"Entity #{summary.entity_id}")
+        imgui.text_disabled(t("scene.entity.default_name", id=summary.entity_id))
 
         # ── Transform ──
         imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() + 2)
@@ -641,7 +670,7 @@ class ScenePanel(BasePanel):
         imgui.end_disabled()
         imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - 2)
         imgui.same_line()
-        if imgui.collapsing_header("Transform", imgui.TreeNodeFlags_.default_open):
+        if imgui.collapsing_header(t("scene.transform"), imgui.TreeNodeFlags_.default_open):
             # ── Local / Global 切换 ──
             av = imgui.get_content_region_avail().x
             btn_w = (av - imgui.get_style().item_spacing.x) / 2.0
@@ -649,7 +678,7 @@ class ScenePanel(BasePanel):
             if not use_local:
                 imgui.push_style_color(
                     imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.50))
-            if imgui.button("Global", (btn_w, 0)):
+            if imgui.button(t("scene.transform.global"), (btn_w, 0)):
                 self._transform_local = False
             if not use_local:
                 imgui.pop_style_color(1)
@@ -657,7 +686,7 @@ class ScenePanel(BasePanel):
             if use_local:
                 imgui.push_style_color(
                     imgui.Col_.button, imgui.ImVec4(*BLENDER_ORANGE, 0.50))
-            if imgui.button("Local", (btn_w, 0)):
+            if imgui.button(t("scene.transform.local"), (btn_w, 0)):
                 self._transform_local = True
             if use_local:
                 imgui.pop_style_color(1)
@@ -665,17 +694,17 @@ class ScenePanel(BasePanel):
             imgui.spacing()
 
             pos = list(summary.position)
-            changed, new_pos = imgui.drag_float3("Position", pos, 0.1, format="%.2f")
+            changed, new_pos = imgui.drag_float3(t("scene.transform.position"), pos, 0.1, format="%.2f")
             if changed:
                 self._browser_ctrl.set_position(entity_id, tuple(new_pos), use_local=use_local)
 
             rot = list(summary.rotation)
-            changed, new_rot = imgui.drag_float3("Rotation", rot, 1.0, format="%.1f")
+            changed, new_rot = imgui.drag_float3(t("scene.transform.rotation"), rot, 1.0, format="%.1f")
             if changed:
                 self._browser_ctrl.set_rotation(entity_id, tuple(new_rot), use_local=use_local)
 
             scl = list(summary.scale)
-            changed, new_scl = imgui.drag_float3("Scale", scl, 0.05, format="%.2f")
+            changed, new_scl = imgui.drag_float3(t("scene.transform.scale"), scl, 0.05, format="%.2f")
             if changed:
                 self._browser_ctrl.set_scale(entity_id, tuple(new_scl), use_local=use_local)
 
@@ -686,7 +715,7 @@ class ScenePanel(BasePanel):
                 self._browser_ctrl.remove_component(entity_id, "MeshRenderer")
             imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - 2)
             imgui.same_line()
-            if imgui.collapsing_header("MeshRenderer", imgui.TreeNodeFlags_.default_open):
+            if imgui.collapsing_header(t("scene.mesh_renderer"), imgui.TreeNodeFlags_.default_open):
                 self._draw_mesh_renderer_editor(entity_id, summary)
 
         # ── Camera（有 camera 才显示，可编辑） ──
@@ -696,7 +725,7 @@ class ScenePanel(BasePanel):
                 self._browser_ctrl.remove_component(entity_id, "Camera")
             imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - 2)
             imgui.same_line()
-            if imgui.collapsing_header("Camera", imgui.TreeNodeFlags_.default_open):
+            if imgui.collapsing_header(t("scene.camera"), imgui.TreeNodeFlags_.default_open):
                 try:
                     cam = self._browser_ctrl.get_camera_info(entity_id)
                 except Exception:
@@ -704,7 +733,7 @@ class ScenePanel(BasePanel):
                 if cam:
                     # ── 投影类型 ──
                     is_persp = cam.get('is_perspective', True)
-                    changed, new_persp = imgui.checkbox("Perspective", is_persp)
+                    changed, new_persp = imgui.checkbox(t("scene.camera.perspective"), is_persp)
                     if changed:
                         self._browser_ctrl.set_camera_projection(entity_id, new_persp)
                         cam['is_perspective'] = new_persp
@@ -712,12 +741,12 @@ class ScenePanel(BasePanel):
                     # ── 透视: FOV / 正交: ortho_size ──
                     if cam.get('is_perspective', True):
                         fov_val = float(cam.get('fov', 45.0))
-                        changed, new_fov = imgui.drag_float("FOV", fov_val, 0.5, 1.0, 179.0, "%.1f")
+                        changed, new_fov = imgui.drag_float(t("scene.camera.fov"), fov_val, 0.5, 1.0, 179.0, "%.1f")
                         if changed:
                             self._browser_ctrl.set_camera_fov(entity_id, new_fov)
                     else:
                         size_val = float(cam.get('ortho_size', 5.0))
-                        changed, new_size = imgui.drag_float("Ortho Size", size_val, 0.1, 0.01, 1000.0, "%.2f")
+                        changed, new_size = imgui.drag_float(t("scene.camera.ortho_size"), size_val, 0.1, 0.01, 1000.0, "%.2f")
                         if changed:
                             self._browser_ctrl.set_camera_ortho_size(entity_id, new_size)
 
@@ -735,7 +764,7 @@ class ScenePanel(BasePanel):
                         key=lambda i: abs(_ASPECT_PRESETS[i][1] - current_ar)
                     )
                     changed_ar, new_idx = imgui.combo(
-                        "Aspect Ratio", preset_idx,
+                        t("scene.camera.aspect"), preset_idx,
                         [p[0] for p in _ASPECT_PRESETS]
                     )
                     if changed_ar:
@@ -746,17 +775,17 @@ class ScenePanel(BasePanel):
                     # ── 裁剪平面 ──
                     near_val = float(cam.get('near', 0.1))
                     far_val = float(cam.get('far', 1000.0))
-                    changed_n, new_near = imgui.drag_float("Near", near_val, 0.01, 0.001, 1000.0, "%.3f")
-                    changed_f, new_far = imgui.drag_float("Far", far_val, 1.0, 0.01, 10000.0, "%.1f")
+                    changed_n, new_near = imgui.drag_float(t("scene.camera.near"), near_val, 0.01, 0.001, 1000.0, "%.3f")
+                    changed_f, new_far = imgui.drag_float(t("scene.camera.far"), far_val, 1.0, 0.01, 10000.0, "%.1f")
                     if changed_n:
                         self._browser_ctrl.set_camera_clip(entity_id, new_near, far_val)
                     if changed_f:
                         self._browser_ctrl.set_camera_clip(entity_id, near_val, new_far)
 
                     if cam.get('is_primary'):
-                        imgui.text_colored(imgui.ImVec4(*WARNING_AMBER, 1.00), "(Primary Camera)")
+                        imgui.text_colored(imgui.ImVec4(*WARNING_AMBER, 1.00), t("scene.camera.primary"))
                 else:
-                    imgui.text_disabled("(camera info unavailable)")
+                    imgui.text_disabled(t("scene.camera.unavailable"))
 
         # ── 其它组件 (通用检视 — TextDisplay / MediaPlayer / Light 等) ──
         for comp_name in self._browser_ctrl.get_extra_components(entity_id):
@@ -768,7 +797,7 @@ class ScenePanel(BasePanel):
                 self._browser_ctrl.remove_component(entity_id, comp_name)
             imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - 2)
             imgui.same_line()
-            if imgui.collapsing_header(f"{comp_name}##extra_{comp_name}", imgui.TreeNodeFlags_.default_open):
+            if imgui.collapsing_header(component_label(comp_name) + f"##extra_{comp_name}", imgui.TreeNodeFlags_.default_open):
                 self._draw_generic_component_fields(entity_id, comp_name, fields_list)
 
         # ── Add Component ──
@@ -831,7 +860,7 @@ class ScenePanel(BasePanel):
     def _draw_mesh_renderer_editor(self, entity_id: int, summary) -> None:
         """绘制 MeshRenderer 编辑区域 — Visible / Mesh / Material。"""
         # ── Visible 勾选框 ──
-        changed, vis = imgui.checkbox("Visible", summary.render_visible)
+        changed, vis = imgui.checkbox(t("scene.mesh.visible"), summary.render_visible)
         if changed:
             self._browser_ctrl.set_entity_render_visible(entity_id, vis)
             summary.render_visible = vis
@@ -839,12 +868,13 @@ class ScenePanel(BasePanel):
         mesh_options = self._resource_ctrl.get_mesh_options()
 
         # ── Mesh 子节点 ──
-        if imgui.tree_node_ex("Mesh##mesh_tree", imgui.TreeNodeFlags_.default_open):
+        if imgui.tree_node_ex(t("scene.mesh.title") + "##mesh_tree", imgui.TreeNodeFlags_.default_open):
             current_mesh_id = summary.mesh_id or 0
             mesh_names = {mid: name for mid, name in mesh_options}
-            current_mesh_name = mesh_names.get(current_mesh_id, f"Mesh #{current_mesh_id}")
+            current_mesh_name = mesh_names.get(
+                current_mesh_id, t("scene.mesh.default", id=current_mesh_id))
 
-            if imgui.begin_combo("Mesh##mesh_select", current_mesh_name):
+            if imgui.begin_combo(t("scene.mesh.title") + "##mesh_select", current_mesh_name):
                 for mid, mname in mesh_options:
                     selected = (mid == current_mesh_id)
                     if imgui.selectable(f"{mname}##mesh_{mid}", selected)[0]:
@@ -856,7 +886,7 @@ class ScenePanel(BasePanel):
 
         # ── Material 子节点 ──
         has_mat = summary.material_id is not None and summary.material_id != 0
-        if imgui.tree_node_ex("Material##mat_tree",
+        if imgui.tree_node_ex(t("scene.material.title") + "##mat_tree",
                                imgui.TreeNodeFlags_.default_open if has_mat else 0):
             self._draw_material_section(entity_id, summary)
             imgui.tree_pop()
@@ -877,12 +907,12 @@ class ScenePanel(BasePanel):
         current_mat_id = summary.material_id or 0
         info = self._browser_ctrl.get_entity_material_info(entity_id)
         if current_mat_id == 0 or info is None:
-            imgui.text_disabled("(no material)")
+            imgui.text_disabled(t("scene.material.none"))
             return
 
         is_saved = info.get('is_saved', False)
-        display_name = info.get('display_name', '*Untitled')
-        current_name = info.get('material_name', 'Untitled')
+        display_name = info.get('display_name', t("scene.material.untitled"))
+        current_name = info.get('material_name', t("scene.material.untitled"))
         file_path = info.get('file_path', '')
 
         # ── Material 下拉选择 + 保存图标 ──
@@ -891,8 +921,8 @@ class ScenePanel(BasePanel):
         # ★ 如果 material 已丢失（不在 loaded_material 中），标记 (Lost)
         mat_lost = (str(current_mat_id) not in ResourceManager.loaded_material)
         if mat_lost:
-            current_mat_label = f"{current_mat_label} (Lost)"
-        if imgui.begin_combo("Material##mat_select", current_mat_label):
+            current_mat_label = current_mat_label + t("scene.material.lost")
+        if imgui.begin_combo(t("scene.material.title") + "##mat_select", current_mat_label):
             for mid, mname in mat_options:
                 selected = (mid == current_mat_id)
                 if imgui.selectable(f"{mname}##mat_opt_{mid}", selected)[0]:
@@ -921,12 +951,12 @@ class ScenePanel(BasePanel):
                 start_dir=start_dir,
             )
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Save material to .mat file")
+            imgui.set_tooltip(t("scene.material.save_tip"))
         if is_saved:
             imgui.end_disabled()
 
         # ── Name 可编辑 ──
-        changed, new_name = imgui.input_text("Name##mat_name", current_name, 64)
+        changed, new_name = imgui.input_text(t("scene.material.name") + "##mat_name", current_name, 64)
         if changed and new_name.strip():
             self._browser_ctrl.set_material_name(entity_id, new_name.strip())
 
@@ -934,7 +964,7 @@ class ScenePanel(BasePanel):
         shader_names = {sid: name for sid, name in shader_options}
         current_shader_name = shader_names.get(
             info['shader_id'], info.get('shader_name', f"#{info['shader_id']}"))
-        if imgui.begin_combo("Shader##mat_shader", current_shader_name):
+        if imgui.begin_combo(t("scene.material.shader") + "##mat_shader", current_shader_name):
             for sid, sname in shader_options:
                 selected = (sid == info['shader_id'])
                 if imgui.selectable(f"{sname}##shader_{sid}", selected)[0]:
@@ -945,10 +975,13 @@ class ScenePanel(BasePanel):
 
         # ── Blend (混合模式: opaque / alpha) ──
         current_blend = info.get('blend', 'opaque')
-        if imgui.begin_combo("Blend##mat_blend", current_blend):
-            for opt in ("opaque", "alpha"):
+        blend_opts = (("opaque", t("scene.material.opaque")),
+                      ("alpha", t("scene.material.alpha")))
+        blend_idx = next((i for i, (v, _l) in enumerate(blend_opts) if v == current_blend), 0)
+        if imgui.begin_combo(t("scene.material.blend") + "##mat_blend", blend_opts[blend_idx][1]):
+            for opt, opt_label in blend_opts:
                 selected = (opt == current_blend)
-                if imgui.selectable(f"{opt}##blend_{opt}", selected)[0]:
+                if imgui.selectable(opt_label + f"##blend_{opt}", selected)[0]:
                     self._browser_ctrl.set_material_blend(entity_id, opt)
                 if selected:
                     imgui.set_item_default_focus()
@@ -960,17 +993,17 @@ class ScenePanel(BasePanel):
 
         # ── Textures ──
         tex_names = {tid: name for tid, name in tex_options}
-        if imgui.tree_node("Textures##mat_tex"):
+        if imgui.tree_node(t("scene.material.textures") + "##mat_tex"):
             for i, tid in enumerate(info['texture_ids']):
                 tname = tex_names.get(tid, f"Texture #{tid}")
                 imgui.bullet_text(f"[{i}] {tname}")
                 imgui.same_line()
-                if imgui.small_button(f"x##tex_{entity_id}_{i}"):
+                if imgui.small_button(f"{fa.ICON_FA_XMARK}##tex_{entity_id}_{i}"):
                     self._browser_ctrl.remove_material_texture(entity_id, i)
                 if imgui.is_item_hovered():
-                    imgui.set_tooltip("Remove texture")
+                    imgui.set_tooltip(t("scene.material.remove_texture"))
             imgui.spacing()
-            if imgui.small_button(f"{fa.ICON_FA_PLUS}  Add Texture##add_tex_{entity_id}"):
+            if imgui.small_button(f"{fa.ICON_FA_PLUS}  " + t("scene.material.add_texture") + f"##add_tex_{entity_id}"):
                 imgui.open_popup(f"add_tex_popup_{entity_id}")
             if imgui.begin_popup(f"add_tex_popup_{entity_id}"):
                 used_tex_ids = set(info['texture_ids'])
@@ -980,13 +1013,13 @@ class ScenePanel(BasePanel):
                         if imgui.menu_item(tname, "", False, True)[0]:
                             self._browser_ctrl.add_material_texture(entity_id, tid)
                 else:
-                    imgui.text_disabled("(all textures in use)")
+                    imgui.text_disabled(t("scene.material.all_textures_used"))
                 imgui.end_popup()
             imgui.tree_pop()
 
         # ── Uniforms ──
         uniforms = info.get('uniforms', {})
-        if uniforms and imgui.tree_node("Uniforms##mat_uniforms"):
+        if uniforms and imgui.tree_node(t("scene.material.uniforms") + "##mat_uniforms"):
             for u_name, u_value in uniforms.items():
                 if u_name == 'uColor' and info.get('shader_name') == 'Basic':
                     continue
@@ -998,14 +1031,14 @@ class ScenePanel(BasePanel):
                         if changed:
                             self._browser_ctrl.set_material_uniform(entity_id, u_name, float(new_v))
                     elif val.shape == (4, 4):
-                        imgui.text_disabled(f"{u_name}: mat4")
+                        imgui.text_disabled(t("scene.uniform.mat4", name=u_name))
                     elif val.shape == (4,):
                         changed, new_v = imgui.drag_float4(
                             f"{u_name}##mat_{entity_id}", list(val), 0.01, format="%.3f")
                         if changed:
                             self._browser_ctrl.set_material_uniform(entity_id, u_name, tuple(new_v))
                     else:
-                        imgui.text_disabled(f"{u_name}: shape {val.shape}")
+                        imgui.text_disabled(t("scene.uniform.shape", name=u_name, shape=val.shape))
                 elif isinstance(val, (int, float)):
                     changed, new_v = imgui.drag_float(
                         f"{u_name}##mat_{entity_id}", float(val), 0.1, format="%.3f")
@@ -1025,7 +1058,7 @@ class ScenePanel(BasePanel):
         current_color = tuple(float(c) for c in u_color)  # (r, g, b, a)
 
         # ── 预设颜色按钮 ──
-        imgui.text("Presets:")
+        imgui.text(t("scene.material.presets"))
         preset_names = list(COLOR_PRESETS.keys())
         # 每行 5 个
         cols = 5
@@ -1043,7 +1076,7 @@ class ScenePanel(BasePanel):
             imgui.pop_style_color(3)
             # tooltip on hover
             if imgui.is_item_hovered():
-                imgui.set_tooltip(name)
+                imgui.set_tooltip(_color_label(name))
             if (idx + 1) % cols != 0:
                 imgui.same_line()
 
@@ -1051,7 +1084,7 @@ class ScenePanel(BasePanel):
 
         # ── ColorEdit4 调色盘 ──
         changed, new_color = imgui.color_edit4(
-            f"Color##mat_{entity_id}", current_color,
+            t("scene.material.color") + f"##mat_{entity_id}", current_color,
             flags=imgui.ColorEditFlags_.display_hsv | imgui.ColorEditFlags_.float,
         )
         if changed:
@@ -1065,16 +1098,16 @@ class ScenePanel(BasePanel):
         # 过滤掉已存在的
         addable = {k: v for k, v in available.items() if k not in existing}
         if not addable:
-            imgui.text_disabled("(all available components added)")
+            imgui.text_disabled(t("scene.add_component.all_added"))
             return
 
-        if imgui.button(f"{fa.ICON_FA_PLUS}  Add Component##add_comp"):
+        if imgui.button(f"{fa.ICON_FA_PLUS}  " + t("scene.add_component.button") + "##add_comp"):
             imgui.open_popup("add_component_popup")
 
         if imgui.begin_popup("add_component_popup"):
             imgui.text_colored(
-                imgui.ImVec4(*BLENDER_ORANGE, 0.90), "Add Component:")
+                imgui.ImVec4(*BLENDER_ORANGE, 0.90), t("scene.add_component.title"))
             for comp_name in addable:
-                if imgui.menu_item(comp_name, "", False, True)[0]:
+                if imgui.menu_item(component_label(comp_name), "", False, True)[0]:
                     self._browser_ctrl.add_component(entity_id, comp_name)
             imgui.end_popup()

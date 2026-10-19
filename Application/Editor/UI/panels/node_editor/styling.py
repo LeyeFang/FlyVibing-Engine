@@ -48,6 +48,7 @@ LINK_COLORS: dict[str, tuple[float, float, float]] = {
     "vec3":       (0.65, 0.42, 0.92),  # 淡紫 — 向量/结构体
     "string":     (0.88, 0.62, 0.31),  # 暖橙 — 文本
     "entity_ref": (0.88, 0.75, 0.31),  # 琥珀 — 对象引用
+    "entity_list": (0.95, 0.62, 0.24), # 深橙 — 实体集合 (tree/list batch)
     "device":     (0.93, 0.80, 0.30),  # 金黄 — 设备引用 (Init.device → AddToDevicePool)
     "variant":    (0.65, 0.65, 0.65),  # 浅灰 — 动态类型
 }
@@ -89,6 +90,7 @@ MENU_SECTIONS: list[tuple[str, list]] = [
     ("Basic", [
         ("Number", "Constant"),
         ("String Constant", "StringConst"),
+        ("Make List", "MakeList"),
     ]),
 
     # ── 变量读写 ────────────────────────────────────────────
@@ -139,6 +141,11 @@ MENU_SECTIONS: list[tuple[str, list]] = [
             ("Destroy Entity", "EntityDestroy"),
             ("Set Render Visible", "EntitySetRenderVisible"),
             ("Set Group Visible", "EntityGroupSetVisible"),
+            ("Get Entity Tree", "EntityGetTree"),
+            ("Pack 4 Entities", "EntityPack"),
+            ("Merge Entity Lists", "EntityListMerge"),
+            ("Set List Visible", "EntityListSetVisible"),
+            ("Destroy List", "EntityListDestroy"),
             ("Set Text", "SetText"),
         ]),
         ("Component", [

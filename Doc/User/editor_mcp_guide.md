@@ -42,7 +42,7 @@
 
 > 直接说人话即可；下表列出助手实际调用的命令名与参数，便于你精确指定或对照。
 >
-> **版本说明（v0.4.0）**：下表是 **full 档**（44 工具）的命令名；默认安装现为 **lite 档**（5 工具，schema 从 ≈17.9k 字符降到 ≈2.3k，大幅省 token）：
+> **版本说明（v0.4.0）**：下表是 **full 档**（45 工具）的命令名；默认安装现为 **lite 档**（5 工具，schema 从 ≈17.9k 字符降到 ≈2.3k，大幅省 token）：
 > 助手通过 `engine_call <op> ...` / `engine_batch` 调用同样能力，或直接终端用 `engine-editor-cli`（§3.12）。
 > 想回到旧工具名行为：注册时 `--profile full`（或环境变量 `MGE_MCP_PROFILE=full`）。
 
@@ -67,10 +67,14 @@
 
 | 命令 | 作用 | 说明 |
 |---|---|---|
-| `editor_graph_list` | 查看节点图（节点/连线/属性） | "看看节点图里有什么" |
-| `editor_graph_add` | 加节点 | `node_type` + 可选 `props`；例：加 `EntitySpawn`，`props={"template": "DefaultCube"}` |
+| `editor_graph_list` | 查看节点图（节点/连线/属性/别名/描述） | "看看节点图里有什么" |
+| `editor_graph_add` | 加节点 | `node_type` + 可选 `props` / `description`；例：加 `EntitySpawn`，`props={"template": "DefaultCube"}` |
 | `editor_graph_link` | 连线 | 例：`OnGameStart.exec → EntitySpawn.exec_in` |
 | `editor_graph_set_props` | 改节点属性 | `node_id` + `props` |
+| `editor_graph_set_description` | 读写节点描述 | `node_id`；省略 `description` 为读取，空串为清除（lite 档用 `engine_call graph.set_description`） |
+
+> 内置示例：主菜单 **File → Open Example → MI / RestingState**（两个独立工程）。
+> 节点卡上的 **Description** 可展开/收起并直接编辑；agent 通过 `graph.list` / `graph.find` 读取描述。
 
 ### 3.4 截图
 
@@ -217,9 +221,10 @@
 |---|---|
 | 助手说"编辑器未运行" | 先运行 `startup.bat`；确认编辑器控制台有 `[Live] Editor command server on 127.0.0.1:8977` |
 | 聊天里找不到这些命令（助手不能用） | 重载 VS Code 窗口；或 `MCP: List Servers → engine-editor-live → 重启` |
-| 助手工具名变成 `engine_call` 等（不再是 editor_*） | 正常 — v0.4.0 默认 lite 档（省 token）；`--profile full` 可回到旧 44 工具 |
+| 助手工具名变成 `engine_call` 等（不再是 editor_*） | 正常 — v0.4.0 默认 lite 档（省 token）；`--profile full` 可回到旧 45 工具 |
 | 找不到 `engine-editor-cli` 命令 | 安装时未勾选 PATH → 用绝对路径 `<安装目录>\engine-editor-cli.cmd`；源码仓用 `.venv-py314t\Scripts\engine-editor-cli.exe` |
 | Skill 不生效/想更新 | 在项目目录重新跑 `engine-editor-cli setup --workspace .`，再重载窗口 |
 | 截图找不到 | 查看 `<临时目录>\engine_editor_mcp\frames\`（默认 `%TEMP%`；可用环境变量 `MGE_MCP_FRAMES_DIR` 覆盖）；注意该目录会在助手服务启动时自动清空 |
 | 工具报"PIE is not running" | 截图运行时窗口前先"运行一下" |
 | 端口被占用 | 关闭占用进程，或在启动前的环境变量中设置 `MGE_EDITOR_MCP_PORT`（编辑器与 VS Code 两侧需一致） |
+| 设置里只有 English、中文不可选 | 语言目录未标记 `ui_complete=true`（未完成全量迁移）时会被隐藏；当前 `zh` 已发布，若仍不可见请检查 `Locale/zh.json` 的 `_meta.ui_complete` / `reviewed` |

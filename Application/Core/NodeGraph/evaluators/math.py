@@ -154,25 +154,117 @@ register_evaluator("MathRandomGaussian", _eval_random_gaussian)
 
 # ── Compare 比较节点 ─────────────────────────────────────────
 
+def _read_variant_input(node_id: int, pin_name: str, ctx: ExecutionContext,
+                        g: GraphEvaluator, default=None):
+    """读取一个不限定类型的 data input（未连接 → default）。"""
+    inst = g._canvas.nodes[node_id]
+    nd = g._types[inst.node_type]
+    for p in nd.pins:
+        if p.name == pin_name and p.direction == "input":
+            inst_pin_id = inst.pin_ids.get(p.name)
+            if inst_pin_id is not None:
+                val = g._read_input(inst_pin_id, ctx)
+                if val is not None:
+                    return val
+    return default
+
+
+def _entity_id(value):
+    """EntityRef / int 归一化（成员比较用）。"""
+    return getattr(value, "eid", value)
+
+
+def _values_equal(a, b) -> bool:
+    """数值容差相等；其它类型直接相等（EntityRef 比较 eid）。"""
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return abs(float(a) - float(b)) < 1e-9
+    return _entity_id(a) == _entity_id(b)
+
+
+def _contains(a, b) -> bool:
+    """a 是否在列表 b 内；b 不是 list/tuple/set → False（失效安全）。"""
+    if not isinstance(b, (list, tuple, set)):
+        return False
+    key = _entity_id(a)
+    return any(_entity_id(item) == key for item in b)
+
+
 def _eval_compare(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
-    """Compare — 根据 operation 属性比较 A 和 B，输出 bool。"""
-    a = _read_data_input(node_id, "A", ctx, g, 0.0)
-    b = _read_data_input(node_id, "B", ctx, g, 0.0)
+    """Compare — 数值/相等/成员/区间判断，输出 bool。
+
+    operation:
+      gt lt eq neq gte lte — 数值（字符串/布尔 eq/neq 直接用相等）
+      and / or / xor / not  — 布尔组合（A/B 取真值；not 只用 A）
+      in / not_in           — A 是否在 B 列表内（EntityRef 按 eid 比较）
+      between               — B <= A < C（include_end=true 时 B <= A <= C）
+    """
+    a = _read_variant_input(node_id, "A", ctx, g, 0.0)
+    b = _read_variant_input(node_id, "B", ctx, g, 0.0)
+    c = _read_variant_input(node_id, "C", ctx, g, 0.0)
     inst = g._canvas.nodes[node_id]
     op = inst.props.get("operation", "gt")
 
-    ops = {
-        "gt":  lambda: a > b,
-        "lt":  lambda: a < b,
-        "eq":  lambda: abs(a - b) < 1e-9,
-        "neq": lambda: abs(a - b) >= 1e-9,
-        "gte": lambda: a >= b,
-        "lte": lambda: a <= b,
-    }
-    result = ops.get(op, ops["gt"])()
+    if op in ("and", "or", "xor", "not"):
+        av, bv = bool(a), bool(b)
+        if op == "and":
+            result = av and bv
+        elif op == "or":
+            result = av or bv
+        elif op == "xor":
+            result = av != bv
+        else:
+            result = not av
+    elif op in ("in", "not_in", "out"):
+        result = _contains(a, b)
+        if op in ("not_in", "out"):
+            result = not result
+    elif op == "between":
+        try:
+            lo, hi, value = float(b), float(c), float(a)
+            include_end = bool(inst.props.get("include_end", False))
+            result = (lo <= value <= hi) if include_end else (lo <= value < hi)
+        except (TypeError, ValueError):
+            result = False
+    elif op in ("eq", "neq"):
+        result = _values_equal(a, b)
+        if op == "neq":
+            result = not result
+    else:
+        try:
+            av, bv = float(a), float(b)
+            ops = {
+                "gt": av > bv, "lt": av < bv,
+                "gte": av >= bv, "lte": av <= bv,
+            }
+            result = ops.get(op, ops["gt"])
+        except (TypeError, ValueError):
+            result = False
     _write_data_output(node_id, "Result", float(result), ctx, g)
 
+
 register_evaluator("Compare", _eval_compare)
+
+
+# ── MakeList: 标量/实体引用列表源 ─────────────────────────────
+
+def _eval_make_list(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
+    """收集已连接的 Item_0..Item_7；未连接项跳过。"""
+    inst = g._canvas.nodes[node_id]
+    nd = g._types[inst.node_type]
+    items = []
+    for p in nd.pins:
+        if p.direction != "input" or not p.name.startswith("Item_"):
+            continue
+        pid = inst.pin_ids.get(p.name)
+        if pid is None:
+            continue
+        val = g._read_input(pid, ctx)
+        if val is not None:
+            items.append(val)
+    _write_data_output(node_id, "List", items, ctx, g)
+
+
+register_evaluator("MakeList", _eval_make_list)
 
 
 # ── 统一 Random 节点 (Manual / Pin 双模式, 服从全局 Set Seed) ──

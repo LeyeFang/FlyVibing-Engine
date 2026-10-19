@@ -27,7 +27,6 @@ gui-314 = [
 ]
 device = [
     "econexg[lsl,usb]",
-    "gpype; python_version < '3.14'"
 ]
 
 [build-system]

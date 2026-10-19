@@ -32,7 +32,7 @@
 |---|---|---|
 | `../..` → **`Utils/README.md`** | `Utils/**`（工具层布局：受众 × 分发命运） | **往 Utils/ 放任何东西前必读**：三层词表（Dev/ExtDev/User 与 Doc 三分区同名）、依赖资格（ExtDev 禁 import 编辑器内部）、导出卫生（游戏包只带 `Utils/User`） |
 | `ui_protocol.md` | `Application/Editor/UI/**`（Panel / Widget / 样式 / 菜单 / FileDialog） | 改编辑器 UI、加内联控件、调 Add 菜单、改删除交互 |
-| `i18n_protocol.md` | `Application/Editor/I18n.py` + `Application/Editor/Locale/**` + `Utils/Dev/i18n_tool.py` + `Doc/Dev/i18n_baseline.json` | **写任何 UI 文案 / 加菜单项 / 新增语言前必读**：角色分工、键规范与可提取性、不翻译边界表（agent 面=中文不随语言变化）、运行时回退链、**守卫三层与棘轮口径**、新增语言 Runbook（全量适配门槛）、扩展侧约定 |
+| `i18n_protocol.md` | `Application/Editor/I18n.py` + `Application/Editor/Locale/**` + `Utils/Dev/i18n_tool.py` + `Doc/Dev/i18n_baseline.json` | **写任何 UI 文案 / 加菜单项 / 新增语言前必读**：角色分工、键规范与可提取性、不翻译边界表（agent 面=中文不随语言变化）、**发布门（`ui_complete`，zh 已发布；未完成语言不进设置）**、运行时回退链、守卫三层与棘轮口径、新增语言 Runbook（全量适配门槛）、扩展侧约定 |
 | `node_editor_protocol.md` | `Application/Core/NodeGraph/**`（运行时）+ `Application/Editor/UI/panels/node_editor/**`（编辑器交互）+ `FlyVibing-User-And-Developer-Utils/packages/node-editor/**` | 新增/修改节点类型、求值器、图约束、图校验、MCP 文档 |
 | `device_io_protocol.md` | `Application/Functions/**`（SerialParallelDevice / VirtualDevice） | 设备集成、真实/空跑双后端、线程与数据落盘 |
 | `bci_algorithm_protocol.md` | `Application/Functions/BCIAlgorithm/**` + `node_types/evaluators {epoch,bci_algorithm}` + 对应 widgets | epoch 数据集、FBCSP/CCA 节点、打包 list 超参、训练同步语义、模型注册、空采验证 |
@@ -50,6 +50,7 @@
 | `doc_cli_plan.md` | 文档交付链（Doc CLI 化）: `engine-editor-cli doc` + `doclib.py` + `docs_content/**` | 迁移文档到 CLI / 新增 CLI 文档主题时读：架构、指针 stub 纪律、守卫、批量 runbook、待决事项 |
 | `extension_protocol.md` | 三层模型（EngineModule / Extension / Mod）+ `Application/Functions/**` 扩展区 + `Application/Editor/Extensions/**` | **Functions 功能模块化、扩展体系开发前必读**：Plugin 审计与改名（已执行）、三档侵入模型（T0 声明式 / T1 Hooks / T2 进程外）、依赖方向铁律、兼容与遏制机制（SDK 门面 / 命名空间 / 冲突检测 / 能力声明）、节点包与设计面板贡献点 |
 | `roadmap_next.md` | 全局（线程治理 / 资源管线 / 动态媒体 三章蓝图, 待评估草案） | 开工前评估三大愿景方向、依赖取舍与里程碑顺序 |
+| `examples_plan.md` | `Examples/**` 示例工程 + 节点组（`flyvibing_node_editor.node_groups`） | 构建/修改 MI、静息态等实验示例前读：Example 验收清单、节点组能力边界、执行顺序与待拍板项 |
 
 > **社区开发者（第三方扩展作者）的外部文档已独立**：规范全文 `Doc/ExtDev/extension_dev_protocol.md`、
 > 入口 `Doc/ExtDev/README.md`；开发者生态/工具链剥离规划 `ecosystem_plan.md`（本目录）。

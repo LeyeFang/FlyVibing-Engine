@@ -107,7 +107,6 @@ def _rebuild() -> None:
     rest = sorted(l for l in merged if l != _FALLBACK)
     LANGS = tuple(([_FALLBACK] if _FALLBACK in merged else []) + rest)
 
-
 # ── 扩展贡献（与 ExtensionManager 的 _purge_ops/_purge_ui 对称） ──
 
 def register_catalog(owner: str, lang: str, mapping: dict, meta: dict | None = None) -> int:
@@ -137,10 +136,45 @@ def unregister_catalogs(owner: str) -> int:
 
 # ── 查询 ──────────────────────────────────────────────────────
 
-def available_languages() -> tuple:
-    """可用语言（en 恒在首位; 由目录推导 — 覆盖表/设置枚举同源）。"""
+def available_languages(include_drafts: bool = False) -> tuple:
+    """可用语言（en 恒在首位; 由目录推导 — 覆盖表/设置枚举同源）。
+
+    默认只返回**已发布**语言：源语言 + `_meta.ui_complete=true` 的目录。
+    未完成的翻译目录（如 zh）不进入设置枚举，避免中英混排；本地开发者可用
+    `FVE_I18N_SHOW_DRAFTS=1`（或旧名 MGE_*）临时预览全部目录。
+    """
+    load_core()
+    if include_drafts or AppIdentity.env_get("I18N_SHOW_DRAFTS"):
+        return LANGS
+    released = []
+    for lang in LANGS:
+        meta = _META.get(lang, {})
+        if lang == _FALLBACK or meta.get("source") or meta.get("ui_complete"):
+            released.append(lang)
+    return tuple(released)
+
+
+def all_catalog_languages() -> tuple:
+    """全部已装载目录（含草稿）— 翻译校验/覆盖率报告用。"""
     load_core()
     return LANGS
+
+
+def font_candidates() -> list[str]:
+    """所有目录声明的字体候选（`_meta.fonts`）— 新增语言只改 JSON。"""
+    load_core()
+    out: list[str] = []
+    for lang in LANGS:
+        fonts = _META.get(lang, {}).get("fonts")
+        if isinstance(fonts, str):
+            fonts = [fonts]
+        if not isinstance(fonts, (list, tuple)):
+            continue
+        for path in fonts:
+            p = str(path or "").strip()
+            if p and p not in out:
+                out.append(p)
+    return out
 
 
 def language_name(code: str) -> str:
@@ -153,6 +187,7 @@ def coverage() -> dict:
     """逐语言完备性报告（守卫与 `i18n_tool report` 同源）。"""
     load_core()
     en = set(_STRINGS.get(_FALLBACK, {}))
+    released = set(available_languages())
     out: dict = {}
     for lang in LANGS:
         keys = set(_STRINGS.get(lang, {}))
@@ -161,6 +196,7 @@ def coverage() -> dict:
         out[lang] = {
             "name": language_name(lang),
             "source": bool(_META.get(lang, {}).get("source")),
+            "released": lang in released,
             "keys": len(keys),
             "missing": missing,
             "pct": round(pct, 1),
@@ -199,6 +235,20 @@ def t(key: str, **fmt) -> str:
         except (KeyError, IndexError, ValueError):
             return text
     return text
+
+
+def t_optional(key: str, fallback: str) -> str:
+    """动态显示名查询（`node.<Type>` / `comp.<Type>` 等数据表）— 缺失回退 fallback。
+
+    这类键由运行时字符串拼出（节点/组件注册表的显示名），无法被 AST 静态提取；
+    守卫按命名空间跳过 unused 检查，并由注册表覆盖测试保证每个类型都有词条。
+    """
+    load_core()
+    for lang in (_current, _FALLBACK):
+        bucket = _STRINGS.get(lang)
+        if bucket and bucket.get(key):
+            return bucket[key]
+    return fallback
 
 
 def _reset_for_tests() -> None:

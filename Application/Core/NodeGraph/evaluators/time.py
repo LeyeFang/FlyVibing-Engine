@@ -238,14 +238,21 @@ def _eval_set_timer(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> N
 
     operate=reset:   重置 timer 为 0
     operate=set_time: 设置 timer 为指定值 (pin 或 manual)
+
+    宽松初始化（create_if_missing，默认开）：timer 不存在时由本节点创建，
+    不再强制先放 NewTimer；显式关掉可保留旧行为（不存在则静默跳过）。
     """
     inst = g._canvas.nodes[node_id]
     nd = g._types[inst.node_type]
     operate = inst.props.get("operate", "reset")
     timer_name = str(inst.props.get("timer_name", ""))
 
-    if not timer_name or not ctx.has_timer(timer_name):
+    if not timer_name:
         return
+    if not ctx.has_timer(timer_name):
+        if not bool(inst.props.get("create_if_missing", True)):
+            return
+        ctx.create_timer(timer_name)
 
     if operate == "reset":
         ctx.reset_timer(timer_name)

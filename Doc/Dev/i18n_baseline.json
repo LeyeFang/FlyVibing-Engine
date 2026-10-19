@@ -1,6 +1,6 @@
 {
-  "generated": "2026-10-16",
-  "total": 270,
+  "generated": "2026-10-18",
+  "total": 0,
   "note": "棘轮基线（协议 Doc/Dev/i18n_protocol.md 6）：未迁移的可见 UI 文案字面量数只减不增；新 UI 文案必须走 t()，确实不该翻译的（imgui 内部 id 等）须带 reason 加进 exempt。",
   "exclude_files": [
     "Application/Editor/UI/panels/MenuBarPanel.py"
@@ -10,24 +10,37 @@
       "file": "Application/Editor/UI/UIManager.py",
       "text": "MainDockSpace",
       "reason": "dock 宿主窗口名（无标题栏, 不渲染文案; 改它会破坏 dock 身份）"
+    },
+    {
+      "file": "Application/Editor/UI/panels/ResourcePanel.py",
+      "text": "RESOURCE",
+      "reason": "imgui drag payload 类型 id（不渲染）"
+    },
+    {
+      "file": "Application/Editor/UI/panels/ScenePanel.py",
+      "text": "ENTITY",
+      "reason": "imgui drag payload 类型 id（不渲染）"
+    },
+    {
+      "file": "Application/Editor/UI/panels/ScenePanel.py",
+      "text": "Del",
+      "reason": "快捷键提示（协议 §4 不翻译）"
+    },
+    {
+      "file": "Application/Editor/UI/panels/node_editor/panel.py",
+      "text": "f",
+      "reason": "报告帧号前缀（技术标记, 不翻译）"
+    },
+    {
+      "file": "Application/Editor/UI/panels/node_editor/widgets/core.py",
+      "text": "_txt_",
+      "reason": "f-string 内 imgui id 片段（不渲染）"
+    },
+    {
+      "file": "Application/Editor/UI/panels/node_editor/widgets/flow_io.py",
+      "text": ".txt",
+      "reason": "文件扩展名后缀（不翻译）"
     }
   ],
-  "files": {
-    "Application/Editor/UI/panels/ScenePanel.py": 71,
-    "Application/Editor/UI/panels/node_editor/widgets/flow_io.py": 48,
-    "Application/Editor/UI/panels/node_editor/panel.py": 46,
-    "Application/Editor/UI/panels/node_editor/widgets/device_siggen.py": 20,
-    "Application/Editor/UI/panels/ResourcePanel.py": 19,
-    "Application/Editor/UI/panels/node_editor/widgets/algorithm.py": 15,
-    "Application/Editor/UI/UIManager.py": 13,
-    "Application/Editor/UI/panels/node_editor/widgets/entity_comp.py": 9,
-    "Application/Editor/Extensions/ExtensionMenu.py": 7,
-    "Application/Editor/UI/panels/SettingsPanel.py": 7,
-    "Application/Editor/UI/panels/node_editor/widgets/epoch.py": 6,
-    "Application/Editor/UI/panels/node_editor/widgets/device_common.py": 2,
-    "Application/Editor/UI/panels/node_editor/widgets/device_pool.py": 2,
-    "Application/Editor/UI/panels/node_editor/widgets/media.py": 2,
-    "Application/Editor/UI/panels/node_editor/widgets/text.py": 2,
-    "Application/Editor/UI/panels/node_editor/widgets/core.py": 1
-  }
+  "files": {}
 }

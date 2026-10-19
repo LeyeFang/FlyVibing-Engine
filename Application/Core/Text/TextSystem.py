@@ -37,7 +37,7 @@ def _resolve_font_path(spec: str) -> str:
         p = os.path.join(fonts_dir, cand)
         if os.path.isfile(p):
             return p
-    fallback = os.path.join(fonts_dir, "segoeui.ttf")
+    fallback = os.path.join(fonts_dir, "Roboto-Regular.ttf")
     return fallback if os.path.isfile(fallback) else ""
 
 

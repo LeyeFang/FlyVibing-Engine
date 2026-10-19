@@ -9,6 +9,7 @@ from Application.Editor.UI.BasePanel import BasePanel
 from Application.Editor.UI.PanelStyle import apply_custom_style
 from Application.Editor.UI.FileDialog import FileDialog
 from Application.Editor.Services.ImportService import ImportService
+from Application.Editor.I18n import t
 
 # ── 输入状态 (状态栏显示修饰键/组合键) ──
 from Application.Core.Input import (
@@ -243,6 +244,45 @@ class UIManager:
         from Application.Editor.ProjectManager import ProjectManager
         ProjectManager.open_project(path)
 
+    # ── Examples ──────────────────────────────────────────────
+
+    @classmethod
+    def _example_dirs(cls) -> list[str]:
+        """示例工程目录（开发区优先，发布区预留）。"""
+        repo = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))))
+        return [
+            os.path.join(repo, "Examples"),
+            os.path.join(repo, "Test", "TestProject", "Examples"),
+        ]
+
+    @classmethod
+    def _example_projects(cls) -> list[tuple[str, str]]:
+        """返回 [(显示名, .myproj 绝对路径)]，支持每个示例一个子目录。"""
+        raw: list[tuple[str, str, str]] = []  # (label, folder, path)
+        for root in cls._example_dirs():
+            if not os.path.isdir(root):
+                continue
+            for name in sorted(os.listdir(root)):
+                path = os.path.join(root, name)
+                if os.path.isfile(path) and name.lower().endswith(".myproj"):
+                    raw.append((os.path.splitext(name)[0], "", path))
+                    continue
+                if not os.path.isdir(path):
+                    continue
+                for sub in sorted(os.listdir(path)):
+                    proj = os.path.join(path, sub)
+                    if os.path.isfile(proj) and sub.lower().endswith(".myproj"):
+                        raw.append((os.path.splitext(sub)[0], name, proj))
+        counts: dict[str, int] = {}
+        for label, _folder, _path in raw:
+            counts[label.lower()] = counts.get(label.lower(), 0) + 1
+        return sorted(
+            (((f"{folder}/{label}" if counts.get(label.lower(), 0) > 1 else label), path)
+             for label, folder, path in raw),
+            key=lambda item: item[0].lower(),
+        )
+
     @classmethod
     def _on_save_project(cls) -> None:
         from Application.Editor.ProjectManager import ProjectManager
@@ -309,51 +349,58 @@ class UIManager:
         if imgui.begin_main_menu_bar():
 
             # ── File 菜单 ──
-            if imgui.begin_menu("File", True):
-                if imgui.menu_item("New Project", "", False, True)[0]:
+            if imgui.begin_menu(t("menu.file.title"), True):
+                if imgui.menu_item(t("menu.file.new_project"), "", False, True)[0]:
                     cls._on_new_project()
-                if imgui.menu_item("Open Project...", "", False, True)[0]:
+                if imgui.menu_item(t("menu.file.open_project"), "", False, True)[0]:
                     cls._on_open_project()
+                examples = cls._example_projects()
+                if examples:
+                    if imgui.begin_menu(t("menu.file.open_example")):
+                        for label, path in examples:
+                            if imgui.menu_item(label, "", False, True)[0]:
+                                cls._do_open_project(path)
+                        imgui.end_menu()
                 imgui.separator()
                 from Application.Editor.ProjectManager import ProjectManager
                 has_path = bool(ProjectManager.is_open() and ProjectManager.get_project_dir())
                 if not has_path:
                     imgui.begin_disabled(True)
-                if imgui.menu_item("Save Project", "Ctrl+S", False, True)[0]:
+                if imgui.menu_item(t("menu.file.save_project"), "Ctrl+S", False, True)[0]:
                     cls._on_save_project()
                 if not has_path:
                     imgui.end_disabled()
-                if imgui.menu_item("Save Project As...", "Ctrl+Shift+S", False, True)[0]:
+                if imgui.menu_item(t("menu.file.save_project_as"), "Ctrl+Shift+S", False, True)[0]:
                     cls._on_save_as_project()
                 imgui.separator()
-                if imgui.menu_item("Export...", "", False, True)[0]:
+                if imgui.menu_item(t("menu.file.export"), "", False, True)[0]:
                     cls._on_export_project()
                 imgui.separator()
-                if imgui.menu_item("Exit", "Alt+F4", False, True)[0]:
+                if imgui.menu_item(t("menu.file.exit"), "Alt+F4", False, True)[0]:
                     cls._on_exit()
                 imgui.end_menu()
 
             # ── Edit 菜单 ──
-            if imgui.begin_menu("Edit", True):
-                if imgui.menu_item("Undo", "Ctrl+Z", False, False)[0]:
+            if imgui.begin_menu(t("menu.edit.title"), True):
+                if imgui.menu_item(t("menu.edit.undo"), "Ctrl+Z", False, False)[0]:
                     pass
-                if imgui.menu_item("Redo", "Ctrl+Y", False, False)[0]:
+                if imgui.menu_item(t("menu.edit.redo"), "Ctrl+Y", False, False)[0]:
                     pass
                 imgui.separator()
-                from Application.Editor.I18n import t as _t
-                if imgui.menu_item(_t("menu.edit.preferences"), "", False, True)[0]:
+                if imgui.menu_item(t("menu.edit.preferences"), "", False, True)[0]:
                     from Application.Editor.UI.panels.SettingsPanel import SettingsPanel
                     SettingsPanel.open()
                 imgui.end_menu()
 
             # ── View 菜单：切换面板可见性（动态枚举 — 扩展窗口自动纳入） ──
-            if imgui.begin_menu("View", True):
+            if imgui.begin_menu(t("menu.view.title"), True):
                 for panel in list(cls._panels):
                     pname = str(panel.name or "")
                     if not pname or pname.startswith("##"):
                         continue
+                    label = t(panel.title_key) if getattr(panel, "title_key", "") else pname
                     _, panel.visible = imgui.menu_item(
-                        pname, "", panel.visible, True
+                        label, "", panel.visible, True
                     )
                 imgui.end_menu()
 
@@ -362,8 +409,8 @@ class UIManager:
             draw_extensions_menu()
 
             # ── Help 菜单 ──
-            if imgui.begin_menu("Help", True):
-                if imgui.menu_item("About", "", False, True)[0]:
+            if imgui.begin_menu(t("menu.help.title"), True):
+                if imgui.menu_item(t("menu.help.about"), "", False, True)[0]:
                     pass
                 imgui.end_menu()
 

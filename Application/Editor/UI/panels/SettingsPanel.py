@@ -117,7 +117,7 @@ class SettingsPanel(BasePanel):
     def draw(self) -> None:
         pages = SettingsPanel.pages()
         if not pages:
-            imgui.text_disabled("(no settings pages registered)")
+            imgui.text_disabled(t("settings.pages.none"))
             return
         ids = [p.id for p in pages]
         if SettingsPanel._active_id not in ids:
@@ -148,10 +148,10 @@ class SettingsPanel(BasePanel):
 # ════════════════════════════════════════════════════════════════
 
 # 字号档（[自由度: L1 受控枚举] — 只登记已实现档位; 应用侧仍做 0.7..1.6 钳制兜底）
-_FONT_SIZE_CHOICES = [("Small (0.85)", 0.85),
-                      ("Default (1.00)", 1.0),
-                      ("Large (1.15)", 1.15),
-                      ("Extra Large (1.30)", 1.30)]
+_FONT_SIZE_CHOICES = [("settings.font.small", 0.85),
+                      ("settings.font.default", 1.0),
+                      ("settings.font.large", 1.15),
+                      ("settings.font.xl", 1.30)]
 
 # 语言选项 — **由语言目录动态推导**（新增 `Locale/<lang>.json` 即自动出现;
 # 显示名用该语言自称, 取自 `_meta.name` — 协议 `Doc/Dev/i18n_protocol.md` §5）
@@ -167,13 +167,14 @@ def _draw_common_page() -> None:
 
     # ── Font size [自由度: L1 受控枚举] — 写入 EditorSettings, 渲染线程帧首应用 ──
     cur = float(EditorSettings.get("ui.font_scale"))
-    labels = [lbl for lbl, _v in _FONT_SIZE_CHOICES]
-    values = [v for _lbl, v in _FONT_SIZE_CHOICES]
+    labels = [t("settings.font.small"), t("settings.font.default"),
+              t("settings.font.large"), t("settings.font.xl")]
+    values = [v for _key, v in _FONT_SIZE_CHOICES]
     idx = min(range(len(values)), key=lambda i: abs(values[i] - cur))
     if abs(values[idx] - cur) > 1e-6:
         # 值来自 agent op（连续值, 非档位）→ 追加当前项, 不误导为"最近档位"
         # （ui_protocol §11 假自由度禁令: 控件显示必须与真实值一致）
-        labels = labels + [f"Custom ({cur:.2f})"]
+        labels = labels + [t("settings.font.custom", scale=cur)]
         values = values + [cur]
         idx = len(values) - 1
     changed, new_idx = imgui.combo(f"{t('settings.common.font_size')}##ui_font_scale", idx, labels)
@@ -196,16 +197,16 @@ def _draw_common_page() -> None:
 # 内置页: Export（PIE 启动窗口设置 — 迁自 ScenePanel ⚙ Settings 弹层）
 # ════════════════════════════════════════════════════════════════
 
-_PIE_MODES = [("Windowed", "windowed"),
-              ("Borderless (fullscreen-sized)", "borderless"),
-              ("Exclusive fullscreen", "fullscreen")]
+_PIE_MODES = [("settings.export.windowed", "windowed"),
+              ("settings.export.borderless", "borderless"),
+              ("settings.export.fullscreen", "fullscreen")]
 
 
 def _draw_export_page() -> None:
     """Export 页 — PIE 初始窗口行为（持久化 PIE.json; 下次 Run 生效）。"""
     ctrl = get_ctrl(NAME_SIMULATION)
     if ctrl is None:  # 无头/未注册环境兜底
-        imgui.text_disabled("(simulation controller unavailable)")
+        imgui.text_disabled(t("settings.sim.unavailable"))
         return
     s = ctrl.get_pie_settings()
 
@@ -216,25 +217,28 @@ def _draw_export_page() -> None:
     # 工程背景色（测试性配置；存 .myproj，完整成品常用 skybox/内容填底）
     from Application.Editor.ProjectManager import ProjectManager as _PM
     if _PM.is_open():
-        imgui.text_disabled("Background (project)")
+        imgui.text_disabled(t("settings.bg.title"))
         imgui.same_line()
         _bg = list(_PM.background_color())
-        _c0 = imgui.drag_float("R##bg_r", _bg[0], 0.01, 0.0, 1.0, "%.2f")
+        _c0 = imgui.drag_float(t("settings.bg.r") + "##bg_r", _bg[0], 0.01, 0.0, 1.0, "%.2f")
         imgui.same_line()
-        _c1 = imgui.drag_float("G##bg_g", _bg[1], 0.01, 0.0, 1.0, "%.2f")
+        _c1 = imgui.drag_float(t("settings.bg.g") + "##bg_g", _bg[1], 0.01, 0.0, 1.0, "%.2f")
         imgui.same_line()
-        _c2 = imgui.drag_float("B##bg_b", _bg[2], 0.01, 0.0, 1.0, "%.2f")
+        _c2 = imgui.drag_float(t("settings.bg.b") + "##bg_b", _bg[2], 0.01, 0.0, 1.0, "%.2f")
         if _c0[0] or _c1[0] or _c2[0]:
             _PM.set_background_color(_c0[1], _c1[1], _c2[1])
         imgui.same_line()
-        for _n, _rgb in (("White", (1, 1, 1)), ("Gray", (0.2, 0.2, 0.2)), ("Black", (0, 0, 0))):
-            if imgui.small_button(f"{_n}##bg_{_n}"):
+        for _label, _id, _rgb in ((t("settings.bg.white"), "white", (1, 1, 1)),
+                                  (t("settings.bg.gray"), "gray", (0.2, 0.2, 0.2)),
+                                  (t("settings.bg.black"), "black", (0, 0, 0))):
+            if imgui.small_button(f"{_label}##bg_{_id}"):
                 _PM.set_background_color(*_rgb)
     else:
-        imgui.text_disabled("Background (project) — open a project to edit")
+        imgui.text_disabled(t("settings.bg.open_project"))
     imgui.separator()
 
-    labels = [m[0] for m in _PIE_MODES]
+    labels = [t("settings.export.windowed"), t("settings.export.borderless"),
+              t("settings.export.fullscreen")]
     keys = [m[1] for m in _PIE_MODES]
     cur = keys.index(s["mode"]) if s["mode"] in keys else 0
     changed, idx = imgui.combo(f"{t('settings.export.mode')}##pie_mode", cur, labels)

@@ -30,3 +30,4 @@ from . import lifecycle  # noqa: F401 — EntitySpawn
 from . import camera     # noqa: F401 — CameraSetMain
 from . import component  # noqa: F401 — ComponentAdd, SetComponent, GetComponent, ComponentRemove
 from . import group_visible  # noqa: F401 — EntityGroupSetVisible
+from . import list_ops   # noqa: F401 — EntityGetTree / EntityPack / EntityListMerge / EntityListSetVisible / EntityListDestroy

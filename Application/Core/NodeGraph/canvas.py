@@ -21,6 +21,9 @@ class NodeCanvas(DataContract):
     def __init__(self):
         self._nodes: dict[int, NodeInstance] = {}
         self._links: dict[int, LinkInstance] = {}
+        # 节点组元数据（tools 层宏的记账; 引擎只做不透明保留 — 不参与求值）。
+        # 结构见 flyvibing_node_editor.node_groups; 空 dict = 无组。
+        self.node_groups: dict = {}
 
     # ── 属性 ──────────────────────────────────────────────
 
@@ -171,6 +174,10 @@ class NodeCanvas(DataContract):
         nodes_dict: dict[str, dict] = {}
         for nid, inst in self._nodes.items():
             nd = dataclasses.asdict(inst)
+            if not nd.get("alias"):
+                nd.pop("alias", None)
+            if not nd.get("description"):
+                nd.pop("description", None)
             nodes_dict[str(nid)] = nd
             max_id = max(max_id, nid)
             for pid in inst.pin_ids.values():
@@ -181,14 +188,16 @@ class NodeCanvas(DataContract):
             links_dict[str(lid)] = dataclasses.asdict(lk)
             max_id = max(max_id, lid, lk.from_pin, lk.to_pin)
 
-        return {
+        result = {
             "version": "0.1.0",
             "nodes": nodes_dict,
             "links": links_dict,
             "next_id": max_id + 1,
             "_rules": _NODE_GRAPH_RULES,
         }
-
+        if self.node_groups:
+            result["node_groups"] = self.node_groups
+        return result
     @staticmethod
     def from_dict(data: dict) -> 'NodeCanvas':
         """从 dict 恢复画布状态。
@@ -199,11 +208,18 @@ class NodeCanvas(DataContract):
         Returns:
             新的 NodeCanvas 实例
         """
-        global _next_id
         canvas = NodeCanvas()
 
         # ── 先恢复 ID 生成器下界（版本兼容补 pin 时生成的 ID 不得与文件内 ID 冲突）──
-        data_model._next_id = max(data_model._next_id, int(data.get("next_id", 1)))
+        max_id = int(data.get("next_id", 1))
+        for nid_str, nd in (data.get("nodes") or {}).items():
+            max_id = max(max_id, int(nid_str))
+            for pid in (nd.get("pin_ids") or {}).values():
+                max_id = max(max_id, int(pid))
+        for ld in (data.get("links") or {}).values():
+            max_id = max(max_id, int(ld.get("id", 0)),
+                         int(ld.get("from_pin", 0)), int(ld.get("to_pin", 0)))
+        data_model._next_id = max(data_model._next_id, max_id + 1)
 
         # ── 恢复节点 ──
         for nid_str, nd in data.get("nodes", {}).items():
@@ -222,6 +238,8 @@ class NodeCanvas(DataContract):
                 pos=tuple(nd.get("pos", (0.0, 0.0))),
                 props=nd.get("props", {}),
                 pin_ids=pins,
+                alias=str(nd.get("alias") or ""),
+                description=str(nd.get("description") or ""),
             )
 
         # ── 恢复连线 ──
@@ -235,12 +253,16 @@ class NodeCanvas(DataContract):
 
         # ── 恢复 ID 生成器: 已在开头完成（须先于补 pin 生成）──
 
+        # ── 节点组元数据（不透明保留）──
+        canvas.node_groups = dict(data.get("node_groups") or {})
+
         return canvas
 
     def clear(self) -> None:
         """清空画布（保留 _next_id 不重置）。"""
         self._nodes.clear()
         self._links.clear()
+        self.node_groups.clear()
 
     def replace_from(self, other: 'NodeCanvas') -> None:
         """用另一画布内容整体替换（导入路径统一入口 — GUI 面板与 agent ops 共用）。
@@ -252,6 +274,7 @@ class NodeCanvas(DataContract):
             self._nodes[nid] = inst
         for lid, lk in other.links.items():
             self._links[lid] = lk
+        self.node_groups = dict(getattr(other, "node_groups", {}) or {})
 
 
 # ── 注册到 Serializable 注册表 ──

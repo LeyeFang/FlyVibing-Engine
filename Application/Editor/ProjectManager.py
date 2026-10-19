@@ -382,6 +382,15 @@ class ProjectManager:
         warnings: list[str] = []
         files: list[str] = []
         total_bytes = 0
+        engine_root = cls._get_engine_root()
+
+        # ── 0. 第三方许可声明（随导出包根目录分发） ──
+        notices_src = os.path.join(engine_root, "THIRD_PARTY_NOTICES.md")
+        if os.path.isfile(notices_src):
+            notices_dst = os.path.join(out_dir, "THIRD_PARTY_NOTICES.md")
+            _shutil.copy2(notices_src, notices_dst)
+            files.append("THIRD_PARTY_NOTICES.md")
+            total_bytes += os.path.getsize(notices_dst)
 
         # ── 1. 场景 ──
         scenes_rel: list[str] = []
@@ -502,9 +511,8 @@ class ProjectManager:
 
         # ── 5. 游戏层（include_player）: 清单 + 冻结引擎 + Python 环境 + 启动器 ──
         game_info: dict | None = None
+        export_excluded: set[str] = set()
         if include_player:
-            engine_root = cls._get_engine_root()
-
             # 5a. game.json（播放器清单）
             cls._write_json(os.path.join(out_dir, "game.json"), {
                 "format": "mge.game/1",
@@ -521,9 +529,11 @@ class ProjectManager:
             })
 
             # 5b. 冻结引擎副本（Resource 不含 wheels/ 与 runtime/ — 另放顶层）
+            export_excluded = cls._export_excluded_paths(engine_root)
             app_files, app_bytes = cls._copy_tree_for_export(
                 os.path.join(engine_root, "Application"),
                 os.path.join(out_dir, "Application"), warnings,
+                exclude_paths=export_excluded,
             )
             res_files, res_bytes = cls._copy_tree_for_export(
                 os.path.join(engine_root, "Resource"),
@@ -637,6 +647,8 @@ class ProjectManager:
             "scenes": scenes_rel,
             "assets_copied": copied,
             "files": ["export_manifest.json", proj_file] + files,
+            "export_excluded": [os.path.relpath(p, engine_root).replace("\\", "/")
+                                 for p in sorted(export_excluded)],
             "game": game_info,
             "warnings": warnings,
         })
@@ -648,6 +660,8 @@ class ProjectManager:
             "assets": copied,
             "bytes": total_bytes,
             "game": game_info,
+            "export_excluded": [os.path.relpath(p, cls._get_engine_root()).replace("\\", "/")
+                                for p in sorted(export_excluded)],
             "warnings": warnings,
         }
         print(f"[Export] Bundle exported → {out_dir}")
@@ -676,9 +690,34 @@ class ProjectManager:
         return None
 
     @staticmethod
+    def _export_excluded_paths(engine_root: str) -> set[str]:
+        """扫描 `Application/Functions/**/extension.json`，返回 `export:false` 的绝对目录集。
+
+        Local/third-party fixtures can opt out of the游戏层 without touching this file:
+        `{"id": "myplugin", "export": false}`。默认 true（官方扩展行为不变）。
+        """
+        excluded: set[str] = set()
+        funcs = os.path.join(engine_root, "Application", "Functions")
+        if not os.path.isdir(funcs):
+            return excluded
+        for dirpath, _dirnames, filenames in os.walk(funcs):
+            if "extension.json" not in filenames:
+                continue
+            path = os.path.join(dirpath, "extension.json")
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+            except (OSError, ValueError):
+                continue
+            if isinstance(data, dict) and data.get("export", True) is False:
+                excluded.add(os.path.abspath(dirpath))
+        return excluded
+
+    @staticmethod
     def _copy_tree_for_export(src: str, dst: str, warnings: list[str],
-                              exclude_dirs: set | None = None) -> tuple[int, int]:
-        """复制目录树用于游戏层（排除 __pycache__ 与指定目录名）。
+                              exclude_dirs: set | None = None,
+                              exclude_paths: set | None = None) -> tuple[int, int]:
+        """复制目录树用于游戏层（排除 __pycache__、指定目录名/绝对路径）。
 
         Returns:
             (文件数, 字节数) — 复制失败时报 warning 并返回 (0, 0)
@@ -686,9 +725,18 @@ class ProjectManager:
         import shutil as _shutil
 
         skip = {"__pycache__"} | (set(exclude_dirs) if exclude_dirs else set())
+        blocked = {os.path.normcase(os.path.abspath(p)) for p in (exclude_paths or ())}
 
         def _ignore(_dir, names):
-            return [n for n in names if n in skip]
+            ignored = set()
+            for n in names:
+                if n in skip:
+                    ignored.add(n)
+                    continue
+                p = os.path.normcase(os.path.abspath(os.path.join(_dir, n)))
+                if p in blocked:
+                    ignored.add(n)
+            return list(ignored)
 
         try:
             _shutil.copytree(src, dst, ignore=_ignore, dirs_exist_ok=True)

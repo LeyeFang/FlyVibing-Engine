@@ -1,0 +1,40 @@
+{
+  "version": "0.1.0",
+  "name": "MI",
+  "startup_scene": "scenes\\MI.scene",
+  "scenes": [
+    "scenes\\MI.scene"
+  ],
+  "resources": {
+    "materials": [
+      {
+        "path": "Assets\\cue.mat",
+        "material_id": 3
+      },
+      {
+        "path": "Assets\\task.mat",
+        "material_id": 4
+      }
+    ],
+    "shaders": [],
+    "textures": [],
+    "meshes": [],
+    "prefabs": [
+      {
+        "path": "builtin://DefaultCamera3D"
+      },
+      {
+        "path": "builtin://DefaultCamera2D"
+      },
+      {
+        "path": "builtin://DefaultCameraOverlay"
+      },
+      {
+        "path": "builtin://DefaultCube"
+      },
+      {
+        "path": "builtin://DefaultLight"
+      }
+    ]
+  }
+}

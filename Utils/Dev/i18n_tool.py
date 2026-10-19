@@ -29,7 +29,8 @@ if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
 from Application.Editor.I18n import (  # noqa: E402
-    KEY_PATTERN, _FALLBACK, available_languages, coverage, load_core, locale_dir,
+    KEY_PATTERN, _FALLBACK, all_catalog_languages, available_languages, coverage,
+    load_core, locale_dir,
 )
 
 SCAN_ROOT = os.path.join(REPO, "Application", "Editor")
@@ -114,6 +115,10 @@ def scan_code_keys() -> tuple[dict, list]:
                 else:
                     problems.append(f"{rel}:{node.lineno}: dynamic key (not extractable)")
     return used, problems
+
+
+# 动态显示名命名空间（节点/组件注册表在运行期拼键；由覆盖测试保证完整）
+_DYNAMIC_KEY_PREFIXES = ("node.", "comp.", "menu.node_group.")
 
 
 BASELINE_PATH = os.path.join(REPO, "Doc", "Dev", "i18n_baseline.json")
@@ -307,7 +312,7 @@ def cmd_check(args) -> int:
     load_core()
     errors: list[str] = []
     warnings: list[str] = []
-    langs = [args.lang] if args.lang else list(available_languages())
+    langs = [args.lang] if args.lang else list(all_catalog_languages())
     print(f"locale dir: {locale_dir()}   languages: {', '.join(langs)}")
 
     # 1. 源语言存在性 + 代码键 ⊆ en
@@ -332,6 +337,8 @@ def cmd_check(args) -> int:
             errors.append(f"{lang}.json: _meta.name missing (language self-name)")
         if not meta.get("reviewed", False) and lang != _FALLBACK:
             warnings.append(f"{lang}: _meta.reviewed = false (unreviewed catalog)")
+        if lang != _FALLBACK and meta.get("ui_complete") and not meta.get("reviewed"):
+            errors.append(f"{lang}.json: ui_complete=true requires reviewed=true")
         for k in sorted(set(strings) - set(en)):
             errors.append(f"{lang}.json: extra key not in {_FALLBACK}: {k}")
         for k in sorted(set(en) - set(strings)):
@@ -354,7 +361,27 @@ def cmd_check(args) -> int:
 
     # 3. 未使用键（提示级）
     for k in sorted(set(en) - set(used)):
+        if k.startswith(_DYNAMIC_KEY_PREFIXES):
+            continue          # 节点/组件显示名：运行期拼键，见 labels.py + 覆盖测试
         warnings.append(f"unused key in {_FALLBACK}: {k}")
+
+    # 4. 发布门：ui_complete=true 时不得再有未迁移裸文案
+    baseline_path = os.path.join(REPO, "Doc", "Dev", "i18n_baseline.json")
+    try:
+        with open(baseline_path, encoding="utf-8") as fh:
+            baseline_total = int(json.load(fh).get("total", 0))
+    except (OSError, ValueError, TypeError):
+        baseline_total = -1
+    for lang in all_catalog_languages():
+        if lang == _FALLBACK:
+            continue
+        meta = read_catalog(lang)["meta"]
+        if meta.get("ui_complete") and baseline_total > 0:
+            errors.append(
+                f"{lang}.json: ui_complete=true but UI still has {baseline_total} "
+                "unmigrated literals (see i18n_baseline.json)")
+        if meta.get("ui_complete") is None:
+            warnings.append(f"{lang}: _meta.ui_complete missing (defaults to draft)")
 
     for w in warnings:
         print(f"  [WARN] {w}")
@@ -380,7 +407,7 @@ def cmd_add_lang(args) -> int:
     en = read_catalog(_FALLBACK)["strings"]
     payload = {
         "_meta": {"language": lang, "name": lang, "source": False,
-                  "reviewed": False, "status": "pending"},
+                  "reviewed": False, "ui_complete": False, "status": "pending"},
         "strings": {k: "" for k in sorted(en)},
     }
     os.makedirs(locale_dir(), exist_ok=True)
@@ -392,7 +419,8 @@ def cmd_add_lang(args) -> int:
     print("  1. 填写 en 源文案对应译文; 2. _meta.name 设为该语言自称;")
     print("  3. EditorImguiLayer.LOCALE_FONTS 增加该语言字体候选;")
     print("  4. python Utils/Dev/i18n_tool.py check --lang " + lang)
-    print("  5. 字形覆盖 + 场景目视（scenarios/i18n_smoke.py）; 6. 协议表加行 + 置 reviewed")
+    print("  5. 字形覆盖 + 场景目视（scenarios/i18n_smoke.py）; 6. 协议表加行 + 置 reviewed;")
+    print("  7. UI 裸文案全部迁移（baseline total=0）后置 ui_complete=true")
     return 0
 
 

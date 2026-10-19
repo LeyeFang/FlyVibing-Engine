@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from imgui_bundle import imgui
+from Application.Editor.I18n import t
 from .core import _ne_combo
 
 def _device_name_field(nid: int, inst, key: str, canvas=None) -> None:
@@ -33,7 +34,7 @@ def _device_name_field(nid: int, inst, key: str, canvas=None) -> None:
         inst.props["pool"] = pool_names[new_idx]
         cur_pool = pool_names[new_idx]
     imgui.same_line()
-    imgui.text_disabled("Pool")
+    imgui.text_disabled(t("common.pool"))
     imgui.pop_item_width()
 
     if cur_pool == "global" or cur_pool not in inv["pools"]:
@@ -44,16 +45,16 @@ def _device_name_field(nid: int, inst, key: str, canvas=None) -> None:
 
     cur = str(inst.props.get("device_name", "")).strip()
     values = [""] + members
-    labels = ["(Auto)"] + members
+    labels = [t("common.auto")] + members
     if cur and cur not in members:
         values.append(cur)
-        labels.append(cur + " (unlisted)")
+        labels.append(t("common.unlisted", name=cur))
 
     imgui.push_item_width(120)
     changed, sel = _ne_combo(f"##dev_{key}_{nid}", values.index(cur), labels)
     if changed and sel < len(values):
         inst.props["device_name"] = values[sel]
     imgui.same_line()
-    imgui.text_disabled("Device")
+    imgui.text_disabled(t("common.device"))
     imgui.pop_item_width()
     imgui.dummy(imgui.ImVec2(0, 2))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from imgui_bundle import imgui
+from Application.Editor.I18n import t
 from .core import register, _ne_combo
 
 # ══════════════════════════════════════════════════════════════
@@ -19,7 +20,7 @@ def _draw_create_pool_widgets(nid: int, inst, _canvas) -> None:
     if changed:
         inst.props["pool_name"] = v
     imgui.same_line()
-    imgui.text_disabled("Pool Name")
+    imgui.text_disabled(t("device.pool_name"))
     imgui.pop_item_width()
     imgui.dummy(imgui.ImVec2(0, 2))
 
@@ -32,12 +33,12 @@ def _draw_pool_picker(nid: int, inst, key: str, canvas, allow_auto: bool) -> Non
     names = sorted(inv["pools"].keys())
     cur = str(inst.props.get("pool_name", "")).strip()
     values = ([""] if allow_auto else []) + names
-    labels = (["(Auto)"] if allow_auto else []) + names
+    labels = ([t("common.auto")] if allow_auto else []) + names
     if cur and cur not in names:
         values.append(cur)
-        labels.append(cur + " (unlisted)")
+        labels.append(t("common.unlisted", name=cur))
     if not values:
-        values, labels = [""], ["(no pools)"]
+        values, labels = [""], [t("common.no_pools")]
     try:
         sel = values.index(cur)
     except ValueError:
@@ -48,7 +49,7 @@ def _draw_pool_picker(nid: int, inst, key: str, canvas, allow_auto: bool) -> Non
     if changed:
         inst.props["pool_name"] = values[new_idx]
     imgui.same_line()
-    imgui.text_disabled("Pool")
+    imgui.text_disabled(t("common.pool"))
     imgui.pop_item_width()
     imgui.dummy(imgui.ImVec2(0, 2))
 
@@ -62,7 +63,7 @@ def _draw_add_pool_widgets(nid: int, inst, _canvas) -> None:
     inv = device_inventory(_canvas)
     src_nid = next((k for k, a in inv["assignments"].items() if a["add"] == nid), None)
     src = inv["inits"].get(src_nid, "") if src_nid is not None else ""
-    imgui.text_disabled(f"  <- {src}" if src else "  <- (device pin not linked)")
+    imgui.text_disabled(t("device.pin_unlinked") if not src else f"  <- {src}")
 
 
 @register("KillDevicePool")

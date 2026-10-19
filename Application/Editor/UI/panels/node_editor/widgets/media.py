@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
+from Application.Editor.I18n import t
 from .core import register
 
 
@@ -42,6 +43,6 @@ def _draw_show_media_widgets(nid: int, inst, canvas) -> None:
     if name:
         imgui.text_disabled(f"  -> {name}")
     else:
-        imgui.text_disabled("  -> (link Get Entity -> Entity)")
-    imgui.text_disabled("  plays in PIE · wire on OnFrameUpdate")
+        imgui.text_disabled(t("media.link_hint"))
+    imgui.text_disabled(t("media.play_hint"))
     imgui.dummy(imgui.ImVec2(0, 2))

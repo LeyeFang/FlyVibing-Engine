@@ -17,7 +17,9 @@ The node_graph is a JSON object with these keys:
 ### NodeInstance Format
   "id": <int>, "node_type": "<type_name>", "pos": [<x>, <y>],
   "props": {<key>: <value>, ...},  — mode-dependent props (see per-node table)
-  "pin_ids": {"<pin_name>": <int>, ...}  — instance-level unique pin IDs
+  "pin_ids": {"<pin_name>": <int>, ...},  — instance-level unique pin IDs
+  "alias": "<optional_name>",  — human/agent-readable name (runtime-ignored)
+  "description": "<optional_text>"  — intent/IO note (runtime-ignored; GUI/MCP editable)
 
 ### LinkInstance Format
   "id": <int>, "from_pin": <int> (output pin ID), "to_pin": <int> (input pin ID)
@@ -42,7 +44,7 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 - OnFrameUpdate: fires EVERY FRAME. Use for per-frame checks (TimeTrigger, input polling).
 - OnGameStop: fires ONCE when the game ends. Use for cleanup.
 - Exec chain: _walk_exec follows exec output→input links depth-first.
-- Data nodes (Constant/Scale, StringConst, PathVar, Compare, ScalarMath, MakeVec3, BreakVec3, VecMath, Random, legacy math):
+- Data nodes (Constant/Scale, StringConst, PathVar, Compare, ScalarMath, MakeList, MakeVec3, BreakVec3, VecMath, Random, legacy math):
   NO exec pins. Evaluated LAZILY when their output pin is read via a data link.
 - Mixed nodes (VarGet): have BOTH exec_in and data output pins. Exec triggers read; data output
   is then available for downstream data links. When data-read without exec context, lazy-eval works too.
@@ -78,7 +80,8 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 | type_name      | input pins                    | output pins    | props                        |
 |----------------|-------------------------------|----------------|------------------------------|
 | ScalarMath     | In_0..In_7 (float)           | Result (float) | operation: sum/sub/mul/div   |
-| Compare        | A (float), B (float)          | Result (bool)  | operation: gt/lt/eq/neq/gte/lte |
+| Compare        | A (variant), B (variant), C (float, optional) | Result (bool)  | operation: gt/lt/eq/neq/gte/lte/and/or/not/xor/in/not_in(out alias)/between; between uses B<=A<C unless include_end |
+| MakeList       | Item_0..Item_7 (variant, optional) | List (variant) | — (unconnected items skipped) |
 | MathAdd        | A,B (float)                   | Result (float) | — (legacy, hidden)           |
 | MathSubtract   | A,B (float)                   | Result (float) | — (legacy, hidden)           |
 | MathMultiply   | A,B (float)                   | Result (float) | — (legacy, hidden)           |
@@ -97,8 +100,14 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 | TimeGetElapsed | exec_in (exec)           | exec_out (exec), Elapsed(float)| —                      |
 | TimeGetDelta   | exec_in (exec)           | exec_out (exec), Delta(float)  | —                      |
 | TimeDelay      | exec_in,Seconds(float)   | exec_out (exec)                | —                      |
-| TimeTrigger    | exec_in,Time(float)      | Elapsed(float), out_0..out_7(exec×8) | mode: manual/pin, time: float |
+| TimeTrigger    | exec_in,Time(float)      | Elapsed(float), out_0..out_7(exec×8) | mode: manual/pin, time: float, timer: named timer (empty=global) |
+| NewTimer       | exec_in,Name(string)     | exec_out (exec)                 | mode: manual/pin, timer_name     |
+| SetTimer       | exec_in,Value(float)     | exec_out (exec)                 | operate: reset/set_time, mode: manual/pin, timer_name, value, create_if_missing(default true) |
 | TimeGetDate    | —                        | DateString (string)            | year,month,day,hour,minute: bool, format: str |
+
+SetTimer behavior: if `create_if_missing` is true (default), a missing timer name is created
+before reset/set_time; `NewTimer` is no longer mandatory. TimeTrigger's `_set_count` guard then
+sees the SetTimer initialization.
 
 TimeTrigger behavior: fires when ctx.elapsed_time >= threshold. Re-armable: increasing the threshold via variable/pin allows repeated triggering. Tracks _last_fired_threshold in state.
 
@@ -129,14 +138,27 @@ VarGet: reads ctx.get_var(name) and writes to Value output.
 | EntityAddMesh         | exec_in,EntityID,MeshID,MaterialID (int)    | exec_out             | —                |
 | EntityAddCamera       | exec_in,EntityID (int)                      | exec_out             | —                |
 | EntitySetRenderVisible| exec_in,EntityID(int),Visible(bool)         | exec_out             | —                |
-| EntityGroupSetVisible | exec_in,Entity1-4(ref,可选),Visible(bool)  | exec_out             | —                |
-| SetText               | exec_in,Entity(ref),Text(string)            | exec_out             | —                |
+| EntityGroupSetVisible | exec_in,Entity1-4(ref,可选),Visible(bool)  | exec_out             | —                || EntityGetTree         | Entity(ref)                                | Entities(entity_list),Count(int) | — (pure data: root + descendants) |
+| EntityPack            | Entity1-4(ref, optional)                   | Entities(entity_list),Count(int) | — (pure data) |
+| EntityListMerge       | A,B(entity_list)                           | Entities(entity_list),Count(int) | — (pure data: concat + dedup) |
+| EntityListSetVisible  | exec_in,Entities(entity_list),Visible(bool) | exec_out            | — (one atomic batch) |
+| EntityListDestroy     | exec_in,Entities(entity_list)              | exec_out             | — (subtree delete) || SetText               | exec_in,Entity(ref),Text(string)            | exec_out             | —                |
 
 EntitySpawn: creates entity from Scene.entities template (dropdown). Recursively spawns children.
 EntityRef: type-safe wrapper with is_valid property. Output as entity_ref on data pins.
+EntitySetRenderVisible: sets MeshRenderer.visible on EXACTLY ONE entity (no recursion).
+  A container without MeshRenderer (e.g. a cue root) has no visual effect; target the mesh
+  children instead.
 EntityGroupSetVisible: show/hide up to 4 entities as ONE atomic batch (same frame).
   Use it for multi-part cues (arrow body+head, rigs) — EntitySetRenderVisible per entity
   can be split across frames by the render boundary (partial appearances).
+  The node does NOT recurse: every mesh part must be passed as its own Entity ref.
+EntityGetTree / EntityPack / EntityListMerge / EntityListSetVisible / EntityListDestroy:
+  entity_list is a runtime list of EntityRefs. EntityGetTree = root + descendants;
+  EntityPack/Merge build arbitrary length lists; SetVisible writes one atomic batch;
+  Destroy uses subtree semantics. Never store editor scene ids in a list (PIE reallocates).
+Editor eye icon (entity.visible editor=...) is EDITOR viewport visibility and DOES recurse
+  to all descendants; it is separate from runtime MeshRenderer.visible.
 SetText: sets TextDisplay.text on the target entity and re-rasterizes immediately (PIE).
   Target must have a TextDisplay component; style (font/size/bold/italic/color/bg) lives
   on the component and is editable in the inspector or via MCP component.set.

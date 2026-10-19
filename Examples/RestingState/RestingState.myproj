@@ -1,0 +1,31 @@
+{
+  "version": "0.1.0",
+  "name": "RestingState",
+  "startup_scene": "scenes\\RestingState.scene",
+  "scenes": [
+    "scenes\\RestingState.scene"
+  ],
+  "resources": {
+    "materials": [],
+    "shaders": [],
+    "textures": [],
+    "meshes": [],
+    "prefabs": [
+      {
+        "path": "builtin://DefaultCamera3D"
+      },
+      {
+        "path": "builtin://DefaultCamera2D"
+      },
+      {
+        "path": "builtin://DefaultCameraOverlay"
+      },
+      {
+        "path": "builtin://DefaultCube"
+      },
+      {
+        "path": "builtin://DefaultLight"
+      }
+    ]
+  }
+}

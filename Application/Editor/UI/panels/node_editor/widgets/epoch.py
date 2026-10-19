@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from imgui_bundle import imgui
+from Application.Editor.I18n import t
 from .core import register, _ne_combo
 
 # ══════════════════════════════════════════════════════════════
@@ -20,12 +21,12 @@ def _draw_epochs_picker(nid: int, inst, key: str, canvas, allow_auto: bool,
     names = sorted(sources.keys())
     cur = str(inst.props.get(prop, "")).strip()
     values = ([""] if allow_auto else []) + names
-    labels = (["(Auto)"] if allow_auto else []) + names
+    labels = ([t("common.auto")] if allow_auto else []) + names
     if cur and cur not in names:
         values.append(cur)
-        labels.append(cur + " (unlisted)")
+        labels.append(t("common.unlisted", name=cur))
     if not values:
-        values, labels = [""], ["(no datasets)"]
+        values, labels = [""], [t("common.no_datasets")]
     try:
         sel = values.index(cur)
     except ValueError:
@@ -36,7 +37,7 @@ def _draw_epochs_picker(nid: int, inst, key: str, canvas, allow_auto: bool,
     if changed:
         inst.props[prop] = values[new_idx]
     imgui.same_line()
-    imgui.text_disabled("Dataset")
+    imgui.text_disabled(t("widget.epoch.dataset"))
     imgui.pop_item_width()
     imgui.dummy(imgui.ImVec2(0, 2))
 
@@ -51,17 +52,17 @@ def _draw_epoch_append_widgets(nid: int, inst, _canvas) -> None:
     if changed:
         inst.props["epochs_name"] = v
     imgui.same_line()
-    imgui.text_disabled("Epochs")
+    imgui.text_disabled(t("widget.epoch.epochs"))
     imgui.pop_item_width()
     name = str(inst.props.get("epochs_name", "")).strip()
-    hint = "  (set a name to capture)"
+    hint = t("widget.epoch.name_hint")
     if name:
         try:
             from Application.Functions.BCIAlgorithm import epoch_stats
 
             stats, _why = epoch_stats(name)
-            hint = (f"  {stats['count']} epoch(s), {stats['classes']} class(es)"
-                    if stats else "  (not captured yet)")
+            hint = (t("widget.epoch.stats", count=stats['count'], classes=stats['classes'])
+                    if stats else t("widget.epoch.not_captured"))
         except Exception:  # noqa: BLE001
             pass
     imgui.text_disabled(hint)
@@ -87,7 +88,7 @@ def _draw_epoch_save_widgets(nid: int, inst, _canvas) -> None:
     if changed:
         inst.props["save_dir"] = v
     imgui.same_line()
-    imgui.text_disabled("Save Dir")
+    imgui.text_disabled(t("widget.epoch.save_dir"))
     imgui.pop_item_width()
 
 
@@ -100,7 +101,7 @@ def _draw_epoch_load_widgets(nid: int, inst, _canvas) -> None:
     if changed:
         inst.props["epochs_name"] = v
     imgui.same_line()
-    imgui.text_disabled("Epochs")
+    imgui.text_disabled(t("widget.epoch.epochs"))
     imgui.pop_item_width()
     imgui.push_item_width(220)
     changed, v = imgui.input_text(f"##epochs_file_{nid}",
@@ -108,16 +109,16 @@ def _draw_epoch_load_widgets(nid: int, inst, _canvas) -> None:
     if changed:
         inst.props["file_path"] = v
     imgui.same_line()
-    imgui.text_disabled("NPZ Path")
+    imgui.text_disabled(t("widget.epoch.npz_path"))
     imgui.pop_item_width()
     modes = ["replace", "append"]
     cur = str(inst.props.get("mode", "replace"))
     idx = modes.index(cur) if cur in modes else 0
-    changed, ni = _ne_combo(f"##epochs_mode_{nid}", idx, ["Replace", "Append"])
+    changed, ni = _ne_combo(f"##epochs_mode_{nid}", idx, [t("widget.epoch.replace"), t("widget.epoch.append")])
     if changed:
         inst.props["mode"] = modes[ni]
     imgui.same_line()
-    imgui.text_disabled("Mode")
+    imgui.text_disabled(t("widget.epoch.mode"))
     imgui.dummy(imgui.ImVec2(0, 2))
 
 

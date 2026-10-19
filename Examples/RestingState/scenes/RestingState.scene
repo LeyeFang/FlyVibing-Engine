@@ -1,0 +1,647 @@
+{
+  "version": "0.1.0",
+  "scene": {
+    "name": "RestingState",
+    "game_type": "2d",
+    "ambient_color": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "lighting_fallback": true,
+    "entities": {
+      "4": {
+        "name": "Cross",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          }
+        }
+      },
+      "5": {
+        "name": "row",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 0.5,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 3.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.5
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 1,
+            "visible": true
+          }
+        },
+        "parent_id": 4
+      },
+      "6": {
+        "name": "col",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 0.5,
+            "scale_y": 1.0,
+            "scale_z": 3.0,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 0.5,
+            "local_scl_y": 1.0,
+            "local_scl_z": 3.0
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 1,
+            "visible": true
+          }
+        },
+        "parent_id": 4
+      }
+    },
+    "main_camera_entity_id": null,
+    "next_eid": 14,
+    "node_graph": {
+      "version": "0.1.0",
+      "nodes": {
+        "161": {
+          "id": 161,
+          "node_type": "OnGameStart",
+          "pos": [
+            80,
+            80
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 162
+          },
+          "alias": "start",
+          "description": "Spawn the fixation cross and arm the block timer."
+        },
+        "163": {
+          "id": 163,
+          "node_type": "OnFrameUpdate",
+          "pos": [
+            80,
+            280
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 164,
+            "delta": 165
+          },
+          "alias": "tick",
+          "description": "Frame update: evaluate the eyes-open/closed phases."
+        },
+        "166": {
+          "id": 166,
+          "node_type": "OnGameStop",
+          "pos": [
+            80,
+            480
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 167
+          },
+          "alias": "stop",
+          "description": "Game stop hook (no actions in this example)."
+        },
+        "200": {
+          "id": 200,
+          "node_type": "EntitySpawn",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "template": "Cross"
+          },
+          "pin_ids": {
+            "exec_in": 10000,
+            "exec_out": 10001,
+            "Entity": 10002
+          },
+          "alias": "spawn_cross",
+          "description": "Spawn the fixation cross template."
+        },
+        "201": {
+          "id": 201,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "Cross"
+          },
+          "pin_ids": {
+            "exec_in": 10003,
+            "exec_out": 10004,
+            "Name": 10005,
+            "Entity": 10006
+          },
+          "alias": "hide_cross_entry",
+          "description": "Exec entry for the initial hide."
+        },
+        "202": {
+          "id": 202,
+          "node_type": "EntityGetTree",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity": 10007,
+            "Entities": 10008,
+            "Count": 10009
+          }
+        },
+        "203": {
+          "id": 203,
+          "node_type": "EntityListSetVisible",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10010,
+            "Entities": 10011,
+            "Visible": 10012,
+            "exec_out": 10013
+          },
+          "alias": "hide_cross",
+          "description": "Hide the cross until the first phase trigger."
+        },
+        "204": {
+          "id": 204,
+          "node_type": "Constant",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "value": 0.0
+          },
+          "pin_ids": {
+            "Result": 10014
+          }
+        },
+        "205": {
+          "id": 205,
+          "node_type": "NewTimer",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "mode": "manual",
+            "timer_name": "rest_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10015,
+            "exec_out": 10016,
+            "Name": 10017
+          },
+          "alias": "block_timer",
+          "description": "Named timer for the resting-state block timeline."
+        },
+        "206": {
+          "id": 206,
+          "node_type": "SetTimer",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "operate": "set_time",
+            "mode": "manual",
+            "timer_name": "rest_phase",
+            "value": 0.0
+          },
+          "pin_ids": {
+            "exec_in": 10018,
+            "exec_out": 10019,
+            "Value": 10020
+          },
+          "alias": "block_timer_start",
+          "description": "Start the block timer at 0 s."
+        },
+        "207": {
+          "id": 207,
+          "node_type": "Sequence",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10021,
+            "out_0": 10022,
+            "out_1": 10023,
+            "out_2": 10024,
+            "out_3": 10025,
+            "out_4": 10026
+          },
+          "alias": "phase",
+          "description": "Fan out the timeline to the resting-state phase triggers."
+        },
+        "208": {
+          "id": 208,
+          "node_type": "TimeTrigger",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "mode": "manual",
+            "time": 0,
+            "timer": "rest_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10027,
+            "Time": 10028,
+            "Elapsed": 10029,
+            "out_0": 10030,
+            "out_1": 10031,
+            "out_2": 10032,
+            "out_3": 10033,
+            "out_4": 10034,
+            "out_5": 10035,
+            "out_6": 10036,
+            "out_7": 10037
+          },
+          "alias": "tt_open",
+          "description": "0 s: eyes-open phase begins (show cross, code 1)."
+        },
+        "209": {
+          "id": 209,
+          "node_type": "TimeTrigger",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "mode": "manual",
+            "time": 20,
+            "timer": "rest_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10038,
+            "Time": 10039,
+            "Elapsed": 10040,
+            "out_0": 10041,
+            "out_1": 10042,
+            "out_2": 10043,
+            "out_3": 10044,
+            "out_4": 10045,
+            "out_5": 10046,
+            "out_6": 10047,
+            "out_7": 10048
+          },
+          "alias": "tt_closed",
+          "description": "20 s: eyes-closed phase begins (code 2)."
+        },
+        "210": {
+          "id": 210,
+          "node_type": "TimeTrigger",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "mode": "manual",
+            "time": 40,
+            "timer": "rest_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10049,
+            "Time": 10050,
+            "Elapsed": 10051,
+            "out_0": 10052,
+            "out_1": 10053,
+            "out_2": 10054,
+            "out_3": 10055,
+            "out_4": 10056,
+            "out_5": 10057,
+            "out_6": 10058,
+            "out_7": 10059
+          },
+          "alias": "tt_cycle",
+          "description": "40 s: end the block and reset the timer."
+        },
+        "211": {
+          "id": 211,
+          "node_type": "EntityGet",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "entity_name": "Cross"
+          },
+          "pin_ids": {
+            "exec_in": 10060,
+            "exec_out": 10061,
+            "Name": 10062,
+            "Entity": 10063
+          },
+          "alias": "show_cross_entry",
+          "description": "Resolve the cross before the show batch."
+        },
+        "212": {
+          "id": 212,
+          "node_type": "EntityGetTree",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "Entity": 10064,
+            "Entities": 10065,
+            "Count": 10066
+          }
+        },
+        "213": {
+          "id": 213,
+          "node_type": "EntityListSetVisible",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10067,
+            "Entities": 10068,
+            "Visible": 10069,
+            "exec_out": 10070
+          },
+          "alias": "show_cross",
+          "description": "Show the fixation cross for the eyes-open phase."
+        },
+        "214": {
+          "id": 214,
+          "node_type": "Constant",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "value": 1.0
+          },
+          "pin_ids": {
+            "Result": 10071
+          }
+        },
+        "215": {
+          "id": 215,
+          "node_type": "Constant",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "value": 1.0
+          },
+          "pin_ids": {
+            "Result": 10072
+          },
+          "alias": "code_open",
+          "description": "Parallel code 1 = eyes open."
+        },
+        "216": {
+          "id": 216,
+          "node_type": "ParallelSend",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "mode": "pin",
+            "address": 16376
+          },
+          "pin_ids": {
+            "exec_in": 10073,
+            "exec_out": 10074,
+            "Address": 10075,
+            "Value": 10076
+          },
+          "alias": "send_open",
+          "description": "Send the eyes-open marker to the parallel port."
+        },
+        "217": {
+          "id": 217,
+          "node_type": "Constant",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "value": 2.0
+          },
+          "pin_ids": {
+            "Result": 10077
+          },
+          "alias": "code_closed",
+          "description": "Parallel code 2 = eyes closed."
+        },
+        "218": {
+          "id": 218,
+          "node_type": "ParallelSend",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "mode": "pin",
+            "address": 16376
+          },
+          "pin_ids": {
+            "exec_in": 10078,
+            "exec_out": 10079,
+            "Address": 10080,
+            "Value": 10081
+          },
+          "alias": "send_closed",
+          "description": "Send the eyes-closed marker to the parallel port."
+        },
+        "219": {
+          "id": 219,
+          "node_type": "SetTimer",
+          "pos": [
+            0,
+            0
+          ],
+          "props": {
+            "operate": "set_time",
+            "mode": "manual",
+            "timer_name": "rest_phase",
+            "value": -0.02
+          },
+          "pin_ids": {
+            "exec_in": 10082,
+            "exec_out": 10083,
+            "Value": 10084
+          },
+          "alias": "next_block",
+          "description": "Rewind the block timer to repeat the open/closed cycle."
+        }
+      },
+      "links": {
+        "500": {
+          "id": 500,
+          "from_pin": 162,
+          "to_pin": 10000
+        },
+        "501": {
+          "id": 501,
+          "from_pin": 10006,
+          "to_pin": 10007
+        },
+        "502": {
+          "id": 502,
+          "from_pin": 10008,
+          "to_pin": 10011
+        },
+        "503": {
+          "id": 503,
+          "from_pin": 10014,
+          "to_pin": 10012
+        },
+        "504": {
+          "id": 504,
+          "from_pin": 10001,
+          "to_pin": 10003
+        },
+        "505": {
+          "id": 505,
+          "from_pin": 10004,
+          "to_pin": 10010
+        },
+        "506": {
+          "id": 506,
+          "from_pin": 10016,
+          "to_pin": 10018
+        },
+        "507": {
+          "id": 507,
+          "from_pin": 10013,
+          "to_pin": 10015
+        },
+        "508": {
+          "id": 508,
+          "from_pin": 164,
+          "to_pin": 10021
+        },
+        "509": {
+          "id": 509,
+          "from_pin": 10022,
+          "to_pin": 10027
+        },
+        "510": {
+          "id": 510,
+          "from_pin": 10023,
+          "to_pin": 10038
+        },
+        "511": {
+          "id": 511,
+          "from_pin": 10024,
+          "to_pin": 10049
+        },
+        "512": {
+          "id": 512,
+          "from_pin": 10063,
+          "to_pin": 10064
+        },
+        "513": {
+          "id": 513,
+          "from_pin": 10065,
+          "to_pin": 10068
+        },
+        "514": {
+          "id": 514,
+          "from_pin": 10071,
+          "to_pin": 10069
+        },
+        "515": {
+          "id": 515,
+          "from_pin": 10072,
+          "to_pin": 10076
+        },
+        "516": {
+          "id": 516,
+          "from_pin": 10061,
+          "to_pin": 10067
+        },
+        "517": {
+          "id": 517,
+          "from_pin": 10070,
+          "to_pin": 10073
+        },
+        "518": {
+          "id": 518,
+          "from_pin": 10030,
+          "to_pin": 10060
+        },
+        "519": {
+          "id": 519,
+          "from_pin": 10077,
+          "to_pin": 10081
+        },
+        "520": {
+          "id": 520,
+          "from_pin": 10041,
+          "to_pin": 10078
+        },
+        "521": {
+          "id": 521,
+          "from_pin": 10052,
+          "to_pin": 10082
+        }
+      },
+      "next_id": 10085
+    }
+  }
+}

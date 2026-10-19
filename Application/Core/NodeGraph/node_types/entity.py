@@ -91,3 +91,62 @@ _reg(NodeTypeDef(
     ],
     "Show/hide up to 4 entities as one atomic batch (same frame)",
 ))
+
+# ── 实体集合 (entity_list): 树 / 打包 / 合并 / 批量操作 ──
+# 列表节点为**纯数据**（树遍历、打包、合并），写入节点为 exec。
+# 运行时列表只能由 EntityRef 构成（不能用编辑器场景 id — PIE 会重新分配）。
+
+_reg(NodeTypeDef(
+    "EntityGetTree", "Get Entity Tree", "Entity", ENTITY_COLOR,
+    [
+        PinDef(_gen_id(), "Entity", "data", "input", "entity_ref"),
+        PinDef(_gen_id(), "Entities", "data", "output", "entity_list"),
+        PinDef(_gen_id(), "Count", "data", "output", "int"),
+    ],
+    "Root + all descendants (pre-order)",
+))
+
+_reg(NodeTypeDef(
+    "EntityPack", "Pack Entities", "Entity", ENTITY_COLOR,
+    [
+        PinDef(_gen_id(), "Entity1", "data", "input", "entity_ref", optional=True),
+        PinDef(_gen_id(), "Entity2", "data", "input", "entity_ref", optional=True),
+        PinDef(_gen_id(), "Entity3", "data", "input", "entity_ref", optional=True),
+        PinDef(_gen_id(), "Entity4", "data", "input", "entity_ref", optional=True),
+        PinDef(_gen_id(), "Entities", "data", "output", "entity_list"),
+        PinDef(_gen_id(), "Count", "data", "output", "int"),
+    ],
+    "Collect up to 4 entity refs into one list",
+))
+
+_reg(NodeTypeDef(
+    "EntityListMerge", "Merge Entity Lists", "Entity", ENTITY_COLOR,
+    [
+        PinDef(_gen_id(), "A", "data", "input", "entity_list"),
+        PinDef(_gen_id(), "B", "data", "input", "entity_list"),
+        PinDef(_gen_id(), "Entities", "data", "output", "entity_list"),
+        PinDef(_gen_id(), "Count", "data", "output", "int"),
+    ],
+    "Concatenate two entity lists (dedup, order preserved)",
+))
+
+_reg(NodeTypeDef(
+    "EntityListSetVisible", "Set List Visible", "Entity", ENTITY_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Entities", "data", "input", "entity_list"),
+        PinDef(_gen_id(), "Visible", "data", "input", "bool"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+    ],
+    "Show/hide a whole entity list as one atomic batch",
+))
+
+_reg(NodeTypeDef(
+    "EntityListDestroy", "Destroy List", "Entity", ENTITY_COLOR,
+    [
+        PinDef(_gen_id(), "exec_in", "exec", "input"),
+        PinDef(_gen_id(), "Entities", "data", "input", "entity_list"),
+        PinDef(_gen_id(), "exec_out", "exec", "output"),
+    ],
+    "Destroy every entity in a list (subtree semantics)",
+))

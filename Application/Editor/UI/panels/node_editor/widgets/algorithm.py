@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from imgui_bundle import imgui
+from Application.Editor.I18n import t
 from .core import register, _ne_combo
 from .epoch import _draw_epochs_picker
 
@@ -16,7 +17,7 @@ def _draw_band_editor(nid: int, inst) -> None:
     if not isinstance(bands, list):
         bands = [[4.0, 8.0], [8.0, 13.0], [13.0, 30.0]]
         inst.props["bands"] = bands
-    imgui.text_disabled(f"  Bands ({len(bands)}) - 0 = plain CSP")
+    imgui.text_disabled(t("widget.algorithm.bands", count=len(bands)))
     remove_idx = None
     for i, band in enumerate(list(bands)):
         if not isinstance(band, list) or len(band) < 2:
@@ -45,7 +46,7 @@ def _draw_band_editor(nid: int, inst) -> None:
     if len(bands) < 16 and imgui.small_button(f"+##bd_add_{nid}"):
         bands.append([8.0, 13.0])
     imgui.same_line()
-    imgui.text_disabled("+ Add Band")
+    imgui.text_disabled(t("widget.algorithm.add_band"))
 
 
 def _draw_freq_editor(nid: int, inst) -> None:
@@ -54,7 +55,7 @@ def _draw_freq_editor(nid: int, inst) -> None:
     if not isinstance(freqs, list):
         freqs = [10.0, 12.0, 15.0]
         inst.props["freqs"] = freqs
-    imgui.text_disabled(f"  Frequencies ({len(freqs)}) - at least 2")
+    imgui.text_disabled(t("widget.algorithm.freqs", count=len(freqs)))
     remove_idx = None
     for i, f in enumerate(list(freqs)):
         try:
@@ -74,7 +75,7 @@ def _draw_freq_editor(nid: int, inst) -> None:
     if imgui.small_button(f"+##fq_add_{nid}"):
         freqs.append(12.0)
     imgui.same_line()
-    imgui.text_disabled("+ Add Freq")
+    imgui.text_disabled(t("widget.algorithm.add_freq"))
 
 
 def _draw_model_picker(nid: int, inst, key: str, canvas, kind: str) -> None:
@@ -89,10 +90,10 @@ def _draw_model_picker(nid: int, inst, key: str, canvas, kind: str) -> None:
     names = sorted(src.keys())
     cur = str(inst.props.get("model_name", "")).strip()
     values = [""] + names
-    labels = ["(Auto)"] + names
+    labels = [t("common.auto")] + names
     if cur and cur not in names:
         values.append(cur)
-        labels.append(cur + " (unlisted)")
+        labels.append(t("common.unlisted", name=cur))
     try:
         sel = values.index(cur)
     except ValueError:
@@ -103,7 +104,7 @@ def _draw_model_picker(nid: int, inst, key: str, canvas, kind: str) -> None:
     if changed:
         inst.props["model_name"] = values[ni]
     imgui.same_line()
-    imgui.text_disabled("Model")
+    imgui.text_disabled(t("widget.algorithm.model"))
     imgui.pop_item_width()
     imgui.dummy(imgui.ImVec2(0, 2))
 
@@ -117,7 +118,7 @@ def _draw_init_fbcsp_widgets(nid: int, inst, _canvas) -> None:
     if changed:
         inst.props["model_name"] = v
     imgui.same_line()
-    imgui.text_disabled("Model")
+    imgui.text_disabled(t("widget.algorithm.model"))
     imgui.pop_item_width()
     imgui.push_item_width(60)
     changed, v = imgui.input_int(f"##fb_m_{nid}",
@@ -125,7 +126,7 @@ def _draw_init_fbcsp_widgets(nid: int, inst, _canvas) -> None:
     if changed:
         inst.props["n_components"] = max(1, min(8, int(v)))
     imgui.same_line()
-    imgui.text_disabled("CSP pairs")
+    imgui.text_disabled(t("widget.algorithm.csp_pairs"))
     imgui.pop_item_width()
     cls_keys = ["LDA", "SVM"]
     cur = str(inst.props.get("classifier", "LDA")).upper()
@@ -134,7 +135,7 @@ def _draw_init_fbcsp_widgets(nid: int, inst, _canvas) -> None:
     if changed:
         inst.props["classifier"] = cls_keys[ni]
     imgui.same_line()
-    imgui.text_disabled("Classifier")
+    imgui.text_disabled(t("widget.algorithm.classifier"))
     _draw_band_editor(nid, inst)
 
 
@@ -146,11 +147,11 @@ def _draw_train_fbcsp_widgets(nid: int, inst, _canvas) -> None:
     modes = ["train", "load"]
     cur = str(inst.props.get("mode", "train")).lower()
     idx = modes.index(cur) if cur in modes else 0
-    changed, ni = _ne_combo(f"##tr_mode_{nid}", idx, ["Train", "Load"])
+    changed, ni = _ne_combo(f"##tr_mode_{nid}", idx, [t("widget.algorithm.train"), t("widget.algorithm.load")])
     if changed:
         inst.props["mode"] = modes[ni]
     imgui.same_line()
-    imgui.text_disabled("Mode")
+    imgui.text_disabled(t("widget.algorithm.mode"))
     if modes[idx] == "load":
         imgui.push_item_width(200)
         changed, v = imgui.input_text(f"##tr_path_{nid}",
@@ -158,7 +159,7 @@ def _draw_train_fbcsp_widgets(nid: int, inst, _canvas) -> None:
         if changed:
             inst.props["model_path"] = v
         imgui.same_line()
-        imgui.text_disabled("Model NPZ")
+        imgui.text_disabled(t("widget.algorithm.model_npz"))
         imgui.pop_item_width()
     else:
         imgui.push_item_width(150)
@@ -167,9 +168,9 @@ def _draw_train_fbcsp_widgets(nid: int, inst, _canvas) -> None:
         if changed:
             inst.props["save_path"] = v
         imgui.same_line()
-        imgui.text_disabled("Save NPZ (opt)")
+        imgui.text_disabled(t("widget.algorithm.save_npz"))
         imgui.pop_item_width()
-    imgui.text_disabled("  blocks exec until done - keep on a frame chain")
+    imgui.text_disabled(t("widget.algorithm.blocks_exec"))
 
 
 @register("TestFBCSP")
@@ -186,5 +187,5 @@ def _draw_test_cca_widgets(nid: int, inst, _canvas) -> None:
     if changed:
         inst.props["n_harmonics"] = max(1, min(8, int(v)))
     imgui.same_line()
-    imgui.text_disabled("Harmonics")
+    imgui.text_disabled(t("widget.algorithm.harmonics"))
     imgui.pop_item_width()

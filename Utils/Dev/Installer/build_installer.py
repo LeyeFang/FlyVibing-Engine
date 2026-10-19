@@ -65,6 +65,12 @@ def _copy_tree(src: str, dst: str, skip_top: tuple[str, ...] = ()) -> None:
 
 
 def _stage_engine_tree(skip_runtime: bool) -> None:
+    # Application/Doc/Utils 完全由源树生成 — 即使 --keep-stage 也先清空，
+    # 避免旧插件/已删除文件（如历史 Gtec 副本）残留进安装包。
+    for item in ("Application", "Doc", "Utils"):
+        dst = os.path.join(STAGE, item)
+        if os.path.isdir(dst):
+            shutil.rmtree(dst)
     for item in ("Application", "Resource", "Doc"):
         src = os.path.join(ROOT, item)
         skip_top = ("runtime",) if (skip_runtime and item == "Resource") else ()
@@ -75,6 +81,9 @@ def _stage_engine_tree(skip_runtime: bool) -> None:
     shutil.copy2(os.path.join(utils_src, "__init__.py"),
                  os.path.join(STAGE, "Utils", "__init__.py"))
     shutil.copy2(os.path.join(ROOT, "startup.bat"), os.path.join(STAGE, "startup.bat"))
+    notices = os.path.join(ROOT, "THIRD_PARTY_NOTICES.md")
+    if os.path.isfile(notices):
+        shutil.copy2(notices, os.path.join(STAGE, "THIRD_PARTY_NOTICES.md"))
 
 
 def _install_engine_deps() -> None:

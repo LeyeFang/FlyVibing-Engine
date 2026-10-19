@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import zlib
 from collections import defaultdict, deque
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from imgui_bundle import imgui_node_editor as node_ed
 from Application.Editor.UI.BasePanel import BasePanel
 from Application.Editor.UI.PanelStyle import ERROR_RED
 from Application.Editor.UI.FileDialog import FileDialog
+from Application.Editor.I18n import t
 
 from Application.Core.NodeGraph import (
     NodeCanvas,
@@ -42,6 +44,7 @@ from .styling import (
     TEXT_DISABLED,
 )
 from .widgets import draw_node_widgets
+from .labels import group_label, node_label
 from .visible_pins import get_visible_pins
 
 
@@ -59,7 +62,7 @@ def _draw_add_menu_section(
     avail: imgui.ImVec2,
 ) -> None:
     """在 Add 弹出菜单中绘制一个顶级分类（悬停展开子菜单）。"""
-    if imgui.begin_menu(title):
+    if imgui.begin_menu(group_label(title)):
         for item in items:
             _draw_menu_item(item[0], item[1], canvas)
         imgui.end_menu()
@@ -76,12 +79,13 @@ def _draw_menu_item(
     """
     if isinstance(target, list):
         imgui.spacing()
-        imgui.text_colored(_SUB_HDR_COLOR, f"  {label}")
+        imgui.text_colored(_SUB_HDR_COLOR, f"  {group_label(label)}")
         imgui.separator()
         for sub_label, sub_value in target:
             _draw_menu_item(sub_label, sub_value, canvas)
     else:
-        changed, _selected = imgui.menu_item(label, "", False, True)
+        display_label = node_label(target, label)
+        changed, _selected = imgui.menu_item(display_label, "", False, True)
         if changed:
             n_before = len(canvas.nodes)
             max_y = max((inst.pos[1] for inst in canvas.nodes.values()), default=40)
@@ -105,6 +109,7 @@ class NodeEditorPanel(BasePanel):
     """节点编辑器画布 — Runtime 生命周期节点编辑"""
 
     name = "Node Editor"
+    title_key = "panel.node_editor"
     flags = imgui.WindowFlags_.none
 
     _CONFIG_FILE: str = os.path.join(
@@ -135,6 +140,8 @@ class NodeEditorPanel(BasePanel):
         self._report: dict | None = None                # 最近一次报告（UI 缓存）
         self._report_open: bool = False
         self._report_note: str = ""
+        self._fit_requested: bool = False              # 下一帧把视图 fit 到全部节点
+        self._desc_open: set[int] = set()               # 已展开描述的节点 id
 
     # ============================================================
     # 生命周期
@@ -168,10 +175,10 @@ class NodeEditorPanel(BasePanel):
         if self._editor_context is None:
             imgui.text_colored(
                 imgui.ImVec4(*ERROR_RED, 1.00),
-                "Node Editor not available"
+                t("node_editor.unavailable")
             )
             imgui.text_disabled(
-                "Ensure imgui_bundle is compiled with node editor support."
+                t("node_editor.unavailable_hint")
             )
             return
 
@@ -195,28 +202,32 @@ class NodeEditorPanel(BasePanel):
         self._draw_scene_info()
 
         # ── 工具栏: Add / Import / Export ──
-        if imgui.small_button("Add Node"):
+        if imgui.small_button(t("node_editor.add_node")):
             rect_min = imgui.get_item_rect_min()
             rect_max = imgui.get_item_rect_max()
             self._add_popup_pos = imgui.ImVec2(rect_min.x, rect_max.y)
-            imgui.open_popup("Create Node")
+            imgui.open_popup("###create_node")
 
         imgui.same_line()
-        if imgui.small_button("Import"):
+        if imgui.small_button(t("node_editor.import")):
             self._import_error = ""
-            imgui.open_popup("Import Graph")
+            imgui.open_popup("###import_graph")
 
         imgui.same_line()
-        if imgui.small_button("Export"):
+        if imgui.small_button(t("node_editor.export")):
             self._export_error = ""
-            imgui.open_popup("Export Graph")
+            imgui.open_popup("###export_graph")
 
         imgui.same_line()
         self._draw_validate_button()
 
         imgui.same_line()
-        if imgui.small_button("Rearrange"):
+        if imgui.small_button(t("node_editor.rearrange")):
             self._auto_layout(canvas)
+
+        imgui.same_line()
+        if imgui.small_button(t("node_editor.fit")):
+            self._fit_requested = True
 
         # ── Import 弹出窗口 ──
         self._draw_import_popup(canvas)
@@ -235,6 +246,10 @@ class NodeEditorPanel(BasePanel):
 
         ne.begin("NodeEditor", avail)
 
+        if self._fit_requested:
+            ne.navigate_to_content()
+            self._fit_requested = False
+
         self._draw_nodes(canvas, ne)
         self._draw_links(canvas, ne)
         self._handle_link_creation(canvas, ne)
@@ -250,7 +265,7 @@ class NodeEditorPanel(BasePanel):
             ))
             imgui.text_colored(
                 imgui.ImVec4(0.400, 0.400, 0.400, 1.00),
-                'Click "Add" button to create nodes',
+                t("node_editor.empty_hint"),
             )
         ne.resume()
         ne.end()
@@ -327,7 +342,7 @@ class NodeEditorPanel(BasePanel):
         if scene is None:
             imgui.text_colored(
                 imgui.ImVec4(0.55, 0.55, 0.55, 1.00),
-                "Scene: (none)",
+                t("node_editor.scene_none"),
             )
             return
 
@@ -351,7 +366,7 @@ class NodeEditorPanel(BasePanel):
         # ── 标签 ──
         imgui.text_colored(
             imgui.ImVec4(0.55, 0.55, 0.55, 1.00),
-            "Scene:",
+            t("scene.header"),
         )
         imgui.same_line()
 
@@ -371,9 +386,50 @@ class NodeEditorPanel(BasePanel):
     # 子步骤: 节点渲染
     # ============================================================
 
+    # 组框使用独立的 NodeId 空间（与真实节点 id 不冲突）
+    _GROUP_NODE_BASE = 60_000_000
+
+    def _draw_group_hints(self, canvas: NodeCanvas, ne) -> None:
+        """绘制节点组框（tools 层 node_groups 元数据 → 画布背景区）。
+
+        组只是宏的记账：成员节点仍按普通节点绘制；这里按成员位置算包围盒，
+        画一个 imgui-node-editor group 节点作视觉分区（不参与求值/删除）。
+        """
+        groups = getattr(canvas, "node_groups", None) or {}
+        if not groups:
+            return
+        for gid, grp in groups.items():
+            members = [int(m) for m in (grp.get("members") or [])
+                       if str(m).isdigit() and int(m) in canvas.nodes]
+            if not members:
+                continue
+            xs = [canvas.nodes[m].pos[0] for m in members]
+            ys = [canvas.nodes[m].pos[1] for m in members]
+            min_x, min_y = min(xs) - 40.0, min(ys) - 58.0
+            max_x, max_y = max(xs) + 300.0, max(ys) + 220.0
+            if str(gid).startswith("g") and str(gid)[1:].isdigit():
+                node_id = self._GROUP_NODE_BASE + int(str(gid)[1:])
+            else:
+                node_id = self._GROUP_NODE_BASE + (zlib.crc32(str(gid).encode("utf-8")) % 10_000_000)
+            ne.set_node_position(ne.NodeId(node_id), imgui.ImVec2(min_x, min_y))
+            ne.push_style_color(ne.StyleColor.group_bg, imgui.ImVec4(0.18, 0.34, 0.50, 0.70))
+            ne.push_style_color(ne.StyleColor.node_border, imgui.ImVec4(0.45, 0.72, 0.95, 1.00))
+            ne.begin_node(ne.NodeId(node_id))
+            ne.group(imgui.ImVec2(max_x - min_x, max_y - min_y))
+            # Group() 会把光标推进到框底 — 拉回左上角画标题
+            imgui.set_cursor_pos(imgui.ImVec2(8.0, 6.0))
+            label = str(grp.get("alias") or gid)
+            gtype = str(grp.get("type") or "group")
+            imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.70, 0.86, 0.98, 1.0))
+            imgui.text(f"@{label}   [{gtype}]")
+            imgui.pop_style_color(1)
+            ne.pop_style_color(2)
+            ne.end_node()
+
     def _draw_nodes(self, canvas: NodeCanvas, ne) -> None:
         n_drawn = 0
         self._rendered_nids: set[int] = set()
+        self._draw_group_hints(canvas, ne)
         for nid, inst in list(canvas.nodes.items()):
             nd = _TYPES.get(inst.node_type)
             if nd is None:
@@ -387,10 +443,16 @@ class NodeEditorPanel(BasePanel):
             ne.begin_node(ne.NodeId(nid))
             _apply_ne_style(nd.accent_color)
 
-            # 标题栏
+            # 标题栏（别名 — tools/agent 侧可读名; 运行时忽略）
             imgui.push_style_color(imgui.Col_.text, _col(nd.accent_color, 1.00))
-            imgui.text(nd.label)
+            imgui.text(node_label(nd.type_name, nd.label))
             imgui.pop_style_color(1)
+            alias = str(getattr(inst, "alias", "") or "")
+            if alias:
+                imgui.same_line()
+                imgui.push_style_color(imgui.Col_.text, _col(TEXT_DISABLED))
+                imgui.text(f"@{alias}")
+                imgui.pop_style_color(1)
 
             # 属性文字
             if nd.props_text:
@@ -400,6 +462,8 @@ class NodeEditorPanel(BasePanel):
                     imgui.text(f"  {line}")
                 imgui.pop_style_color(1)
                 imgui.dummy(imgui.ImVec2(0, 2))
+
+            self._draw_description(nid, inst)
 
             # ── 节点专用内联控件（注册表驱动，按 node_type 分发） ──
             draw_node_widgets(nid, inst, canvas)
@@ -413,6 +477,38 @@ class NodeEditorPanel(BasePanel):
                   f"({len(canvas.nodes)-n_drawn} skipped)")
 
     # ============================================================
+    # 子步骤: 节点描述
+    # ============================================================
+
+    def _draw_description(self, nid: int, inst) -> None:
+        """描述区: 折叠时显示首行; 展开后可直接编辑（持久化到节点实例）。"""
+        desc = str(getattr(inst, "description", "") or "")
+        is_open = nid in self._desc_open
+        label = t("node_editor.description_hide") if is_open else t("node_editor.description")
+        if imgui.small_button(f"{label}##desc_toggle_{nid}"):
+            if is_open:
+                self._desc_open.discard(nid)
+            else:
+                self._desc_open.add(nid)
+            is_open = not is_open
+        if is_open:
+            imgui.set_next_item_width(240)
+            changed, value = imgui.input_text_multiline(
+                f"##desc_edit_{nid}", desc, imgui.ImVec2(240, 56),
+            )
+            if changed:
+                inst.description = value
+            if not desc:
+                imgui.text_disabled(t("node_editor.description_tip"))
+        elif desc:
+            first = desc.splitlines()[0].strip()
+            if len(first) > 46:
+                first = first[:43] + "..."
+            imgui.push_style_color(imgui.Col_.text, _col(TEXT_DISABLED))
+            imgui.text(first)
+            imgui.pop_style_color(1)
+
+    # ============================================================
     # 子步骤: 引脚渲染
     # ============================================================
 
@@ -421,7 +517,7 @@ class NodeEditorPanel(BasePanel):
         pins = get_visible_pins(inst, nd, canvas)
 
         # ── 第 1 步: 计算节点宽度（基于标题 + 所有 pin 原始文字） ──
-        _title_w = imgui.calc_text_size(f"  {nd.label}  ").x
+        _title_w = imgui.calc_text_size(f"  {node_label(nd.type_name, nd.label)}  ").x
         _max_pin_text_w = max(
             (imgui.calc_text_size(f"> {p.name}").x for p in pins),
             default=0,
@@ -553,10 +649,10 @@ class NodeEditorPanel(BasePanel):
 
     def _draw_import_popup(self, canvas: NodeCanvas) -> None:
         """绘制 Import Graph 弹出窗口。"""
-        if not imgui.begin_popup_modal("Import Graph", None, imgui.WindowFlags_.always_auto_resize)[0]:
+        if not imgui.begin_popup_modal(t("node_editor.import_title") + "###import_graph", None, imgui.WindowFlags_.always_auto_resize)[0]:
             return
 
-        imgui.text("Import node graph from JSON file:")
+        imgui.text(t("node_editor.import_prompt"))
         imgui.spacing()
 
         # ── 文件路径输入 ──
@@ -566,7 +662,7 @@ class NodeEditorPanel(BasePanel):
         )
         imgui.pop_item_width()
         imgui.same_line()
-        if imgui.small_button("Browse##import"):
+        if imgui.small_button(t("node_editor.browse") + "##import"):
             FileDialog.open_json(
                 callback=lambda p: setattr(self, '_import_path', p),
                 start_dir=self._last_io_dir,
@@ -583,16 +679,16 @@ class NodeEditorPanel(BasePanel):
 
         # ── 静态检查开关（agent 导入默认拒绝静态错误; GUI 默认关 — 便于导入待修图）──
         _, self._import_validate_first = imgui.checkbox(
-            "Validate first (reject on static errors)", self._import_validate_first)
+            t("node_editor.import_validate_first"), self._import_validate_first)
 
         imgui.spacing()
 
         # ── Import / Cancel ──
-        if imgui.button("Import", imgui.ImVec2(100, 0)):
+        if imgui.button(t("node_editor.import"), imgui.ImVec2(100, 0)):
             self._do_import(canvas)
 
         imgui.same_line()
-        if imgui.button("Cancel", imgui.ImVec2(100, 0)):
+        if imgui.button(t("node_editor.cancel"), imgui.ImVec2(100, 0)):
             self._import_path = ""
             self._import_error = ""
             imgui.close_current_popup()
@@ -601,10 +697,10 @@ class NodeEditorPanel(BasePanel):
 
     def _draw_export_popup(self, canvas: NodeCanvas) -> None:
         """绘制 Export Graph 弹出窗口。"""
-        if not imgui.begin_popup_modal("Export Graph", None, imgui.WindowFlags_.always_auto_resize)[0]:
+        if not imgui.begin_popup_modal(t("node_editor.export_title") + "###export_graph", None, imgui.WindowFlags_.always_auto_resize)[0]:
             return
 
-        imgui.text("Export node graph to JSON file:")
+        imgui.text(t("node_editor.export_prompt"))
         imgui.spacing()
 
         # ── 文件路径输入 ──
@@ -614,7 +710,7 @@ class NodeEditorPanel(BasePanel):
         )
         imgui.pop_item_width()
         imgui.same_line()
-        if imgui.small_button("Browse##export"):
+        if imgui.small_button(t("node_editor.browse") + "##export"):
             FileDialog.save_json(
                 callback=lambda p: setattr(self, '_export_path', p),
                 start_dir=self._last_io_dir,
@@ -622,10 +718,12 @@ class NodeEditorPanel(BasePanel):
 
         imgui.spacing()
 
-        # ── 节点/连线统计 ──
+        # ── 节点/连线统计（组 = tools 层宏元数据）──
         n_count = len(canvas.nodes)
         l_count = len(canvas.links)
-        imgui.text_disabled(f"  {n_count} nodes, {l_count} links")
+        groups = getattr(canvas, "node_groups", None) or {}
+        imgui.text_disabled(t("node_editor.export_count", nodes=n_count, links=l_count,
+                              groups=len(groups)))
 
         imgui.spacing()
 
@@ -639,11 +737,11 @@ class NodeEditorPanel(BasePanel):
         imgui.spacing()
 
         # ── Export / Cancel ──
-        if imgui.button("Export", imgui.ImVec2(100, 0)):
+        if imgui.button(t("node_editor.export"), imgui.ImVec2(100, 0)):
             self._do_export(canvas)
 
         imgui.same_line()
-        if imgui.button("Cancel", imgui.ImVec2(100, 0)):
+        if imgui.button(t("node_editor.cancel"), imgui.ImVec2(100, 0)):
             self._export_path = ""
             self._export_error = ""
             imgui.close_current_popup()
@@ -717,9 +815,9 @@ class NodeEditorPanel(BasePanel):
     # ============================================================
 
     _VALIDATE_MENU = [
-        ("Static only (no dry-run)", {"frames": 0}),
-        ("Dry run 360 frames (6s @60fps)", {"frames": 360}),
-        ("Dry run 600 frames (10s)", {"frames": 600}),
+        ("node_editor.validate.static", {"frames": 0}),
+        ("node_editor.validate.dry360", {"frames": 360}),
+        ("node_editor.validate.dry600", {"frames": 600}),
     ]
 
     def _validate_service(self):
@@ -733,39 +831,43 @@ class NodeEditorPanel(BasePanel):
         state = self._validate_service().state()
         if state.get("state") == "running":
             pct = int(float(state.get("progress", 0.0)) * 100)
-            imgui.small_button(f"Validating… {pct}%")
+            imgui.small_button(t("node_editor.validate.running", pct=pct))
             return
-        if imgui.small_button("Validate"):
-            imgui.open_popup("Validate Options")
+        if imgui.small_button(t("node_editor.validate.button")):
+            imgui.open_popup("###validate_options")
         if self._report is not None:
             counts = self._report.get("counts") or {}
             errs = int(counts.get("errors", 0) or 0)
             warns = int(counts.get("warnings", 0) or 0)
             imgui.same_line()
             if self._report.get("ok"):
-                imgui.text_colored(imgui.ImVec4(0.35, 0.85, 0.45, 1.0), f"OK ({warns}w)")
+                imgui.text_colored(imgui.ImVec4(0.35, 0.85, 0.45, 1.0),
+                                   t("node_editor.validate.ok", warnings=warns))
             else:
-                imgui.text_colored(imgui.ImVec4(*ERROR_RED, 1.0), f"{errs}E/{warns}W")
+                imgui.text_colored(imgui.ImVec4(*ERROR_RED, 1.0),
+                                   t("node_editor.validate.errors", errors=errs, warnings=warns))
             imgui.same_line()
-            if imgui.small_button("Report"):
+            if imgui.small_button(t("node_editor.validate.report")):
                 self._report_open = True
 
     def _draw_validate_popup(self, canvas: NodeCanvas) -> None:
         """Validate 选项菜单 + 每帧轮询任务完成（自动取回报告并弹窗）。"""
         self._poll_validate()
 
-        if not imgui.begin_popup("Validate Options"):
+        if not imgui.begin_popup(t("node_editor.validate.options") + "###validate_options"):
             return
-        imgui.text("Dry-run validation of current graph:")
+        imgui.text(t("node_editor.validate.prompt"))
         imgui.separator()
-        for label, preset in self._VALIDATE_MENU:
+        validate_labels = [t("node_editor.validate.static"), t("node_editor.validate.dry360"),
+                           t("node_editor.validate.dry600")]
+        for label, (_key, preset) in zip(validate_labels, self._VALIDATE_MENU):
             if imgui.menu_item(label, "", False, True)[0]:
                 opts = dict(self._validate_opts)
                 opts.update(preset)
                 self._start_validate(canvas, opts)
         imgui.separator()
         running = self._validate_service().state().get("state") == "running"
-        if imgui.menu_item("Cancel running task", "", False, running)[0]:
+        if imgui.menu_item(t("node_editor.validate.cancel_running"), "", False, running)[0]:
             self._validate_service().cancel()
         imgui.end_popup()
 
@@ -860,7 +962,7 @@ class NodeEditorPanel(BasePanel):
             return
         report = self._report
         imgui.set_next_window_size(imgui.ImVec2(560, 430), imgui.Cond_.first_use_ever)
-        visible, still_open = imgui.begin("Validation Report", self._report_open)
+        visible, still_open = imgui.begin(t("node_editor.report.title"), self._report_open)
         if still_open is not None:
             self._report_open = bool(still_open)
         if visible:
@@ -872,20 +974,20 @@ class NodeEditorPanel(BasePanel):
             if report.get("ok"):
                 imgui.text_colored(
                     imgui.ImVec4(0.35, 0.85, 0.45, 1.0),
-                    f"PASSED — {graph.get('nodes')} nodes, {graph.get('links')} links, "
-                    f"{timing.get('duration_ms')} ms",
+                    t("node_editor.report.passed", nodes=graph.get('nodes'),
+                      links=graph.get('links'), ms=timing.get('duration_ms')),
                 )
             else:
-                label = "CANCELLED" if state == "cancelled" else "FAILED"
+                label = t("node_editor.report.cancelled") if state == "cancelled" else t("node_editor.report.failed")
                 imgui.text_colored(
                     imgui.ImVec4(*ERROR_RED, 1.0),
-                    f"{label} — {counts.get('errors', 0)} error(s), "
-                    f"{counts.get('warnings', 0)} warning(s)",
+                    t("node_editor.report.failed_detail", label=label,
+                      errors=counts.get('errors', 0), warnings=counts.get('warnings', 0)),
                 )
             imgui.text_disabled(
-                f"task#{report.get('task_id')}  hash={graph.get('hash')}  "
-                f"frames={runtime.get('frames_simulated')}  "
-                f"events={runtime.get('total_events')}"
+                t("node_editor.report.meta", task=report.get('task_id'),
+                  hash=graph.get('hash'), frames=runtime.get('frames_simulated'),
+                  events=runtime.get('total_events'))
             )
             if self._report_note:
                 imgui.text_colored(imgui.ImVec4(0.90, 0.70, 0.30, 1.00), self._report_note)
@@ -909,12 +1011,12 @@ class NodeEditorPanel(BasePanel):
 
             _red = imgui.ImVec4(*ERROR_RED, 1.00)
             _yellow = imgui.ImVec4(0.90, 0.75, 0.30, 1.00)
-            _section("Static errors", (report.get("static") or {}).get("errors") or [], _red)
-            _section("Static warnings", (report.get("static") or {}).get("warnings") or [], _yellow)
-            _section("Runtime errors", runtime.get("errors") or [], _red)
+            _section(t("node_editor.report.static_errors"), (report.get("static") or {}).get("errors") or [], _red)
+            _section(t("node_editor.report.static_warnings"), (report.get("static") or {}).get("warnings") or [], _yellow)
+            _section(t("node_editor.report.runtime_errors"), runtime.get("errors") or [], _red)
 
             log = report.get("log") or []
-            if log and imgui.collapsing_header(f"Event log ({len(log)})"):
+            if log and imgui.collapsing_header(t("node_editor.report.event_log", count=len(log))):
                 shown = log[:300]
                 for ent in shown:
                     imgui.text_disabled(
@@ -922,20 +1024,20 @@ class NodeEditorPanel(BasePanel):
                         f"{ent.get('action')} | {ent.get('detail')}"
                     )
                 if len(log) > len(shown):
-                    imgui.text_disabled(f"… ({len(log) - len(shown)} more — Export for full log)")
+                    imgui.text_disabled(t("node_editor.report.more", count=len(log) - len(shown)))
 
             imgui.separator()
-            if imgui.button("Copy summary"):
+            if imgui.button(t("node_editor.report.copy")):
                 imgui.set_clipboard_text(self._report_text())
             imgui.same_line()
-            if imgui.button("Export .json"):
+            if imgui.button(t("node_editor.report.export")):
                 FileDialog.save_json(
                     callback=self._save_report,
                     default_name=f"validation_report_task{report.get('task_id')}.json",
                     start_dir=self._last_io_dir,
                 )
             imgui.same_line()
-            if imgui.button("Close"):
+            if imgui.button(t("node_editor.report.close")):
                 self._report_open = False
         imgui.end()
 
@@ -945,7 +1047,7 @@ class NodeEditorPanel(BasePanel):
 
     def _draw_add_popup(self, canvas: NodeCanvas, avail) -> None:
         imgui.set_next_window_pos(self._add_popup_pos)
-        _bpop = imgui.begin_popup("Create Node")
+        _bpop = imgui.begin_popup(t("node_editor.create_node") + "###create_node")
         if _bpop:
             for title, items in MENU_SECTIONS:
                 _draw_add_menu_section(title, items, canvas, avail)

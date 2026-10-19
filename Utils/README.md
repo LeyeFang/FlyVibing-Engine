@@ -4,7 +4,7 @@
 
 > **FlyVibing-User-And-Developer-Utils** — https://github.com/LeyeFang/FlyVibing-User-And-Developer-Utils
 > 安装：`pip install -e <tools repo>/packages/*`（实验设计者、扩展开发者、引擎团队自己都用它）
-> 本机开发：`Utils\Dev\link_tools.bat` 把工具仓库链接进来（`Utils/ExtDev` 是链接，已 gitignore）
+> 本地开发：运行 `Utils\Dev\link_tools.bat`，将工具仓库链接到 `Utils/ExtDev`。
 
 ## 内容
 
@@ -21,12 +21,12 @@
 
 ## 守卫
 
-`Test/Application/Editor/test_utils_layout.py`（core）机器校验：
+布局守卫测试（core 档）会校验：
 
 - `Utils/` 顶层只有 `Dev` / `User`（工具目录不得回迁）；
 - 全仓无 `Utils/ExtDev` 残留引用；
 - `Utils/User` 登记制白名单 + 导出行为（whl / png / pyc 不进游戏包）；
-- `.github/skills/**` 与工具仓库 `skills/**` 逐字节一致（权威源 = 工具仓库；工具仓库不在本机时该项跳过）。
+- `.github/skills/**` 与工具仓库 `skills/**` 逐字节一致（以工具仓库为源；工具仓库不可用时跳过该项）。
 
 > 背景：工具链曾与运行时混居在 `Utils/User`，导出游戏时把 wheel、调试截图一并带进了成品（46 个文件）。
 > 现在两仓分工 + 守卫把这个坑封住了。

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from imgui_bundle import imgui
+from Application.Editor.I18n import t
 from .core import register, _ne_combo, _get_scene_template_names, _get_component_type_names
 from Application.Core.NodeGraph.component_registry import get_properties
 
@@ -16,9 +17,9 @@ def _draw_entity_spawn_widgets(nid: int, inst, _canvas) -> None:
     template = inst.props.get("template", "")
     labels = _get_scene_template_names()
     if not labels:
-        labels = ["(no scene)"]
+        labels = [t("widget.entity.no_scene")]
 
-    if not template and labels and labels[0] != "(no scene)":
+    if not template and labels and labels[0] != t("widget.entity.no_scene"):
         inst.props["template"] = labels[0]
         template = labels[0]
 
@@ -32,7 +33,7 @@ def _draw_entity_spawn_widgets(nid: int, inst, _canvas) -> None:
         inst.props["template"] = labels[new_idx]
 
     imgui.same_line()
-    imgui.text_disabled("Template")
+    imgui.text_disabled(t("common.template"))
     imgui.pop_item_width()
 
 
@@ -48,7 +49,7 @@ def _draw_entity_get_widgets(nid: int, inst, _canvas) -> None:
     if not labels:
         labels = []
 
-    items = labels + ["+ Custom..."] if labels else ["+ Custom..."]
+    items = labels + [t("widget.entity.custom")] if labels else [t("widget.entity.custom")]
     try:
         idx = labels.index(current) if current in labels else len(items) - 1
     except ValueError:
@@ -65,7 +66,7 @@ def _draw_entity_get_widgets(nid: int, inst, _canvas) -> None:
             inst.props["entity_name"] = txt
 
     imgui.same_line()
-    imgui.text_disabled("Name")
+    imgui.text_disabled(t("common.name"))
     imgui.pop_item_width()
 
 
@@ -80,7 +81,7 @@ def _draw_component_remove_widgets(nid: int, inst, _canvas) -> None:
     comp_name = inst.props.get("component", "")
     labels = _get_component_type_names()
     if not labels:
-        labels = ["(none)"]
+        labels = [t("common.none")]
     try:
         idx = labels.index(comp_name) if comp_name in labels else 0
     except ValueError:
@@ -91,7 +92,7 @@ def _draw_component_remove_widgets(nid: int, inst, _canvas) -> None:
         inst.props["component"] = labels[new_idx]
 
     imgui.same_line()
-    imgui.text_disabled("Type")
+    imgui.text_disabled(t("common.type"))
     imgui.pop_item_width()
 
 
@@ -105,9 +106,9 @@ def _draw_component_get_widgets(nid: int, inst, _canvas) -> None:
     comp_name = inst.props.get("component", "")
     labels = _get_component_type_names()
     if not labels:
-        labels = ["(none)"]
+        labels = [t("common.none")]
 
-    if not comp_name and labels and labels[0] != "(none)":
+    if not comp_name and labels and labels[0] != t("common.none"):
         inst.props["component"] = labels[0]
         comp_name = labels[0]
 
@@ -122,7 +123,7 @@ def _draw_component_get_widgets(nid: int, inst, _canvas) -> None:
         inst.props["component"] = labels[new_idx]
     imgui.pop_item_width()
     imgui.same_line()
-    imgui.text_disabled("Type")
+    imgui.text_disabled(t("common.type"))
 
 
 # ── ComponentAdd / SetComponent ────────────────────────────
@@ -143,9 +144,9 @@ def _draw_component_add_or_set(nid: int, inst) -> None:
     comp_name = inst.props.get("component", "")
     labels = _get_component_type_names()
     if not labels:
-        labels = ["(none)"]
+        labels = [t("common.none")]
 
-    if not comp_name and labels and labels[0] != "(none)":
+    if not comp_name and labels and labels[0] != t("common.none"):
         inst.props["component"] = labels[0]
         comp_name = labels[0]
 
@@ -161,16 +162,16 @@ def _draw_component_add_or_set(nid: int, inst) -> None:
         comp_name = labels[new_idx]
     imgui.pop_item_width()
     imgui.same_line()
-    imgui.text_disabled("Type")
+    imgui.text_disabled(t("common.type"))
 
     props = get_properties(comp_name) if comp_name else []
     if props:
         mode = inst.props.get("mode", "manual")
         imgui.spacing()
-        if imgui.radio_button(f"Manual##ca_mode_man_{nid}", mode == "manual"):
+        if imgui.radio_button(t("common.manual") + f"##ca_mode_man_{nid}", mode == "manual"):
             inst.props["mode"] = "manual"
         imgui.same_line()
-        if imgui.radio_button(f"Pin##ca_mode_pin_{nid}", mode == "pin"):
+        if imgui.radio_button(t("common.pin") + f"##ca_mode_pin_{nid}", mode == "pin"):
             inst.props["mode"] = "pin"
 
         if mode == "manual":
@@ -255,7 +256,7 @@ def _draw_component_property_rows(
 @register("EntityGroupSetVisible")
 def _draw_entity_group_visible_widgets(nid: int, inst, _canvas) -> None:
     """一组实体原子显隐 — 目标由 Entity1-4 引脚连线决定 (最多 4 个)。"""
-    imgui.text_disabled("Targets: Entity1-4 links (atomic same-frame visible toggle)")
+    imgui.text_disabled(t("widget.entity.targets_hint"))
 
 
 # ── VecMath ────────────────────────────────────────────────
@@ -278,7 +279,7 @@ def _draw_vec_math_widgets(nid: int, inst, _canvas) -> None:
         inst.props["operation"] = ops[new_idx].lower()
 
     imgui.same_line()
-    imgui.text_disabled("Op")
+    imgui.text_disabled(t("widget.vec.op"))
     imgui.pop_item_width()
 
 

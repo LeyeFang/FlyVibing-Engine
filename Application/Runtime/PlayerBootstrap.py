@@ -177,8 +177,13 @@ def resolve_window_mode(session: PlayerSession) -> str:
 # ────────────────────────────────────────────────────────────────
 
 
-def dry_run(source: str, frames: int = 0, verbose: bool = False) -> int:
+def dry_run(source: str, frames: int = 0, verbose: bool = False,
+            dt: float = 0.0) -> int:
     """无头自检: 工程/场景加载 + 静态校验 (+ 可选假时间干跑)。
+
+    Args:
+        frames: fake-time 模拟帧数（0 = 跳过 L2 干跑）。
+        dt:     每帧 fake-time 步长（秒; 0 = 引擎默认 1/60）。
 
     Returns:
         退出码（0=通过）
@@ -249,7 +254,10 @@ def dry_run(source: str, frames: int = 0, verbose: bool = False) -> int:
             print(f"  ⚠ {e['message']}")
 
     if frames > 0:
-        report = run_validation(scene_json, {"frames": frames, "verbose": verbose})
+        options = {"frames": frames, "verbose": verbose}
+        if dt and dt > 0:
+            options["dt"] = dt
+        report = run_validation(scene_json, options)
         errors = report["runtime"]["errors"]
         if report["static"]["errors"]:
             print("[Player] Dry-run: skipped (static errors)")
@@ -261,7 +269,8 @@ def dry_run(source: str, frames: int = 0, verbose: bool = False) -> int:
         else:
             rt = report["runtime"]
             print(
-                f"[Player] Dry-run: {rt['frames_simulated']} frames, "
+                f"[Player] Dry-run: {rt['frames_simulated']} frames "
+                f"({report['options']['dt']} s/frame), "
                 f"{rt['total_events']} side-effect events"
             )
 

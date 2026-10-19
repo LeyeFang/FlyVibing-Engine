@@ -1,5 +1,5 @@
 """
-Math / Vector 节点 — ScalarMath, Compare, Random, MakeVec3, BreakVec3, VecMath。
+Math / Vector 节点 — ScalarMath, Compare, MakeList, Random, MakeVec3, BreakVec3, VecMath。
 """
 
 from . import _reg, _gen_id, MATH_COLOR
@@ -26,11 +26,25 @@ _reg(NodeTypeDef(
 _reg(NodeTypeDef(
     "Compare", "Compare", "Math", MATH_COLOR,
     [
-        PinDef(_gen_id(), "A", "data", "input", "float"),
-        PinDef(_gen_id(), "B", "data", "input", "float"),
+        PinDef(_gen_id(), "A", "data", "input", "variant"),
+        PinDef(_gen_id(), "B", "data", "input", "variant"),
+        PinDef(_gen_id(), "C", "data", "input", "float", optional=True),
         PinDef(_gen_id(), "Result", "data", "output", "bool"),
     ],
-    "A > < == != >= <= B",
+    "A op B; bool and/or/not/xor; membership in/not_in(out)(B list); between A in [B,C)",
+))
+
+# ── MakeList: 标量/实体引用列表源（Compare in/not_in 的 B 输入）──
+
+_reg(NodeTypeDef(
+    "MakeList", "Make List", "Math", MATH_COLOR,
+    [
+        PinDef(_gen_id(), f"Item_{i}", "data", "input", "variant", optional=True)
+        for i in range(8)
+    ] + [
+        PinDef(_gen_id(), "List", "data", "output", "variant"),
+    ],
+    "Collect connected inputs into a list (unconnected skipped)",
 ))
 
 # ── 旧版四则运算 (保留兼容，菜单中不再出现) ──

@@ -43,6 +43,13 @@ class EditorModule(EngineModule):
 
     def on_load(self, engine: 'Engine') -> None:
         """编辑器装配加载（主线程）。"""
+        # 设置必须在命令服务器启动前载入 — Port 是服务器监听地址的一部分。
+        # CLI/启动参数覆盖已在 EntryPoint 解析并写入 EditorSettings（仅本进程）。
+        try:
+            from Application.Editor.EditorSettings import EditorSettings
+            EditorSettings.load()
+        except Exception as e:  # noqa: BLE001
+            print(f"[Settings] load failed before LiveCommandServer: {e}")
         # ── 实时命令总线（agent MCP 热注入; 仅本机回环 127.0.0.1）──
         try:
             from Application.Editor.Services.LiveCommandServer import LiveCommandServer

@@ -41,7 +41,7 @@ from .api import (
     is_running,
 )
 
-# ── 设备身份（逻辑设备名 → 物理端口; 协议 device_io_protocol §12） ──
+# ── 设备身份（逻辑设备名 → 物理端口; 协议 device_io_protocol §10） ──
 from .serial_manager import resolve_port
 
 # ── 任务类型（供高级用户直接构造） ──────────────────────────

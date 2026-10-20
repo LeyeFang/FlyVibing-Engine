@@ -14,15 +14,12 @@ The engine is designed for experimental work rather than general-purpose game pr
 
 ## Features
 
-- **Scene editor** — entity hierarchy, component inspector, transform gizmos, resource browser, project management, and configurable UI language and font size.
-- **Node-graph authoring** — execution and data-flow graphs with node aliases, reusable node groups, structural validation, dry-run validation, and static execution-flow inspection.
-- **Play in Editor (PIE)** — run, pause, and stop the current scene without leaving the editor. The same runtime is used by packaged builds.
-- **Experimental I/O** — serial/parallel device abstraction with simulated backends, virtual devices, signal-processing nodes, epoch datasets, and FBCSP/CCA algorithms.
-- **Dynamic content** — image/GIF playback through runtime texture updates, dynamic text rendering, and material/shader pipelines.
-- **Extension system** — a tiered extension model (declarative, hook-based, out-of-process) with built-in modules under `Application/Functions/`.
-- **Self-contained distribution** — exports bundle the runtime and an offline wheelhouse; the result launches through `run_game.cmd` on a clean machine.
-- **Automation surface** — a loopback TCP command server exposes editor operations to CLI and MCP clients for scripted or assisted workflows.
-- **Free-threaded runtime** — CPython 3.14 with the GIL disabled.
+The engine focuses on four areas:
+
+- **Agent-ready authoring** — Editor operations are exposed to CLI and MCP clients through a local command interface.
+- **Experiment scene construction** — Scenes, stimuli, and devices are configured in-editor and previewed with the same runtime used in exports.
+- **Flexible experiment design** — Trial flow is defined as node graphs with reusable groups, validation, and flow inspection.
+- **Community extension support** — Devices, algorithms, UI, and nodes are added through a tiered extension model without modifying the engine core.
 
 ## Requirements
 
@@ -89,8 +86,8 @@ pip install -e ..\FlyVibing-User-And-Developer-Utils\packages\editor-mcp
 
 While the editor is running, a loopback command server listens on `127.0.0.1:8977`. The toolchain repository provides:
 
-- `engine-editor-cli` — terminal client with no persistent context cost;
-- `engine-editor-mcp` — MCP server with a lite profile (5 tools) and a full compatibility profile;
+- `engine-editor-cli` — command-line client;
+- `engine-editor-mcp` — MCP server with lite and full profiles;
 - `flyvibing-node-editor` — offline graph construction, validation, and scene injection.
 
 Set up a workspace with the skill and MCP configuration in one step:

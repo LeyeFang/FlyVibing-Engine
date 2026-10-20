@@ -2,8 +2,8 @@
 
 能力注入模型（见 Doc/ExtDev/extension_dev_protocol.md §5）:
   - 由 ExtensionManager 构造并注入可用能力;
-  - M0 实装: ops / log / 目录信息;
-  - 设计未实装: ui / threads / jobs / settings / nodes（M1/M2, 按 capabilities 发放）;
+  - 实装: ops / ui.register_window / graph / nodes（M1） / log / 目录信息;
+  - 设计未实装: threads / jobs / settings（M2/M1, 按 capabilities 发放）;
   - 未注入的能力属性为 None（扩展应做能力检测, 不得假设存在）。
 
 ★ 本文件属 Core（GUI 无关）; ops 注册器由 Editor 侧注入, Core 不依赖 Editor。
@@ -41,7 +41,7 @@ class ExtensionContext:
         self.threads = None  # M2: spawn / stop_all
         self.jobs = None     # M2: submit → Future
         self.settings = None # M1: schema 化设置（持久化 + 自动 UI）
-        self.nodes = None    # M1: NodePack 注册
+        self.nodes = None    # M1: NodePack 注册（manifest capabilities 含 nodes 时注入）
         self.graph = None    # M1: 受限图访问（capabilities 含 "graph" 才注入 —
                              #     见 Application/Editor/Extensions/ExtensionGraph.py）
 

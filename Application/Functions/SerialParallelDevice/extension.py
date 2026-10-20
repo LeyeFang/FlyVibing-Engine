@@ -74,7 +74,7 @@ class DeviceExtension(UIExtensionBase):
 
     id = "device"
     name = "Device (Serial/Parallel)"
-    version = "0.1.0"
+    version = "0.3.0"
 
     _WINDOW_NAME = "Serial/Parallel Monitor"
 
@@ -106,6 +106,12 @@ class DeviceExtension(UIExtensionBase):
     def on_enable(self) -> None:
         if self._ctx is not None:
             self._install(self._ctx)   # 幂等 — disable 后 enable 重走
+            try:
+                res = self._op_autobind({})
+                if res["bound"] or res["ambiguous"]:
+                    self._ctx.log("autobind: " + json.dumps(res, ensure_ascii=False))
+            except Exception as e:  # noqa: BLE001 — 启动期自动重绑失败不阻塞面板
+                self._ctx.log(f"autobind failed: {e!r}")
 
     def on_ui_event(self, event: str, name: str) -> None:
         """窗口生命周期事件（UIExtensionBase 抽象方法实现）。
@@ -148,6 +154,8 @@ class DeviceExtension(UIExtensionBase):
                      summary="{value, address?, fmt?} 写并口（5ms 自动复位）")
         ops.register("bind_alias", self._op_bind_alias,
                      summary="{name, port?, baud?, unbind?} 绑定/解绑逻辑设备名（机器侧注册表）")
+        ops.register("autobind", self._op_autobind,
+                     summary="{name?, dry_run?} 按 USB 指纹自动改绑逻辑设备名（仅唯一候选）")
         ops.register("bind_nodes", self._op_bind_nodes,
                      summary="{name, migrate_from?, dry_run?} 把引用物理端口的场景节点迁到 @name")
 
@@ -223,7 +231,7 @@ class DeviceExtension(UIExtensionBase):
         return {"queued": True, "address": address, "fmt": fmt}
 
     # ════════════════════════════════════════════════════════════
-    # ops: 设备名（@alias）—— 两级设备身份（协议 device_io_protocol §12）
+    # ops: 设备名（@alias）—— 两级设备身份（协议 device_io_protocol §10）
     # ════════════════════════════════════════════════════════════
 
     def _op_bind_alias(self, args) -> dict:
@@ -242,8 +250,91 @@ class DeviceExtension(UIExtensionBase):
         baud = int(args.get("baud") or self._settings.get("baud") or 115200)
         entry = reg.bind(name, transport=str(args.get("transport") or "serial"),
                          port=port, baud=baud)
+        # 绑定即采集 USB 指纹（serial 优先；无序列号记 vid:pid）
+        try:
+            from Application.Functions.SerialParallelDevice import identity
+            info = next((p for p in self._list_ports_now()
+                         if str(p.get("device") or "") == port), None)
+            if info is not None:
+                hint = identity.fingerprint(info)
+                if hint:
+                    reg.set_hint(name, **hint)
+                    entry = reg.get(name) or entry
+            elif self._ctx is not None:
+                self._ctx.log(f"no USB fingerprint for {port} (manual or unplugged)")
+        except Exception as e:  # noqa: BLE001 — 指纹采集失败不影响绑定
+            if self._ctx is not None:
+                self._ctx.log(f"fingerprint capture failed for {port}: {e!r}")
+        # 绑定即同步面板当前端口（agent 显式传 port 时面板不应继续停在旧口）
+        self._settings["port"], self._settings["baud"] = port, baud
+        self._save_settings()
         return {"alias": "@" + reg.parse_ref(name), "entry": entry,
                 "describe": reg.describe(name), "devices": reg.all()}
+
+    def _op_autobind(self, args) -> dict:
+        """按 USB 指纹自动改绑逻辑设备名（唯一候选才改；歧义/无匹配显式报告）。"""
+        args = args or {}
+        import Application.Core.DeviceRegistry as reg
+        from Application.Functions.SerialParallelDevice import identity
+
+        dry = bool(args.get("dry_run"))
+        ports = self._list_ports_now()
+        requested = str(args.get("name") or "").strip()
+        if requested:
+            name = reg.parse_ref(requested)
+            if reg.get(name) is None:
+                raise ValueError(f"@{name} is not bound — bind it first (bind_alias)")
+            names = [name]
+        else:
+            names = sorted(reg.all().keys())
+
+        out = {"dry_run": dry, "bound": [], "ambiguous": [],
+               "unmatched": [], "unchanged": []}
+        for name in names:
+            entry = reg.get(name) or {}
+            hint = dict(entry.get("hint") or {})
+            cur_port = str(entry.get("port") or "")
+            cur_info = next((p for p in ports
+                             if str(p.get("device") or "") == cur_port), None)
+
+            # 旧绑定没有 hint: 设备当前在位时补录指纹（不改变端口）。
+            if cur_info is not None and not hint:
+                hint = identity.fingerprint(cur_info)
+                if hint and not dry:
+                    reg.set_hint(name, **hint)
+
+            if cur_info is not None and hint:
+                cur_match = identity.match(hint, [cur_info])
+                if cur_match["status"] == "matched":
+                    out["unchanged"].append({"alias": "@" + name, "port": cur_port})
+                    continue
+
+            res = identity.match(hint, ports)
+            if res["status"] == "matched":
+                new_port = str(res["port"].get("device") or "")
+                item = {"alias": "@" + name, "from": cur_port, "to": new_port,
+                        "matched_by": res["reason"]}
+                out["bound"].append(item)
+                if not dry and new_port and new_port != cur_port:
+                    reg.bind(name, port=new_port,
+                             baud=int(entry.get("baud") or self._settings.get("baud") or 115200))
+                    if self._ctx is not None:
+                        self._ctx.log(
+                            f"auto-bound @{name} -> {new_port} ({res['reason']})")
+                    # 面板若正停在那个已失效的旧口，跟着换（保持面板与设备一致）
+                    if str(self._settings.get("port") or "") == cur_port:
+                        self._settings["port"] = new_port
+                        self._save_settings()
+            elif res["status"] == "ambiguous":
+                item = {"alias": "@" + name,
+                        "candidates": [c.get("device") for c in res["candidates"]]}
+                out["ambiguous"].append(item)
+                if self._ctx is not None:
+                    self._ctx.log(
+                        f"auto-bind @{name} ambiguous: {item['candidates']} — not changed")
+            else:
+                out["unmatched"].append({"alias": "@" + name, "reason": res["reason"]})
+        return out
 
     def _op_bind_nodes(self, args) -> dict:
         """把场景里指向某物理端口的节点一键迁到逻辑设备名（面板按钮走同一实现）。
@@ -301,7 +392,12 @@ class DeviceExtension(UIExtensionBase):
 
     def _guard(self, op_name: str, args: dict) -> None:
         """面板按钮 → **与 agent 同一操作实现**（动作单点），结果显式显示（禁静默）。"""
-        fn = {"bind_alias": self._op_bind_alias, "bind_nodes": self._op_bind_nodes}.get(op_name)
+        fn = {"bind_alias": self._op_bind_alias,
+              "bind_nodes": self._op_bind_nodes,
+              "autobind": self._op_autobind}.get(op_name)
+        if fn is None:
+            self._alias_msg = f"error: unknown panel op {op_name}"
+            return
         try:
             res = fn(args or {})
             self._alias_msg = "ok: " + json.dumps(res, ensure_ascii=False)[:120]
@@ -321,6 +417,10 @@ class DeviceExtension(UIExtensionBase):
         imgui.spacing()
         if not imgui.collapsing_header("Device names (@alias)", imgui.TreeNodeFlags_.default_open):
             return
+        if imgui.small_button(f"{_icon('ICON_FA_MAGNIFYING_GLASS')} Auto-detect##spd_autobind"):
+            self._guard("autobind", {})
+        imgui.same_line()
+        imgui.text_disabled("match USB fingerprint (serial > vid:pid)")
         cur_port = str(self._settings.get("port") or "")
         devices = reg.all()
         if not devices:

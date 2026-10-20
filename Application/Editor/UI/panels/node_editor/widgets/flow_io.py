@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 from Application.Editor.I18n import t
-from .core import register, _ne_combo, _list_com_ports, _collect_timer_names, _draw_timer_name_combo, _draw_var_name_combo
+from .core import register, _ne_combo, _collect_timer_names, _draw_timer_name_combo, _draw_var_name_combo
 
 # ═══════════════════════════════════════════════════════════════
 # Widget 函数 — 每个节点类型一个
@@ -123,97 +123,9 @@ def _draw_random_set_seed_widgets(nid: int, inst, _canvas) -> None:
     imgui.pop_item_width()
 
 
-# ── SerialSend ─────────────────────────────────────────────
-
-@register("SerialSend")
-def _draw_serial_send_widgets(nid: int, inst, _canvas) -> None:
-    """Port / BaudRate / Format 始终在节点属性中配置；Value 从上游 pin 传入。
-
-    Port 可为物理端口（`COM5`）或**逻辑设备名**（`@mibox` — 本机绑定, 协议
-    `Doc/Dev/device_io_protocol.md` §12）: 换机器只需在面板里重绑别名, 场景不用改。
-    """
-    imgui.dummy(imgui.ImVec2(0, 2))
-    imgui.push_item_width(105)
-
-    # ── Port ──
-    port = str(inst.props.get("port", ""))
-    ports = _list_com_ports()
-    try:                                    # 逻辑设备名（本机已绑定）也进候选
-        from Application.Core.DeviceRegistry import all as _aliases
-        ports = ports + ["@" + n for n in sorted(_aliases())]
-    except Exception:                       # noqa: BLE001 — 无注册表环境降级
-        pass
-    if ports:
-        try:
-            idx = ports.index(port)
-        except ValueError:
-            idx = -1
-        if idx < 0:
-            ports.append(port)
-            idx = len(ports) - 1
-        changed, new_idx = _ne_combo(t("widget.flow.port") + f"##ser_port_{nid}", idx, ports)
-        if changed:
-            inst.props["port"] = ports[new_idx]
-    else:
-        changed, new_port = imgui.input_text(t("widget.flow.port") + f"##ser_port_{nid}", port)
-        if changed:
-            inst.props["port"] = new_port
-
-    # ── Baud Rate ──
-    baud = int(inst.props.get("baud_rate", 9600))
-    changed, new_baud = imgui.input_int(t("widget.flow.baud") + f"##ser_baud_{nid}", baud)
-    if changed:
-        inst.props["baud_rate"] = new_baud
-
-    # ── Format ──
-    fmt = inst.props.get("format", "bytes")
-    fmt_labels = [t("widget.flow.bytes"), t("widget.flow.string")]
-    fmt_keys = ["bytes", "string"]
-    try:
-        fmt_idx = fmt_keys.index(fmt)
-    except ValueError:
-        fmt_idx = 0
-    changed, new_fmt_idx = _ne_combo(t("widget.flow.format") + f"##ser_fmt_{nid}", fmt_idx, fmt_labels)
-    if changed:
-        inst.props["format"] = fmt_keys[new_fmt_idx]
-
-    imgui.pop_item_width()
-
-
-# ── ParallelSend ───────────────────────────────────────────
-
-@register("ParallelSend")
-def _draw_parallel_send_widgets(nid: int, inst, _canvas) -> None:
-    """Address 始终以 combo 展示；Value 受 mode 影响。"""
-    imgui.dummy(imgui.ImVec2(0, 2))
-    imgui.push_item_width(105)
-
-    address = int(inst.props.get("address", 0x3FF8))
-    addr_labels = [t("widget.flow.addr_lpt1"), t("widget.flow.addr_lpt2"), t("widget.flow.addr_lpt3")]
-    addr_values = [0x3FF8, 0x3FF0, 0x3FE8]
-    try:
-        idx = addr_values.index(address)
-    except ValueError:
-        idx = -1
-    changed, new_idx = _ne_combo(t("widget.flow.address") + f"##par_addr_{nid}", idx, addr_labels)
-    if changed and 0 <= new_idx < len(addr_values):
-        inst.props["address"] = addr_values[new_idx]
-
-    mode = inst.props.get("mode", "manual")
-    imgui.dummy(imgui.ImVec2(0, 1))
-    if imgui.radio_button(t("common.manual") + f"##par_mode_man_{nid}", mode == "manual"):
-        inst.props["mode"] = "manual"
-    imgui.same_line()
-    if imgui.radio_button(t("common.pin") + f"##par_mode_pin_{nid}", mode == "pin"):
-        inst.props["mode"] = "pin"
-
-    if mode == "manual":
-        v = int(inst.props.get("value", 1))
-        changed, nv = imgui.input_int(t("widget.flow.value_1_255") + f"##par_val_{nid}", v)
-        if changed:
-            inst.props["value"] = max(1, min(255, nv))
-
-    imgui.pop_item_width()
+# ── SerialSend / ParallelSend ─────────────────────────────
+# 2026-10-20: 卡片控件改由设备扩展 node_pack.fields 自动渲染；核心不再保留
+# 这两个节点的自定义控件。
 
 
 # ── PathVar ────────────────────────────────────────────────

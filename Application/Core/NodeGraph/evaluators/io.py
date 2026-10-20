@@ -1,11 +1,9 @@
 """
-Evaluators: IO 节点 (SerialSend, ParallelSend, PathVar, TextFileWrite)。
+Evaluators: IO 节点 (PathVar, TextFileWrite)。
 
-SerialSend   — 通过串口发送信号，支持 Manual / Pin 双模式，String / Bytes 双格式。
-ParallelSend — 通过并口发送 uint8 值 (1–255)，Manual / Pin 双模式，5ms 后自动复位。
-PathVar      — 输出文件/目录路径字符串。
+SerialSend / ParallelSend 的求值器已于 2026-10-20 迁到设备扩展 node_pack。
+PathVar — 输出文件/目录路径字符串。
 TextFileWrite — 将内容写入文本文件，支持 Manual / Pin 双模式，w/a 模式，分隔符。
-实际 I/O 由 Application/Functions/SerialParallelDevice 线程池执行，本求值器只做入队。
 """
 
 import os
@@ -29,108 +27,6 @@ def _read_input_raw(node_id: int, pin_name: str, ctx: ExecutionContext,
                 if val is not None:
                     return val
     return default
-
-
-# ── Evaluator ─────────────────────────────────────────────────
-
-def _eval_serial_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
-    """SerialSend — 通过串口发送一个值。
-
-    Port / BaudRate / Format 始终从节点属性读取（实验级配置）。
-    Value 从上游数据 pin 读入（动态值）。
-
-    实际写入由 Application/Functions/SerialParallelDevice 的独立 I/O 线程执行，
-    本函数仅做参数读取 + 编码 + 入队 — 不阻塞逻辑线程。
-    """
-    inst = g._canvas.nodes[node_id]
-    port = str(inst.props.get("port", "")).strip()
-    baud = int(inst.props.get("baud_rate", 9600))
-    fmt = inst.props.get("format", "bytes")
-    value = _read_input_raw(node_id, "Value", ctx, g, 0)
-    if value is None:
-        value = 0.0
-
-    # ── 端口未配置 → 显式跳过（2026-10-12: 不再假定 COM1 —— 静默发错端口比报错更糟）──
-    if not port:
-        ctx.emit_log(node_id, "SerialSend", "error",
-                     "no port configured (set 'port' to COMx or @device name)")
-        if not ctx.dry_run:
-            print("[SerialSend] skipped: no port configured (COM1 default removed)")
-        return
-
-    # ── 编码 + 入队 ──
-    if ctx.dry_run:
-        ctx.emit_log(node_id, "SerialSend", "send",
-                     f"port={port}, baud={baud}, fmt={fmt}, val={value}")
-        return
-
-    from Application.Functions.SerialParallelDevice import send as spd_send
-    from Application.Functions.SerialParallelDevice.protocol import encode
-
-    payload = encode(value, fmt)
-    try:
-        # '@device' 别名在此解析（机器侧绑定; 未绑定 → 显式抛错而非静默回退）
-        spd_send(port, baud, payload)
-    except Exception as e:  # noqa: BLE001 — 显式告警, 禁止静默吞错（ui_protocol §2.12）
-        ctx.emit_log(node_id, "SerialSend", "error", f"{port}@{baud}: {e}")
-        print(f"[SerialSend] {port}@{baud} FAILED: {e}")
-        return
-
-    # debug: 首 4 字节 hex
-    _hex = payload[:4].hex(' ') if len(payload) >= 4 else payload.hex()
-    print(f"[SerialSend] {port}@{baud} fmt={fmt} val={value} → {len(payload)}B [{_hex}]")
-
-register_evaluator("SerialSend", _eval_serial_send)
-
-
-# ── ParallelSend ───────────────────────────────────────────
-
-def _eval_parallel_send(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
-    """ParallelSend — 通过并口发送一个 uint8 值 (1–255)。
-
-    Manual 模式: Address / Value 全部从节点属性读取。
-    Pin 模式:    Address / Value 全部从上游连线读取。
-
-    实际写入由 Application/Functions/SerialParallelDevice 的独立 I/O 线程执行，
-    写入后 5ms 自动复位为零。本函数仅做参数读取 + 入队 — 不阻塞逻辑线程。
-    """
-    inst = g._canvas.nodes[node_id]
-    mode = inst.props.get("mode", "manual")
-
-    if mode == "manual":
-        address = int(inst.props.get("address", 0x3FF8))
-        value = inst.props.get("value", 1)
-    else:
-        addr_raw = _read_input_raw(node_id, "Address", ctx, g, None)
-        if addr_raw is None:
-            address = int(inst.props.get("address", 0x3FF8))
-        else:
-            try:
-                address = int(float(addr_raw))
-            except (TypeError, ValueError):
-                address = int(inst.props.get("address", 0x3FF8))
-        value = _read_input_raw(node_id, "Value", ctx, g, 1)
-        if value is None:
-            value = 1
-
-    # ── 钳位到 1–255 (0 留给自动复位) ──
-    try:
-        ival = max(1, min(255, int(float(value))))
-    except (TypeError, ValueError):
-        ival = 1
-
-    # ── 编码 + 入队 ──
-    if ctx.dry_run:
-        ctx.emit_log(node_id, "ParallelSend", "write",
-                     f"addr=0x{address:04X}, val=0x{ival:02X} ({ival})")
-        return
-
-    from Application.Functions.SerialParallelDevice import write_parallel
-
-    write_parallel(address, ival, "byte")
-    print(f"[ParallelSend] 0x{address:04X} ← 0x{ival:02X} ({ival})")
-
-register_evaluator("ParallelSend", _eval_parallel_send)
 
 
 # ── 辅助：写入 output pin（不做类型转换）──────────────────

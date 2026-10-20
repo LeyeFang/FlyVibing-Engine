@@ -10,7 +10,7 @@
   - 取画布路径复用 `LiveCommandServer._node_canvas()`（单一事实源，不新增第二套逻辑）。
 
 启用条件: manifest `capabilities` 含 `"graph"`（显式声明 → 宿主才注入 `ctx.graph`）。
-协议: `Doc/Dev/device_io_protocol.md` §12（用法）· `Doc/ExtDev/extension_dev_protocol.md` §6。
+协议: `Doc/Dev/device_io_protocol.md` §10（用法）· `Doc/ExtDev/extension_dev_protocol.md` §6。
 """
 
 from __future__ import annotations

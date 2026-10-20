@@ -8,18 +8,26 @@
 你现在**接手维护** MyGameEngine-Python（Python 3.14 free-threaded 游戏引擎）的一个**已上线官方扩展**：
 串并口扩展 `Application/Functions/SerialParallelDevice/`（`id = device`，ops 前缀 `ext.device.*`）。
 
-**先按顺序读完这 4 份，再动手**（不要凭猜测改）:
+> **当前状态（2026-10-20）**: 该扩展**已由现任维护 agent 接手**；本提示词保留为启动清单与红线速查。
+> 后续变更请保持 `HANDOFF.md` 顶部状态和 `TODO.md` 与仓库一致。
+
+**先按顺序读完这 5 份，再动手**（不要凭猜测改）:
 
 1. `Application/Functions/SerialParallelDevice/HANDOFF.md` — 交接书（边界 / 资产地图 / 已定裁决 / 坑 / 下一步 / 验收）**必读**
-2. `Doc/Dev/device_io_protocol.md` §11 与 **§12（两级设备身份，通读）**
-3. `Doc/ExtDev/extension_dev_protocol.md` §6（ctx 能力）/ §7（UI 契约）/ §9（agent op 生态）/ §14（提交检查单）
-4. `Application/Functions/SerialParallelDevice/extension.py` + `Application/Core/DeviceRegistry.py`（源码即规范）
+2. `engine-editor-cli doc show dev/device_io_protocol#10`（两级设备身份，通读；该文档只有 §1–§10，`#11` 为空）
+3. `engine-editor-cli doc show extdev/extension_dev_protocol#6` / `#7` / `#9` / `#14`
+   （`Doc/Dev/...` 与 `Doc/ExtDev/...` 只是 CLI 迁移后的入口占位页，正文权威在工具仓库的 `docs_content/`）
+4. `Application/Functions/SerialParallelDevice/Doc/NODE_PACK_MIGRATION_2026-10-20.md`
+   （2026-10-20 节点包迁移：已改项 / 验证命令 / Serial 侧收尾清单 / 约束）
+5. `Application/Functions/SerialParallelDevice/extension.py` + `Application/Core/DeviceRegistry.py`（源码即规范）
 
 **红线（违反即返工）**:
 
 - 面板按钮与 agent op **必须同一实现**（`_guard` → `_op_*`），不允许两条代码路径。
 - 未绑定设备名 / 未配置端口 → **显式报错**，绝不静默回退、绝不给默认端口。
 - 扩展**不得 import 编辑器层**；要读写当前场景节点只能走 `ctx.graph`（`nodes/find/set_props`）。
+- `SerialSend` / `ParallelSend` 的类型、求值器、字段都在本目录 `node_pack.py`；**不要**再写回
+  `Application/Core/NodeGraph/{node_types,evaluators}`（会被自动发现机制重复注册/覆盖）。
 - 扩展**不得触碰**宿主全局 imgui 状态（`create/destroy_context`、`set_ini_filename`、`io/style` 赋值）。
 - 无头 GUI 测试只能用 `flyvibing_extension_kit.imgui_headless.headless_imgui()`；`begin_child/end_child` 无条件配对。
 - UI 文案英文；代码注释/日志可中文。
@@ -29,14 +37,14 @@ CLI 用 `.venv-py314t\Scripts\engine-editor-cli.exe`；嵌套参数走 `cli batc
 
 **工作姿势**: 任何改动前后都跑 HANDOFF §6 三条命令（`--only device_alias` / `--tier core` / `review_extension.py`）；
 改面板或 op 后必须在真实编辑器里走一遍（enable → 操作 → 截图 → quit）才算完成；
-完成定义（DoD）见 HANDOFF §7。
+完成定义（DoD）见 HANDOFF §7（其中文档用 `engine-editor-cli doc show ...` 定位，源头在工具仓库 `docs_content/`）。
 
 **沟通偏好**: 用户要**简短直接**的答复（先给结论再给证据），中文；不要长篇复述代码；
 设计上有多个选项时给 2–3 个方案 + 推荐 + 代价，让用户拍板；已定裁决在 HANDOFF §3 查，**不要重开**。
 
 **第一个任务**: HANDOFF §5 的 **P0 — 自动重绑**：绑定时采集并写入设备指纹 `hint`（`usb_serial` / `vid_pid`），
-新机器打开工程/启动面板时按指匹配自动改绑（日志 `[ext:device] auto-bound ...`），匹配不到保持显式报错；
+新机器打开工程/启动面板时按指纹匹配自动改绑（日志 `[ext:device] auto-bound ...`），匹配不到保持显式报错；
 对外新增 `ext.device.autobind {name?, dry_run?}` + 面板 `Auto-detect` 按钮（同一实现），按 DoD 交付
-（单测伪造端口列表 + 实机拔插一次 + 文档 §12 补一小节）。
+（单测伪造端口列表 + 实机拔插一次 + 文档 §10 补一小节）。
 
 === 提示词结束 ===

@@ -31,6 +31,7 @@ from Application.Core.NodeGraph import (
     _TYPES,
     _gen_id,
 )
+from Application.Core.NodeGraph.node_packs import NodePackRegistry
 from Application.Core.NodeGraph.graph_constraints import (
     device_cascade_deletes,
 )
@@ -55,16 +56,39 @@ from .visible_pins import get_visible_pins
 _SUB_HDR_COLOR = imgui.ImVec4(0.500, 0.500, 0.500, 0.60)
 
 
+def _free_node_position(
+    canvas: NodeCanvas,
+    target: tuple[float, float],
+    step: float = 36.0,
+) -> tuple[float, float]:
+    """从画布中心开始找一个不与现有节点完全重合的落点。
+
+    画布中心是固定屏幕点，连续 Add 时若所有新节点都落在同一坐标，
+    imgui-node-editor 会把它们完全叠在一起（看起来像 Add 只成功了一次）。
+    这里做一个小步长右下滑移；不试图做完整碰撞检测（节点高度由控件动态
+    决定），只保证每次 Add 都能看到新节点。
+    """
+    occupied = [(inst.pos[0], inst.pos[1]) for inst in canvas.nodes.values()]
+    x, y = target
+    for _ in range(32):
+        if not any(abs(x - ox) < step * 0.5 and abs(y - oy) < step * 0.5
+                   for ox, oy in occupied):
+            return x, y
+        x += step
+        y += step
+    return target
+
+
 def _draw_add_menu_section(
     title: str,
     items: list,
     canvas: NodeCanvas,
-    avail: imgui.ImVec2,
+    node_pos: imgui.ImVec2,
 ) -> None:
     """在 Add 弹出菜单中绘制一个顶级分类（悬停展开子菜单）。"""
     if imgui.begin_menu(group_label(title)):
         for item in items:
-            _draw_menu_item(item[0], item[1], canvas)
+            _draw_menu_item(item[0], item[1], canvas, node_pos)
         imgui.end_menu()
 
 
@@ -72,6 +96,7 @@ def _draw_menu_item(
     label: str,
     target,
     canvas: NodeCanvas,
+    node_pos: imgui.ImVec2,
 ) -> None:
     """绘制菜单项:
       target 为 list → 子分组标题 + 展平子项
@@ -82,14 +107,15 @@ def _draw_menu_item(
         imgui.text_colored(_SUB_HDR_COLOR, f"  {group_label(label)}")
         imgui.separator()
         for sub_label, sub_value in target:
-            _draw_menu_item(sub_label, sub_value, canvas)
+            _draw_menu_item(sub_label, sub_value, canvas, node_pos)
     else:
         display_label = node_label(target, label)
         changed, _selected = imgui.menu_item(display_label, "", False, True)
         if changed:
             n_before = len(canvas.nodes)
-            max_y = max((inst.pos[1] for inst in canvas.nodes.values()), default=40)
-            nid = canvas.add_node(target, (80, max_y + 200))
+            drop = _free_node_position(
+                canvas, (float(node_pos.x), float(node_pos.y)))
+            nid = canvas.add_node(target, drop)
             if nid < 0:
                 print(f"[AddNode] FAILED: type '{target}' not registered")
             else:
@@ -126,6 +152,10 @@ class NodeEditorPanel(BasePanel):
         self._editor_initialized: bool = False
         self._canvas_initialized: bool = False
         self._add_popup_pos: imgui.ImVec2 = imgui.ImVec2(0, 0)
+        # Add 菜单打开的屏幕中心 → 在 ne.begin 后解析成画布坐标（新节点落点）
+        self._add_screen_center: imgui.ImVec2 = imgui.ImVec2(0, 0)
+        self._add_node_pos: imgui.ImVec2 = imgui.ImVec2(80, 40)
+        self._add_target_pending: bool = False
         # ── Import / Export 状态 ──
         self._import_path: str = ""
         self._export_path: str = ""
@@ -206,6 +236,11 @@ class NodeEditorPanel(BasePanel):
             rect_min = imgui.get_item_rect_min()
             rect_max = imgui.get_item_rect_max()
             self._add_popup_pos = imgui.ImVec2(rect_min.x, rect_max.y)
+            # 新节点落在画布可见区域中心（不是整个面板中心：工具栏占高度，
+            # 面板中心会偏上/偏下）。屏幕中心在 ne.begin 之前计算，坐标转换
+            # 必须在 ne.begin 之后进行，见下方 _add_target_pending。
+            self._add_target_pending = True
+            self._add_node_pos = imgui.ImVec2(80, 40)  # 解析失败时的回退
             imgui.open_popup("###create_node")
 
         imgui.same_line()
@@ -244,7 +279,45 @@ class NodeEditorPanel(BasePanel):
         s.set_color_(ne.StyleColor.bg,   _col((0.090, 0.090, 0.090), 1.00))
         s.set_color_(ne.StyleColor.grid, _col((0.180, 0.180, 0.180), 0.50))
 
-        ne.begin("NodeEditor", avail)
+        # ★ 工具栏已经占用了窗口顶部；画布必须使用“剩余内容区”而不是
+        #   draw() 开头的完整 avail。否则独立标签页/高窗口下画布高度多出
+        #   一条工具栏高度，底部溢出，工具栏和画布点击区域会错位。
+        canvas_avail = imgui.get_content_region_avail()
+        if canvas_avail.x <= 0 or canvas_avail.y <= 0:
+            # 面板过小/刚被折叠：丢弃本次 Add 目标，避免下一帧用旧屏幕坐标
+            # 解析到完全不同的画布位置。
+            self._add_target_pending = False
+            return
+        if self._add_target_pending:
+            # 工具栏/弹窗都已经画完，此时光标位置就是画布左上角。
+            canvas_origin = imgui.get_cursor_screen_pos()
+            self._add_screen_center = imgui.ImVec2(
+                canvas_origin.x + canvas_avail.x * 0.5,
+                canvas_origin.y + canvas_avail.y * 0.5,
+            )
+        ne.begin("NodeEditor", canvas_avail)
+        try:
+            self._draw_canvas_contents(canvas, ne, canvas_avail)
+        finally:
+            # begin/end 必须严格配对：即使节点、控件或用户交互抛异常，
+            # 也不能把 imgui-node-editor 的原生栈留成未闭合状态。
+            ne.end()
+
+        self._draw_add_popup(canvas)
+        self._sync_positions(canvas, ne)
+
+    def _draw_canvas_contents(self, canvas: NodeCanvas, ne, canvas_avail) -> None:
+        """ne.begin 与 ne.end 之间的画布内容（异常由外层 finally 兜底）。"""
+        # ★ 必须在 ne.begin 之后做屏幕→画布转换；否则节点编辑器还没有
+        #   当前视口/滚动信息，坐标会按旧状态解析，新节点可能落到视口外。
+        #   转换只做一次（点击 Add 的当帧），之后菜单悬停/点击期间视口即使
+        #   被拖动，也保持用户打开菜单时看到的落点。
+        if self._add_target_pending:
+            try:
+                self._add_node_pos = ne.screen_to_canvas(self._add_screen_center)
+            except Exception:
+                self._add_node_pos = imgui.ImVec2(80, 40)
+            self._add_target_pending = False
 
         if self._fit_requested:
             ne.navigate_to_content()
@@ -257,21 +330,19 @@ class NodeEditorPanel(BasePanel):
 
         # ── 空画布提示 ──
         ne.suspend()
-        if not canvas.nodes:
-            canvas_pos = imgui.get_cursor_screen_pos()
-            imgui.set_cursor_screen_pos((
-                canvas_pos.x + avail.x / 2 - 80,
-                canvas_pos.y + avail.y / 2 - 10,
-            ))
-            imgui.text_colored(
-                imgui.ImVec4(0.400, 0.400, 0.400, 1.00),
-                t("node_editor.empty_hint"),
-            )
-        ne.resume()
-        ne.end()
-
-        self._draw_add_popup(canvas, avail)
-        self._sync_positions(canvas, ne)
+        try:
+            if not canvas.nodes:
+                canvas_pos = imgui.get_cursor_screen_pos()
+                imgui.set_cursor_screen_pos((
+                    canvas_pos.x + canvas_avail.x / 2 - 80,
+                    canvas_pos.y + canvas_avail.y / 2 - 10,
+                ))
+                imgui.text_colored(
+                    imgui.ImVec4(0.400, 0.400, 0.400, 1.00),
+                    t("node_editor.empty_hint"),
+                )
+        finally:
+            ne.resume()
 
     # ============================================================
     # Scene 管理
@@ -1045,12 +1116,12 @@ class NodeEditorPanel(BasePanel):
     # 子步骤: Import / Export 弹出窗口（END）
     # ============================================================
 
-    def _draw_add_popup(self, canvas: NodeCanvas, avail) -> None:
+    def _draw_add_popup(self, canvas: NodeCanvas) -> None:
         imgui.set_next_window_pos(self._add_popup_pos)
         _bpop = imgui.begin_popup(t("node_editor.create_node") + "###create_node")
         if _bpop:
-            for title, items in MENU_SECTIONS:
-                _draw_add_menu_section(title, items, canvas, avail)
+            for title, items in [*MENU_SECTIONS, *NodePackRegistry.menu_sections()]:
+                _draw_add_menu_section(title, items, canvas, self._add_node_pos)
             imgui.end_popup()
 
     # ============================================================

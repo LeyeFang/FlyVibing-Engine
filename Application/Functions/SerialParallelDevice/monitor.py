@@ -65,12 +65,24 @@ def observe_error(msg: str) -> None:
 # ── 查询 / 控制（面板与 ops 调用） ─────────────────────────────
 
 def list_serial_ports() -> list[dict]:
-    """枚举本机串口（pyserial.tools.list_ports; 失败/缺库 → []）。"""
+    """枚举本机串口（pyserial.tools.list_ports; 失败/缺库 → []）。
+
+    除 device/description/hwid 外，额外返回自动重绑所需的 USB 指纹字段:
+    serial_number / vid / pid / location / manufacturer / product / interface。
+    `location` 是本机口位置，仅用于诊断，**不参与匹配**。
+    """
     try:
         from serial.tools import list_ports
         return [{"device": p.device or "",
                  "description": p.description or "",
-                 "hwid": p.hwid or ""}
+                 "hwid": p.hwid or "",
+                 "serial_number": p.serial_number or "",
+                 "vid": p.vid,
+                 "pid": p.pid,
+                 "location": p.location or "",
+                 "manufacturer": getattr(p, "manufacturer", "") or "",
+                 "product": getattr(p, "product", "") or "",
+                 "interface": getattr(p, "interface", "") or ""}
                 for p in list_ports.comports()]
     except Exception:
         return []
@@ -79,7 +91,7 @@ def list_serial_ports() -> list[dict]:
 def start_watch(port: str, baud: int) -> dict:
     """开始监视指定串口（实际打开交给 spd-io 线程; 幂等 — 重复调用替换参数）。
 
-    `port` 可为物理端口或**逻辑设备名** `@mibox`（协议 §12）—— 解析失败会显式抛错
+    `port` 可为物理端口或**逻辑设备名** `@mibox`（协议 §10）—— 解析失败会显式抛错
     （`DeviceUnresolved` / `ValueError`），便于面板与 op 立刻给出可操作提示。
     """
     from .serial_manager import resolve_port

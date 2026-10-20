@@ -16,6 +16,6 @@ engine-editor-cli doc show dev/editor_live_protocol#<节号|标题片段>      #
 engine-editor-cli doc search <关键词>                    # 跨主题检索
 ```
 
-章节：1 架构与线程纪律 · 2 端点与配置 · 3 协议（NDJSON + 二进制尾帧） · 4 op 表（v2 基础 13 条 — 2026-09-28 实机验证；v3 容器表见 §4.1） · 5 agent 通道（MCP / CLI / Skill — v0.4.0 混合形态） · 6 新增一个 op 的步骤（扩展清单） · 7 故障排查 · 8 测试与验收 · 9 路线（后续阶段） · 10 容器补全跟进（Follow-ups — 2026-09-28 盘点）
+章节：1 架构与线程纪律 · 2 端点与配置 · **2.1 启动设置与多引擎端口协商（v0.5.0 — Port / launch / engines）** · 3 协议（NDJSON + 二进制尾帧） · 4 op 表（v2 基础 13 条 — 2026-09-28 实机验证；v3 容器表见 §4.1） · 5 agent 通道（MCP / CLI / Skill — v0.5.0 混合形态） · 6 新增一个 op 的步骤（扩展清单） · 7 故障排查 · 8 测试与验收 · 9 路线（后续阶段） · 10 容器补全跟进（Follow-ups — 2026-09-28 盘点）
 
 内容权威（唯一）：工具仓 `packages/editor-mcp/src/engine_editor_mcp/docs_content/dev/editor_live_protocol.md`。

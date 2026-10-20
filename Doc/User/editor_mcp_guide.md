@@ -21,6 +21,10 @@
 ## 2. 准备工作
 
 1. 启动编辑器：运行 `startup.bat`（控制台出现 `[Live] Editor command server on 127.0.0.1:8977` 即就绪）；
+   - 也可以在 Settings 面板 **Edit ▸ Preferences… ▸ Common ▸ Port** 查看/修改端口（修改后下次启动生效）；
+   - 自动化启动可直接用 CLI：`engine-editor-cli launch --port auto --language zh`（自动选 8977..9076 空闲端口并等待就绪）；
+   - **English**: set the loopback port in **Settings ▸ Common ▸ Port**, or run
+     `engine-editor-cli launch --port auto --language en`; use `engine-editor-cli engines` to list running editors.
 2. **注册助手服务（仅一次 — v0.4.0 起一条命令搞定）**：
 
    ```powershell
@@ -28,7 +32,7 @@
    engine-editor-cli setup --workspace .
    ```
 
-   - 会写入 `.vscode/mcp.json`（**lite 档**，5 个精简工具）并把 Skill 拷到 `.github/skills/engine-editor/`；
+   - 会写入 `.vscode/mcp.json`（**lite 档**，6 个精简工具）并把 Skill 拷到 `.github/skills/engine-editor/`；
    - **安装版**：`engine-editor-cli` / `engine-editor-mcp` 是安装目录内的命令（安装时勾选 PATH 任务即可直接使用；未勾选则写绝对路径 `<安装目录>\engine-editor-cli.cmd`）。**无需任何外部 Python 环境——Python 由引擎自带运行时提供**；
    - **源码仓库（开发）**：`.venv-py314t\Scripts\python.exe FlyVibing-User-And-Developer-Utils\packages\editor-mcp\install_mcp.py`（默认 lite 档，可 `--profile full`）。
 
@@ -42,8 +46,10 @@
 
 > 直接说人话即可；下表列出助手实际调用的命令名与参数，便于你精确指定或对照。
 >
-> **版本说明（v0.4.0）**：下表是 **full 档**（45 工具）的命令名；默认安装现为 **lite 档**（5 工具，schema 从 ≈17.9k 字符降到 ≈2.3k，大幅省 token）：
+> **版本说明（v0.5.0）**：下表是 **full 档**（45 个旧 `editor_*` 工具 + `engine_launch`）的命令名；
+> 默认安装为 **lite 档**（6 工具，schema 仍然很小，大幅省 token）：
 > 助手通过 `engine_call <op> ...` / `engine_batch` 调用同样能力，或直接终端用 `engine-editor-cli`（§3.12）。
+> 新增 `engine_launch`：让 MCP 直接启动引擎并自动协商端口（适合多 agent 并行）。
 > 想回到旧工具名行为：注册时 `--profile full`（或环境变量 `MGE_MCP_PROFILE=full`）。
 
 ### 3.1 运行控制 / 场景类型
@@ -68,7 +74,8 @@
 | 命令 | 作用 | 说明 |
 |---|---|---|
 | `editor_graph_list` | 查看节点图（节点/连线/属性/别名/描述） | "看看节点图里有什么" |
-| `editor_graph_add` | 加节点 | `node_type` + 可选 `props` / `description`；例：加 `EntitySpawn`，`props={"template": "DefaultCube"}` |
+| `editor_graph_add` | 加节点 | `node_type` + 可选 `props` / `description`；例：加 `EntitySpawn`，`props={"template": "DefaultCube"}`；**不要求连线** |
+| `graph.types` | 发现节点类型 | 核心 + 扩展 `node_pack`；`owner=device` 只看设备扩展；返回 type/pins/fields |
 | `editor_graph_link` | 连线 | 例：`OnGameStart.exec → EntitySpawn.exec_in` |
 | `editor_graph_set_props` | 改节点属性 | `node_id` + `props` |
 | `editor_graph_set_description` | 读写节点描述 | `node_id`；省略 `description` 为读取，空串为清除（lite 档用 `engine_call graph.set_description`） |
@@ -166,17 +173,41 @@
 
 | 命令 | 作用 |
 |---|---|
-| `engine-editor-cli ops` | 列出全部 55 个核心 op（一行一个；扩展 op 经 `extension.list` 发现） |
+| `engine-editor-cli ops` | 列出全部 60 个核心 op（一行一个；扩展 op 经 `extension.list` 发现） |
 | `engine-editor-cli help <op>` | 单 op 详情（参数 + 示例） |
 | `engine-editor-cli call <op> k=v ...` | 执行一个 op（数组/对象值加引号，如 `position='[1,0,2]'`） |
 | `engine-editor-cli batch ops.json` | 一次执行多个 op（JSON 数组；`-` 读 stdin） |
 | `engine-editor-cli exec script.py` | 脚本模式（注入 `engine` 客户端，可过滤输出 → 省 token） |
 | `engine-editor-cli validate` | 图干跑校验（默认摘要；`--detail full` / `--save` 取全量） |
 | `engine-editor-cli capture pie --out f.png` | 抓帧并落盘（只回路径，不回传图像） |
-| `engine-editor-cli setup [--workspace DIR]` | 安装/更新 Skill + `.vscode/mcp.json`（`--uninstall` 卸载） |
+| `engine-editor-cli setup [--workspace DIR]` | 安装/更新 Skill + `.vscode/mcp.json`（`--uninstall` 卸载；`--port N` 固定 MCP 端口） |
+| `engine-editor-cli launch [--port auto] [--language en\|zh] [--set k=v]` | 启动引擎并等待就绪；自动选空闲端口（多引擎） |
+| `engine-editor-cli engines` | 扫描 8977..9076，列出运行中的编辑器端口 |
+| `engine-editor-cli --port N call ...` | 指定端口（放在子命令前；也可用 `MGE_EDITOR_MCP_PORT`） |
 
 示例：`engine-editor-cli call entity.add name=Cue` → `{"id": 6, ...}`；
+节点池：`engine-editor-cli call graph.types owner=device` 查扩展节点，然后 `graph.add` 可只建节点不连线；
+含嵌套 props 时用 `--json @args.json`（避免 PowerShell 吞引号）。
 编辑器未运行时返回人话错误并退出码 1（不会卡住）。
+
+**启动设置（Settings 面板同键）**:
+
+```powershell
+# 中文界面 + 自定义字号 + 指定端口（仅本次启动，不写回 settings.json）
+engine-editor-cli launch --port 8978 --language zh --set ui.font_scale=1.15
+
+# 英文界面，自动端口
+engine-editor-cli launch --port auto --language en
+
+# 也可以直接启动 startup.bat
+startup.bat --port 8978 --language zh --set ui.font_scale=1.15
+```
+
+- 端口范围 `1024..65535`；Settings 面板修改在**下次启动**生效；环境变量 `MGE_EDITOR_MCP_PORT` 优先。
+- 多个 agent 同时工作：各自 `launch --port auto`，再用返回的 `port` 配后续 CLI/MCP；
+  不同端口互不串话，`engines` 可核对。
+- **English**: startup settings mirror the Settings panel (`--port`, `--language en|zh`, `--set key=value`);
+  each agent should launch its own editor on an auto-assigned port.
 
 ---
 
@@ -221,10 +252,12 @@
 |---|---|
 | 助手说"编辑器未运行" | 先运行 `startup.bat`；确认编辑器控制台有 `[Live] Editor command server on 127.0.0.1:8977` |
 | 聊天里找不到这些命令（助手不能用） | 重载 VS Code 窗口；或 `MCP: List Servers → engine-editor-live → 重启` |
-| 助手工具名变成 `engine_call` 等（不再是 editor_*） | 正常 — v0.4.0 默认 lite 档（省 token）；`--profile full` 可回到旧 45 工具 |
+| 助手工具名变成 `engine_call` 等（不再是 editor_*） | 正常 — v0.5.0 默认 lite 档（6 工具，省 token）；`--profile full` 可回到旧 45 工具 + `engine_launch` |
 | 找不到 `engine-editor-cli` 命令 | 安装时未勾选 PATH → 用绝对路径 `<安装目录>\engine-editor-cli.cmd`；源码仓用 `.venv-py314t\Scripts\engine-editor-cli.exe` |
 | Skill 不生效/想更新 | 在项目目录重新跑 `engine-editor-cli setup --workspace .`，再重载窗口 |
 | 截图找不到 | 查看 `<临时目录>\engine_editor_mcp\frames\`（默认 `%TEMP%`；可用环境变量 `MGE_MCP_FRAMES_DIR` 覆盖）；注意该目录会在助手服务启动时自动清空 |
 | 工具报"PIE is not running" | 截图运行时窗口前先"运行一下" |
-| 端口被占用 | 关闭占用进程，或在启动前的环境变量中设置 `MGE_EDITOR_MCP_PORT`（编辑器与 VS Code 两侧需一致） |
+| 端口被占用 | 关闭占用进程，或用 Settings ▸ Common ▸ Port / `MGE_EDITOR_MCP_PORT`；多引擎用 `launch --port auto` |
+| 多个引擎/助手互相串话 | 每个 agent 用 `launch --port auto` 后固定自己的 `--port N`；用 `engines` 核对 |
+| `launch` 找不到引擎 | 传 `--engine-root <仓库根>` 或设置 `MGE_ENGINE_ROOT` |
 | 设置里只有 English、中文不可选 | 语言目录未标记 `ui_complete=true`（未完成全量迁移）时会被隐藏；当前 `zh` 已发布，若仍不可见请检查 `Locale/zh.json` 的 `_meta.ui_complete` / `reviewed` |

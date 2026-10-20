@@ -201,7 +201,7 @@ class EditorImguiLayer(Layer):
         if cls._panels_registered:
             return
         UIManager.register(ScenePanel())
-        UIManager.register(NodeEditorPanel())
         UIManager.register(ResourcePanel())
+        UIManager.register(NodeEditorPanel())
         UIManager.register(SettingsPanel())
         cls._panels_registered = True

@@ -128,6 +128,11 @@ def register_evaluator(type_name: str, fn: callable) -> None:
     _EVALUATORS[type_name] = fn
 
 
+def unregister_evaluator(type_name: str) -> bool:
+    """移除动态节点求值器（扩展 pack 反注册用）。"""
+    return _EVALUATORS.pop(str(type_name), None) is not None
+
+
 # ═══════════════════════════════════════════════════════════════
 # GraphEvaluator
 # ═══════════════════════════════════════════════════════════════

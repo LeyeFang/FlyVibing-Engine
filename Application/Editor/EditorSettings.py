@@ -4,10 +4,12 @@
 
 存储: `Application/Editor/Config/settings.json`（env `MGE_EDITOR_SETTINGS` 可覆盖 — 测试沙箱）
 
-键位（首版）:
+键位:
   - `"ui.font_scale"`  float, clamp **0.7..1.6** — UI 字体缩放（imgui `style.font_scale_main`）
   - `"ui.language"`    语言代码 — 由 `Locale/*.json` 目录动态推导（默认 `en`;
                        协议 `Doc/Dev/i18n_protocol.md` §5）
+  - `"server.port"`    int, clamp **1024..65535** — 编辑器实时命令总线（MCP/CLI）监听端口（默认 8977;
+                       环境变量 `MGE_EDITOR_MCP_PORT` 优先于本设置）
 
 线程模型（free-threaded）:
   - 任意线程可读 `get`；`set` 以锁保护并在锁内落盘（低频）;
@@ -29,11 +31,16 @@ from typing import Callable, Optional
 DEFAULTS: dict = {
     "ui.font_scale": 1.0,
     "ui.language": "en",
+    "server.port": 8977,
 }
 
 # 数值 clamp: key → (min, max)；枚举: key → 允许值集合（单一权威 — 与 Settings 面板选择集一致）
 CLAMPS: dict = {
     "ui.font_scale": (0.7, 1.6),
+}
+# 整数 clamp（端口等 — 不能用 float 落盘）
+INT_CLAMPS: dict = {
+    "server.port": (1024, 65535),
 }
 CHOICES: dict = {
     "ui.language": ("en",),   # 兜底值; 运行期由已发布语言目录动态推导（_allowed_choices）
@@ -63,6 +70,7 @@ class EditorSettings:
 
     _values: dict = dict(DEFAULTS)
     _pending: set = set()
+    _startup_overrides: dict = {}
     _lock = threading.Lock()
     _loaded: bool = False
 
@@ -96,8 +104,30 @@ class EditorSettings:
         with cls._lock:
             for key, default in DEFAULTS.items():
                 cls._values[key] = cls._coerce(key, data.get(key, default))
+            # CLI/环境启动覆盖在每次重载后重新压上（不落盘 — 仅本次进程）
+            for key, value in cls._startup_overrides.items():
+                cls._values[key] = value
             cls._loaded = True
         return cls.all()
+
+    @classmethod
+    def apply_startup_overrides(cls, values: dict) -> dict:
+        """应用本次启动覆盖（不落盘）; 返回实际生效值。
+
+        由 `Application/Editor/StartupOptions.py` 调用；后续 UI 修改仍可通过 `set()` 落盘。
+        未知键抛 KeyError（启动参数拼错不静默忽略）。
+        """
+        cls.load()
+        applied = {}
+        with cls._lock:
+            for key, value in values.items():
+                if key not in DEFAULTS:
+                    raise KeyError(f"unknown setting key: {key!r}")
+                coerced = cls._coerce(key, value)
+                cls._startup_overrides[key] = coerced
+                cls._values[key] = coerced
+                applied[key] = coerced
+        return applied
 
     @classmethod
     def get(cls, key: str, default=None):
@@ -124,6 +154,8 @@ class EditorSettings:
         with cls._lock:
             cls._values[key] = coerced
             cls._pending.add(key)
+            # 面板显式修改优先于本次启动参数（下次 load 不再回滚到 CLI 覆盖值）
+            cls._startup_overrides.pop(key, None)
             snapshot = dict(cls._values)
         cls._save(snapshot)
         return coerced
@@ -131,6 +163,12 @@ class EditorSettings:
     @classmethod
     def _coerce(cls, key: str, value):
         """类型 + 范围/枚举校验（钳制而非报错 — 与 FIELD_CLAMPS 同风格）。"""
+        if key in INT_CLAMPS:
+            lo, hi = INT_CLAMPS[key]
+            try:
+                return max(lo, min(hi, int(float(value))))
+            except (TypeError, ValueError):
+                return DEFAULTS[key]
         if key in CLAMPS:
             lo, hi = CLAMPS[key]
             try:
@@ -205,5 +243,6 @@ class EditorSettings:
         with cls._lock:
             cls._values = dict(DEFAULTS)
             cls._pending.clear()
+            cls._startup_overrides = {}
             cls._loaded = False
         cls._apply_hooks = {}

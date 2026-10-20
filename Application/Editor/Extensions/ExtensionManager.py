@@ -10,9 +10,10 @@ M0 实装范围:
   - 启停: 持久化到 `Application/Editor/Config/extensions.json`（env `MGE_EXTENSIONS_STATE` 可覆盖;
     测试沙箱用）
   - ops 贡献: ctx.ops.register → LiveCommandServer 扩展注册表（ext.<id>.* 强制前缀）
+  - nodes 贡献: ctx.nodes.register_pack → NodePackRegistry（节点类型/evaluator/控件字段）
   - 异常遏制: 加载失败 → broken（菜单/op 可见错误原因, 不拖垮编辑器）
 
-设计未实装（见 dev protocol §13）: ui.window / threads / jobs / nodes / settings /
+设计未实装（见 dev protocol §13）: threads / jobs / settings /
 外部安装(.mgext) / 依赖拓扑（requires 仅解析展示）。
 """
 
@@ -96,6 +97,43 @@ class _ExtensionOpRegistrar:
         return full
 
 
+class _ExtensionNodeRegistrar:
+    """ctx.nodes 门面 — 扩展节点包注册（M1）。
+
+    - 内置扩展的 `node_pack.py` 由 NodeGraph 自动发现（无需扩展 enable）；
+    - 第三方/运行期 pack 可在这里显式注册，disable/unload 时反注册本次注册的 pack。
+    """
+
+    def __init__(self, owner_id: str) -> None:
+        self._owner = owner_id
+        self._registered: set[str] = set()
+
+    def register_pack(self, pack: dict) -> dict:
+        from Application.Core.NodeGraph.node_packs import NodePackRegistry
+        pack = dict(pack or {})
+        pack.setdefault("owner", self._owner)
+        pack.setdefault("id", f"{self._owner}.{pack.get('name', 'pack')}")
+        result = NodePackRegistry.register(pack)
+        self._registered.add(str(result["pack"]))
+        return result
+
+    def catalog(self) -> list[dict]:
+        from Application.Core.NodeGraph.node_packs import NodePackRegistry
+        return NodePackRegistry.catalog(self._owner)
+
+    def unregister_all(self) -> list[str]:
+        """移除本扩展通过 ctx.nodes 显式注册的节点包。"""
+        from Application.Core.NodeGraph.node_packs import NodePackRegistry
+        removed: list[str] = []
+        for pack_id in sorted(self._registered):
+            pack = NodePackRegistry._packs.get(pack_id)
+            if pack:
+                removed.extend(sorted(pack.get("types") or ()))
+                NodePackRegistry.unregister_owner(str(pack.get("owner", self._owner)))
+        self._registered.clear()
+        return removed
+
+
 # ════════════════════════════════════════════════════════════════
 # 管理器
 # ════════════════════════════════════════════════════════════════
@@ -105,6 +143,7 @@ class ExtensionManager:
 
     _infos: dict[str, ExtensionInfo] = {}
     _instances: dict[str, ExtensionBase] = {}
+    _node_facades: dict[str, _ExtensionNodeRegistrar] = {}
     _scanned: bool = False
 
     # 挂起停用请求（窗口 X 关闭等可从渲染线程发起 — 实际执行在主线程 pump）
@@ -322,7 +361,7 @@ class ExtensionManager:
             if info.loaded:
                 cls._unload(info)
 
-    # ── 装载 / 卸载内部 ──────────────────────────────────────────
+    # ── 装载 / 卸载内部（ctx.nodes 注入见 _load）────────────────
 
     @classmethod
     def _load(cls, info: ExtensionInfo) -> None:
@@ -363,6 +402,9 @@ class ExtensionManager:
                           "maturity": info.maturity, "capabilities": list(info.capabilities)},
                 extension_dir=info.dir, data_dir=data_dir, engine_root=cls._engine_root())
             ctx.ops = _ExtensionOpRegistrar(info.id)
+            if "nodes" in [str(c) for c in (info.capabilities or [])]:
+                ctx.nodes = _ExtensionNodeRegistrar(info.id)
+                cls._node_facades[info.id] = ctx.nodes
             try:
                 from Application.Editor.Extensions.ExtensionUI import ExtensionUI
                 ctx.ui = ExtensionUI(info.id, instance)
@@ -388,6 +430,7 @@ class ExtensionManager:
             info.loaded = False
             cls._instances.pop(info.id, None)
             cls._purge_ops(info.id)
+            cls._purge_nodes(info.id)
             cls._purge_ui(info.id)
 
     @classmethod
@@ -403,6 +446,7 @@ class ExtensionManager:
             except Exception:  # noqa: BLE001
                 traceback.print_exc()
         cls._purge_ops(info.id)
+        cls._purge_nodes(info.id)
         cls._purge_ui(info.id)
         info.loaded = False
         print(f"[Extensions] unloaded: {info.id}")
@@ -414,6 +458,16 @@ class ExtensionManager:
             LiveCommandServer.unregister_extension_ops(ext_id)
         except Exception:  # noqa: BLE001 — 无头环境允许跳过
             pass
+
+    @classmethod
+    def _purge_nodes(cls, ext_id: str) -> None:
+        """移除扩展通过 ctx.nodes 显式注册的 pack（内置自动发现 pack 保留）。"""
+        facade = cls._node_facades.pop(ext_id, None)
+        if facade is not None:
+            try:
+                facade.unregister_all()
+            except Exception:  # noqa: BLE001 — 卸载失败不拖垮其余清理
+                traceback.print_exc()
 
     @classmethod
     def _purge_ui(cls, ext_id: str) -> None:

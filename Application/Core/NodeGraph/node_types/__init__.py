@@ -1,8 +1,9 @@
 """
-节点编辑器 — 节点类型注册表。
+节点编辑器 — 核心节点类型注册表。
 
-所有可用节点类型在此定义并注册到 _TYPES。
-新增节点类型只需在对应分类文件中添加一个 _reg() 调用。
+核心类型在对应分类文件中通过 _reg() 注册；扩展节点由
+`Core/NodeGraph/node_packs.py` 自动发现 `Application/Functions/**/node_pack.py`
+后增量注册（2026-10-20 起）。
 """
 
 from __future__ import annotations
@@ -18,9 +19,20 @@ _TYPES: dict[str, NodeTypeDef] = {}
 
 
 def _reg(t: NodeTypeDef) -> NodeTypeDef:
-    """注册一个节点类型到全局注册表"""
+    """注册一个核心节点类型到全局注册表。"""
     _TYPES[t.type_name] = t
     return t
+
+
+def register_node_type(t: NodeTypeDef) -> NodeTypeDef:
+    """动态注册节点类型（扩展节点包入口 — 由 NodePackRegistry 调用）。"""
+    _TYPES[t.type_name] = t
+    return t
+
+
+def unregister_node_type(type_name: str) -> bool:
+    """移除动态节点类型（内置核心类型不应调用；pack 反注册用）。"""
+    return _TYPES.pop(str(type_name), None) is not None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -43,10 +55,6 @@ CAMERA_COLOR     = (0.314, 0.650, 0.920)
 COMPONENT_COLOR  = (0.314, 0.710, 0.710)
 IO_COLOR         = (0.878, 0.620, 0.314)
 BASIC_COLOR      = (0.580, 0.580, 0.620)
-SIGGEN_COLOR     = (0.350, 0.780, 0.850)
-POOL_COLOR       = (0.930, 0.780, 0.220)
-EPOCH_COLOR      = (0.290, 0.680, 0.600)
-ALGO_COLOR       = (0.600, 0.360, 0.720)
 MEDIA_COLOR      = (0.870, 0.350, 0.400)
 TEXT_COLOR       = (0.420, 0.780, 0.560)
 
@@ -65,9 +73,8 @@ from . import component  # noqa: E402, F401
 from . import variable   # noqa: E402, F401
 from . import debug      # noqa: E402, F401
 from . import io         # noqa: E402, F401
-from . import siggen     # noqa: E402, F401
-from . import device_pool  # noqa: E402, F401
-from . import epoch      # noqa: E402, F401
-from . import bci_algorithm  # noqa: E402, F401
+# Serial/Parallel、SigGen/Pool、BCI/Epoch 已迁到扩展 node_pack（2026-10-20）:
+#   Application/Functions/{SerialParallelDevice,VirtualDevice,BCIAlgorithm}/node_pack.py
+# 不再 import 旧 node_types 文件，避免和动态 pack 重复注册。
 from . import media      # noqa: E402, F401
 from . import text       # noqa: E402, F401

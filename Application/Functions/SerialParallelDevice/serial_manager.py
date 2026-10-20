@@ -13,7 +13,7 @@ def port_key(port: str, baud: int) -> str:
 def resolve_port(port: str) -> str:
     """把物理端口直写或逻辑设备名（`@mibox`）解析为**物理端口**。
 
-    协议: `Doc/Dev/device_io_protocol.md` §12（两级设备身份）。
+    协议: `Doc/Dev/device_io_protocol.md` §10（两级设备身份）。
       - `"COM5"`        → 原样返回（兼容旧场景的物理直写）;
       - `"@mibox"`      → 查机器侧注册表（`Application.Core.DeviceRegistry`）;
       - 未绑定/缺 port  → 抛 `DeviceUnresolved`（**绝不静默回退** —— 静默发错端口比报错更糟）;

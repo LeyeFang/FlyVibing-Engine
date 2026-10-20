@@ -14,7 +14,7 @@
      "hint": {"usb_serial": "AB12CD", "vid_pid": "1a86:7523"},   # 自动重绑线索
      "updated": "2026-10-12T18:00:00"}
 
-协议: `Doc/Dev/device_io_protocol.md` §12（设备别名与跨机器迁移）。
+协议: `Doc/Dev/device_io_protocol.md` §10（设备别名与跨机器迁移）。
 """
 
 from __future__ import annotations

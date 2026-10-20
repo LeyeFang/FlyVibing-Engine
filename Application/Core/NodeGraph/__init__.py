@@ -26,6 +26,7 @@ from .evaluator_engine import (
     ExecutionContext,
     GraphEvaluator,
     register_evaluator,
+    unregister_evaluator,
     _EVALUATORS,
 )
 
@@ -49,7 +50,13 @@ from .evaluators import (  # noqa: F401
     text,
 )
 
+# 内置扩展节点包（Application/Functions/**/node_pack.py）自动发现 — 必须在
+# 核心类型与求值器都就绪之后执行，保证扩展只做增量注册。
+from .node_packs import NodePackRegistry  # noqa: E402
+NodePackRegistry.load_all()
+
 __all__ = [
+    "NodePackRegistry",
     "PinDef",
     "NodeTypeDef",
     "NodeInstance",

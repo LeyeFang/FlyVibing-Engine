@@ -101,14 +101,15 @@ class ExtensionUI:
 
     # ── 注册 / 注销 ──────────────────────────────────────────────
 
-    def register_window(self, name: str, draw_fn, visible: bool = True, flags=None,
+    def register_window(self, name: str, draw_fn, visible: bool = False, flags=None,
                         close_policy: str = "hide") -> str:
         """注册扩展窗口。
 
         Args:
             name:   窗口显示名（全局唯一 — 与内置面板/其它扩展重名则报错）;
             draw_fn: 无参绘制函数（在 imgui.begin/end 之间被调用 — 只画内容）;
-            visible: 初始可见性;
+            visible: 初始可见性（默认 False — 启动只保留主工作区三个标签页;
+                     用户启用扩展时 ExtensionManager.enable → show_all 会重新打开）;
             flags:  imgui.WindowFlags（None = 默认）;
             close_policy: 窗口关闭（X）语义 —
                 "hide"（默认）仅隐藏 / "disable" 关闭即请求停用扩展（菜单勾选同步消失） /

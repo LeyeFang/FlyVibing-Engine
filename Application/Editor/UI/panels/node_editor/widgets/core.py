@@ -1,9 +1,10 @@
 """
 节点编辑器 — 各节点类型的内联控件 (Widget)。
 
-采用注册表模式：每个节点类型的 widget 函数通过 @register 装饰器注册，
+采用注册表模式：核心节点类型的 widget 函数通过 @register 装饰器注册，
 panel.py 只需调用 draw_node_widgets(nid, inst, canvas) 即可自动分发。
-新增节点类型只需在此文件添加一个 @register 函数，无需修改 panel.py。
+扩展节点优先使用 node_pack.py 的声明式 `fields`（由 _draw_declared_fields
+通用渲染）；只有需要复杂交互时才在核心添加 @register 自定义控件。
 """
 
 from __future__ import annotations
@@ -37,10 +38,93 @@ def register(node_type: str):
 
 
 def draw_node_widgets(nid: int, inst, canvas) -> None:
-    """根据节点类型分发到对应的 widget 绘制函数。"""
+    """根据节点类型分发到自定义 widget；扩展节点无自定义控件时渲染声明字段。"""
     fn = _WIDGET_REGISTRY.get(inst.node_type)
     if fn:
         fn(nid, inst, canvas)
+        return
+    from Application.Core.NodeGraph.node_packs import NodePackRegistry
+    fields = NodePackRegistry.fields_for(inst.node_type)
+    if fields:
+        _draw_declared_fields(nid, inst, fields)
+
+
+def _draw_declared_fields(nid: int, inst, fields: list[dict]) -> None:
+    """渲染 node_pack 声明的通用字段（扩展无需 import Editor）。"""
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(120)
+    for spec in fields:
+        if not isinstance(spec, dict):
+            continue
+        key = str(spec.get("key") or "").strip()
+        if not key:
+            continue
+        label = str(spec.get("label") or key)
+        kind = str(spec.get("kind") or "text")
+        tag = f"##ext_{key}_{nid}"
+        current = inst.props.get(key, spec.get("default"))
+        if kind == "serial_port":
+            ports = _list_com_ports()
+            try:
+                from Application.Core.DeviceRegistry import all as _aliases
+                ports = ports + ["@" + n for n in sorted(_aliases())]
+            except Exception:  # noqa: BLE001 — 无注册表环境降级
+                pass
+            if ports:
+                try:
+                    idx = ports.index(str(current or ""))
+                except ValueError:
+                    idx = -1
+                if idx < 0:
+                    ports.append(str(current or ""))
+                    idx = len(ports) - 1
+                changed, new_idx = _ne_combo(label + tag, idx, ports)
+                if changed:
+                    inst.props[key] = ports[new_idx]
+            else:
+                changed, text = imgui.input_text(label + tag, str(current or ""))
+                if changed:
+                    inst.props[key] = text
+        elif kind == "int":
+            changed, value = imgui.input_int(label + tag, int(current or 0))
+            if changed:
+                lo, hi = spec.get("min"), spec.get("max")
+                if lo is not None:
+                    value = max(int(lo), value)
+                if hi is not None:
+                    value = min(int(hi), value)
+                inst.props[key] = value
+        elif kind == "float":
+            changed, value = imgui.input_float(label + tag, float(current or 0.0))
+            if changed:
+                inst.props[key] = value
+        elif kind == "bool":
+            changed, value = imgui.checkbox(label + tag, bool(current))
+            if changed:
+                inst.props[key] = bool(value)
+        elif kind == "enum":
+            choices = spec.get("choices") or []
+            labels, values = [], []
+            for choice in choices:
+                if isinstance(choice, (list, tuple)) and len(choice) >= 2:
+                    labels.append(str(choice[0]))
+                    values.append(choice[1])
+                else:
+                    labels.append(str(choice))
+                    values.append(choice)
+            if labels:
+                try:
+                    idx = values.index(current)
+                except ValueError:
+                    idx = 0
+                changed, new_idx = _ne_combo(label + tag, idx, labels)
+                if changed:
+                    inst.props[key] = values[new_idx]
+        else:  # text
+            changed, text = imgui.input_text(label + tag, str(current or ""))
+            if changed:
+                inst.props[key] = text
+    imgui.pop_item_width()
 
 
 # ═══════════════════════════════════════════════════════════════

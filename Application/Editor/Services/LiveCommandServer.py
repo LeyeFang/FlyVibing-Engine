@@ -12,7 +12,7 @@ LiveCommandServer — 编辑器实时命令总线（给 agent 的 MCP 热注入�
     - 一切编辑器状态变更只在主线程 pump() 中执行 —
       与人类点按钮走完全相同的代码路径。
 
-端点: 127.0.0.1:<port>（仅回环; 默认 8977, 可用环境变量 MGE_EDITOR_MCP_PORT 覆盖）。
+端点: 127.0.0.1:<port>（仅回环; 默认 8977; 优先级: 参数 > 环境变量 MGE_EDITOR_MCP_PORT > Settings server.port）。
 协议: NDJSON — 一行一条 JSON:
     请求  {"id": 1, "op": "sim.play", "args": {}}
     回执  {"id": 1, "ok": true,  "result": {...}}
@@ -63,14 +63,26 @@ class LiveCommandServer:
 
     @classmethod
     def start(cls, port: int | None = None) -> bool:
-        """启动监听（幂等）。port=None → 环境变量或默认 8977; port=0 → 系统分配（测试用）。"""
+        """启动监听（幂等）。
+
+        端口优先级: 显式参数 > 环境变量 MGE_EDITOR_MCP_PORT > Settings 的 server.port > 8977。
+        port=0 → 系统分配（测试用）。
+        """
         if cls._running:
             return True
         if port is None:
-            try:
-                port = int(os.environ.get(_ENV_PORT, "") or DEFAULT_PORT)
-            except ValueError:
-                port = DEFAULT_PORT
+            raw = os.environ.get(_ENV_PORT, "").strip()
+            if raw:
+                try:
+                    port = int(raw)
+                except ValueError:
+                    port = DEFAULT_PORT
+            else:
+                try:
+                    from Application.Editor.EditorSettings import EditorSettings
+                    port = int(EditorSettings.get("server.port", DEFAULT_PORT))
+                except Exception:  # noqa: BLE001 — 设置不可用/无头 → 默认端口
+                    port = DEFAULT_PORT
 
         cls._queue = queue.Queue()
         cls._register_ops()
@@ -254,6 +266,7 @@ class LiveCommandServer:
             "camera.get": cls._op_camera_get,
             "camera.set": cls._op_camera_set,
             "graph.list": cls._op_graph_list,
+            "graph.types": cls._op_graph_types,
             "graph.add": cls._op_graph_add,
             "graph.link": cls._op_graph_link,
             "graph.set_props": cls._op_graph_set_props,
@@ -599,11 +612,13 @@ class LiveCommandServer:
     def _op_graph_list(args: dict) -> dict:
         """节点图只读快照（nodes: id/type/alias/props/pins; links; node_groups 摘要）。"""
         canvas = _node_canvas()
+        from Application.Core.NodeGraph.node_packs import NodePackRegistry
         nodes = []
         for nid, inst in canvas.nodes.items():
             item = {
                 "id": int(nid),
                 "type": inst.node_type,
+                "owner": NodePackRegistry.owner_of(inst.node_type),
                 "props": dict(inst.props),
                 "pins": {str(name): int(pid) for name, pid in inst.pin_ids.items()},
             }
@@ -652,24 +667,59 @@ class LiveCommandServer:
         return {"requested": True, "panel": "Node Editor"}
 
     @staticmethod
+    def _op_graph_types(args: dict) -> dict:
+        """发现可用节点类型（含扩展 node_pack）: type/label/category/owner/pins。
+
+        args: owner（可选 — 只看某扩展，如 "device"）；category（可选）。
+        """
+        from Application.Core.NodeGraph.node_packs import NodePackRegistry
+
+        owner = str(args.get("owner") or "") or None
+        category = str(args.get("category") or "")
+        items = NodePackRegistry.catalog(owner)
+        if category:
+            items = [t for t in items if t.get("category") == category]
+        return {"types": items, "count": len(items), "packs": NodePackRegistry.packs()}
+
+    @staticmethod
     def _op_graph_add(args: dict) -> dict:
-        """添加节点（等同 Add 菜单 — 同一 canvas API）。args: type, props(可选), position(可选)。"""
+        """添加节点（等同 Add 菜单 — 同一 canvas API）。args: type, props(可选), position(可选)。
+
+        不要求连线；孤立节点是合法画布状态（agent 可分批建节点池后再接线）。
+        """
         from Application.Core.NodeGraph import _TYPES
+        from Application.Core.NodeGraph.node_packs import NodePackRegistry
 
         type_name = str(args.get("type", ""))
         if type_name not in _TYPES:
-            raise ValueError(f"unknown node type: {type_name!r}")
+            candidates = [name for name in sorted(_TYPES) if type_name.lower() in name.lower()]
+            raise ValueError(
+                f"unknown node type: {type_name!r}"
+                + (f" (did you mean: {', '.join(candidates[:8])})" if candidates else "")
+                + " — use graph.types to discover core/extension node types"
+            )
         pos = args.get("position") or (80.0, 80.0)
+        props = args.get("props") or {}
+        if props and not isinstance(props, dict):
+            raise ValueError("props must be a JSON object (dict)")
+        if not isinstance(pos, (list, tuple)) or len(pos) < 2:
+            raise ValueError("position must be [x, y]")
         canvas = _node_canvas()
         nid = int(canvas.add_node(type_name, (float(pos[0]), float(pos[1]))))
-        props = args.get("props") or {}
         if props:
             canvas.nodes[nid].props.update(dict(props))
         description = args.get("description")
         if description is not None:
             canvas.nodes[nid].description = str(description)
-        return {"node_id": nid, "type": type_name, "props": dict(canvas.nodes[nid].props),
-                "description": str(canvas.nodes[nid].description or "")}
+        nd = _TYPES[type_name]
+        return {
+            "node_id": nid, "type": type_name,
+            "owner": NodePackRegistry.owner_of(type_name),
+            "pins": {p.name: int(canvas.nodes[nid].pin_ids[p.name]) for p in nd.pins
+                     if p.name in canvas.nodes[nid].pin_ids},
+            "props": dict(canvas.nodes[nid].props),
+            "description": str(canvas.nodes[nid].description or ""),
+        }
 
     @staticmethod
     def _op_graph_set_props(args: dict) -> dict:
@@ -953,13 +1003,22 @@ class LiveCommandServer:
 
     @staticmethod
     def _op_extension_list(args: dict) -> dict:
-        """列出扩展（发现/装载状态/贡献 ops）+ 已增量扫描到的扩展 op 清单。"""
+        """列出扩展（发现/装载状态/贡献 ops/nodes）+ 已增量扫描到的扩展 op 清单。"""
         from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+        from Application.Core.NodeGraph.node_packs import NodePackRegistry
 
         ExtensionManager.ensure_init()
+        infos = ExtensionManager.list_infos()
+        by_owner: dict[str, list[dict]] = {}
+        for item in NodePackRegistry.catalog():
+            if item["owner"] != "core":
+                by_owner.setdefault(item["owner"], []).append(item)
+        for info in infos:
+            info["nodes"] = by_owner.get(str(info.get("id", "")), [])
         return {
-            "extensions": ExtensionManager.list_infos(),
+            "extensions": infos,
             "extension_ops": LiveCommandServer.extension_ops_snapshot(),
+            "extension_nodes": by_owner,
         }
 
     @staticmethod

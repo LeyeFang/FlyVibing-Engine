@@ -319,7 +319,7 @@ register_evaluator("Random", _eval_random)
 
 def _eval_scalar_math(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
     inst = g._canvas.nodes[node_id]
-    op = inst.props.get("operation", "sum")
+    op = str(inst.props.get("operation", "sum")).strip().lower()
     nd = g._types[inst.node_type]
 
     # 收集所有已连接的输入值
@@ -338,22 +338,27 @@ def _eval_scalar_math(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) ->
         _write_data_output(node_id, "Result", 0.0, ctx, g)
         return
 
-    if op == "sum":
+    # operation 同时接受短名（UI/图规则/节点组宏）与长名（旧图兼容）。
+    # 未知值必须显式报错 — 禁止静默 fallback 到 sum（2026-10-20: mi*mul 被误算成 sum）。
+    if op in ("sum", "add"):
         result = sum(values)
-    elif op == "subtract":
+    elif op in ("sub", "subtract"):
         result = values[0]
         for v in values[1:]:
             result -= v
-    elif op == "multiply":
+    elif op in ("mul", "multiply"):
         result = values[0]
         for v in values[1:]:
             result *= v
-    elif op == "divide":
+    elif op in ("div", "divide"):
         result = values[0]
         for v in values[1:]:
             result = result / v if v != 0.0 else 0.0
     else:
-        result = sum(values)
+        raise ValueError(
+            f"ScalarMath: unknown operation {op!r} "
+            f"(expected sum/sub/mul/div or add/subtract/multiply/divide)"
+        )
 
     _write_data_output(node_id, "Result", result, ctx, g)
 

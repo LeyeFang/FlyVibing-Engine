@@ -2,9 +2,6 @@ import os
 
 from imgui_bundle import imgui
 
-# DockBuilder API 在 imgui.internal 命名空间
-from imgui_bundle import imgui as imgui_internal
-
 from Application.Editor.UI.BasePanel import BasePanel
 from Application.Editor.UI.PanelStyle import apply_custom_style
 from Application.Editor.UI.FileDialog import FileDialog
@@ -29,6 +26,13 @@ class UIManager:
     _dockspace_id: int = 0
     _dock_layout_done: bool = False
     _style_applied: bool = False
+
+    # 默认工作区：一个右侧面板 + 三个标签页。其余面板（Settings、扩展监视器）
+    # 启动时隐藏，由菜单/扩展启用路径按需打开。
+    DEFAULT_PANEL_ORDER = ("Scene", "Resources", "Node Editor")
+    DEFAULT_VISIBLE_PANELS = frozenset(DEFAULT_PANEL_ORDER)
+    DEFAULT_DOCK_RIGHT_FRACTION: float = 1.0 / 3.0
+    _right_dock_id: int = 0
 
     # 底部状态栏高度 (像素)
     STATUS_BAR_HEIGHT: float = 22.0
@@ -86,58 +90,82 @@ class UIManager:
     def draw_all(
         cls
     ) -> None:
-        """每帧由 ImguiLayer 调用：画 DockSpace 背景 → 菜单栏 → 各面板"""
+        """每帧由 ImguiLayer 调用：菜单栏 → 右侧 DockSpace → 各面板"""
         # 首次运行时应用自定义主题
         if not cls._style_applied:
             apply_custom_style()
             cls._style_applied = True
 
-        # ── 准备全屏 DockSpace 背景窗口 ──
-        viewport = imgui.get_main_viewport()
-        # 底部留出状态栏空间
-        dockspace_h = viewport.work_size.y - cls.STATUS_BAR_HEIGHT
-        imgui.set_next_window_pos(viewport.work_pos)
-        imgui.set_next_window_size(imgui.ImVec2(viewport.work_size.x, dockspace_h))
-        imgui.set_next_window_viewport(viewport.id_)
-        window_flags = (
-            imgui.WindowFlags_.no_title_bar
-            | imgui.WindowFlags_.no_collapse
-            | imgui.WindowFlags_.no_resize
-            | imgui.WindowFlags_.no_move
-            | imgui.WindowFlags_.no_bring_to_front_on_focus
-            | imgui.WindowFlags_.no_nav_focus
-        )
-
-        # 取消圆角、边框、内边距，背景透明（让 3D 场景透出来，面板贴边）
-        imgui.push_style_var(imgui.StyleVar_.window_rounding, 0.0)
-        imgui.push_style_var(imgui.StyleVar_.window_border_size, 0.0)
-        imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
-        imgui.push_style_color(imgui.Col_.window_bg, imgui.ImVec4(0, 0, 0, 0))
-
-        imgui.begin("MainDockSpace", None, window_flags)
-        imgui.pop_style_var(3)
-        imgui.pop_style_color()
-
-        # ── 绘制主菜单栏（必须在 MainDockSpace 内部） ──
+        # ── 主视口 / 菜单栏 ──
+        # begin_main_menu_bar 自己创建 ##MainMenuBar 窗口；不再套一层全屏
+        # MainDockSpace（全屏窗口会挡住右侧面板的 tab 命中，导致标签点不动）。
         cls._draw_menu_bar()
 
-        # ── 创建 DockSpace 停靠系统 ──
-        dockspace_id = imgui.get_id("MainDockSpace")
-        cls._dockspace_id = dockspace_id
-        imgui.dock_space(
-            dockspace_id,
-            (0.0, 0.0),
-            imgui.DockNodeFlags_.none)
+        # 菜单栏绘制后 main viewport 的 work_pos/work_size 已经让出菜单高度。
+        viewport = imgui.get_main_viewport()
+        content_top = viewport.work_pos.y
+        content_h = max(1.0, viewport.work_size.y - cls.STATUS_BAR_HEIGHT)
 
-        # 首次运行时设置默认停靠布局
-        if not cls._dock_layout_done:
-            cls._setup_default_dock_layout(dockspace_id)
-            cls._dock_layout_done = True
+        # ── 右侧 1/3 独立 DockSpace ──
+        # 左侧 2/3 不创建 dock 节点，因此不会出现空 tab bar
+        # （那条菜单栏下的空栏正是左侧 central node 的单 tab bar）。
+        right_w = viewport.work_size.x * cls.DEFAULT_DOCK_RIGHT_FRACTION
+        right_pos = imgui.ImVec2(
+            viewport.work_pos.x + viewport.work_size.x - right_w,
+            content_top,
+        )
+
+        first_layout = not cls._dock_layout_done
+        if first_layout:
+            # 启动工作区只保留三个主标签页；Settings / 扩展监视器默认关闭。
+            for panel in cls._panels:
+                if panel.name not in cls.DEFAULT_VISIBLE_PANELS:
+                    panel.visible = False
+
+        right_flags = (
+            imgui.WindowFlags_.no_title_bar
+            | imgui.WindowFlags_.no_resize
+            | imgui.WindowFlags_.no_move
+            | imgui.WindowFlags_.no_collapse
+            | imgui.WindowFlags_.no_saved_settings
+            | imgui.WindowFlags_.no_nav_focus
+            | imgui.WindowFlags_.no_bring_to_front_on_focus
+            | imgui.WindowFlags_.no_scrollbar
+            | imgui.WindowFlags_.no_scroll_with_mouse
+            | imgui.WindowFlags_.no_docking
+        )
+        imgui.set_next_window_pos(right_pos)
+        imgui.set_next_window_size(imgui.ImVec2(right_w, content_h))
+        imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
+        imgui.push_style_color(imgui.Col_.window_bg, imgui.ImVec4(0, 0, 0, 0))
+        imgui.begin("##RightDockHost", None, right_flags)
+        imgui.pop_style_var()
+        imgui.pop_style_color()
+        right_dockspace_id = imgui.get_id("##RightDockSpace")
+        cls._right_dock_id = right_dockspace_id
+        cls._dockspace_id = right_dockspace_id
+        imgui.dock_space(right_dockspace_id, (0.0, 0.0),
+                         imgui.DockNodeFlags_.none)
+        imgui.end()
+        cls._dock_layout_done = True
 
         # ── 依次绘制所有可见面板 (快照迭代: 面板可能在处理链上被注销) ──
+        # 默认三标签页按 DEFAULT_PANEL_ORDER 排序，不依赖注册顺序；扩展/其他
+        # 面板保持原注册顺序排在后面。
+        panels = list(cls._panels)
+        by_name = {p.name: p for p in panels}
+        ordered = [by_name[n] for n in cls.DEFAULT_PANEL_ORDER if n in by_name]
+        ordered += [p for p in panels if p.name not in cls.DEFAULT_VISIBLE_PANELS]
         cls._panel_rects.clear()
-        for panel in list(cls._panels):
+        for panel in ordered:
             if panel.visible:
+                # 首帧用 set_next_window_dock_id 显式把三个主面板放到同一个
+                # 右侧节点；比按窗口标题名 DockBuilderDockWindow 更可靠（标题
+                # 会随语言变化，但窗口 dock 目标不会）。
+                if first_layout and panel.name in cls.DEFAULT_VISIBLE_PANELS \
+                        and cls._right_dock_id:
+                    imgui.set_next_window_dock_id(
+                        cls._right_dock_id, imgui.Cond_.always)
                 expanded = panel.begin_panel()
                 # 📸 无论展开还是折叠，都记录窗口矩形，防止摄像头穿透
                 pos = imgui.get_window_pos()
@@ -146,8 +174,6 @@ class UIManager:
                 if expanded:
                     panel.draw()
                 panel.end_panel()
-
-        imgui.end()  # MainDockSpace
 
         # ── 渲染文件对话框 (在 DockSpace 外部, 独立窗口) ──
         FileDialog.render()
@@ -335,17 +361,14 @@ class UIManager:
         WindowCloseEvent.Pack(engine=EditorHost)
 
     # ============================================================
-    # 菜单栏（内联在 MainDockSpace 中）
+    # 菜单栏（独立 BeginMainMenuBar 窗口）
     # ============================================================
 
     @classmethod
     def _draw_menu_bar(
         cls
     ) -> None:
-        """
-        在主窗口内绘制菜单栏（不单独开窗口）。
-        必须放在 imgui.begin() 和 dock_space() 之间。
-        """
+        """绘制顶层菜单栏；由 begin_main_menu_bar 自己创建窗口。"""
         if imgui.begin_main_menu_bar():
 
             # ── File 菜单 ──
@@ -415,33 +438,6 @@ class UIManager:
                 imgui.end_menu()
 
             imgui.end_main_menu_bar()
-
-    # ============================================================
-    # 默认停靠布局
-    # ============================================================
-
-    @classmethod
-    def _setup_default_dock_layout(
-        cls,
-        dockspace_id: int
-    ) -> None:
-        """
-        Scene + Node Editor + Resources → 右侧 1/4 标签页。
-        """
-        internal = imgui_internal.internal
-
-        # 分割: 右侧 1/4
-        result = internal.dock_builder_split_node(
-            dockspace_id, imgui.Dir_.right, 0.25,
-        )
-        dock_right = result.id_at_dir
-
-        # 停靠到右侧 (同一节点 → 自动标签页)
-        internal.dock_builder_dock_window("Scene", dock_right)
-        internal.dock_builder_dock_window("Node Editor", dock_right)
-        internal.dock_builder_dock_window("Resources", dock_right)
-
-        internal.dock_builder_finish(dockspace_id)
 
     # ============================================================
     # 状态栏

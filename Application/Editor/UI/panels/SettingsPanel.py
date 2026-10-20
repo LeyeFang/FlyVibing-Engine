@@ -48,6 +48,9 @@ class SettingsPanel(BasePanel):
 
     name = "Settings"
     title_key = "panel.settings"      # 窗口标题可翻译（imgui ID 仍由 ###name 固定）
+    # 默认布局只显示 Scene / Resources / Node Editor 三个标签页；
+    # Settings 由 Edit ▸ Preferences… / settings.* 入口按需打开。
+    visible = False
 
     _pages: dict = {}                 # id → SettingsPage
     _active_id: str = ""
@@ -191,6 +194,18 @@ def _draw_common_page() -> None:
     changed, new_idx = imgui.combo(f"{t('settings.common.language')}##ui_language", lidx, lang_labels)
     if changed:
         EditorSettings.set("ui.language", lang_values[new_idx])
+
+    # ── Editor server [自由度: L2 开放输入 + EditorSettings 钳制] ──
+    # 端口在 LiveCommandServer 启动时读取，因此本次修改在下次启动生效。
+    imgui.spacing()
+    imgui.text_disabled(t("settings.common.server"))
+    imgui.separator()
+    port = int(EditorSettings.get("server.port"))
+    changed, new_port = imgui.input_int(
+        f"{t('settings.common.port')}##server_port", port, 1, 100)
+    if changed:
+        EditorSettings.set("server.port", new_port)
+    imgui.text_disabled(t("settings.common.port_note"))
 
 
 # ════════════════════════════════════════════════════════════════

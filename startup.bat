@@ -28,7 +28,7 @@ if not defined PYTHON (
     echo   Dev build expects:      .venv-py314t\Scripts\python.exe
     echo   Dev setup: run Utils\Dev\setup_env.bat
     echo.
-    pause
+    if not defined MGE_NO_PAUSE pause
     exit /b 1
 )
 
@@ -51,5 +51,5 @@ if %errorlevel% neq 0 (
     echo [ERROR] Application exited with code %errorlevel%
 )
 
-pause
+if not defined MGE_NO_PAUSE pause
 endlocal

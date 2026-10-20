@@ -1,31 +1,13 @@
 """
-IO 节点 — SerialSend, ParallelSend, PathVar, TextFileWrite。
+IO 节点 — PathVar, TextFileWrite。
+
+SerialSend / ParallelSend 已于 2026-10-20 迁到设备扩展
+`Application/Functions/SerialParallelDevice/node_pack.py`（type 名保持兼容）。
 """
 
 from . import _reg, _gen_id, IO_COLOR
 from ..data_model import NodeTypeDef, PinDef
 
-
-_reg(NodeTypeDef(
-    "SerialSend", "Serial Send", "IO", IO_COLOR,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-        PinDef(_gen_id(), "Value", "data", "input", "variant"),
-    ],
-    "Send signal via serial port.",
-))
-
-_reg(NodeTypeDef(
-    "ParallelSend", "Parallel Send", "IO", IO_COLOR,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-        PinDef(_gen_id(), "Address", "data", "input", "int"),
-        PinDef(_gen_id(), "Value", "data", "input", "variant"),
-    ],
-    "Send uint8 via LPT port",
-))
 
 _reg(NodeTypeDef(
     "PathVar", "Path", "IO", IO_COLOR,

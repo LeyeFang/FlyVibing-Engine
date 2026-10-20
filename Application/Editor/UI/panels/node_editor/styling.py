@@ -173,50 +173,11 @@ MENU_SECTIONS: list[tuple[str, list]] = [
 
     # ── 设备 / 文件输出 ─────────────────────────────────────
     ("IO", [
-        ("Serial", [
-            ("Serial Send", "SerialSend"),
-            ("Parallel Send", "ParallelSend"),
-        ]),
         ("File", [
             ("Path", "PathVar"),
             ("Write Text File", "TextFileWrite"),
         ]),
-        ("SigGen", [
-            ("Init SigGen Device", "InitSigGenDevice"),
-            ("Start SigGen Record", "StartSigGenRecord"),
-            ("Stop SigGen Record", "StopSigGenRecord"),
-            ("Kill SigGen Device", "KillSigGenDevice"),
-            ("Get SigGen Data", "GetSigGenData"),
-        ]),
-        ("Pool", [
-            ("Create Device Pool", "CreateDevicePool"),
-            ("Add To Device Pool", "AddToDevicePool"),
-            ("Kill Device Pool", "KillDevicePool"),
-        ]),
     ]),
 
-    # ── epoch 数据集（BCI 算法域）──────────────────────────
-    ("Epoch", [
-        ("Capture", [
-            ("Append Epoch", "EpochAppend"),
-            ("Count Epochs", "EpochCount"),
-            ("Clear Epochs", "EpochClear"),
-        ]),
-        ("Persistence", [
-            ("Save Epoch Dataset", "EpochSave"),
-            ("Load Epoch Dataset", "EpochLoad"),
-        ]),
-    ]),
-
-    # ── BCI 算法（FBCSP / CCA）────────────────────────────
-    ("Algorithm", [
-        ("FBCSP", [
-            ("Init FBCSP", "InitFBCSP"),
-            ("Train FBCSP", "TrainFBCSP"),
-            ("Test FBCSP", "TestFBCSP"),
-        ]),
-        ("SSVEP", [
-            ("Test CCA", "TestCCA"),
-        ]),
-    ]),
+    # Extension 节点分区由 NodePackRegistry.menu_sections() 动态追加（Device / BCI）。
 ]

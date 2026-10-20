@@ -79,7 +79,7 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 #### Math Nodes (pure data — no exec pins)
 | type_name      | input pins                    | output pins    | props                        |
 |----------------|-------------------------------|----------------|------------------------------|
-| ScalarMath     | In_0..In_7 (float)           | Result (float) | operation: sum/sub/mul/div   |
+| ScalarMath     | In_0..In_7 (float)           | Result (float) | operation: sum/subtract/multiply/divide (short aliases add/sub/mul/div accepted) |
 | Compare        | A (variant), B (variant), C (float, optional) | Result (bool)  | operation: gt/lt/eq/neq/gte/lte/and/or/not/xor/in/not_in(out alias)/between; between uses B<=A<C unless include_end |
 | MakeList       | Item_0..Item_7 (variant, optional) | List (variant) | — (unconnected items skipped) |
 | MathAdd        | A,B (float)                   | Result (float) | — (legacy, hidden)           |

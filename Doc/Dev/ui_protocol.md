@@ -16,6 +16,6 @@ engine-editor-cli doc show dev/ui_protocol#<节号|标题片段>      # 单节�
 engine-editor-cli doc search <关键词>                    # 跨主题检索
 ```
 
-章节：1 文件地图（改 UI 先定位） · 2 硬性约定 · 3 Add 菜单（MENU_SECTIONS）约定 · 4 自动布局（Rearrange）与卡片高度 · 5 删除交互与级联 · 6 文件/目录选择 · 7 数据结构联动（引用型 props） · 8 测试 · 9 PIE 窗口设置（Settings 面板 ▸ Export 页） · 10 Action 契约（GUI ↔ agent op 映射） · 11 GUI 自由度分级与审核闭环（2026-10-11 立项） · 12 文本与字形安全（2026-10-11 — "?" 现象根治） · 13 Settings 面板与设置体系（2026-10-12）
+章节：1 文件地图（改 UI 先定位） · 2 硬性约定 · 3 Add 菜单（MENU_SECTIONS）约定 · 4 自动布局（Rearrange）与卡片高度 · 5 删除交互与级联 · 6 文件/目录选择 · 7 数据结构联动（引用型 props） · 8 测试 · 9 PIE 窗口设置（Settings 面板 ▸ Export 页） · 10 Action 契约（GUI ↔ agent op 映射） · 11 GUI 自由度分级与审核闭环（2026-10-11 立项） · 12 文本与字形安全（2026-10-11 — "?" 现象根治） · 13 Settings 面板与设置体系（2026-10-12；13.3 含 Port）
 
 内容权威（唯一）：工具仓 `packages/editor-mcp/src/engine_editor_mcp/docs_content/dev/ui_protocol.md`。

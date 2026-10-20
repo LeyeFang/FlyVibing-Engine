@@ -65,7 +65,7 @@ def send(port: str, baud: int, data: bytes) -> None:
     """入队串口发送 — 非阻塞，立即返回。
 
     Args:
-        port:  串口号（`"COM2"`）或**逻辑设备名**（`"@mibox"` — 机器侧绑定, 见协议 §12）
+        port:  串口号（`"COM2"`）或**逻辑设备名**（`"@mibox"` — 机器侧绑定, 见协议 §10）
         baud:  波特率，如 9600
         data:  要发送的字节数据
 

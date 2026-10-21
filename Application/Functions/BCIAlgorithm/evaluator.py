@@ -22,8 +22,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
-from ..graph_constraints import ALGO_INIT, ALGO_TRAIN, epoch_source_keys, model_key
+from Application.Core.NodeGraph.evaluator_engine import (
+    ExecutionContext, GraphEvaluator, register_evaluator,
+)
+from Application.Core.NodeGraph.graph_constraints import (
+    ALGO_INIT, ALGO_TRAIN, epoch_source_keys, model_key,
+)
 
 _DRY_PREFIX = "dryrun#"
 

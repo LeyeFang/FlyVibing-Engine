@@ -1,0 +1,93 @@
+{
+  "format_version": 1,
+  "prefab_name": "Cross",
+  "root": {
+    "name": "Cross",
+    "components": {
+      "Transform": {
+        "position_x": 0,
+        "position_y": 0,
+        "position_z": 0,
+        "rotation_x": 0,
+        "rotation_y": 0,
+        "rotation_z": 0,
+        "scale_x": 1,
+        "scale_y": 1,
+        "scale_z": 1,
+        "local_pos_x": 0,
+        "local_pos_y": 0,
+        "local_pos_z": 0,
+        "local_rot_x": 0,
+        "local_rot_y": 0,
+        "local_rot_z": 0,
+        "local_scl_x": 1,
+        "local_scl_y": 1,
+        "local_scl_z": 1
+      }
+    }
+  },
+  "children": {
+    "1": {
+      "name": "row",
+      "components": {
+        "Transform": {
+          "position_x": 0,
+          "position_y": 0,
+          "position_z": 0,
+          "rotation_x": 0,
+          "rotation_y": 0,
+          "rotation_z": 0,
+          "scale_x": 3.0,
+          "scale_y": 1.0,
+          "scale_z": 0.5,
+          "local_pos_x": 0,
+          "local_pos_y": 0,
+          "local_pos_z": 0,
+          "local_rot_x": 0,
+          "local_rot_y": 0,
+          "local_rot_z": 0,
+          "local_scl_x": 1,
+          "local_scl_y": 1,
+          "local_scl_z": 1
+        },
+        "MeshRenderer": {
+          "mesh_id": 1,
+          "material_id": 1,
+          "visible": true
+        }
+      },
+      "parent_id": 0
+    },
+    "2": {
+      "name": "col",
+      "components": {
+        "Transform": {
+          "position_x": 0,
+          "position_y": 0,
+          "position_z": 0,
+          "rotation_x": 0,
+          "rotation_y": 0,
+          "rotation_z": 0,
+          "scale_x": 0.5,
+          "scale_y": 1.0,
+          "scale_z": 3.0,
+          "local_pos_x": 0,
+          "local_pos_y": 0,
+          "local_pos_z": 0,
+          "local_rot_x": 0,
+          "local_rot_y": 0,
+          "local_rot_z": 0,
+          "local_scl_x": 1,
+          "local_scl_y": 1,
+          "local_scl_z": 1
+        },
+        "MeshRenderer": {
+          "mesh_id": 1,
+          "material_id": 1,
+          "visible": true
+        }
+      },
+      "parent_id": 0
+    }
+  }
+}

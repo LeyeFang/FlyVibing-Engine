@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import os
 import zlib
-from collections import defaultdict, deque
 from pathlib import Path
 
 from imgui_bundle import imgui
@@ -47,6 +46,14 @@ from .styling import (
 from .widgets import draw_node_widgets
 from .labels import group_label, node_label
 from .visible_pins import get_visible_pins
+from .group_layout import (
+    GroupLayoutEngine,
+    descendant_group_ids,
+    group_bounds,
+    group_depth,
+    group_member_ids,
+    group_order,
+)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -172,6 +179,17 @@ class NodeEditorPanel(BasePanel):
         self._report_note: str = ""
         self._fit_requested: bool = False              # 下一帧把视图 fit 到全部节点
         self._desc_open: set[int] = set()               # 已展开描述的节点 id
+        # ── 节点查询窗口 ──
+        self._find_open: bool = False
+        self._find_query: str = ""
+        self._find_selected: int | None = None
+        self._find_focus: bool = False
+        self._last_focused_node: int | None = None
+        # ── 节点组编辑窗口 / 拖拽状态 ──
+        self._groups_open: bool = False
+        self._active_group: str = ""
+        self._group_prev_pos: dict[str, tuple[float, float]] = {}
+        self._fit_group_pending: str = ""
 
     # ============================================================
     # 生命周期
@@ -231,7 +249,7 @@ class NodeEditorPanel(BasePanel):
         # ── 当前场景信息 ──
         self._draw_scene_info()
 
-        # ── 工具栏: Add / Import / Export ──
+        # ── 工具栏: Add / Find / Groups / Import / Export ──
         if imgui.small_button(t("node_editor.add_node")):
             rect_min = imgui.get_item_rect_min()
             rect_max = imgui.get_item_rect_max()
@@ -242,6 +260,15 @@ class NodeEditorPanel(BasePanel):
             self._add_target_pending = True
             self._add_node_pos = imgui.ImVec2(80, 40)  # 解析失败时的回退
             imgui.open_popup("###create_node")
+
+        imgui.same_line()
+        if imgui.small_button(t("node_editor.find_node")):
+            self._find_open = True
+            self._find_focus = True
+
+        imgui.same_line()
+        if imgui.small_button(t("node_editor.groups")):
+            self._groups_open = True
 
         imgui.same_line()
         if imgui.small_button(t("node_editor.import")):
@@ -263,6 +290,12 @@ class NodeEditorPanel(BasePanel):
         imgui.same_line()
         if imgui.small_button(t("node_editor.fit")):
             self._fit_requested = True
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(t("node_editor.fit_tip"))
+
+        # ── 节点查询 / 节点组窗口（非 modal; 与画布并行）──
+        self._draw_find_window(canvas)
+        self._draw_groups_window(canvas)
 
         # ── Import 弹出窗口 ──
         self._draw_import_popup(canvas)
@@ -322,6 +355,21 @@ class NodeEditorPanel(BasePanel):
         if self._fit_requested:
             ne.navigate_to_content()
             self._fit_requested = False
+
+        if self._fit_group_pending:
+            gid = self._fit_group_pending
+            self._fit_group_pending = ""
+            ids = group_member_ids(canvas, gid)
+            if ids:
+                try:
+                    ne.clear_selection()
+                    for nid in ids:
+                        if nid in canvas.nodes:
+                            ne.select_node(ne.NodeId(nid))
+                    ne.navigate_to_selection(True)
+                    ne.clear_selection()
+                except Exception as e:  # noqa: BLE001
+                    print(f"[GroupFit] {gid} failed: {e}")
 
         self._draw_nodes(canvas, ne)
         self._draw_links(canvas, ne)
@@ -460,39 +508,96 @@ class NodeEditorPanel(BasePanel):
     # 组框使用独立的 NodeId 空间（与真实节点 id 不冲突）
     _GROUP_NODE_BASE = 60_000_000
 
-    def _draw_group_hints(self, canvas: NodeCanvas, ne) -> None:
-        """绘制节点组框（tools 层 node_groups 元数据 → 画布背景区）。
+    def _group_editor_id(self, gid: str) -> int:
+        """Stable NodeId for a group frame (separate from real node ids)."""
+        raw = str(gid)
+        if raw.startswith("g") and raw[1:].isdigit():
+            return self._GROUP_NODE_BASE + int(raw[1:])
+        return self._GROUP_NODE_BASE + (zlib.crc32(raw.encode("utf-8")) % 10_000_000)
 
-        组只是宏的记账：成员节点仍按普通节点绘制；这里按成员位置算包围盒，
-        画一个 imgui-node-editor group 节点作视觉分区（不参与求值/删除）。
+    def _move_group(self, canvas: NodeCanvas, gid: str, dx: float, dy: float) -> int:
+        """Translate every node in a group subtree by (dx, dy)."""
+        ids = group_member_ids(canvas, gid)
+        for nid in ids:
+            inst = canvas.nodes.get(nid)
+            if inst is not None:
+                inst.pos = (float(inst.pos[0]) + dx, float(inst.pos[1]) + dy)
+        return len(ids)
+
+    def _draw_group_hints(self, canvas: NodeCanvas, ne) -> None:
+        """绘制可拖拽的节点组框（父子组按深度排序，父框在底层）。
+
+        组框位置由成员节点的包围盒推导；拖动组框时把整棵成员子树平移。
+        这使 group 成为 Rearrange / 外部节点的真实布局单元，而不是纯装饰。
         """
         groups = getattr(canvas, "node_groups", None) or {}
         if not groups:
+            self._group_prev_pos.clear()
             return
-        for gid, grp in groups.items():
-            members = [int(m) for m in (grp.get("members") or [])
-                       if str(m).isdigit() and int(m) in canvas.nodes]
-            if not members:
+        suppressed: set[str] = set()
+        for gid in group_order(canvas):
+            skip_drag = gid in suppressed
+            bounds = group_bounds(canvas, gid)
+            if bounds is None:
+                self._group_prev_pos.pop(gid, None)
                 continue
-            xs = [canvas.nodes[m].pos[0] for m in members]
-            ys = [canvas.nodes[m].pos[1] for m in members]
-            min_x, min_y = min(xs) - 40.0, min(ys) - 58.0
-            max_x, max_y = max(xs) + 300.0, max(ys) + 220.0
-            if str(gid).startswith("g") and str(gid)[1:].isdigit():
-                node_id = self._GROUP_NODE_BASE + int(str(gid)[1:])
-            else:
-                node_id = self._GROUP_NODE_BASE + (zlib.crc32(str(gid).encode("utf-8")) % 10_000_000)
-            ne.set_node_position(ne.NodeId(node_id), imgui.ImVec2(min_x, min_y))
-            ne.push_style_color(ne.StyleColor.group_bg, imgui.ImVec4(0.18, 0.34, 0.50, 0.70))
-            ne.push_style_color(ne.StyleColor.node_border, imgui.ImVec4(0.45, 0.72, 0.95, 1.00))
-            ne.begin_node(ne.NodeId(node_id))
-            ne.group(imgui.ImVec2(max_x - min_x, max_y - min_y))
+            grp = groups.get(gid) or {}
+            editor_id = self._group_editor_id(gid)
+            expected = (float(bounds[0]), float(bounds[1]))
+            prev = self._group_prev_pos.get(gid)
+            selected = False
+            try:
+                selected = bool(ne.is_node_selected(ne.NodeId(editor_id)))
+            except Exception:  # noqa: BLE001 — node not created yet
+                selected = False
+
+            # A selected group that moved in the node editor is a user drag.
+            # Recompute bounds first because other nodes may have changed size.
+            # Descendants of a dragged parent are drawn but never drag twice.
+            if prev is not None and selected and not skip_drag:
+                try:
+                    cur = ne.get_node_position(ne.NodeId(editor_id))
+                    dx = float(cur.x) - prev[0]
+                    dy = float(cur.y) - prev[1]
+                except Exception:  # noqa: BLE001
+                    dx = dy = 0.0
+                if abs(dx) > 0.75 or abs(dy) > 0.75:
+                    moved = self._move_group(canvas, gid, dx, dy)
+                    suppressed.update(descendant_group_ids(canvas, gid))
+                    bounds = group_bounds(canvas, gid)
+                    if bounds is None:
+                        continue
+                    expected = (float(bounds[0]), float(bounds[1]))
+                    print(f"[GroupDrag] {gid}: moved {moved} node(s) "
+                          f"by ({dx:.1f}, {dy:.1f})")
+
+            self._group_prev_pos[gid] = expected
+            if selected:
+                self._active_group = gid
+            ne.set_node_position(ne.NodeId(editor_id), imgui.ImVec2(*expected))
+            try:
+                ne.set_node_z_position(ne.NodeId(editor_id), -1.0)
+            except Exception:  # noqa: BLE001 — API optional
+                pass
+            active = (gid == self._active_group)
+            ne.push_style_color(
+                ne.StyleColor.group_bg,
+                imgui.ImVec4(0.18, 0.34, 0.50, 0.70) if not active
+                else imgui.ImVec4(0.24, 0.44, 0.62, 0.78))
+            ne.push_style_color(
+                ne.StyleColor.node_border,
+                imgui.ImVec4(0.45, 0.72, 0.95, 1.00) if not active
+                else imgui.ImVec4(0.95, 0.78, 0.32, 1.00))
+            ne.begin_node(ne.NodeId(editor_id))
+            ne.group(imgui.ImVec2(bounds[2], bounds[3]))
             # Group() 会把光标推进到框底 — 拉回左上角画标题
-            imgui.set_cursor_pos(imgui.ImVec2(8.0, 6.0))
+            indent = 8.0 + 12.0 * group_depth(canvas, gid)
+            imgui.set_cursor_pos(imgui.ImVec2(indent, 6.0))
             label = str(grp.get("alias") or gid)
             gtype = str(grp.get("type") or "group")
+            count = len(group_member_ids(canvas, gid))
             imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.70, 0.86, 0.98, 1.0))
-            imgui.text(f"@{label}   [{gtype}]")
+            imgui.text(f"@{label}   [{gtype}]   ({count})")
             imgui.pop_style_color(1)
             ne.pop_style_color(2)
             ne.end_node()
@@ -977,9 +1082,10 @@ class NodeEditorPanel(BasePanel):
             print(f"[Validate] start rejected: {self._report_note}")
 
     def _focus_node(self, nid: int) -> None:
-        """报告条目点击 → 选中并居中到对应节点（API 缺失时静默降级）。"""
+        """报告/查询窗口 → 选中并居中到对应节点（API 缺失时静默降级）。"""
         if self._editor_context is None:
             return
+        self._last_focused_node = int(nid)
         ne = node_ed
         try:
             ne.set_current_editor(self._editor_context)
@@ -1116,6 +1222,177 @@ class NodeEditorPanel(BasePanel):
     # 子步骤: Import / Export 弹出窗口（END）
     # ============================================================
 
+    # ============================================================
+    # 子步骤: 节点查询窗口（按 alias / type / label / description）
+    # ============================================================
+
+    @staticmethod
+    def _node_search_blob(inst) -> str:
+        ndef = _TYPES.get(inst.node_type)
+        label = ndef.label if ndef else inst.node_type
+        parts = [
+            str(getattr(inst, "alias", "") or ""),
+            str(inst.node_type),
+            str(label),
+            str(getattr(inst, "description", "") or ""),
+        ]
+        parts.extend(str(v) for v in (inst.props or {}).values()
+                     if isinstance(v, (str, int, float, bool)))
+        return " ".join(parts).lower()
+
+    def _find_results(self, canvas: NodeCanvas) -> list[int]:
+        query = self._find_query.strip().lower()
+        tokens = [part for part in query.split() if part]
+        scored: list[tuple[int, str, int]] = []
+        for nid, inst in canvas.nodes.items():
+            blob = self._node_search_blob(inst)
+            if tokens and not all(tok in blob for tok in tokens):
+                continue
+            alias = str(getattr(inst, "alias", "") or "").lower()
+            ndef = _TYPES.get(inst.node_type)
+            label = str(ndef.label if ndef else inst.node_type).lower()
+            if not query:
+                rank = 5
+            elif alias.startswith(query):
+                rank = 0
+            elif query in alias:
+                rank = 1
+            elif inst.node_type.lower().startswith(query):
+                rank = 2
+            elif label.startswith(query):
+                rank = 3
+            else:
+                rank = 4
+            scored.append((rank, alias or inst.node_type.lower(), nid))
+        scored.sort()
+        return [nid for _rank, _name, nid in scored]
+
+    def _delete_find_selected(self, canvas: NodeCanvas) -> bool:
+        """Delete the current find result (query window button + tests)."""
+        selected = self._find_selected
+        if selected is None or selected not in canvas.nodes:
+            return False
+        inst = canvas.nodes.get(int(selected))
+        canvas.remove_node(int(selected))
+        print(f"[FindNode] deleted nid={selected} "
+              f"type={getattr(inst, 'node_type', '?')}")
+        self._find_selected = None
+        return True
+
+    def _draw_find_window(self, canvas: NodeCanvas) -> None:
+        if not self._find_open:
+            return
+        imgui.set_next_window_size(imgui.ImVec2(460, 390), imgui.Cond_.first_use_ever)
+        visible, still_open = imgui.begin(
+            t("node_editor.find_title") + "###node_find", self._find_open)
+        if still_open is not None:
+            self._find_open = bool(still_open)
+        if not visible:
+            imgui.end()
+            return
+        try:
+            imgui.text_disabled(t("node_editor.find_hint"))
+            imgui.set_next_item_width(imgui.get_content_region_avail().x)
+            if self._find_focus:
+                imgui.set_keyboard_focus_here()
+                self._find_focus = False
+            changed, query = imgui.input_text(
+                "##node_find_query", self._find_query,
+                imgui.InputTextFlags_.auto_select_all)
+            if changed:
+                self._find_query = query
+                self._find_selected = None
+
+            results = self._find_results(canvas)
+            imgui.text_disabled(t("node_editor.find_count", count=len(results)))
+            list_h = max(80.0, float(imgui.get_content_region_avail().y) - 38.0)
+            child_visible = imgui.begin_child(
+                "##node_find_list", imgui.ImVec2(0, list_h), True)
+            try:
+                if child_visible:
+                    if not results:
+                        imgui.text_disabled(t("node_editor.find_none"))
+                    for nid in results:
+                        inst = canvas.nodes.get(nid)
+                        if inst is None:
+                            continue
+                        alias = str(getattr(inst, "alias", "") or "")
+                        ndef = _TYPES.get(inst.node_type)
+                        label = ndef.label if ndef else inst.node_type
+                        shown = f"@{alias}" if alias else t("node_editor.find_unnamed")
+                        text = f"{shown}   [{inst.node_type}]   {label}"
+                        if imgui.selectable(text, nid == self._find_selected)[0]:
+                            self._find_selected = nid
+                            if imgui.is_mouse_double_clicked(0):
+                                self._focus_node(nid)
+            finally:
+                imgui.end_child()
+
+            selected = self._find_selected
+            exists = selected is not None and selected in canvas.nodes
+            imgui.begin_disabled(not exists)
+            if imgui.button(t("node_editor.find_go"), imgui.ImVec2(150, 0)):
+                if exists:
+                    self._focus_node(int(selected))
+            imgui.same_line()
+            if imgui.button(t("node_editor.find_delete"), imgui.ImVec2(150, 0)):
+                self._delete_find_selected(canvas)
+            imgui.end_disabled()
+        finally:
+            imgui.end()
+
+    # ============================================================
+    # 子步骤: 节点组编辑窗口（嵌套树 + 组内重排 / 适配）
+    # ============================================================
+
+    def _draw_groups_window(self, canvas: NodeCanvas) -> None:
+        if not self._groups_open:
+            return
+        imgui.set_next_window_size(imgui.ImVec2(400, 430), imgui.Cond_.first_use_ever)
+        visible, still_open = imgui.begin(
+            t("node_editor.groups_title") + "###node_groups", self._groups_open)
+        if still_open is not None:
+            self._groups_open = bool(still_open)
+        if not visible:
+            imgui.end()
+            return
+        try:
+            groups = getattr(canvas, "node_groups", None) or {}
+            if not groups:
+                imgui.text_disabled(t("node_editor.groups_empty"))
+            else:
+                imgui.text_disabled(t("node_editor.groups_hint"))
+                child_visible = imgui.begin_child(
+                    "##node_group_tree", imgui.ImVec2(0, -38), True)
+                try:
+                    if child_visible:
+                        for gid in group_order(canvas):
+                            grp = groups.get(gid) or {}
+                            depth = group_depth(canvas, gid)
+                            alias = str(grp.get("alias") or gid)
+                            gtype = str(grp.get("type") or "group")
+                            count = len(group_member_ids(canvas, gid))
+                            label = f"{'  ' * depth}{alias} [{gtype}] ({count})"
+                            if imgui.selectable(
+                                    label, gid == self._active_group)[0]:
+                                self._active_group = gid
+                finally:
+                    imgui.end_child()
+                active = self._active_group
+                valid = active in groups
+                imgui.begin_disabled(not valid)
+                if imgui.button(t("node_editor.groups_rearrange"),
+                                imgui.ImVec2(180, 0)):
+                    self._auto_layout_group(canvas, active)
+                imgui.same_line()
+                if imgui.button(t("node_editor.groups_fit"), imgui.ImVec2(150, 0)):
+                    self._fit_group_pending = active
+                imgui.end_disabled()
+                if imgui.button(t("node_editor.groups_all"), imgui.ImVec2(0, 0)):
+                    self._auto_layout(canvas)
+        finally:
+            imgui.end()
+
     def _draw_add_popup(self, canvas: NodeCanvas) -> None:
         imgui.set_next_window_pos(self._add_popup_pos)
         _bpop = imgui.begin_popup(t("node_editor.create_node") + "###create_node")
@@ -1130,175 +1407,56 @@ class NodeEditorPanel(BasePanel):
 
     @staticmethod
     def _auto_layout(canvas: NodeCanvas) -> None:
-        """拓扑分层自动布局 — 沿 exec 链路 BFS 分配层级。
+        """Group-aware topological layout.
 
-        纯数据节点 (无 exec pin) 放在消费它们的 exec 节点左侧一层。
-        同层节点按类型分组排序以减少连线交叉。
-
-        层间距 320px, 节点间距 100px, 高度根据 pin 数量估算。
+        A group is one block in its parent layout; nested groups are laid out
+        recursively before the parent allocates space for them.  This prevents
+        the old node-only pass from squeezing a group between its neighbours.
         """
         if not canvas.nodes:
             return
+        positions = GroupLayoutEngine(canvas).layout_all()
+        for nid, pos in positions.items():
+            inst = canvas.nodes.get(nid)
+            if inst is not None:
+                inst.pos = (float(pos[0]), float(pos[1]))
+        groups = getattr(canvas, "node_groups", None) or {}
+        print(f"[Rearrange] {len(canvas.nodes)} nodes / {len(groups)} groups laid out")
 
-        H_SPACING = 320
-        V_PADDING = 32
-        V_HEADER = 44
-        V_PER_PIN = 24
-        V_WIDGET_EXTRA = 40  # 有关联控件的节点额外高度 (VarGet/VarSet/Constant 等)
+    def _auto_layout_group(self, canvas: NodeCanvas, gid: str) -> None:
+        """Rearrange one group's contents, then reflow its ancestors.
 
-        # ── 1. 分类连线 (exec vs data) ──
-        exec_down: dict[int, list[int]] = defaultdict(list)
-        data_down: dict[int, list[int]] = defaultdict(list)
-        data_up: dict[int, list[int]] = defaultdict(list)
+        The group keeps its current top-left; its frame size follows the new
+        member bounds.  Ancestors are re-laid out so a resized child cannot
+        overlap its siblings.
+        """
+        groups = getattr(canvas, "node_groups", None) or {}
+        if gid not in groups:
+            return
+        engine = GroupLayoutEngine(canvas)
+        origin = group_bounds(canvas, gid)
+        positions = engine.layout_group(gid)
+        if origin is None or not positions:
+            return
+        for nid, (x, y) in positions.items():
+            inst = canvas.nodes.get(nid)
+            if inst is not None:
+                inst.pos = (origin[0] + float(x), origin[1] + float(y))
+        print(f"[Rearrange] group {gid}: {len(positions)} nodes")
 
-        for link in canvas.links.values():
-            src_nid = canvas.find_pin_node(link.from_pin)
-            dst_nid = canvas.find_pin_node(link.to_pin)
-            if src_nid is None or dst_nid is None:
-                continue
-
-            pin_name = canvas.find_pin_name(link.from_pin)
-            src_inst = canvas.nodes.get(src_nid)
-            if src_inst and pin_name:
-                ndef = _TYPES.get(src_inst.node_type)
-                if ndef:
-                    pdef = next((p for p in ndef.pins if p.name == pin_name), None)
-                    if pdef and pdef.kind == "exec":
-                        exec_down[src_nid].append(dst_nid)
-                        continue
-            data_down[src_nid].append(dst_nid)
-            data_up[dst_nid].append(src_nid)
-
-        # ── 2. 找根节点 ──
-        event_types = {"OnGameStart", "OnFrameUpdate", "OnGameStop"}
-        roots = [nid for nid, inst in canvas.nodes.items()
-                 if inst.node_type in event_types]
-
-        # ── 3. BFS 沿 exec 边分配 layer ──
-        layer: dict[int, int] = {}
-        queue = deque()
-        for r in roots:
-            layer[r] = 0
-            queue.append(r)
-
-        while queue:
-            nid = queue.popleft()
-            for dn in exec_down.get(nid, []):
-                if dn not in layer:
-                    layer[dn] = layer[nid] + 1
-                    queue.append(dn)
-
-        # 未被 BFS 到达的 exec 节点: 从其 exec 前驱推算 layer
-        for nid in canvas.nodes:
-            if nid in layer:
-                continue
-            pred_layers = [layer[s] for s, ds in exec_down.items()
-                           if nid in ds and s in layer]
-            layer[nid] = (max(pred_layers) + 1) if pred_layers else len(roots)
-
-        # ── 4. 将节点按 layer 分组 ──
-        layer_nodes: dict[int, list[int]] = defaultdict(list)
-        max_exec_layer = max(layer.values()) if layer else 0
-
-        for nid, inst in canvas.nodes.items():
-            ndef = _TYPES.get(inst.node_type)
-            has_exec = ndef and any(p.kind == "exec" for p in ndef.pins)
-
-            if not has_exec:
-                # 纯数据节点: 放在消费者的左侧一层
-                consumers = data_down.get(nid, [])
-                if consumers:
-                    cons_layers = [layer.get(c, 0) for c in consumers]
-                    dl = max(cons_layers) - 1
-                    layer_nodes[max(0, dl)].append(nid)
-                else:
-                    # 孤立数据节点 → 最右侧
-                    layer_nodes[max_exec_layer + 1].append(nid)
-            else:
-                layer_nodes[layer.get(nid, 0)].append(nid)
-
-        # ── 5. 层内排序: barycenter 扫掠降交叉 ──
-        #     数据边也参与重心计算, 纯数据节点按其消费者的 Y 排序
-        #     然后左→右、右→左各扫一次, 按前后继重心重排
-        _temp_y: dict[int, float] = {}
-        for lyr in sorted(layer_nodes.keys()):
-            _ty = 0.0
-            for nid in layer_nodes[lyr]:
-                _temp_y[nid] = _ty
-                _ty += 1.0
-
-        for _pass in range(2):
-            # 左→右: 按前驱的平均 Y 排序 (exec 前驱为主, 数据前驱为 fallback)
-            for lyr in sorted(layer_nodes.keys()):
-                nids = layer_nodes[lyr]
-                bary: dict[int, float] = {}
-                for nid in nids:
-                    preds = [s for s, ds in exec_down.items() if nid in ds]
-                    if not preds:
-                        preds = data_up.get(nid, [])
-                    if preds:
-                        bary[nid] = sum(_temp_y.get(p, 0.0) for p in preds) / len(preds)
-                    else:
-                        bary[nid] = float(nid % 1000)
-                nids.sort(key=lambda n: (bary.get(n, 0.0), n))
-                for i, nid in enumerate(nids):
-                    _temp_y[nid] = float(i)
-
-            # 右→左: 按后继的平均 Y 排序 (exec 后继为主, 数据消费者为 fallback)
-            for lyr in reversed(sorted(layer_nodes.keys())):
-                nids = layer_nodes[lyr]
-                bary = {}
-                for nid in nids:
-                    succs = exec_down.get(nid, [])
-                    if not succs:
-                        succs = data_down.get(nid, [])
-                    if succs:
-                        bary[nid] = sum(_temp_y.get(s, 0.0) for s in succs) / len(succs)
-                    else:
-                        bary[nid] = float(nid % 1000)
-                nids.sort(key=lambda n: (bary.get(n, 0.0), n))
-                for i, nid in enumerate(nids):
-                    _temp_y[nid] = float(i)
-
-        # ── 6. 分配坐标 (按每节点实际估算高度累加 Y, 避免重叠) ──
-        # 带内联控件的节点类型 (VarGet/VarSet/Constant 等) 渲染时额外高
-        _WIDGET_NODES = {
-            "VarGet", "VarSet", "Constant", "StringConst",
-            "EntitySpawn", "EntityGet", "EntitySetRenderVisible", "EntityGroupSetVisible",
-            "ComponentAdd", "SetComponent", "GetComponent", "ComponentRemove",
-            "ParallelSend", "SerialSend", "PathVar", "TextFileWrite",
-            "TimeGetDate",
-            "InitSigGenDevice", "StartSigGenRecord", "StopSigGenRecord",
-            "KillSigGenDevice", "GetSigGenData",
-            "ShowMedia", "SetText",
-        }
-        for lyr in sorted(layer_nodes.keys()):
-            current_y: float = 80.0
-            for nid in layer_nodes[lyr]:
-                inst = canvas.nodes[nid]
-                ndef = _TYPES.get(inst.node_type)
-                pin_count = len(ndef.pins) if ndef else 2
-                est_h = V_HEADER + pin_count * V_PER_PIN
-                if inst.node_type in _WIDGET_NODES:
-                    est_h += V_WIDGET_EXTRA
-                x = 80 + lyr * H_SPACING
-                inst.pos = (float(x), float(current_y))
-                current_y += est_h + V_PADDING
-
-        # ── 6b. 纯数据节点 1:1 snap 到消费者 Y ──
-        for nid, inst in canvas.nodes.items():
-            ndef = _TYPES.get(inst.node_type)
-            has_exec = ndef and any(p.kind == "exec" for p in ndef.pins)
-            if has_exec:
-                continue
-            consumers = data_down.get(nid, [])
-            if len(consumers) == 1:
-                consumer_inst = canvas.nodes.get(consumers[0])
-                if consumer_inst:
-                    inst.pos = (inst.pos[0], consumer_inst.pos[1])
-
-        print(f"[Rearrange] {len(canvas.nodes)} nodes laid out "
-              f"in {len(layer_nodes)} layers")
+        parent = str((groups.get(gid) or {}).get("parent") or "")
+        while parent and parent in groups:
+            p_origin = group_bounds(canvas, parent)
+            p_positions = engine.layout_group(parent)
+            if p_origin is None or not p_positions:
+                break
+            for nid, (x, y) in p_positions.items():
+                inst = canvas.nodes.get(nid)
+                if inst is not None:
+                    inst.pos = (p_origin[0] + float(x), p_origin[1] + float(y))
+            print(f"[Rearrange] parent group {parent}: "
+                  f"{len(p_positions)} nodes")
+            parent = str((groups.get(parent) or {}).get("parent") or "")
 
     # ============================================================
     # 子步骤: 位置同步

@@ -1,14 +1,16 @@
 """VirtualDevice node pack — SigGen + DevicePool 节点（2026-10-20 从核心迁出）。
 
 节点声明与 `Core/NodeGraph/node_types` 解耦；type 名保持不变。
-求值器仍由现有设备域实现提供，后续由 VirtualDevice 维护者收回本目录。
-本文件必须是纯声明（不 import Editor / imgui）。
+求值器在本目录 `evaluator_siggen.py` / `evaluator_pool.py`，由本文件注册。
+本文件不得 import Editor / imgui。
 """
 
 from __future__ import annotations
 
 
 def register() -> dict:
+    # Evaluators live in this extension directory; register them with the pack.
+    from Application.Functions.VirtualDevice import evaluator_pool, evaluator_siggen  # noqa: F401
     pool = (0.930, 0.780, 0.220)
     sig = (0.350, 0.780, 0.850)
     return {

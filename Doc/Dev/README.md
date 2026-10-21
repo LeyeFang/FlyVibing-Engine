@@ -34,13 +34,15 @@
 | `ui_protocol.md` | `Application/Editor/UI/**`（Panel / Widget / 样式 / 菜单 / FileDialog） | 改编辑器 UI、加内联控件、调 Add 菜单、改删除交互 |
 | `i18n_protocol.md` | `Application/Editor/I18n.py` + `Application/Editor/Locale/**` + `Utils/Dev/i18n_tool.py` + `Doc/Dev/i18n_baseline.json` | **写任何 UI 文案 / 加菜单项 / 新增语言前必读**：角色分工、键规范与可提取性、不翻译边界表（agent 面=中文不随语言变化）、**发布门（`ui_complete`，zh 已发布；未完成语言不进设置）**、运行时回退链、守卫三层与棘轮口径、新增语言 Runbook（全量适配门槛）、扩展侧约定 |
 | `node_editor_protocol.md` | `Application/Core/NodeGraph/**`（运行时）+ `Application/Editor/UI/panels/node_editor/**`（编辑器交互）+ `FlyVibing-User-And-Developer-Utils/packages/node-editor/**` | 新增/修改节点类型、求值器、图约束、图校验、MCP 文档 |
-| `device_io_protocol.md` | `Application/Functions/**`（SerialParallelDevice / VirtualDevice） | 设备集成、真实/空跑双后端、线程与数据落盘 |
-| `bci_algorithm_protocol.md` | `Application/Functions/BCIAlgorithm/**` + `node_types/evaluators {epoch,bci_algorithm}` + 对应 widgets | epoch 数据集、FBCSP/CCA 节点、打包 list 超参、训练同步语义、模型注册、空采验证 |
+| `device_io_protocol.md` | `Application/Functions/**`（SerialParallelDevice / VirtualDevice；后者含 `HANDOFF.md`） | 设备集成、真实/空跑双后端、线程与数据落盘；Virtual 求值器已出核心 |
+| `bci_algorithm_protocol.md` | `Application/Functions/BCIAlgorithm/**`（含 `evaluator.py` / `evaluator_epoch.py` / `HANDOFF.md`） + 对应 widgets | epoch 数据集、FBCSP/CCA 节点、打包 list 超参、训练同步语义、模型注册、空采验证；求值器已出核心 |
 | `project_export_protocol.md` | `Application/Editor/ProjectManager.py` + EditorHost 场景 I/O + UI/UIManager 主菜单 + UI/FileDialog | 项目保存/另存/导出、资源路径、主菜单 File 项、迁移与打包 |
 | `runtime_packaging_protocol.md` | `Application/PlayerEntry.py` + `Application/Runtime/PlayerBootstrap.py` + `Application/Core/Project/**` + `Utils/Dev/**`（打包流水线） | 播放器/独立运行、Python 环境打包、wheelhouse、run_game.cmd、运行时线程纪律（§3.1） |
 | `editor_live_protocol.md` | `Application/Editor/Services/LiveCommandServer.py` + `FlyVibing-User-And-Developer-Utils/packages/editor-mcp/**` | 实时命令总线（agent 热注入）、实体/组件/场景/资源编辑 ops（v3 §4.1）、校验/导入导出/工程 ops（v4 §4.2）、新增 op、容器补全跟进（§10）、agent 通道（MCP lite/full 档、CLI、Skill）与故障排查 |
 | `graph_validation_protocol.md` | `Application/Core/NodeGraph/validation/**` + Node Editor 面板 Validate + `graph.validate.*` / `graph.export/import` ops | 改校验规则/干跑语义/报告格式、改 Validate UI 或图导入导出 |
 | `test_protocol.md` | `Test/**` + `Utils/Dev/test_runner.py` + `Test/Application/Editor/ui_scenario.py` + `_ui_boot.py` | 新增/修改测试、UI 场景回放、排查测试互相干扰时必读：档位 / 沙箱 / 输出契约 / 重置清单 |
+| `test_map_todo.md` + `test_nodes.md` + `ui_map.md` | `Doc/Dev/{test_nodes,ui_map}.json` + `Utils/Dev/test_map.py` | 测试节点地图 / UI 展开图 / 跨会话任务上下文：一个测试文件=一个节点、`ui tree`、affected 查询、map check；修改测试、控件或定位回归范围前先查 |
+| `product_todo.md` | 扩展剥离 / 节点编辑器 UX / 1.0 Release / macOS | 产品级待办与暂缓决策（CI、社区扩展仓库治理、组编辑后续、Release 清单） |
 | `threading_protocol.md` | `Application/Core/ThreadRegistry.py` + 全体线程启动点 + `Utils/Dev/thread_probe.py` | **新开线程/跨线程通信/服务进程集成前必读**：三通道纪律、心跳注册四步、实时探针、检查单 |
 | `media_protocol.md` | `Application/Core/Media/**` + `ShowMedia` 节点 + `MediaPlayer` 组件 + `TextureUpdateCommand` 链 | 改动态媒体（GIF/视频/音频）、媒体节点、动态纹理上传：架构决议 **v2**（编辑器=模板 / PIE 唯一由 GameRuntime 控制 / 节点建图才生效）、数据流、注册点、验收证据 |
 | `rendering_protocol.md` | `Application/Core/Renderer/**` + `Resource/Shaders/**` + `Test/Application/Renderer/**` | 改渲染器/渲染命令/shader/纹理上传/overlay，或需要像素级验证时必读：后端现状（OpenGL 一等公民）、线程纪律、资源模型、**验证体系**（GL 像素探针 + 金标准）、agent 工具（`renderer.snapshot` / CLI `probe`）、**§7 渲染目标(RT)**、**§8 光照体系** |

@@ -219,6 +219,10 @@ def _collect_tree(
     from Application.Core.Scene.Scene import EntityData as ED
     if entity_id in out_map:
         return
+    # 不存在于本 SceneManager 的实体不能生成幽灵 prefab（GetEntityTransform
+    # 对缺失实体返回默认 Transform，若不先检查会误判为存在）。
+    if not scene.EntityExists(entity_id):
+        return
 
     try:
         t = scene.GetEntityTransform(entity_id)

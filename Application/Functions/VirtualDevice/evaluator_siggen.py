@@ -15,7 +15,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
+from Application.Core.NodeGraph.evaluator_engine import (
+    ExecutionContext, GraphEvaluator, register_evaluator,
+)
 from Application.Functions.VirtualDevice import SigGenConfig
 from Application.Functions.VirtualDevice import get_data as _sg_get_data
 from Application.Functions.VirtualDevice import init_session as _sg_init

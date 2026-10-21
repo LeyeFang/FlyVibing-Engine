@@ -1,14 +1,36 @@
 """BCI node pack — FBCSP / CCA / Epoch 数据集节点（2026-10-20 从核心迁出）。
 
 节点声明与 `Core/NodeGraph/node_types` 解耦；type 名保持不变。
-求值器仍由现有 BCI/epoch 域实现提供，后续由 BCI 维护者收回本目录。
-本文件必须是纯声明（不 import Editor / imgui）。
+求值器在本目录 `evaluator.py` / `evaluator_epoch.py`，由本文件注册。
+本文件不得 import Editor / imgui。
 """
 
 from __future__ import annotations
 
+import importlib.util
+import sys
+from pathlib import Path
+
+
+def _load_local(module_name: str, filename: str) -> None:
+    """Load a sibling evaluator without importing the heavy package facade."""
+    # Re-execute on re-registration: unregister_owner may have removed the
+    # evaluator while the module object remained in sys.modules.
+    sys.modules.pop(module_name, None)
+    path = Path(__file__).with_name(filename)
+    spec = importlib.util.spec_from_file_location(module_name, str(path))
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load BCI evaluator: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+
 
 def register() -> dict:
+    # Evaluators live in this extension directory; import them only when the
+    # BCI pack is discovered, never from Core/NodeGraph.
+    _load_local("mge_bci_evaluator", "evaluator.py")
+    _load_local("mge_bci_evaluator_epoch", "evaluator_epoch.py")
     algo = (0.600, 0.360, 0.720)
     epoch = (0.290, 0.680, 0.600)
     return {

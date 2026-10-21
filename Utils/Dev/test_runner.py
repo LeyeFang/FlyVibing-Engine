@@ -40,6 +40,8 @@ if _ROOT is None:
 
 ROOT = str(_ROOT)
 SEARCH_DIRS = ["Test/Application"]
+SCENARIO_DIRS = ["Test/Application/Editor/scenarios"]
+UI_SCENARIO_RUNNER = "Test/Application/Editor/ui_scenario.py"
 TIER_RE = re.compile(r"TIER\s*[:=]\s*['\"]?(core|gui|heavy|live|manual)", re.IGNORECASE)
 
 GUI_HINTS = ("gizmo", "grid", "outliner")
@@ -77,6 +79,20 @@ def discover(only: str | None) -> list[tuple[str, Path, str]]:
         if not root.is_dir():
             continue
         for path in sorted(root.rglob("test_*.py")):
+            rel = str(path.relative_to(ROOT)).replace("\\", "/")
+            if only and only.lower() not in rel.lower():
+                continue
+            found.append((rel, path, _classify(path, rel)))
+
+    # UI scenarios are not test_*.py; run them through ui_scenario.py and
+    # expose them as the gui tier so `--tier gui` is no longer empty.
+    for base in SCENARIO_DIRS:
+        root = Path(ROOT) / base
+        if not root.is_dir():
+            continue
+        for path in sorted(root.glob("*.py")):
+            if path.name.startswith("_"):
+                continue
             rel = str(path.relative_to(ROOT)).replace("\\", "/")
             if only and only.lower() not in rel.lower():
                 continue
@@ -143,8 +159,13 @@ def run_one(rel: str, path: Path, runs_dir: Path, timeout: float,
     t0 = time.time()
     timed_out = False
     try:
+        rel_parent = str(path.parent.relative_to(ROOT)).replace("\\", "/")
+        if rel_parent in SCENARIO_DIRS:
+            cmd = [sys.executable, str(Path(ROOT) / UI_SCENARIO_RUNNER), str(path)]
+        else:
+            cmd = [sys.executable, str(path)]
         proc = subprocess.run(
-            [sys.executable, str(path)],
+            cmd,
             cwd=ROOT,
             env=env,
             capture_output=True,

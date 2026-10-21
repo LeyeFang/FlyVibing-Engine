@@ -14,8 +14,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
-from ..graph_constraints import EPOCH_APPEND, EPOCH_LOAD, epoch_key
+from Application.Core.NodeGraph.evaluator_engine import (
+    ExecutionContext, GraphEvaluator, register_evaluator,
+)
+from Application.Core.NodeGraph.graph_constraints import (
+    EPOCH_APPEND, EPOCH_LOAD, epoch_key,
+)
 
 _DRY_PREFIX = "dryrun#"
 

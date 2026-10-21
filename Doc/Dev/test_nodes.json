@@ -1,0 +1,1122 @@
+{
+  "schema": 1,
+  "source": "Test/Application/**/test_*.py",
+  "map_path": "Doc/Dev/test_nodes.json",
+  "nodes": [
+    {
+      "id": "core.filesystem.vfs",
+      "path": "Test/Application/Core/FileSystem/test_vfs.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core.filesystem",
+      "covers": [
+        "Application.Core.FileSystem.PathUtils",
+        "Application.Core.FileSystem.VFS"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.input.input_pipeline",
+      "path": "Test/Application/Core/Input/test_input_pipeline.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core.input",
+      "covers": [
+        "Application.Core.Events.Enum.InputEnum",
+        "Application.Core.Input.InputBackend",
+        "Application.Core.Input.InputPipeline"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.math.math",
+      "path": "Test/Application/Core/Math/test_math.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core.math",
+      "covers": [
+        "Application.Core.Math.Camera",
+        "Application.Core.Math.Transform"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.scene.entity_manager",
+      "path": "Test/Application/Core/Scene/test_entity_manager.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core.scene",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.scene.prefab_manager",
+      "path": "Test/Application/Core/Scene/test_prefab_manager.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core.scene",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.PrefabManager",
+        "Application.Core.Scene.SceneManager",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.scene.scene_manager",
+      "path": "Test/Application/Core/Scene/test_scene_manager.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core.scene",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.Scene",
+        "Application.Core.Scene.SceneManager",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.component_clamps",
+      "path": "Test/Application/Core/test_component_clamps.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.ComponentRegistry",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.EditorHost",
+        "Application.Editor.Services.LiveCommandServer",
+        "Application.Editor.UI.controllers.SceneBrowserController"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.material_isolation",
+      "path": "Test/Application/Core/test_material_isolation.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.node_graph_boundary",
+      "path": "Test/Application/Core/test_node_graph_boundary.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "core",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.runtime_project_loader",
+      "path": "Test/Application/Core/test_runtime_project_loader.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Engine",
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.canvas",
+        "Application.Core.NodeGraph.evaluator_engine",
+        "Application.Core.Project",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.test_map",
+      "path": "Test/Application/Core/test_test_map.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "core",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.thread_boundary",
+      "path": "Test/Application/Core/test_thread_boundary.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "core",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.action_contract",
+      "path": "Test/Application/Editor/test_action_contract.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.Scene.Scene",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.EditorHost",
+        "Application.Editor.Gizmos.TransformGizmo",
+        "Application.Editor.Services.LiveCommandServer",
+        "Application.Editor.UI.controllers.SceneBrowserController",
+        "Application.Editor.UI.controllers.SelectionController"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.editor_mcp_package",
+      "path": "Test/Application/Editor/test_editor_mcp_package.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.node_packs"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.editor_settings",
+      "path": "Test/Application/Editor/test_editor_settings.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Editor.EditorSettings",
+        "Application.Editor.Extensions.ExtensionUI",
+        "Application.Editor.I18n",
+        "Application.Editor.Services.LiveCommandServer",
+        "Application.Editor.StartupOptions",
+        "Application.Editor.UI.UIManager",
+        "Application.Editor.UI.panels.SettingsPanel",
+        "Application.Editor.UI.panels.node_editor.panel"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.examples_catalog",
+      "path": "Test/Application/Editor/test_examples_catalog.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "editor",
+      "covers": [
+        "Application.Editor.UI.UIManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.export_game_bundle",
+      "path": "Test/Application/Editor/test_export_game_bundle.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.Engine",
+        "Application.Core.NodeGraph.canvas",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.EditorHost",
+        "Application.Editor.ProjectManager",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.i18n_coverage",
+      "path": "Test/Application/Editor/test_i18n_coverage.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.NodeGraph.node_types",
+        "Application.Editor.DisplayLabels",
+        "Application.Editor.EditorSettings",
+        "Application.Editor.I18n",
+        "Application.Editor.UI.panels.SettingsPanel",
+        "Application.Editor.UI.panels.node_editor.styling"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.imgui_hygiene",
+      "path": "Test/Application/Editor/test_imgui_hygiene.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "editor",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.imgui_stack_pairing",
+      "path": "Test/Application/Editor/test_imgui_stack_pairing.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "editor",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.light_gizmo",
+      "path": "Test/Application/Editor/test_light_gizmo.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.GizmoQuery",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.Gizmos.LightIconGizmo"
+      ],
+      "requires": [
+        "OpenGL window"
+      ],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.live_command_server",
+      "path": "Test/Application/Editor/test_live_command_server.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.Engine",
+        "Application.Core.Events.Event",
+        "Application.Core.Input.InputState",
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.canvas",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.ThreadRegistry",
+        "Application.Editor.EditorHost",
+        "Application.Editor.Gizmos.Grid",
+        "Application.Editor.Services.LiveCommandServer",
+        "Application.Editor.UI.BasePanel",
+        "Application.Editor.UI.UIManager",
+        "Application.Editor.UI.controllers.SimulationController",
+        "Application.Editor.UI.controllers.ViewportController"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.live_ui",
+      "path": "Test/Application/Editor/test_live_ui.py",
+      "tier": "manual",
+      "kind": "manual",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [
+        "interactive session"
+      ],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.node_runtime",
+      "path": "Test/Application/Editor/test_node_runtime.py",
+      "tier": "manual",
+      "kind": "manual",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.NodeGraph",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.EditorCamera",
+        "Application.Editor.EditorHost",
+        "Application.Editor.UI.UIManager",
+        "Application.Editor.UI.controllers.ResourceBrowserController",
+        "Application.Editor.UI.controllers.SceneBrowserController",
+        "Application.Editor.UI.controllers.SelectionController",
+        "Application.Editor.UI.controllers.SimulationController",
+        "Application.Editor.UI.controllers.ViewportController",
+        "Application.Editor.UI.panels",
+        "Application.Resource.ResourceManager",
+        "Application.Runtime.GameRuntime",
+        "Application.Runtime.RuntimeNodeLayer"
+      ],
+      "requires": [
+        "interactive session"
+      ],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.pie_settings",
+      "path": "Test/Application/Editor/test_pie_settings.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.Scene.Scene",
+        "Application.Core.Window.glfwWindow",
+        "Application.Editor.UI.controllers.SimulationController",
+        "Application.Runtime.RuntimeWindow"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.project_asset_commit",
+      "path": "Test/Application/Editor/test_project_asset_commit.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.Engine",
+        "Application.Core.Events",
+        "Application.Core.NodeGraph.canvas",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.EditorHost",
+        "Application.Editor.ProjectManager",
+        "Application.Editor.UI.controllers.SceneBrowserController",
+        "Application.Resource.Material",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.scene_panel_interactions",
+      "path": "Test/Application/Editor/test_scene_panel_interactions.py",
+      "tier": "core",
+      "kind": "ui-behavior",
+      "owner": "editor",
+      "covers": [
+        "Application.Editor.Services.ControllerRegistry",
+        "Application.Editor.UI.controllers.ResourceBrowserController",
+        "Application.Editor.UI.controllers.SceneBrowserController",
+        "Application.Editor.UI.controllers.SimulationController",
+        "Application.Editor.UI.controllers.ViewportController",
+        "Application.Editor.UI.panels.ScenePanel"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.ui_map",
+      "path": "Test/Application/Editor/test_ui_map.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "editor",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.ui_text_safety",
+      "path": "Test/Application/Editor/test_ui_text_safety.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "editor",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.utils_layout",
+      "path": "Test/Application/Editor/test_utils_layout.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "editor",
+      "covers": [
+        "Application.Editor.ProjectManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "extensions.extension_boundary",
+      "path": "Test/Application/Extensions/test_extension_boundary.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "extensions",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "extensions.extension_manager",
+      "path": "Test/Application/Extensions/test_extension_manager.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "extensions",
+      "covers": [
+        "Application.Editor.Extensions.ExtensionManager",
+        "Application.Editor.Services.LiveCommandServer",
+        "Application.Editor.UI.UIManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "extensions.extension_review",
+      "path": "Test/Application/Extensions/test_extension_review.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "extensions",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "extensions.extension_ui",
+      "path": "Test/Application/Extensions/test_extension_ui.py",
+      "tier": "core",
+      "kind": "ui-behavior",
+      "owner": "extensions",
+      "covers": [
+        "Application.Core.Extension.ExtensionBase",
+        "Application.Editor.Extensions.ExtensionManager",
+        "Application.Editor.Extensions.ExtensionUI",
+        "Application.Editor.UI.UIManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "extensions.virtual_panel",
+      "path": "Test/Application/Extensions/test_virtual_panel.py",
+      "tier": "core",
+      "kind": "ui-behavior",
+      "owner": "extensions",
+      "covers": [
+        "Application.Editor.Extensions.ExtensionManager",
+        "Application.Editor.Services.LiveCommandServer",
+        "Application.Editor.UI.UIManager",
+        "Application.Functions.VirtualDevice"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "functions.bci_algorithm",
+      "path": "Test/Application/Functions/test_bci_algorithm.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "functions",
+      "covers": [
+        "Application.Core.NodeGraph.graph_constraints",
+        "Application.Core.NodeGraph.validation.checks",
+        "Application.Core.NodeGraph.validation.dry_run",
+        "Application.Functions.BCIAlgorithm",
+        "Application.Functions.BCIAlgorithm.evaluator",
+        "Application.Functions.BCIAlgorithm.evaluator_epoch",
+        "Application.Functions.BCIAlgorithm.extension",
+        "Application.Functions.BCIAlgorithm.node_pack",
+        "Application.Functions.VirtualDevice"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "functions.device_alias",
+      "path": "Test/Application/Functions/test_device_alias.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "functions",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.validation.checks",
+        "Application.Functions.SerialParallelDevice"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "functions.device_autobind",
+      "path": "Test/Application/Functions/test_device_autobind.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "functions",
+      "covers": [
+        "Application.Functions.SerialParallelDevice"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "functions.device_pool",
+      "path": "Test/Application/Functions/test_device_pool.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "functions",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.graph_constraints",
+        "Application.Core.NodeGraph.validation.checks",
+        "Application.Functions.VirtualDevice",
+        "Application.Functions.VirtualDevice.evaluator_pool",
+        "Application.Functions.VirtualDevice.node_pack"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "functions.epoch_dataset",
+      "path": "Test/Application/Functions/test_epoch_dataset.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "functions",
+      "covers": [
+        "Application.Core.NodeGraph.graph_constraints",
+        "Application.Core.NodeGraph.validation.checks",
+        "Application.Core.NodeGraph.validation.dry_run",
+        "Application.Functions.BCIAlgorithm",
+        "Application.Functions.BCIAlgorithm.evaluator_epoch",
+        "Application.Functions.VirtualDevice"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "functions.serial_parallel_device",
+      "path": "Test/Application/Functions/test_serial_parallel_device.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "functions",
+      "covers": [
+        "Application.Functions.SerialParallelDevice",
+        "Application.Functions.SerialParallelDevice.protocol"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "functions.siggen_device",
+      "path": "Test/Application/Functions/test_siggen_device.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "functions",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.graph_constraints",
+        "Application.Functions.VirtualDevice",
+        "Application.Functions.VirtualDevice.ServiceClient",
+        "Application.Functions.VirtualDevice.evaluator_siggen",
+        "Application.Functions.VirtualDevice.node_pack"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "functions.spd_monitor",
+      "path": "Test/Application/Functions/test_spd_monitor.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "functions",
+      "covers": [
+        "Application.Functions.SerialParallelDevice"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "media.media_node",
+      "path": "Test/Application/Media/test_media_node.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "media",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.validation.checks",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.UI.controllers.SimulationController",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "media.media_system",
+      "path": "Test/Application/Media/test_media_system.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "media",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.canvas_metadata",
+      "path": "Test/Application/NodeGraph/test_canvas_metadata.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.canvas",
+        "Application.Core.Scene.Scene"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.canvas_optional_pin_ids",
+      "path": "Test/Application/NodeGraph/test_canvas_optional_pin_ids.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.compare_timer_lazy",
+      "path": "Test/Application/NodeGraph/test_compare_timer_lazy.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.entity_group_visible",
+      "path": "Test/Application/NodeGraph/test_entity_group_visible.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.NodeGraph",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.entity_list_nodes",
+      "path": "Test/Application/NodeGraph/test_entity_list_nodes.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.NodeGraph",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.entity_scope_ops",
+      "path": "Test/Application/NodeGraph/test_entity_scope_ops.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.EditorHost",
+        "Application.Editor.Services.LiveCommandServer",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.entity_spawn_visibility",
+      "path": "Test/Application/NodeGraph/test_entity_spawn_visibility.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.Engine",
+        "Application.Core.Events.Event",
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.evaluators.entity.lifecycle",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.Scene",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.EditorHost",
+        "Application.Editor.UI.controllers.SceneBrowserController",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.graph_io",
+      "path": "Test/Application/NodeGraph/test_graph_io.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.canvas"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.graph_validation",
+      "path": "Test/Application/NodeGraph/test_graph_validation.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.validation"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.mi_groups",
+      "path": "Test/Application/NodeGraph/test_mi_groups.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.evaluators.math",
+        "Application.Functions.SerialParallelDevice"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.node_editor_mcp",
+      "path": "Test/Application/NodeGraph/test_node_editor_mcp.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "nodegraph",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.node_pack",
+      "path": "Test/Application/NodeGraph/test_node_pack.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.evaluator_engine",
+        "Application.Core.NodeGraph.node_packs",
+        "Application.Functions.SerialParallelDevice"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.scalar_math_ops",
+      "path": "Test/Application/NodeGraph/test_scalar_math_ops.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.evaluator_engine",
+        "Application.Core.NodeGraph.evaluators.math"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "renderer.gl_lighting",
+      "path": "Test/Application/Renderer/test_gl_lighting.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "renderer",
+      "covers": [
+        "Application.Core.Scene.BasicComponents",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [
+        "OpenGL window"
+      ],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "renderer.gl_pixels",
+      "path": "Test/Application/Renderer/test_gl_pixels.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "renderer",
+      "covers": [
+        "Application.Core.Renderer.PostProcess",
+        "Application.Core.Renderer.RenderCommand",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [
+        "OpenGL window"
+      ],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "renderer.gl_render_targets",
+      "path": "Test/Application/Renderer/test_gl_render_targets.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "renderer",
+      "covers": [
+        "Application.Core.Renderer.RenderCommand",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [
+        "OpenGL window"
+      ],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "renderer.render_commands",
+      "path": "Test/Application/Renderer/test_render_commands.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "renderer",
+      "covers": [
+        "Application.Core.Renderer",
+        "Application.Core.Renderer.CommandQueue"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "renderer.vertex_layout",
+      "path": "Test/Application/Renderer/test_vertex_layout.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "renderer",
+      "covers": [
+        "Application.Core.Renderer.VertexLayout"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "resource.resource_manager",
+      "path": "Test/Application/Resource/test_resource_manager.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "resource",
+      "covers": [
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "runtime.pie_bare",
+      "path": "Test/Application/Runtime/test_pie_bare.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "runtime",
+      "covers": [
+        "Application.Core.Engine",
+        "Application.Core.Events.Event",
+        "Application.Core.Input.InputState",
+        "Application.Core.Scene.SceneManager",
+        "Application.Resource.ResourceManager",
+        "Application.Runtime.GameRuntime",
+        "Application.Runtime.RuntimeLayer"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "runtime.runtime_node_layer_race",
+      "path": "Test/Application/Runtime/test_runtime_node_layer_race.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "runtime",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.NodeGraph",
+        "Application.Runtime.RuntimeNodeLayer"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "stress.material_cycle_stress",
+      "path": "Test/Application/stress/test_material_cycle_stress.py",
+      "tier": "heavy",
+      "kind": "stress",
+      "owner": "stress",
+      "covers": [
+        "Application.Core.Engine",
+        "Application.Core.NodeGraph.canvas",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.EditorHost",
+        "Application.Editor.ProjectManager",
+        "Application.Editor.UI.controllers.SceneBrowserController",
+        "Application.Resource.Material",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [
+        "sandbox project fixture"
+      ],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.group_layout",
+      "path": "Test/Application/NodeGraph/test_group_layout.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Editor.UI.panels.node_editor.group_layout",
+        "Application.Core.NodeGraph.canvas"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "stress.stress_thread_races",
+      "path": "Test/Application/stress/test_stress_thread_races.py",
+      "tier": "core",
+      "kind": "stress",
+      "owner": "stress",
+      "covers": [
+        "Application.Core.Engine",
+        "Application.Core.Events.Event",
+        "Application.Core.Input.InputState",
+        "Application.Core.ThreadRegistry",
+        "Application.Editor.Services.LiveCommandServer"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "text.text_system",
+      "path": "Test/Application/Text/test_text_system.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "text",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.component_registry",
+        "Application.Core.Scene.BasicComponents",
+        "Application.Core.Scene.SceneManager",
+        "Application.Editor.UI.controllers.SimulationController",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    }
+  ]
+}

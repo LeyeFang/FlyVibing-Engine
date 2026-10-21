@@ -1,0 +1,2265 @@
+{
+  "version": "0.1.0",
+  "scene": {
+    "name": "MI",
+    "game_type": "2d",
+    "ambient_color": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "lighting_fallback": true,
+    "entities": {
+      "4": {
+        "name": "Cross",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          }
+        }
+      },
+      "5": {
+        "name": "row",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 0.5,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 3.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.5
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 1,
+            "visible": true
+          }
+        },
+        "parent_id": 4
+      },
+      "6": {
+        "name": "col",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 0.5,
+            "scale_y": 1.0,
+            "scale_z": 3.0,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 0.5,
+            "local_scl_y": 1.0,
+            "local_scl_z": 3.0
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 1,
+            "visible": true
+          }
+        },
+        "parent_id": 4
+      },
+      "7": {
+        "name": "LeftCue",
+        "components": {
+          "Transform": {
+            "position_x": -2.5,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": -2.5,
+            "local_pos_y": 0.0,
+            "local_pos_z": 4.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          }
+        }
+      },
+      "8": {
+        "name": "arrow_body",
+        "components": {
+          "Transform": {
+            "position_x": 2.799999952316284,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 0.25,
+            "local_pos_x": 2.799999952316284,
+            "local_pos_y": 0.0,
+            "local_pos_z": 0.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 3.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.25
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 3,
+            "visible": false
+          }
+        },
+        "parent_id": 7
+      },
+      "9": {
+        "name": "arrow_head_copy",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0.0,
+            "rotation_y": -1.5707963267948966,
+            "rotation_z": 0.0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": -0.0,
+            "local_rot_x": 0.0,
+            "local_rot_y": -1.5707963267948966,
+            "local_rot_z": -0.0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "MeshRenderer": {
+            "mesh_id": 2,
+            "material_id": 3,
+            "visible": false
+          }
+        },
+        "parent_id": 7
+      },
+      "10": {
+        "name": "RightCue",
+        "components": {
+          "Transform": {
+            "position_x": 2.5,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0.0,
+            "rotation_y": 0.0,
+            "rotation_z": -0.0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 2.5,
+            "local_pos_y": 0.0,
+            "local_pos_z": 4.0,
+            "local_rot_x": 0.0,
+            "local_rot_y": 0.0,
+            "local_rot_z": -0.0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          }
+        }
+      },
+      "11": {
+        "name": "arrow_head",
+        "components": {
+          "Transform": {
+            "position_x": 0,
+            "position_y": 0,
+            "position_z": 0,
+            "rotation_x": 0.0,
+            "rotation_y": 1.5707963267948966,
+            "rotation_z": -0.0,
+            "scale_x": 1,
+            "scale_y": 1,
+            "scale_z": 1,
+            "local_pos_x": 0,
+            "local_pos_y": 0,
+            "local_pos_z": 0,
+            "local_rot_x": 0.0,
+            "local_rot_y": 1.5707963267948966,
+            "local_rot_z": -0.0,
+            "local_scl_x": 1,
+            "local_scl_y": 1,
+            "local_scl_z": 1
+          },
+          "MeshRenderer": {
+            "mesh_id": 2,
+            "material_id": 3,
+            "visible": false
+          }
+        },
+        "parent_id": 10
+      },
+      "12": {
+        "name": "arrow_body_copy",
+        "components": {
+          "Transform": {
+            "position_x": -0.2999999523162842,
+            "position_y": 0.0,
+            "position_z": 4.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 3.0,
+            "scale_y": 1.0,
+            "scale_z": 0.25,
+            "local_pos_x": -2.799999952316284,
+            "local_pos_y": 0.0,
+            "local_pos_z": -0.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 3.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.25
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 3,
+            "visible": false
+          }
+        },
+        "parent_id": 10
+      },
+      "13": {
+        "name": "TaskCue",
+        "components": {
+          "Transform": {
+            "position_x": 0.0,
+            "position_y": 0.0,
+            "position_z": 6.0,
+            "rotation_x": 0,
+            "rotation_y": 0,
+            "rotation_z": 0,
+            "scale_x": 4.0,
+            "scale_y": 1.0,
+            "scale_z": 0.30000001192092896,
+            "local_pos_x": 0.0,
+            "local_pos_y": 0.0,
+            "local_pos_z": 6.0,
+            "local_rot_x": 0,
+            "local_rot_y": 0,
+            "local_rot_z": 0,
+            "local_scl_x": 4.0,
+            "local_scl_y": 1.0,
+            "local_scl_z": 0.30000001192092896
+          },
+          "MeshRenderer": {
+            "mesh_id": 1,
+            "material_id": 4,
+            "visible": false
+          }
+        }
+      }
+    },
+    "main_camera_entity_id": null,
+    "next_eid": 14,
+    "node_graph": {
+      "version": "0.1.0",
+      "nodes": {
+        "161": {
+          "id": 161,
+          "node_type": "OnGameStart",
+          "pos": [
+            80.0,
+            80.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 162
+          }
+        },
+        "163": {
+          "id": 163,
+          "node_type": "OnFrameUpdate",
+          "pos": [
+            80.0,
+            180.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 164,
+            "delta": 165
+          }
+        },
+        "166": {
+          "id": 166,
+          "node_type": "OnGameStop",
+          "pos": [
+            80.0,
+            304.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec": 167
+          }
+        },
+        "200": {
+          "id": 200,
+          "node_type": "RandomSetSeed",
+          "pos": [
+            400.0,
+            80.0
+          ],
+          "props": {
+            "source": "hardware"
+          },
+          "pin_ids": {
+            "exec_in": 10000,
+            "exec_out": 10001,
+            "Seed": 10002
+          }
+        },
+        "201": {
+          "id": 201,
+          "node_type": "VarGet",
+          "pos": [
+            720.0,
+            80.0
+          ],
+          "props": {
+            "var_name": "_global_random_seed"
+          },
+          "pin_ids": {
+            "exec_in": 10003,
+            "exec_out": 10004,
+            "Name": 10005,
+            "Value": 10006
+          }
+        },
+        "202": {
+          "id": 202,
+          "node_type": "PathVar",
+          "pos": [
+            720.0,
+            2556.0
+          ],
+          "props": {
+            "browse_mode": "directory",
+            "path": "Test/TestProject/MI-SSSEP/seed"
+          },
+          "pin_ids": {
+            "Path": 10007
+          }
+        },
+        "203": {
+          "id": 203,
+          "node_type": "TimeGetDate",
+          "pos": [
+            720.0,
+            1652.0
+          ],
+          "props": {
+            "year": true,
+            "month": true,
+            "day": true,
+            "hour": true,
+            "minute": true,
+            "format": "MI-Seed-%Y-%m-%d-%H-%M"
+          },
+          "pin_ids": {
+            "DateString": 10008
+          }
+        },
+        "204": {
+          "id": 204,
+          "node_type": "TextFileWrite",
+          "pos": [
+            1040.0,
+            292.0
+          ],
+          "props": {
+            "mode": "pin",
+            "write_mode": "w",
+            "delimiter": "newline"
+          },
+          "pin_ids": {
+            "exec_in": 10009,
+            "exec_out": 10010,
+            "FilePath": 10011,
+            "FileName": 10012,
+            "Value": 10013
+          }
+        },
+        "205": {
+          "id": 205,
+          "node_type": "EntitySpawn",
+          "pos": [
+            1360.0,
+            716.0
+          ],
+          "props": {
+            "template": "Cross"
+          },
+          "pin_ids": {
+            "exec_in": 10014,
+            "exec_out": 10015,
+            "Entity": 10016
+          }
+        },
+        "206": {
+          "id": 206,
+          "node_type": "EntitySpawn",
+          "pos": [
+            1680.0,
+            292.0
+          ],
+          "props": {
+            "template": "LeftCue"
+          },
+          "pin_ids": {
+            "exec_in": 10017,
+            "exec_out": 10018,
+            "Entity": 10019
+          }
+        },
+        "207": {
+          "id": 207,
+          "node_type": "EntitySpawn",
+          "pos": [
+            2000.0,
+            292.0
+          ],
+          "props": {
+            "template": "RightCue"
+          },
+          "pin_ids": {
+            "exec_in": 10020,
+            "exec_out": 10021,
+            "Entity": 10022
+          }
+        },
+        "208": {
+          "id": 208,
+          "node_type": "EntitySpawn",
+          "pos": [
+            2320.0,
+            80.0
+          ],
+          "props": {
+            "template": "TaskCue"
+          },
+          "pin_ids": {
+            "exec_in": 10023,
+            "exec_out": 10024,
+            "Entity": 10025
+          }
+        },
+        "209": {
+          "id": 209,
+          "node_type": "Constant",
+          "pos": [
+            2640.0,
+            1076.0
+          ],
+          "props": {
+            "value": 0
+          },
+          "pin_ids": {
+            "Result": 10026
+          }
+        },
+        "210": {
+          "id": 210,
+          "node_type": "Constant",
+          "pos": [
+            3280.0,
+            504.0
+          ],
+          "props": {
+            "value": 0
+          },
+          "pin_ids": {
+            "Result": 10027
+          }
+        },
+        "211": {
+          "id": 211,
+          "node_type": "Constant",
+          "pos": [
+            3920.0,
+            504.0
+          ],
+          "props": {
+            "value": 0
+          },
+          "pin_ids": {
+            "Result": 10028
+          }
+        },
+        "212": {
+          "id": 212,
+          "node_type": "Constant",
+          "pos": [
+            4560.0,
+            292.0
+          ],
+          "props": {
+            "value": 0
+          },
+          "pin_ids": {
+            "Result": 10029
+          }
+        },
+        "213": {
+          "id": 213,
+          "node_type": "Constant",
+          "pos": [
+            5200.0,
+            292.0
+          ],
+          "props": {
+            "value": 0
+          },
+          "pin_ids": {
+            "Result": 10030
+          }
+        },
+        "214": {
+          "id": 214,
+          "node_type": "EntityGet",
+          "pos": [
+            2640.0,
+            80.0
+          ],
+          "props": {
+            "entity_name": "arrow_body"
+          },
+          "pin_ids": {
+            "exec_in": 10031,
+            "exec_out": 10032,
+            "Name": 10033,
+            "Entity": 10034
+          }
+        },
+        "215": {
+          "id": 215,
+          "node_type": "EntityGet",
+          "pos": [
+            3280.0,
+            80.0
+          ],
+          "props": {
+            "entity_name": "arrow_head_copy"
+          },
+          "pin_ids": {
+            "exec_in": 10035,
+            "exec_out": 10036,
+            "Name": 10037,
+            "Entity": 10038
+          }
+        },
+        "216": {
+          "id": 216,
+          "node_type": "EntityGet",
+          "pos": [
+            3920.0,
+            80.0
+          ],
+          "props": {
+            "entity_name": "arrow_head"
+          },
+          "pin_ids": {
+            "exec_in": 10039,
+            "exec_out": 10040,
+            "Name": 10041,
+            "Entity": 10042
+          }
+        },
+        "217": {
+          "id": 217,
+          "node_type": "EntityGet",
+          "pos": [
+            4560.0,
+            80.0
+          ],
+          "props": {
+            "entity_name": "arrow_body_copy"
+          },
+          "pin_ids": {
+            "exec_in": 10043,
+            "exec_out": 10044,
+            "Name": 10045,
+            "Entity": 10046
+          }
+        },
+        "218": {
+          "id": 218,
+          "node_type": "EntityGet",
+          "pos": [
+            5200.0,
+            80.0
+          ],
+          "props": {
+            "entity_name": "TaskCue"
+          },
+          "pin_ids": {
+            "exec_in": 10047,
+            "exec_out": 10048,
+            "Name": 10049,
+            "Entity": 10050
+          }
+        },
+        "219": {
+          "id": 219,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            2960.0,
+            292.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10051,
+            "exec_out": 10052,
+            "EntityID": 10053,
+            "Visible": 10054
+          }
+        },
+        "220": {
+          "id": 220,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            3600.0,
+            292.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10055,
+            "exec_out": 10056,
+            "EntityID": 10057,
+            "Visible": 10058
+          }
+        },
+        "221": {
+          "id": 221,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            4240.0,
+            80.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10059,
+            "exec_out": 10060,
+            "EntityID": 10061,
+            "Visible": 10062
+          }
+        },
+        "222": {
+          "id": 222,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            4880.0,
+            80.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10063,
+            "exec_out": 10064,
+            "EntityID": 10065,
+            "Visible": 10066
+          }
+        },
+        "223": {
+          "id": 223,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            5520.0,
+            80.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10067,
+            "exec_out": 10068,
+            "EntityID": 10069,
+            "Visible": 10070
+          }
+        },
+        "224": {
+          "id": 224,
+          "node_type": "VarSet",
+          "pos": [
+            5840.0,
+            80.0
+          ],
+          "props": {
+            "mode": "manual",
+            "var_name": "trial",
+            "value": 1
+          },
+          "pin_ids": {
+            "exec_in": 10071,
+            "exec_out": 10072,
+            "Name": 10073,
+            "Value": 10074
+          }
+        },
+        "225": {
+          "id": 225,
+          "node_type": "VarSet",
+          "pos": [
+            6160.0,
+            80.0
+          ],
+          "props": {
+            "mode": "manual",
+            "var_name": "cue_val",
+            "value": 0
+          },
+          "pin_ids": {
+            "exec_in": 10075,
+            "exec_out": 10076,
+            "Name": 10077,
+            "Value": 10078
+          }
+        },
+        "226": {
+          "id": 226,
+          "node_type": "NewTimer",
+          "pos": [
+            6480.0,
+            80.0
+          ],
+          "props": {
+            "mode": "manual",
+            "timer_name": "trial_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10079,
+            "exec_out": 10080,
+            "Name": 10081
+          }
+        },
+        "227": {
+          "id": 227,
+          "node_type": "SetTimer",
+          "pos": [
+            6800.0,
+            80.0
+          ],
+          "props": {
+            "operate": "set_time",
+            "mode": "manual",
+            "timer_name": "trial_phase",
+            "value": -5.0
+          },
+          "pin_ids": {
+            "exec_in": 10082,
+            "exec_out": 10083,
+            "Value": 10084
+          }
+        },
+        "228": {
+          "id": 228,
+          "node_type": "Sequence",
+          "pos": [
+            400.0,
+            228.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10085,
+            "out_0": 10086,
+            "out_1": 10087,
+            "out_2": 10088,
+            "out_3": 10089,
+            "out_4": 10090
+          }
+        },
+        "229": {
+          "id": 229,
+          "node_type": "TimeTrigger",
+          "pos": [
+            720.0,
+            292.0
+          ],
+          "props": {
+            "mode": "manual",
+            "time": 0,
+            "timer": "trial_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10091,
+            "exec_out": 10092,
+            "Time": 10093,
+            "Elapsed": 10094,
+            "out_0": 10095,
+            "out_1": 10096,
+            "out_2": 10097,
+            "out_3": 10098,
+            "out_4": 10099,
+            "out_5": 10100,
+            "out_6": 10101,
+            "out_7": 10102
+          }
+        },
+        "230": {
+          "id": 230,
+          "node_type": "TimeTrigger",
+          "pos": [
+            720.0,
+            632.0
+          ],
+          "props": {
+            "mode": "manual",
+            "time": 2,
+            "timer": "trial_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10103,
+            "exec_out": 10104,
+            "Time": 10105,
+            "Elapsed": 10106,
+            "out_0": 10107,
+            "out_1": 10108,
+            "out_2": 10109,
+            "out_3": 10110,
+            "out_4": 10111,
+            "out_5": 10112,
+            "out_6": 10113,
+            "out_7": 10114
+          }
+        },
+        "231": {
+          "id": 231,
+          "node_type": "TimeTrigger",
+          "pos": [
+            720.0,
+            972.0
+          ],
+          "props": {
+            "mode": "manual",
+            "time": 6,
+            "timer": "trial_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10115,
+            "exec_out": 10116,
+            "Time": 10117,
+            "Elapsed": 10118,
+            "out_0": 10119,
+            "out_1": 10120,
+            "out_2": 10121,
+            "out_3": 10122,
+            "out_4": 10123,
+            "out_5": 10124,
+            "out_6": 10125,
+            "out_7": 10126
+          }
+        },
+        "232": {
+          "id": 232,
+          "node_type": "TimeTrigger",
+          "pos": [
+            720.0,
+            1312.0
+          ],
+          "props": {
+            "mode": "manual",
+            "time": 10,
+            "timer": "trial_phase"
+          },
+          "pin_ids": {
+            "exec_in": 10127,
+            "exec_out": 10128,
+            "Time": 10129,
+            "Elapsed": 10130,
+            "out_0": 10131,
+            "out_1": 10132,
+            "out_2": 10133,
+            "out_3": 10134,
+            "out_4": 10135,
+            "out_5": 10136,
+            "out_6": 10137,
+            "out_7": 10138
+          }
+        },
+        "233": {
+          "id": 233,
+          "node_type": "Random",
+          "pos": [
+            720.0,
+            2360.0
+          ],
+          "props": {
+            "distribution": "discrete",
+            "mode": "manual",
+            "min": 1,
+            "max": 2
+          },
+          "pin_ids": {
+            "Min": 10139,
+            "Max": 10140,
+            "Mean": 10141,
+            "StdDev": 10142,
+            "Result": 10143
+          }
+        },
+        "234": {
+          "id": 234,
+          "node_type": "Compare",
+          "pos": [
+            720.0,
+            1792.0
+          ],
+          "props": {
+            "operation": "eq"
+          },
+          "pin_ids": {
+            "A": 10144,
+            "B": 10145,
+            "Result": 10146
+          }
+        },
+        "235": {
+          "id": 235,
+          "node_type": "Constant",
+          "pos": [
+            720.0,
+            1940.0
+          ],
+          "props": {
+            "value": 1
+          },
+          "pin_ids": {
+            "Result": 10147
+          }
+        },
+        "236": {
+          "id": 236,
+          "node_type": "Branch",
+          "pos": [
+            1040.0,
+            952.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10148,
+            "exec_out": 10149,
+            "Condition": 10150,
+            "True": 10151,
+            "False": 10152
+          }
+        },
+        "237": {
+          "id": 237,
+          "node_type": "Constant",
+          "pos": [
+            2640.0,
+            1216.0
+          ],
+          "props": {
+            "value": 11
+          },
+          "pin_ids": {
+            "Result": 10153
+          }
+        },
+        "238": {
+          "id": 238,
+          "node_type": "VarSet",
+          "pos": [
+            1360.0,
+            292.0
+          ],
+          "props": {
+            "mode": "pin",
+            "var_name": "cue_val"
+          },
+          "pin_ids": {
+            "exec_in": 10154,
+            "exec_out": 10155,
+            "Name": 10156,
+            "Value": 10157
+          }
+        },
+        "239": {
+          "id": 239,
+          "node_type": "EntityGet",
+          "pos": [
+            1680.0,
+            480.0
+          ],
+          "props": {
+            "entity_name": "arrow_body"
+          },
+          "pin_ids": {
+            "exec_in": 10158,
+            "exec_out": 10159,
+            "Name": 10160,
+            "Entity": 10161
+          }
+        },
+        "240": {
+          "id": 240,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            2000.0,
+            480.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10162,
+            "exec_out": 10163,
+            "EntityID": 10164,
+            "Visible": 10165
+          }
+        },
+        "241": {
+          "id": 241,
+          "node_type": "Constant",
+          "pos": [
+            1680.0,
+            1116.0
+          ],
+          "props": {
+            "value": 1
+          },
+          "pin_ids": {
+            "Result": 10166
+          }
+        },
+        "242": {
+          "id": 242,
+          "node_type": "EntityGet",
+          "pos": [
+            2320.0,
+            268.0
+          ],
+          "props": {
+            "entity_name": "arrow_head_copy"
+          },
+          "pin_ids": {
+            "exec_in": 10167,
+            "exec_out": 10168,
+            "Name": 10169,
+            "Entity": 10170
+          }
+        },
+        "243": {
+          "id": 243,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            2640.0,
+            292.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10171,
+            "exec_out": 10172,
+            "EntityID": 10173,
+            "Visible": 10174
+          }
+        },
+        "244": {
+          "id": 244,
+          "node_type": "Constant",
+          "pos": [
+            2320.0,
+            1076.0
+          ],
+          "props": {
+            "value": 1
+          },
+          "pin_ids": {
+            "Result": 10175
+          }
+        },
+        "245": {
+          "id": 245,
+          "node_type": "ParallelSend",
+          "pos": [
+            2960.0,
+            644.0
+          ],
+          "props": {
+            "mode": "pin",
+            "address": 16376
+          },
+          "pin_ids": {
+            "exec_in": 10176,
+            "exec_out": 10177,
+            "Address": 10178,
+            "Value": 10179
+          }
+        },
+        "246": {
+          "id": 246,
+          "node_type": "Constant",
+          "pos": [
+            2640.0,
+            1356.0
+          ],
+          "props": {
+            "value": 12
+          },
+          "pin_ids": {
+            "Result": 10180
+          }
+        },
+        "247": {
+          "id": 247,
+          "node_type": "VarSet",
+          "pos": [
+            1360.0,
+            504.0
+          ],
+          "props": {
+            "mode": "pin",
+            "var_name": "cue_val"
+          },
+          "pin_ids": {
+            "exec_in": 10181,
+            "exec_out": 10182,
+            "Name": 10183,
+            "Value": 10184
+          }
+        },
+        "248": {
+          "id": 248,
+          "node_type": "EntityGet",
+          "pos": [
+            1680.0,
+            692.0
+          ],
+          "props": {
+            "entity_name": "arrow_head"
+          },
+          "pin_ids": {
+            "exec_in": 10185,
+            "exec_out": 10186,
+            "Name": 10187,
+            "Entity": 10188
+          }
+        },
+        "249": {
+          "id": 249,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            2000.0,
+            692.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10189,
+            "exec_out": 10190,
+            "EntityID": 10191,
+            "Visible": 10192
+          }
+        },
+        "250": {
+          "id": 250,
+          "node_type": "Constant",
+          "pos": [
+            1680.0,
+            1256.0
+          ],
+          "props": {
+            "value": 1
+          },
+          "pin_ids": {
+            "Result": 10193
+          }
+        },
+        "251": {
+          "id": 251,
+          "node_type": "EntityGet",
+          "pos": [
+            2320.0,
+            480.0
+          ],
+          "props": {
+            "entity_name": "arrow_body_copy"
+          },
+          "pin_ids": {
+            "exec_in": 10194,
+            "exec_out": 10195,
+            "Name": 10196,
+            "Entity": 10197
+          }
+        },
+        "252": {
+          "id": 252,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            2640.0,
+            504.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10198,
+            "exec_out": 10199,
+            "EntityID": 10200,
+            "Visible": 10201
+          }
+        },
+        "253": {
+          "id": 253,
+          "node_type": "Constant",
+          "pos": [
+            2320.0,
+            1216.0
+          ],
+          "props": {
+            "value": 1
+          },
+          "pin_ids": {
+            "Result": 10202
+          }
+        },
+        "254": {
+          "id": 254,
+          "node_type": "ParallelSend",
+          "pos": [
+            2960.0,
+            856.0
+          ],
+          "props": {
+            "mode": "pin",
+            "address": 16376
+          },
+          "pin_ids": {
+            "exec_in": 10203,
+            "exec_out": 10204,
+            "Address": 10205,
+            "Value": 10206
+          }
+        },
+        "255": {
+          "id": 255,
+          "node_type": "EntityGet",
+          "pos": [
+            1040.0,
+            528.0
+          ],
+          "props": {
+            "entity_name": "TaskCue"
+          },
+          "pin_ids": {
+            "exec_in": 10207,
+            "exec_out": 10208,
+            "Name": 10209,
+            "Entity": 10210
+          }
+        },
+        "256": {
+          "id": 256,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            1360.0,
+            904.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10211,
+            "exec_out": 10212,
+            "EntityID": 10213,
+            "Visible": 10214
+          }
+        },
+        "257": {
+          "id": 257,
+          "node_type": "Constant",
+          "pos": [
+            1040.0,
+            1124.0
+          ],
+          "props": {
+            "value": 1
+          },
+          "pin_ids": {
+            "Result": 10215
+          }
+        },
+        "258": {
+          "id": 258,
+          "node_type": "EntityGet",
+          "pos": [
+            1040.0,
+            740.0
+          ],
+          "props": {
+            "entity_name": "arrow_body"
+          },
+          "pin_ids": {
+            "exec_in": 10216,
+            "exec_out": 10217,
+            "Name": 10218,
+            "Entity": 10219
+          }
+        },
+        "259": {
+          "id": 259,
+          "node_type": "EntityGet",
+          "pos": [
+            1680.0,
+            904.0
+          ],
+          "props": {
+            "entity_name": "arrow_head_copy"
+          },
+          "pin_ids": {
+            "exec_in": 10220,
+            "exec_out": 10221,
+            "Name": 10222,
+            "Entity": 10223
+          }
+        },
+        "260": {
+          "id": 260,
+          "node_type": "EntityGet",
+          "pos": [
+            2320.0,
+            692.0
+          ],
+          "props": {
+            "entity_name": "arrow_head"
+          },
+          "pin_ids": {
+            "exec_in": 10224,
+            "exec_out": 10225,
+            "Name": 10226,
+            "Entity": 10227
+          }
+        },
+        "261": {
+          "id": 261,
+          "node_type": "EntityGet",
+          "pos": [
+            2960.0,
+            80.0
+          ],
+          "props": {
+            "entity_name": "arrow_body_copy"
+          },
+          "pin_ids": {
+            "exec_in": 10228,
+            "exec_out": 10229,
+            "Name": 10230,
+            "Entity": 10231
+          }
+        },
+        "262": {
+          "id": 262,
+          "node_type": "EntityGet",
+          "pos": [
+            3600.0,
+            80.0
+          ],
+          "props": {
+            "entity_name": "TaskCue"
+          },
+          "pin_ids": {
+            "exec_in": 10232,
+            "exec_out": 10233,
+            "Name": 10234,
+            "Entity": 10235
+          }
+        },
+        "263": {
+          "id": 263,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            1360.0,
+            1116.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10236,
+            "exec_out": 10237,
+            "EntityID": 10238,
+            "Visible": 10239
+          }
+        },
+        "264": {
+          "id": 264,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            2000.0,
+            904.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10240,
+            "exec_out": 10241,
+            "EntityID": 10242,
+            "Visible": 10243
+          }
+        },
+        "265": {
+          "id": 265,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            2640.0,
+            716.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10244,
+            "exec_out": 10245,
+            "EntityID": 10246,
+            "Visible": 10247
+          }
+        },
+        "266": {
+          "id": 266,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            3280.0,
+            292.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10248,
+            "exec_out": 10249,
+            "EntityID": 10250,
+            "Visible": 10251
+          }
+        },
+        "267": {
+          "id": 267,
+          "node_type": "EntitySetRenderVisible",
+          "pos": [
+            3920.0,
+            292.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10252,
+            "exec_out": 10253,
+            "EntityID": 10254,
+            "Visible": 10255
+          }
+        },
+        "268": {
+          "id": 268,
+          "node_type": "Constant",
+          "pos": [
+            1040.0,
+            1264.0
+          ],
+          "props": {
+            "value": 0
+          },
+          "pin_ids": {
+            "Result": 10256
+          }
+        },
+        "269": {
+          "id": 269,
+          "node_type": "Constant",
+          "pos": [
+            1680.0,
+            1396.0
+          ],
+          "props": {
+            "value": 0
+          },
+          "pin_ids": {
+            "Result": 10257
+          }
+        },
+        "270": {
+          "id": 270,
+          "node_type": "Constant",
+          "pos": [
+            2320.0,
+            1356.0
+          ],
+          "props": {
+            "value": 0
+          },
+          "pin_ids": {
+            "Result": 10258
+          }
+        },
+        "271": {
+          "id": 271,
+          "node_type": "Constant",
+          "pos": [
+            2960.0,
+            504.0
+          ],
+          "props": {
+            "value": 0
+          },
+          "pin_ids": {
+            "Result": 10259
+          }
+        },
+        "272": {
+          "id": 272,
+          "node_type": "Constant",
+          "pos": [
+            3600.0,
+            504.0
+          ],
+          "props": {
+            "value": 0
+          },
+          "pin_ids": {
+            "Result": 10260
+          }
+        },
+        "273": {
+          "id": 273,
+          "node_type": "VarSet",
+          "pos": [
+            1040.0,
+            80.0
+          ],
+          "props": {
+            "mode": "manual",
+            "var_name": "second",
+            "value": 0
+          },
+          "pin_ids": {
+            "exec_in": 10261,
+            "exec_out": 10262,
+            "Name": 10263,
+            "Value": 10264
+          }
+        },
+        "274": {
+          "id": 274,
+          "node_type": "VarGet",
+          "pos": [
+            1360.0,
+            80.0
+          ],
+          "props": {
+            "var_name": "trial"
+          },
+          "pin_ids": {
+            "exec_in": 10265,
+            "exec_out": 10266,
+            "Name": 10267,
+            "Value": 10268
+          }
+        },
+        "275": {
+          "id": 275,
+          "node_type": "ScalarMath",
+          "pos": [
+            1360.0,
+            1328.0
+          ],
+          "props": {
+            "operation": "sum"
+          },
+          "pin_ids": {
+            "In_0": 10269,
+            "In_1": 10270,
+            "Result": 10271,
+            "In_2": 10272,
+            "In_3": 10273,
+            "In_4": 10274,
+            "In_5": 10275,
+            "In_6": 10276,
+            "In_7": 10277
+          }
+        },
+        "276": {
+          "id": 276,
+          "node_type": "Constant",
+          "pos": [
+            720.0,
+            2080.0
+          ],
+          "props": {
+            "value": 1
+          },
+          "pin_ids": {
+            "Result": 10278
+          }
+        },
+        "277": {
+          "id": 277,
+          "node_type": "VarSet",
+          "pos": [
+            1680.0,
+            80.0
+          ],
+          "props": {
+            "mode": "pin",
+            "var_name": "trial"
+          },
+          "pin_ids": {
+            "exec_in": 10279,
+            "exec_out": 10280,
+            "Name": 10281,
+            "Value": 10282
+          }
+        },
+        "278": {
+          "id": 278,
+          "node_type": "VarGet",
+          "pos": [
+            2000.0,
+            80.0
+          ],
+          "props": {
+            "var_name": "trial"
+          },
+          "pin_ids": {
+            "exec_in": 10283,
+            "exec_out": 10284,
+            "Name": 10285,
+            "Value": 10286
+          }
+        },
+        "279": {
+          "id": 279,
+          "node_type": "Compare",
+          "pos": [
+            2000.0,
+            1116.0
+          ],
+          "props": {
+            "operation": "gt"
+          },
+          "pin_ids": {
+            "A": 10287,
+            "B": 10288,
+            "Result": 10289
+          }
+        },
+        "280": {
+          "id": 280,
+          "node_type": "Constant",
+          "pos": [
+            720.0,
+            2220.0
+          ],
+          "props": {
+            "value": 60
+          },
+          "pin_ids": {
+            "Result": 10290
+          }
+        },
+        "281": {
+          "id": 281,
+          "node_type": "Branch",
+          "pos": [
+            2320.0,
+            904.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10291,
+            "exec_out": 10292,
+            "Condition": 10293,
+            "True": 10294,
+            "False": 10295
+          }
+        },
+        "282": {
+          "id": 282,
+          "node_type": "ExitGame",
+          "pos": [
+            2640.0,
+            1496.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10296
+          }
+        },
+        "283": {
+          "id": 283,
+          "node_type": "SetTimer",
+          "pos": [
+            2640.0,
+            928.0
+          ],
+          "props": {
+            "operate": "set_time",
+            "mode": "manual",
+            "timer_name": "trial_phase",
+            "value": -0.02
+          },
+          "pin_ids": {
+            "exec_in": 10297,
+            "exec_out": 10298,
+            "Value": 10299
+          }
+        }
+      },
+      "links": {
+        "500": {
+          "id": 500,
+          "from_pin": 10001,
+          "to_pin": 10003
+        },
+        "501": {
+          "id": 501,
+          "from_pin": 10004,
+          "to_pin": 10009
+        },
+        "502": {
+          "id": 502,
+          "from_pin": 10007,
+          "to_pin": 10011
+        },
+        "503": {
+          "id": 503,
+          "from_pin": 10008,
+          "to_pin": 10012
+        },
+        "504": {
+          "id": 504,
+          "from_pin": 10006,
+          "to_pin": 10013
+        },
+        "505": {
+          "id": 505,
+          "from_pin": 10010,
+          "to_pin": 10014
+        },
+        "506": {
+          "id": 506,
+          "from_pin": 10015,
+          "to_pin": 10017
+        },
+        "507": {
+          "id": 507,
+          "from_pin": 10018,
+          "to_pin": 10020
+        },
+        "508": {
+          "id": 508,
+          "from_pin": 10021,
+          "to_pin": 10023
+        },
+        "509": {
+          "id": 509,
+          "from_pin": 10024,
+          "to_pin": 10031
+        },
+        "510": {
+          "id": 510,
+          "from_pin": 10032,
+          "to_pin": 10051
+        },
+        "511": {
+          "id": 511,
+          "from_pin": 10052,
+          "to_pin": 10035
+        },
+        "512": {
+          "id": 512,
+          "from_pin": 10036,
+          "to_pin": 10055
+        },
+        "513": {
+          "id": 513,
+          "from_pin": 10056,
+          "to_pin": 10039
+        },
+        "514": {
+          "id": 514,
+          "from_pin": 10040,
+          "to_pin": 10059
+        },
+        "515": {
+          "id": 515,
+          "from_pin": 10060,
+          "to_pin": 10043
+        },
+        "516": {
+          "id": 516,
+          "from_pin": 10044,
+          "to_pin": 10063
+        },
+        "517": {
+          "id": 517,
+          "from_pin": 10064,
+          "to_pin": 10047
+        },
+        "518": {
+          "id": 518,
+          "from_pin": 10048,
+          "to_pin": 10067
+        },
+        "519": {
+          "id": 519,
+          "from_pin": 10034,
+          "to_pin": 10053
+        },
+        "520": {
+          "id": 520,
+          "from_pin": 10026,
+          "to_pin": 10054
+        },
+        "521": {
+          "id": 521,
+          "from_pin": 10038,
+          "to_pin": 10057
+        },
+        "522": {
+          "id": 522,
+          "from_pin": 10027,
+          "to_pin": 10058
+        },
+        "523": {
+          "id": 523,
+          "from_pin": 10042,
+          "to_pin": 10061
+        },
+        "524": {
+          "id": 524,
+          "from_pin": 10028,
+          "to_pin": 10062
+        },
+        "525": {
+          "id": 525,
+          "from_pin": 10046,
+          "to_pin": 10065
+        },
+        "526": {
+          "id": 526,
+          "from_pin": 10029,
+          "to_pin": 10066
+        },
+        "527": {
+          "id": 527,
+          "from_pin": 10050,
+          "to_pin": 10069
+        },
+        "528": {
+          "id": 528,
+          "from_pin": 10030,
+          "to_pin": 10070
+        },
+        "529": {
+          "id": 529,
+          "from_pin": 10068,
+          "to_pin": 10071
+        },
+        "530": {
+          "id": 530,
+          "from_pin": 10072,
+          "to_pin": 10075
+        },
+        "531": {
+          "id": 531,
+          "from_pin": 10076,
+          "to_pin": 10079
+        },
+        "532": {
+          "id": 532,
+          "from_pin": 10080,
+          "to_pin": 10082
+        },
+        "533": {
+          "id": 533,
+          "from_pin": 162,
+          "to_pin": 10000
+        },
+        "534": {
+          "id": 534,
+          "from_pin": 164,
+          "to_pin": 10085
+        },
+        "535": {
+          "id": 535,
+          "from_pin": 10086,
+          "to_pin": 10091
+        },
+        "536": {
+          "id": 536,
+          "from_pin": 10087,
+          "to_pin": 10103
+        },
+        "537": {
+          "id": 537,
+          "from_pin": 10088,
+          "to_pin": 10115
+        },
+        "538": {
+          "id": 538,
+          "from_pin": 10089,
+          "to_pin": 10127
+        },
+        "539": {
+          "id": 539,
+          "from_pin": 10155,
+          "to_pin": 10158
+        },
+        "540": {
+          "id": 540,
+          "from_pin": 10159,
+          "to_pin": 10162
+        },
+        "541": {
+          "id": 541,
+          "from_pin": 10163,
+          "to_pin": 10167
+        },
+        "542": {
+          "id": 542,
+          "from_pin": 10168,
+          "to_pin": 10171
+        },
+        "543": {
+          "id": 543,
+          "from_pin": 10172,
+          "to_pin": 10176
+        },
+        "544": {
+          "id": 544,
+          "from_pin": 10153,
+          "to_pin": 10157
+        },
+        "545": {
+          "id": 545,
+          "from_pin": 10161,
+          "to_pin": 10164
+        },
+        "546": {
+          "id": 546,
+          "from_pin": 10166,
+          "to_pin": 10165
+        },
+        "547": {
+          "id": 547,
+          "from_pin": 10170,
+          "to_pin": 10173
+        },
+        "548": {
+          "id": 548,
+          "from_pin": 10175,
+          "to_pin": 10174
+        },
+        "549": {
+          "id": 549,
+          "from_pin": 10153,
+          "to_pin": 10179
+        },
+        "550": {
+          "id": 550,
+          "from_pin": 10182,
+          "to_pin": 10185
+        },
+        "551": {
+          "id": 551,
+          "from_pin": 10186,
+          "to_pin": 10189
+        },
+        "552": {
+          "id": 552,
+          "from_pin": 10190,
+          "to_pin": 10194
+        },
+        "553": {
+          "id": 553,
+          "from_pin": 10195,
+          "to_pin": 10198
+        },
+        "554": {
+          "id": 554,
+          "from_pin": 10199,
+          "to_pin": 10203
+        },
+        "555": {
+          "id": 555,
+          "from_pin": 10180,
+          "to_pin": 10184
+        },
+        "556": {
+          "id": 556,
+          "from_pin": 10188,
+          "to_pin": 10191
+        },
+        "557": {
+          "id": 557,
+          "from_pin": 10193,
+          "to_pin": 10192
+        },
+        "558": {
+          "id": 558,
+          "from_pin": 10197,
+          "to_pin": 10200
+        },
+        "559": {
+          "id": 559,
+          "from_pin": 10202,
+          "to_pin": 10201
+        },
+        "560": {
+          "id": 560,
+          "from_pin": 10180,
+          "to_pin": 10206
+        },
+        "561": {
+          "id": 561,
+          "from_pin": 10095,
+          "to_pin": 10148
+        },
+        "562": {
+          "id": 562,
+          "from_pin": 10143,
+          "to_pin": 10144
+        },
+        "563": {
+          "id": 563,
+          "from_pin": 10147,
+          "to_pin": 10145
+        },
+        "564": {
+          "id": 564,
+          "from_pin": 10146,
+          "to_pin": 10150
+        },
+        "565": {
+          "id": 565,
+          "from_pin": 10151,
+          "to_pin": 10154
+        },
+        "566": {
+          "id": 566,
+          "from_pin": 10152,
+          "to_pin": 10181
+        },
+        "567": {
+          "id": 567,
+          "from_pin": 10208,
+          "to_pin": 10211
+        },
+        "568": {
+          "id": 568,
+          "from_pin": 10210,
+          "to_pin": 10213
+        },
+        "569": {
+          "id": 569,
+          "from_pin": 10215,
+          "to_pin": 10214
+        },
+        "570": {
+          "id": 570,
+          "from_pin": 10107,
+          "to_pin": 10207
+        },
+        "571": {
+          "id": 571,
+          "from_pin": 10217,
+          "to_pin": 10236
+        },
+        "572": {
+          "id": 572,
+          "from_pin": 10237,
+          "to_pin": 10220
+        },
+        "573": {
+          "id": 573,
+          "from_pin": 10221,
+          "to_pin": 10240
+        },
+        "574": {
+          "id": 574,
+          "from_pin": 10241,
+          "to_pin": 10224
+        },
+        "575": {
+          "id": 575,
+          "from_pin": 10225,
+          "to_pin": 10244
+        },
+        "576": {
+          "id": 576,
+          "from_pin": 10245,
+          "to_pin": 10228
+        },
+        "577": {
+          "id": 577,
+          "from_pin": 10229,
+          "to_pin": 10248
+        },
+        "578": {
+          "id": 578,
+          "from_pin": 10249,
+          "to_pin": 10232
+        },
+        "579": {
+          "id": 579,
+          "from_pin": 10233,
+          "to_pin": 10252
+        },
+        "580": {
+          "id": 580,
+          "from_pin": 10219,
+          "to_pin": 10238
+        },
+        "581": {
+          "id": 581,
+          "from_pin": 10256,
+          "to_pin": 10239
+        },
+        "582": {
+          "id": 582,
+          "from_pin": 10223,
+          "to_pin": 10242
+        },
+        "583": {
+          "id": 583,
+          "from_pin": 10257,
+          "to_pin": 10243
+        },
+        "584": {
+          "id": 584,
+          "from_pin": 10227,
+          "to_pin": 10246
+        },
+        "585": {
+          "id": 585,
+          "from_pin": 10258,
+          "to_pin": 10247
+        },
+        "586": {
+          "id": 586,
+          "from_pin": 10231,
+          "to_pin": 10250
+        },
+        "587": {
+          "id": 587,
+          "from_pin": 10259,
+          "to_pin": 10251
+        },
+        "588": {
+          "id": 588,
+          "from_pin": 10235,
+          "to_pin": 10254
+        },
+        "589": {
+          "id": 589,
+          "from_pin": 10260,
+          "to_pin": 10255
+        },
+        "590": {
+          "id": 590,
+          "from_pin": 10119,
+          "to_pin": 10216
+        },
+        "591": {
+          "id": 591,
+          "from_pin": 10262,
+          "to_pin": 10265
+        },
+        "592": {
+          "id": 592,
+          "from_pin": 10266,
+          "to_pin": 10279
+        },
+        "593": {
+          "id": 593,
+          "from_pin": 10268,
+          "to_pin": 10269
+        },
+        "594": {
+          "id": 594,
+          "from_pin": 10278,
+          "to_pin": 10270
+        },
+        "595": {
+          "id": 595,
+          "from_pin": 10271,
+          "to_pin": 10282
+        },
+        "596": {
+          "id": 596,
+          "from_pin": 10280,
+          "to_pin": 10283
+        },
+        "597": {
+          "id": 597,
+          "from_pin": 10284,
+          "to_pin": 10291
+        },
+        "598": {
+          "id": 598,
+          "from_pin": 10286,
+          "to_pin": 10287
+        },
+        "599": {
+          "id": 599,
+          "from_pin": 10290,
+          "to_pin": 10288
+        },
+        "600": {
+          "id": 600,
+          "from_pin": 10289,
+          "to_pin": 10293
+        },
+        "601": {
+          "id": 601,
+          "from_pin": 10294,
+          "to_pin": 10296
+        },
+        "602": {
+          "id": 602,
+          "from_pin": 10295,
+          "to_pin": 10297
+        },
+        "603": {
+          "id": 603,
+          "from_pin": 10131,
+          "to_pin": 10261
+        }
+      },
+      "next_id": 10300,
+      "_rules": "## Node Graph JSON Reference (v0.1.0)\n\n### JSON Structure\nThe node_graph is a JSON object with these keys:\n- \"version\": \"0.1.0\"\n- \"nodes\": { \"<nid>\": {NodeInstance}, ... }  — nid is globally unique int (string key)\n- \"links\": { \"<lid>\": {LinkInstance}, ... }  — lid is globally unique int (string key)\n- \"next_id\": int — 1 + max(all node/link/pin IDs), ensures no collision on future additions\n- \"_rules\": \"<this document>\"\n\n### NodeInstance Format\n  \"id\": <int>, \"node_type\": \"<type_name>\", \"pos\": [<x>, <y>],\n  \"props\": {<key>: <value>, ...},  — mode-dependent props (see per-node table)\n  \"pin_ids\": {\"<pin_name>\": <int>, ...}  — instance-level unique pin IDs\n\n### LinkInstance Format\n  \"id\": <int>, \"from_pin\": <int> (output pin ID), \"to_pin\": <int> (input pin ID)\n\n### Pin IDs\nEvery node has a pin_ids dict mapping logical pin name → instance-unique integer.\nAll links reference these instance-level IDs, NOT template-level PinDef IDs.\nWhen writing a graph, assign pin IDs sequentially starting from a high base (e.g., nid*10).\n\n### Connection Rules (CRITICAL)\n1. exec pins connect exec→exec: output exec pin → input exec pin\n2. data pins connect data→data: output data pin → input data pin\n3. NEVER connect exec→data or data→exec\n4. One output pin can fan out to multiple input pins (both exec and data)\n5. An input pin can only receive from ONE output pin\n6. Event nodes (OnGameStart/OnFrameUpdate/OnGameStop) have NO input exec pins — they are graph roots\n7. device pins connect device→device: Init*Device.device (output) → AddToDevicePool.device (input). These are NOT exec/data pins.\n8. A device output pin feeds AT MOST ONE AddToDevicePool (a device belongs to one pool — exclusive membership). Devices never added to a pool stay in the implicit \"global\" pool.\n\n### Execution Model\n- OnGameStart: fires ONCE when the game begins. Use for initialization (set variables, spawn entities).\n- OnFrameUpdate: fires EVERY FRAME. Use for per-frame checks (TimeTrigger, input polling).\n- OnGameStop: fires ONCE when the game ends. Use for cleanup.\n- Exec chain: _walk_exec follows exec output→input links depth-first.\n- Data nodes (Constant/Scale, StringConst, PathVar, Compare, ScalarMath, MakeVec3, BreakVec3, VecMath, Random, legacy math):\n  NO exec pins. Evaluated LAZILY when their output pin is read via a data link.\n- Mixed nodes (VarGet): have BOTH exec_in and data output pins. Exec triggers read; data output\n  is then available for downstream data links. When data-read without exec context, lazy-eval works too.\n- _blocked pattern: TimeDelay and TimeTrigger set _blocked=True to pause exec chain.\n  Branch sets _blocked=True after manually walking the matching branch.\n- Variable store: ctx._variables persists across frames. VarSet writes, VarGet reads.\n  Variables are NOT cleared between triggers — use them for state (counters, timers).\n\n### Pin Naming Convention\n- exec_in / exec_out: execution flow pins\n- out_0..out_7: Sequence or TimeTrigger multi-output exec pins\n- Data pins have descriptive names: Value, Result, A, B, X, Y, Z, In_0..In_7, etc.\n- Pin direction is determined by the node type definition (see tables below)\n\n---\n\n### NODE TYPE REFERENCE\n\n#### Event Nodes (graph roots — no input pins)\n| type_name      | output pins                  | notes                            |\n|----------------|------------------------------|----------------------------------|\n| OnGameStart    | exec (exec)                  | fires once at game start         |\n| OnFrameUpdate  | exec (exec), delta (float)   | fires every frame                |\n| OnGameStop     | exec (exec)                  | fires once at game stop          |\n\n#### Flow Nodes\n| type_name | input pins              | output pins               | props              |\n|-----------|-------------------------|---------------------------|--------------------|\n| Sequence  | exec_in (exec)          | out_0,out_1,out_2 (exec) | —                  |\n| Branch    | exec_in,Condition(bool) | True,False (exec)         | —                  |\n\n#### Math Nodes (pure data — no exec pins)\n| type_name      | input pins                    | output pins    | props                        |\n|----------------|-------------------------------|----------------|------------------------------|\n| ScalarMath     | In_0..In_7 (float)           | Result (float) | operation: sum/sub/mul/div   |\n| Compare        | A (float), B (float)          | Result (bool)  | operation: gt/lt/eq/neq/gte/lte |\n| MathAdd        | A,B (float)                   | Result (float) | — (legacy, hidden)           |\n| MathSubtract   | A,B (float)                   | Result (float) | — (legacy, hidden)           |\n| MathMultiply   | A,B (float)                   | Result (float) | — (legacy, hidden)           |\n| MathDivide     | A,B (float)                   | Result (float) | — (legacy, hidden)           |\n| RandomSetSeed  | exec_in,exec_out,Seed(int)   | (exec_out)     | source: manual/pin/hardware, seed: int  |\n| Random         | Min,Max,Mean,StdDev (float)   | Result (float) | distribution: uniform/gaussian/discrete, mode: manual/pin |\n| MathRandomUniform  | Min,Max (float)           | Result (float) | — (legacy, hidden)           |\n| MathRandomGaussian | Mean,StdDev (float)       | Result (float) | — (legacy, hidden)           |\n| MakeVec3       | X,Y,Z (float)                 | Vec3 (vec3)    | —                            |\n| BreakVec3      | Vec3 (vec3)                   | X,Y,Z (float)  | —                            |\n| VecMath        | A,B (vec3)                    | Result(var)   | operation: add/sub/mul/div/dot/cross/normalize/length |\n\n#### Time Nodes\n| type_name      | input pins               | output pins                    | props                  |\n|----------------|--------------------------|--------------------------------|------------------------|\n| TimeGetElapsed | exec_in (exec)           | exec_out (exec), Elapsed(float)| —                      |\n| TimeGetDelta   | exec_in (exec)           | exec_out (exec), Delta(float)  | —                      |\n| TimeDelay      | exec_in,Seconds(float)   | exec_out (exec)                | —                      |\n| TimeTrigger    | exec_in,Time(float)      | Elapsed(float), out_0..out_7(exec×8) | mode: manual/pin, time: float |\n| TimeGetDate    | —                        | DateString (string)            | year,month,day,hour,minute: bool, format: str |\n\nTimeTrigger behavior: fires when ctx.elapsed_time >= threshold. Re-armable: increasing the threshold via variable/pin allows repeated triggering. Tracks _last_fired_threshold in state.\n\n#### Basic Nodes (fundamental value types)\n| type_name   | input pins | output pins    | props              |\n|-------------|------------|----------------|--------------------|\n| Constant    | —         | Result (float) | value: float       |\n| StringConst | —         | Value (string) | value: string      |\n\nConstant is labeled \"Number\" in the UI. StringConst outputs a raw string (no float coercion).\n\n#### Variable Nodes\n| type_name | input pins                    | output pins             | props                          |\n|-----------|-------------------------------|-------------------------|--------------------------------|\n| VarSet    | exec_in,Name(string),Value(var)| exec_out (exec)        | mode: manual/pin, var_name, value |\n| VarGet    | exec_in,Name(string)          | exec_out,Value(var)     | var_name                       |\n\nVarSet manual mode: Name from textbox prop, Value from props.value.\nVarSet pin mode: Name from upstream link, Value from upstream link.\nVarGet: reads ctx.get_var(name) and writes to Value output.\n\n#### Entity Nodes\n| type_name             | input pins                                  | output pins          | props            |\n|-----------------------|---------------------------------------------|----------------------|------------------|\n| EntitySpawn           | exec_in (exec)                              | exec_out,Entity(ref) | template: string |\n| EntityDestroy         | exec_in,EntityID(int)                       | exec_out             | —                |\n| EntityGet             | exec_in,Name(string)                        | exec_out,Entity(ref) | —                |\n| EntityAddMesh         | exec_in,EntityID,MeshID,MaterialID (int)    | exec_out             | —                |\n| EntityAddCamera       | exec_in,EntityID (int)                      | exec_out             | —                |\n| EntitySetRenderVisible| exec_in,EntityID(int),Visible(bool)         | exec_out             | —                |\n| EntityGroupSetVisible | exec_in,Entity1-4(ref,可选),Visible(bool)  | exec_out             | —                |\n| SetText               | exec_in,Entity(ref),Text(string)            | exec_out             | —                |\n\nEntitySpawn: creates entity from Scene.entities template (dropdown). Recursively spawns children.\nEntityRef: type-safe wrapper with is_valid property. Output as entity_ref on data pins.\nEntityGroupSetVisible: show/hide up to 4 entities as ONE atomic batch (same frame).\n  Use it for multi-part cues (arrow body+head, rigs) — EntitySetRenderVisible per entity\n  can be split across frames by the render boundary (partial appearances).\nSetText: sets TextDisplay.text on the target entity and re-rasterizes immediately (PIE).\n  Target must have a TextDisplay component; style (font/size/bold/italic/color/bg) lives\n  on the component and is editable in the inspector or via MCP component.set.\n\n#### Game Nodes\n| type_name    | input pins                  | output pins | notes                    |\n|--------------|-----------------------------|-------------|--------------------------|\n| CameraSetMain| exec_in,Entity(entity_ref)  | exec_out    | sets scene_camera_id     |\n| ExitGame     | exec_in                     | —           | terminal node, no output |\n\n#### Component Nodes\n| type_name      | input pins                                    | output pins | props             |\n|----------------|-----------------------------------------------|-------------|-------------------|\n| ComponentAdd   | exec_in,Entity(ref),Position,Rotation,Scale(vec3),MeshID,MaterialID(int),Visible(bool) | exec_out | mode, component, per-prop enabled |\n| ComponentRemove| exec_in,Entity(ref)                           | exec_out | component (dropdown) |\n| SetComponent   | exec_in,Entity(ref),Position,Rotation,Scale(vec3),MeshID,MaterialID(int),Visible(bool) | exec_out | mode, component, per-prop enabled |\n| GetComponent   | exec_in,Entity(ref)                           | exec_out, Position,Rotation,Scale(vec3),MeshID,MaterialID(int),Visible(bool) | component (dropdown) |\n\nProperty pins use _SKIP sentinel: unconnected (pin mode) or unchecked (manual mode) → property not modified.\n\n#### Debug Nodes\n| type_name   | input pins           | output pins | props           |\n|-------------|----------------------|-------------|-----------------|\n| Print       | exec_in,Value(var)   | exec_out    | —               |\n| PrintString | exec_in              | exec_out    | message: string |\n\n#### IO Nodes\n| type_name    | input pins                              | output pins | props                                      |\n|--------------|-----------------------------------------|-------------|--------------------------------------------|\n| SerialSend   | exec_in,Value(var) | exec_out | format: string/bytes, port, baud_rate |\n| ParallelSend | exec_in,Address(int),Value(var)        | exec_out | mode: manual/pin, address: int (0x3FF8 LPT1, 0x3FF0 LPT2, 0x3FE8 LPT3), value: 1-255 |\n| PathVar      | —                                      | Path (string) | browse_mode: directory/file, path: string |\n| TextFileWrite| exec_in,FilePath(string),FileName(string),Value(var) | exec_out | mode: manual/pin, write_mode: w/a, delimiter: none/space/newline/tab/comma, file_path, file_name, value |\n\nSerialSend format \"string\"→UTF-8, \"bytes\"→float32 LE 4 bytes. Port/BaudRate always read from node props; Value from upstream pin.\nParallelSend always sends uint8 (1-255, 0 reserved for auto-reset after 5ms).\nPathVar outputs a directory or file path selected via OS file browser. browse_mode=directory uses select_folder, browse_mode=file uses open_file (.txt/.csv/.log/.json).\nTextFileWrite writes str(value) + delimiter to {file_path}/{file_name}.txt. FileName auto-appends .txt suffix. Directory created if missing. write_mode=\"w\" overwrites, \"a\" appends. Delimiter appended after each write: none=\"\", space=\" \", newline=\"\\n\", tab=\"\\t\", comma=\",\".\nFilePath is always handled by widget (Browse button); pin connection overrides widget value.\n\n#### SigGen Nodes (Virtual Signal Generator — IO ▸ SigGen)\n| type_name       | input pins | output pins | props |\n|-----------------|------------|-------------|-------|\n| InitSigGenDevice | exec_in | exec_out, device(device) | device_name, channels (1..256), sampling_rate (1..38400), frequency (Hz; ≤0 = unset → 10), freq_step (Hz per channel; 0 = same freq), amplitude_uv, noise_uv (0 = clean sine), seed, export_format: npz/csv, save_dir (\".\"=cwd), buffer_seconds |\n| StartSigGenRecord | exec_in | exec_out | device_name, pool: global/<pool_name> |\n| StopSigGenRecord | exec_in | exec_out | device_name, pool, save_scope: session/buffer |\n| KillSigGenDevice | exec_in | exec_out | device_name, pool |\n| GetSigGenData   | (none, pure data node) | Data (variant ndarray channels×samples), Channels (int), Samples (int), Fs (float) | device_name, pool |\n\nSigGen rules (CRITICAL):\n1. InitSigGenDevice and KillSigGenDevice MUST appear as a pair (validator + editor deletion cascade; binding identical to the other device families).\n2. Pure software sine source — runs on any machine (no hardware). Channel i frequency = f0 + i·step Hz; amplitude in µV float32; optional deterministic Gaussian noise via seed.\n3. Buffer / Get / Stop-save semantics follow the device-family spec: sliding window (buffer_seconds × sampling_rate, old data overwritten), non-destructive Get copy (unfilled region = 0) with Channels / Samples(valid) / Fs, Stop saves scope=session|buffer → npz/csv + .json sidecar. REAL runs write files; dry-run writes nothing.\n4. All device families share one session registry — device_name must be unique across families.\n\n#### Device Pool Nodes (IO ▸ Pool)\n| type_name        | input pins               | output pins | props |\n|------------------|--------------------------|-------------|-------|\n| CreateDevicePool | exec_in                  | exec_out    | pool_name (\"\" → fallback key pool#<nid>) |\n| AddToDevicePool  | exec_in, device (device) | exec_out    | pool_name (must match a CreateDevicePool) |\n| KillDevicePool   | exec_in                  | exec_out    | pool_name (\"\" + single Create = auto-bind) |\n\nDevice pool rules (CRITICAL):\n1. CreateDevicePool ⇄ KillDevicePool MUST appear as a pair (validator + editor deletion cascade; binding by pool_name, like devices).\n2. AddToDevicePool.device pin MUST be linked from an Init*Device.device output, and the Add node MUST run on the SAME exec chain, right after that Init (ctx pin values live for one trigger only).\n3. A device belongs to exactly ONE pool (exclusive). Re-executing Add with another pool MOVES the device (runtime logs it).\n4. Devices not added to any pool stay in the implicit \"global\" pool; \"global\" cannot be created or destroyed.\n5. Device reference nodes (Start/Stop/Kill/Get) select pool (default \"global\"); with device_name empty they auto-bind the SOLE device of the selected pool (pool may hold multiple devices → then set device_name).\n6. KillDevicePool unregisters the pool only — member devices keep running (each owns its Kill*Device node). Members fall back to \"global\".\n7. Dry-run (validate_graph): pools share the \"dryrun#\" namespace with sessions and are cleaned up after the run.\n\n#### Pattern 7: Device + Pool (e.g. SigGen solo or multi-device hyper-scanning prep)\n```\nOnGameStart → CreateDevicePool(pool_name=\"eeg\") → InitSigGenDevice(device_name=\"SG1\")\n  → AddToDevicePool(pool_name=\"eeg\", device←InitSigGenDevice.device)\n  → StartSigGenRecord(pool=\"eeg\", device_name=\"\")\nOnFrameUpdate → GetSigGenData(pool=\"eeg\", device_name=\"\") → ...\nOnGameStop → StopSigGenRecord(pool=\"eeg\") → KillSigGenDevice(pool=\"eeg\", device_name=\"SG1\")\n  → KillDevicePool(pool_name=\"eeg\")\n```\nKey: the Add node sits immediately after its Init in the same chain; acquisition/reference nodes pick the pool and leave device_name empty (auto-bind). With several devices in one pool, set device_name explicitly on Start/Stop/Kill/Get.\n\n#### Epoch Dataset Nodes (Epoch — neuroengineering convention)\n| type_name   | input pins | output pins | props |\n|-------------|------------|-------------|-------|\n| EpochAppend | exec_in, Data (variant), Samples (int), Fs (float), Label (float) | exec_out | epochs_name (\"\" → fallback key epochs#<nid>) |\n| EpochCount  | (none, pure data node) | Count (int), Classes (int), Channels (int), Fs (float) | epochs_name |\n| EpochClear  | exec_in | exec_out | epochs_name |\n| EpochSave   | exec_in | exec_out | epochs_name, save_dir (\".\"=cwd) |\n| EpochLoad   | exec_in | exec_out | epochs_name, file_path (npz), mode: replace/append |\n\nEpoch dataset rules (CRITICAL):\n1. One epoch = one trial segment (channels × samples); appends stack along dim0 → dataset ≈ (epochs, channels, samples). EpochAppend trims to the Samples pin (valid length from Get*Data); Data and Label pins MUST be connected (validator enforces).\n2. All epochs in one dataset share channels count and fs — fixed by the first append (mismatch → error logged, epoch skipped). Samples=0 appends are skipped with a log.\n3. NO Create/Kill pairing (pure in-memory container — unlike devices/pools). Reference nodes (Count/Clear/Save) bind by epochs_name; empty name + exactly one source (Append/Load) on canvas = auto-bind; otherwise static error.\n4. Collect-then-train pattern: append during a trial loop → EpochCount.Count → Compare → Branch gates training; EpochSave for persistence; EpochLoad is the offline-dataset entry (mode replace/append).\n5. EpochSave writes npz: X padded (epochs, ch, max_len) + lengths + y + fs. Real runs only — dry-run computes the target path and writes nothing; EpochLoad reads files deterministically (works in dry-run).\n6. Dry-run: datasets share the \"dryrun#\" namespace and are purged after validation; GameRuntime/PlayerBootstrap reset datasets as a runtime safety net.\n\n#### BCI Algorithm Nodes (Algorithm — FBCSP / CCA)\n| type_name   | input pins | output pins | props |\n|-------------|------------|-------------|-------|\n| InitFBCSP   | exec_in | exec_out | model_name (\"\" → model#<nid>), n_components (1..8), classifier: LDA/SVM, bands: [[lo,hi], ...] (packed list; empty = plain CSP) |\n| TrainFBCSP  | exec_in | exec_out | model_name, dataset_name, mode: train/load, model_path (load), save_path (opt) |\n| TestFBCSP   | Data (variant), Samples (int) | Label (int), Confidence (float) | model_name |\n| TestCCA     | Data (variant), Samples (int), Fs (float) | Label (int idx), Score (float), Freq (float) | freqs: [f, ...] (>=2, no upper limit), n_harmonics (1..8) |\n\nBCI algorithm rules (CRITICAL):\n1. InitFBCSP registers a spec (hyperparams) under model_name; TrainFBCSP(train) binds the spec + an Epoch dataset (both by name; empty + single canvas source = auto-bind) and registers the trained model under the SAME key; TestFBCSP binds a trained model by name.\n2. Training = SYNCHRONIZED WAIT: TrainFBCSP blocks the exec flow while a service thread trains (progress via logs); on completion the SAME exec walk continues downstream exactly once (one-shot, like TimeTrigger). Put it on a repeatedly-triggered chain — an OnGameStart-only chain would stall forever (TimeDelay has the same limitation). Dry-run trains synchronously (deterministic).\n3. Training needs EXACTLY 2 classes in the dataset (first append fixes channels/fs). Classifier math: closed-form LDA or linear SVM (scipy.optimize, deterministic) — no sklearn dependency.\n4. mode=load bypasses training and registers a model from model_path (offline pipeline entry); save_path (train mode) writes the trained model as npz.\n5. TestCCA is training-free: references = sin/cos harmonics of each candidate frequency; Label = argmax canonical correlation (index into freqs), Score = that correlation, Freq = its value. At least 2 frequencies required (no upper limit).\n6. bands/freqs are PACKED lists (UI unpacks into rows with +/-; external MCP sets/replaces the whole list atomically). Models and datasets share the \"dryrun#\" namespace during validation and are purged afterwards.\n\n#### Media Nodes (Media — GIF/image playback)\n| type_name | input pins | output pins | props |\n|-----------|------------|-------------|-------|\n| ShowMedia | exec_in, Entity (entity_ref) | exec_out | — |\n\nShowMedia rules (CRITICAL):\n1. Editor-side editing is only a TEMPLATE (entities/MediaPlayer declare source etc.; the editor never plays). Playback takes effect ONCE the graph drives it at runtime (PIE / standalone player, GameRuntime-only).\n2. Target entity: Get Entity (Name) → Entity ref → ShowMedia.Entity; unconnected Entity pin fails the static check (media_pin_unconnected).\n3. Drive frequency = wiring frequency: OnFrameUpdate chain = per-frame playback (recommended); OnGameStart = single first-frame push. Unconnected exec_in = warning only (media_exec_unconnected).\n4. In PIE, editor entities act as EntitySpawn TEMPLATES (they do not render directly); spawn the instance first, then target it by name — EntityGet resolves the spawned instance.\n5. Duplicate drivers for one entity are de-duplicated per engine frame (single advance). Media playback state (clock/frame) is runtime-only — never serialized.\n\n---\n\n### COMMON PATTERNS\n\n#### Pattern 1: Timer + Repeated Action (e.g., send every 1s, 10 times then exit)\n```\nOnGameStart → VarSet(counter=0, mode=manual) → VarSet(next_time=1.0, mode=manual)\nOnFrameUpdate → VarGet(\"next_time\") → TimeTrigger(mode=pin, Time←VarGet.Value)\nTimeTrigger.out_0 → SerialSend/ParallelSend → VarGet(\"counter\") → ScalarMath(sum:+1) → VarSet(\"counter\", mode=pin)\n  → VarGet(\"next_time\") → ScalarMath(sum:+1) → VarSet(\"next_time\", mode=pin)\n  → Branch(exec_in, Condition←Compare(A←ScalarMath.Result, B←Constant(10), gte))\n  Branch.True → ExitGame\n```\nKey: TimeTrigger re-arms because next_time increases each fire. Compare.A uses ScalarMath(counter+1).Result directly (no need for a second VarGet).\n\n#### Pattern 2: OnFrameUpdate per-frame action (no timer)\n```\nOnFrameUpdate → TimeGetElapsed → Print(Value←TimeGetElapsed.Elapsed)\n```\n\n#### Pattern 3: Spawn entity on start\n```\nOnGameStart → EntitySpawn(template=\"MyEntity\") → ...\n```\n\n#### Pattern 4: Conditional branch\n```\n... → VarGet(\"some_var\") → Compare(A←VarGet.Value, B←Constant(threshold), gte)\n  → Branch(Condition←Compare.Result) → True: ... / False: ...\n```\nNote: Branch needs exec_in from the chain. The Condition is a data link from Compare.Result.\nThe exec_in usually comes from VarGet.exec_out (the VarGet that fed Compare.A).\n\n#### Pattern 5: Parallel port trigger (EEG/SSVEP)\n```\nOnFrameUpdate → VarGet(\"next_time\") → TimeTrigger(mode=pin) → ParallelSend(Address=0x3FF8, Value=1)\n  → VarGet(\"counter\") → ScalarMath(sum) → VarSet(\"counter\", mode=pin)\n  → VarGet(\"next_time\") → ScalarMath(sum) → VarSet(\"next_time\", mode=pin)\n  → Branch(Condition←Compare(A←ScalarMath.Result, B←Constant(N), gte)) → ExitGame\n```\n\n#### Pattern 6: Write to text file (logging experiment data)\n```\nOnGameStart → VarSet(trial=1, mode=manual) → VarSet(max_trials=10, mode=manual)\nOnFrameUpdate → VarGet(\"next_time\") → TimeTrigger(mode=pin)\n  TimeTrigger.out_0 → TextFileWrite(\n      mode=pin,\n      write_mode=\"a\", delimiter=\"newline\",\n      FilePath←PathVar(browse_mode=directory, path=\"D:/Data/\"),\n      FileName←StringConst(value=\"experiment_log\"),  // → experiment_log.txt\n      Value←VarGet(\"trial\").Value\n    )\n  → VarGet(\"trial\") → ScalarMath(sum:+1) → VarSet(\"trial\", mode=pin)\n  → Branch(Condition←Compare(A←ScalarMath.Result, B←VarGet(\"max_trials\").Value, gte))\n  Branch.True → ExitGame\n```\nKey: TextFileWrite creates the directory and file automatically. FileName \"experiment_log\" becomes \"experiment_log.txt\".\nUse StringConst for static strings, VarGet for dynamic values (but note VarGet returns float — use StringConst for file names).\nPathVar provides a reusable directory path that can fan out to multiple TextFileWrite nodes.\n\n---\n\n### WRITING A GRAPH — STEP BY STEP\n\n1. Plan the exec flow: which event nodes trigger what chains.\n2. Assign node IDs starting from 200 (reserve 151-199 for default event nodes).\n3. For each node, assign pin IDs. Use a scheme like node_id*10+0, node_id*10+1, ... for clarity.\n4. Write nodes dict with correct node_type, pin_ids mapping, and props.\n5. Write links dict: exec links first (to establish execution order), then data links.\n6. Compute next_id = 1 + max(all node IDs, pin IDs, link IDs).\n7. Always include the 3 default event nodes (OnGameStart, OnFrameUpdate, OnGameStop).\n8. Pure data nodes (Constant, Compare, ScalarMath, etc.) have NO exec pins — only connect them via data links.\n9. Use VarGet/Scale → ScalarMath/Compare → VarSet for arithmetic on variables.\n   Use StringConst for static string values, VarGet for numeric values.\n   Note: VarGet returns float (even for string var names); use StringConst for file names and paths.\n10. For repeated TimeTrigger: feed a variable into TimeTrigger.Time pin, increment that variable after each fire."
+    }
+  }
+}

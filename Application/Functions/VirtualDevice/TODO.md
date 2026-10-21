@@ -25,9 +25,12 @@
 - [ ] snapshot 增加 `filters` 回显（当前 filters 在 status 里）
 - [ ] 多会话支持评估（当前单会话 `panel`; 多设备实验走节点侧设备池）
 
-### c) 节点迁移（等 NodePack [M1]）
-- [ ] SigGen 节点族若迁入扩展 Pack: type 名/props/pins 不变（兼容红线）;
-      widgets 经 `_device_name_field` 复用 `device_common` 模式（节点现状见核心 `node_types/siggen.py`）
+### c) 节点迁移（已完成求值器出核心）
+- [x] `node_pack.py` 声明 SigGen/DevicePool（type/pins/props 不变）
+- [x] `evaluator_siggen.py` / `evaluator_pool.py` 迁入本目录，核心不再 import
+- [x] 扩展壳 + `ext.virtual.*` 九件套 + 面板
+- [ ] widget 声明化（去掉 Editor 对设备类型的硬编码）
+- [x] 交接书：`HANDOFF.md`
 
 ## 2. 迁移/复用注意
 

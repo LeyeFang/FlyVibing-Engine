@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "api_version": "1",
   "maturity": "partial",
-  "description": "Classic BCI algorithm nodes (FBCSP / CCA implemented, migration pending) + custom algorithm template & test ecosystem",
+  "description": "Classic BCI algorithm nodes (FBCSP / CCA implemented) + epoch datasets, owned by the extension; core only discovers the node pack.",
+  "entry": "extension.py:create_extension",
   "capabilities": ["ops", "nodes"],
   "requires": []
 }

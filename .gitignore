@@ -25,8 +25,33 @@ Resource/wheels/*
 !Resource/wheels/CHECKSUMS.sha256
 !Resource/wheels/imgui_bundle-1.92.5-cp314-cp314t-win_amd64.whl
 
-# Test 目录整体脱离版本控制（本机开发保留；2026-09-28 用户要求）
-Test/
+# Test/: 只跟踪测试源码与小型 fixture；运行产物/缓存保持忽略（2026-10-21 局部放开）
+Test/*
+!Test/Application/
+!Test/Helpers/
+!Test/Resources/
+!Test/Device/
+!Test/TestProject/
+!Test/_path_setup.py
+!Test/_test_harness.py
+!Test/_test_scene.py
+!Test/README.md
+
+# Test runtime artifacts (never commit)
+Test/_runs/
+Test/_archive/
+Test/_gtec_archive_20261016/
+Test/**/__pycache__/
+Test/**/*.py[co]
+Test/Application/Editor/imgui.ini
+Test/Application/Editor/graph.json
+Test/Application/Functions/_siggen_e2e_out/
+Test/TestProject/**/dist/
+Test/TestProject/**/output/
+Test/TestProject/**/runtime/
+Test/TestProject/**/seed/
+Test/TestProject/**/*.txt
+Test/TestProject/**/*.log
 
 # Editor Live MCP 临时目录（E2E/报告产物；运行时生成）
 FlyVibing-User-And-Developer-Utils/packages/editor-mcp/tmp/

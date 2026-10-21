@@ -1,8 +1,8 @@
 # BCI Algorithm Extension — TODO（状态档案）
 
-> 状态: **partial**（内核算实现已交付, 尚未迁移到 extension 形态）
+> 状态: **partial**（算法实现 + 节点族 + 扩展壳已交付；交接书见 `HANDOFF.md`）
 > 开发规范: `Doc/ExtDev/extension_dev_protocol.md` · 架构: `Doc/Dev/extension_protocol.md`
-> manifest: `extension.json`（id=`bci`; 节点/ops 前缀规划 `ext.bci.*`）
+> manifest: `extension.json`（id=`bci`; entry 已启用; ops 前缀 `ext.bci.*`）
 
 ## 0. 现状（已实现资产映射 — 迁移来源）
 
@@ -18,11 +18,11 @@
 ## 1. TODO
 
 ### A. 迁移到 Extension 形态（保持兼容）
-- [ ] 节点 Pack 化: 用 `ctx.nodes.register_pack`（M1 实装）替代 core 五注册点直注册;
-      **节点 type 名保持不变**（已保存场景的图引用兼容——.scene 里带 `TrainFBCSP` 等字符串）
-- [ ] 实现文件归位: 实现保持在 `Application/Functions/BCIAlgorithm/**`（内迁后与扩展壳同目录）; `evaluators/bci_algorithm.py`
-      改薄转发或整体迁入（求值器注册协议不变）
-- [ ] `ext.bci.*` ops: `train` / `test` / `model.list` / `model.load`（把训练入口开放给 agent 渠道）
+- [x] 节点 Pack 化: `node_pack.py` 注入类型/字段；**节点 type 名保持不变**
+- [x] 求值器归位: `evaluator.py` / `evaluator_epoch.py` 已迁入本目录，核心不再 import
+- [x] `ext.bci.status` / `ext.bci.models` / `ext.bci.datasets`（只读发现入口）
+- [x] 扩展壳 `extension.py` + manifest `entry`（Extensions 菜单可启停）
+- [ ] `ext.bci.train` / `test` / `model.load`（训练入口开放给 agent 渠道）
 - [ ] InitFBCSP 等 widgets 的扩展命名空间（沿用 widgets 注册表, key 加前缀）
 
 ### B. 自定义算法开发生态（社区开发者主线）
@@ -34,7 +34,8 @@
 - [ ] 打包/分发: 第三方算法按 .mgext 或目录形式分发（M3）
 
 ### C. 测试生态
-- [ ] 迁移 `test_bci_algorithm.py` / `test_bci_empty_data.py` 到扩展自测（test_protocol 扩展行）
+- [x] `test_bci_algorithm.py` 35/35；`test_node_pack` 17/17；边界 4/4
+- [ ] 迁移 `test_bci_empty_data.py` 到扩展自测（test_protocol 扩展行）
 - [ ] 空数据/坏数据矩阵保持（chance-level 输出断言）
 
 ## 2. 迁移注意

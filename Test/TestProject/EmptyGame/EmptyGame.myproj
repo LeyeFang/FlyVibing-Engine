@@ -1,0 +1,15 @@
+{
+  "version": "0.1.0",
+  "name": "EmptyGame",
+  "startup_scene": "scenes\\Main.scene",
+  "scenes": [
+    "scenes\\Main.scene"
+  ],
+  "resources": {
+    "materials": [],
+    "shaders": [],
+    "textures": [],
+    "meshes": [],
+    "prefabs": []
+  }
+}

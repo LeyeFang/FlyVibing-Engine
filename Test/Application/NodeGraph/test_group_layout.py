@@ -116,6 +116,24 @@ def main() -> int:
     check("layout_group only returns child members",
           set(nested_positions) == {by_alias["nested"]}, str(sorted(nested_positions)))
 
+    # 旧组框升级：只扩容，不因为新端口槽把组框缩回去。
+    from Application.Core.NodeGraph.group_geometry import (  # noqa: PLC0415
+        GROUP_LAYOUT_VERSION,
+        get_box,
+        init_boxes,
+    )
+    canvas.node_groups["g1"]["box"] = {"x": 0.0, "y": 0.0, "w": 20.0, "h": 20.0}
+    canvas.node_groups["g1"].pop("layout_version", None)
+    init_boxes(canvas, lambda nid, inst: node_size(inst))
+    upgraded = get_box(canvas, "g1")
+    check("old group box is expanded for new port gutters",
+          upgraded is not None and upgraded[2] > 20.0 and upgraded[3] > 20.0,
+          str(upgraded))
+    check("group layout version is persisted",
+          int(canvas.node_groups["g1"].get("layout_version", 0)) ==
+          GROUP_LAYOUT_VERSION,
+          str(canvas.node_groups["g1"].get("layout_version")))
+
     print()
     if _failed:
         print(f"RESULT: FAIL ({len(_failed)}): {', '.join(_failed)}")

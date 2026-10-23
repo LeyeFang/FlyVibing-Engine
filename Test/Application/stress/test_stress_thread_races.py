@@ -114,7 +114,65 @@ def case_registry_churn(rng: random.Random, n_threads: int = 6, iters: int = 120
 
 
 # ═══════════════════════════════════════════════════════════════
-# B. LiveCommandServer 并发客户端
+# B. SceneManager 实体注册表 churn（project.open / TextSystem.tick 同类）
+# ═══════════════════════════════════════════════════════════════
+
+def case_scene_registry_churn(rng: random.Random, n_writers: int = 4,
+                              iters: int = 400) -> None:
+    from Application.Core.Scene.SceneManager import SceneManager
+
+    class _StressEngine:
+        renderer = None
+        scene = None
+
+    st = SceneManager("StressScene", _StressEngine)
+    errors: list[str] = []
+    observed = [0]
+
+    def writer(k: int) -> None:
+        base = 10_000_000 + k * 1_000_000
+        try:
+            for i in range(iters):
+                key = str(base + i)
+                with st._entities_lock:
+                    st.entities[key] = 1
+                with st._entities_lock:
+                    st.entities.pop(key, None)
+                if i % 17 == 0:
+                    time.sleep(rng.random() * 0.0005)
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"writer-{k}: {e}")
+
+    def reader() -> None:
+        try:
+            for _ in range(iters):
+                ids = st.entity_ids_snapshot()
+                assert all(isinstance(eid, int) for eid in ids)
+                observed[0] += 1
+                time.sleep(rng.random() * 0.0005)
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"reader: {e}")
+
+    threads = [threading.Thread(target=writer, args=(k,), daemon=True)
+               for k in range(n_writers)]
+    threads += [threading.Thread(target=reader, daemon=True) for _ in range(2)]
+    t0 = time.perf_counter()
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30.0)
+    elapsed = time.perf_counter() - t0
+    check("scene registry churn: no exceptions", not errors, str(errors[:3]))
+    check("scene registry churn: readers observed snapshots",
+          observed[0] > 0, str(observed[0]))
+    check("scene registry churn: no temp keys left",
+          not any(str(k) in st.entities for k in range(10_000_000, 14_000_000)),
+          f"registry={len(st.entities)}")
+    print(f"  [INFO] scene registry {n_writers} writers x {iters} in {elapsed * 1000:.0f} ms")
+
+
+# ═══════════════════════════════════════════════════════════════
+# C. LiveCommandServer 并发客户端
 # ═══════════════════════════════════════════════════════════════
 
 def case_server_concurrency(rng: random.Random, n_clients: int = 8,
@@ -177,6 +235,7 @@ def main() -> int:
     for r in range(1, rounds + 1):
         print(f"-- round {r}/{rounds} --")
         case_registry_churn(rng)
+        case_scene_registry_churn(rng)
         case_server_concurrency(rng)
     total = _RESULTS["pass"] + _RESULTS["fail"]
     status = "OK" if _RESULTS["fail"] == 0 else "FAIL"

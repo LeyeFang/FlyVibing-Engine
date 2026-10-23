@@ -15,6 +15,7 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 
+from Application.Core.NodeGraph.group_geometry import GROUP_IO_TYPES
 from Application.Core.NodeGraph.node_types import _TYPES
 
 # Card geometry estimates.  Keep these in sync with the node-editor card renderer;
@@ -27,9 +28,11 @@ H_GAP = 90.0
 V_GAP = 40.0
 
 # Background group frame padding around its member cards / child group frames.
-PAD_LEFT = 32.0
-PAD_TOP = 56.0
-PAD_RIGHT = 48.0
+# 左侧 100px 给 group exec out，右侧 100px 给 group exec in，
+# 端口与成员卡片之间留出可视线槽；否则入口连线会从卡片上方穿过。
+PAD_LEFT = 100.0
+PAD_TOP = 96.0
+PAD_RIGHT = 100.0
 PAD_BOTTOM = 48.0
 
 EVENT_TYPES = frozenset({"OnGameStart", "OnFrameUpdate", "OnGameStop"})
@@ -50,6 +53,9 @@ WIDGET_TYPES = frozenset({
 
 def node_size(inst) -> tuple[float, float]:
     """Conservative card size estimate used for layout and group bounds."""
+    if inst.node_type in ("GroupStart", "GroupEnd"):
+        # 内部 exec 接口节点只有一行 pin + 标题，比普通卡片窄得多。
+        return (150.0, 68.0)
     ndef = _TYPES.get(inst.node_type)
     pins = len(ndef.pins) if ndef else 2
     title = ndef.label if ndef else inst.node_type
@@ -128,30 +134,16 @@ def group_order(canvas) -> list[str]:
 
 
 def group_bounds(canvas, gid: str) -> tuple[float, float, float, float] | None:
-    """Return ``(x, y, width, height)`` for a group frame, or None if empty."""
-    ids = group_member_ids(canvas, gid)
-    nodes = getattr(canvas, "nodes", {}) or {}
-    if not ids:
-        return None
-    xs: list[float] = []
-    ys: list[float] = []
-    rights: list[float] = []
-    bottoms: list[float] = []
-    for nid in ids:
-        inst = nodes.get(nid)
-        if inst is None:
-            continue
-        w, h = node_size(inst)
-        xs.append(float(inst.pos[0]))
-        ys.append(float(inst.pos[1]))
-        rights.append(float(inst.pos[0]) + w)
-        bottoms.append(float(inst.pos[1]) + h)
-    if not xs:
-        return None
-    x = min(xs) - PAD_LEFT
-    y = min(ys) - PAD_TOP
-    return (x, y, max(rights) + PAD_RIGHT - x,
-            max(bottoms) + PAD_BOTTOM - y)
+    """Return ``(x, y, width, height)`` for a group frame, or None if empty.
+
+    自 2026-10-22 起优先使用持久化的 ``node_groups[gid]["box"]``；
+    只有旧数据缺少 box 时才按成员包围盒初始化一次并写回。这样用户
+    手工 resize 的组框不会被下一帧重新推导覆盖。
+    """
+    from Application.Core.NodeGraph.group_geometry import ensure_box
+
+    box = ensure_box(canvas, gid)
+    return box
 
 
 def descendant_group_ids(canvas, gid: str) -> set[str]:
@@ -217,7 +209,15 @@ class GroupLayoutEngine:
         child_nodes: set[int] = set()
         for cgid in children_of(self.canvas, gid):
             child_nodes.update(self._members(cgid))
-        return [nid for nid in self._members(gid) if nid not in child_nodes]
+        out: list[int] = []
+        for nid in self._members(gid):
+            if nid in child_nodes:
+                continue
+            inst = self.nodes.get(nid)
+            if inst is not None and inst.node_type in GROUP_IO_TYPES:
+                continue
+            out.append(nid)
+        return out
 
     def _node_unit(self, nid: int) -> _Unit:
         inst = self.nodes[nid]
@@ -281,6 +281,9 @@ class GroupLayoutEngine:
             units.append(unit)
             grouped.update(unit.nodes)
         for nid in sorted(self.nodes):
+            inst = self.nodes.get(nid)
+            if inst is not None and inst.node_type in GROUP_IO_TYPES:
+                continue
             if nid not in grouped:
                 units.append(self._node_unit(nid))
         return units

@@ -54,6 +54,10 @@ class LiveCommandServer:
     _ext_ops: dict[str, object] = {}          # op 名 → handler
     _ext_ops_owner: dict[str, str] = {}       # op 名 → 扩展 id
     _ext_ops_summary: dict[str, str] = {}     # op 名 → 摘要
+    # 逐帧输入动作（ui.click / ui.drag）: 渲染帧在 backend new_frame 之后推进一步。
+    _input_actions: "list[dict]" = []
+    _input_events: "list[tuple]" = []
+    _input_frame: int = 0
     port: int = 0
     _running: bool = False
 
@@ -117,6 +121,8 @@ class LiveCommandServer:
     def stop(cls) -> None:
         """停止监听（编辑器关闭时调用; 幂等）。"""
         cls._running = False
+        cls._input_actions.clear()
+        cls._input_events.clear()
         sock, cls._sock = cls._sock, None
         if sock is not None:
             try:
@@ -263,6 +269,12 @@ class LiveCommandServer:
             "view.set_grid": cls._op_view_set_grid,
             "ui.panels": cls._op_ui_panels,
             "ui.panel": cls._op_ui_panel,
+            "ui.mouse": cls._op_ui_mouse,
+            "ui.mouse_button": cls._op_ui_mouse_button,
+            "ui.click": cls._op_ui_click,
+            "ui.drag": cls._op_ui_drag,
+            "ui.wheel": cls._op_ui_wheel,
+            "ui.key": cls._op_ui_key,
             "camera.get": cls._op_camera_get,
             "camera.set": cls._op_camera_set,
             "graph.list": cls._op_graph_list,
@@ -271,6 +283,10 @@ class LiveCommandServer:
             "graph.link": cls._op_graph_link,
             "graph.set_props": cls._op_graph_set_props,
             "graph.set_description": cls._op_graph_set_description,
+            "graph.group.merge": cls._op_graph_group_merge,
+            "graph.group.ungroup": cls._op_graph_group_ungroup,
+            "graph.group.delete": cls._op_graph_group_delete,
+            "graph.group.destroy": cls._op_graph_group_destroy,
             "graph.export": cls._op_graph_export,
             "graph.import": cls._op_graph_import,
             "graph.fit": cls._op_graph_fit,
@@ -519,7 +535,287 @@ class LiveCommandServer:
             panel.visible = not panel.visible
         state = LiveCommandServer._panel_state(panel)
         state["changed"] = bool(panel.visible) != before
+        if name == "Node Editor":
+            # 只读诊断：面板宽度 / 缩放 / 节点屏幕矩形 / 选中态
+            canvas = getattr(panel, "_canvas", None)
+            selected = sorted(getattr(panel, "_selection_snapshot", set()) or set())
+            selected_groups: list[str] = []
+            if canvas is not None:
+                try:
+                    # ★ 不能用 node-editor 原生 get_selected_nodes()：该 op 在
+                    #   渲染帧之外执行，Node Editor 标签页未激活时没有当前
+                    #   editor context，会直接访问空指针崩溃。选择快照和
+                    #   组 id 映射都是纯 Python，可安全查询。
+                    selected_groups = sorted({
+                        gid for eid in selected
+                        if (gid := panel._group_for_editor_id(canvas, int(eid)))
+                    })
+                except Exception:  # noqa: BLE001
+                    pass
+            try:
+                from imgui_bundle import imgui as _imgui
+
+                # 无头测试/编辑器尚未创建 ImGui 上下文时，任何 imgui 状态
+                # 读取都会触发原生访问违例（Python 无法捕获）。先判空。
+                if _imgui.get_current_context() is None:
+                    mouse_view = None
+                    mouse_down = False
+                else:
+                    mouse = _imgui.get_mouse_pos()
+                    if abs(float(mouse.x)) > 1e6 or abs(float(mouse.y)) > 1e6:
+                        mouse_view = None
+                    else:
+                        mouse_view = [round(float(mouse.x), 1),
+                                      round(float(mouse.y), 1)]
+                    mouse_down = bool(_imgui.is_mouse_down(0))
+            except Exception:  # noqa: BLE001
+                mouse_view = None
+                mouse_down = False
+            state["view"] = {
+                "canvas_w": float(getattr(panel, "_last_canvas_width", 0.0) or 0.0),
+                "zoom": float(getattr(panel, "_last_zoom", 0.0) or 0.0),
+                "mouse": mouse_view,
+                "mouse_down": mouse_down,
+                "hovered_pin_id": int(getattr(panel, "_hovered_pin_id", 0) or 0),
+                "selected_nodes": selected,
+                "selected_groups": selected_groups,
+                "last_box_apply": getattr(panel, "_last_box_apply", {}),
+                "box": {
+                    "selecting": bool(getattr(panel, "_box_selecting", False)),
+                    "released": bool(getattr(panel, "_box_select_released", False)),
+                    "settle": int(getattr(panel, "_box_settle", 0) or 0),
+                    "start": (list(getattr(panel, "_box_start_screen", ()) or ())
+                              or None),
+                    "hovered": int(getattr(panel, "_hovered_node_id", 0) or 0),
+                },
+                "nodes": {int(k): [round(v, 1) for v in rect]
+                          for k, rect in
+                          (getattr(panel, "_node_screen_rects", {}) or {}).items()},
+                "groups": {str(k): [round(v, 1) for v in rect]
+                           for k, rect in
+                           (getattr(panel, "_group_screen_rects", {}) or {}).items()},
+                "group_titles": {str(k): [round(v, 1) for v in rect]
+                                 for k, rect in
+                                 (getattr(panel, "_group_title_rects", {}) or {}).items()},
+                "group_title_texts": dict(
+                    getattr(panel, "_group_title_texts", {}) or {}),
+                "group_descriptions": dict(
+                    getattr(panel, "_group_description_texts", {}) or {}),
+                "group_description_rects": {
+                    str(k): [round(v, 1) for v in rect]
+                    for k, rect in
+                    (getattr(panel, "_group_description_rects", {}) or {}).items()
+                },
+                "group_desc_buttons": {
+                    str(k): [round(v, 1) for v in rect]
+                    for k, rect in
+                    (getattr(panel, "_group_desc_button_rects", {}) or {}).items()
+                },
+                "group_io_rects": {
+                    str(k): {name: [round(v, 1) for v in rect]
+                             for name, rect in rects.items()}
+                    for k, rects in
+                    (getattr(panel, "_group_io_rects", {}) or {}).items()
+                },
+                "group_frames": {str(k): [round(v, 1) for v in rect]
+                                 for k, rect in
+                                 (getattr(panel, "_group_frame_rects", {}) or {}).items()},
+                "group_boxes": {
+                    str(gid): [round(float(grp.get("box", {}).get(k, 0.0)), 1)
+                               for k in ("x", "y", "w", "h")]
+                    for gid, grp in
+                    (getattr(canvas, "node_groups", {}) or {}).items()
+                    if isinstance(grp, dict) and isinstance(grp.get("box"), dict)
+                },
+                "group_io": {
+                    str(gid): {k: info.get(k) for k in
+                               ("start_node", "end_node", "in_pin", "out_pin",
+                                "start_type", "end_type")}
+                    for gid, info in
+                    (getattr(panel, "_group_io", {}) or {}).items()
+                },
+            }
         return state
+
+    # ── 界面输入注入（agent 物理点击/拖拽/键盘; 主线程 pump 内生效） ──
+
+    @staticmethod
+    def _move_os_cursor(x: float, y: float) -> None:
+        """把真实 GLFW 光标移动到窗口坐标（与 ImGui 屏幕坐标同系）。
+
+        GLFW backend 每帧会把真实光标位置写回 IO；只调用
+        add_mouse_pos_event 会在下一帧被覆盖，点击就会落到旧位置。
+        """
+        try:
+            import glfw
+
+            from Application.Editor.EditorHost import EditorHost
+
+            window = EditorHost.get_editor_window()
+            handle = getattr(window, "glfw_window", None)
+            if handle is not None:
+                # 编辑器窗口必须真实聚焦；否则 ImGui 的 hover/click 会被
+                # “窗口未聚焦”路径吞掉，只剩残留选中。
+                glfw.focus_window(handle)
+                glfw.set_cursor_pos(handle, float(x), float(y))
+        except Exception:  # noqa: BLE001 — 无窗口/无 glfw 环境跳过
+            pass
+
+    @staticmethod
+    def _ui_pos(args: dict) -> tuple[float, float]:
+        if "x" not in args or "y" not in args:
+            raise ValueError("x and y are required (screen coordinates)")
+        return float(args["x"]), float(args["y"])
+
+    @classmethod
+    def _op_ui_mouse(cls, args: dict) -> dict:
+        """移动鼠标到屏幕坐标（Imgui 逻辑像素，左上角原点）。"""
+        x, y = cls._ui_pos(args)
+        cls._input_events.append(("move", x, y))
+        return {"x": x, "y": y, "frame": cls._input_frame}
+
+    @classmethod
+    def _op_ui_mouse_button(cls, args: dict) -> dict:
+        """按下/抬起鼠标键。down=true 按下，false 抬起；0/1/2 = 左/右/中。"""
+        if "down" not in args:
+            raise ValueError("down is required (true=press, false=release)")
+        button = int(args.get("button", 0))
+        if button not in (0, 1, 2):
+            raise ValueError("button must be 0 (left), 1 (right) or 2 (middle)")
+        if "x" in args and "y" in args:
+            cls._input_events.append(("move", float(args["x"]), float(args["y"])))
+        down = bool(args.get("down"))
+        cls._input_events.append(("button", button, down))
+        return {"button": button, "down": down, "frame": cls._input_frame}
+
+    @classmethod
+    def _schedule_input(cls, steps: list[tuple]) -> dict:
+        if not steps:
+            raise ValueError("input action has no steps")
+        cls._input_actions.append({"steps": steps, "index": 0})
+        return {
+            "scheduled": True,
+            "frames": len(steps),
+            "pending": len(cls._input_actions),
+            "frame": cls._input_frame,
+        }
+
+    @classmethod
+    def _op_ui_click(cls, args: dict) -> dict:
+        """在 (x,y) 完成一次真实点击（移动 → 按下 → 抬起，跨 3 帧）。"""
+        x, y = cls._ui_pos(args)
+        button = int(args.get("button", 0))
+        if button not in (0, 1, 2):
+            raise ValueError("button must be 0 (left), 1 (right) or 2 (middle)")
+        return cls._schedule_input([
+            ("move", x, y),
+            ("button", button, True),
+            ("button", button, False),
+        ])
+
+    @classmethod
+    def _op_ui_drag(cls, args: dict) -> dict:
+        """从 (x0,y0) 拖到 (x1,y1)，steps 为中间移动帧数（默认 8，1..120）。"""
+        for key in ("x0", "y0", "x1", "y1"):
+            if key not in args:
+                raise ValueError(f"{key} is required (screen coordinates)")
+        x0, y0 = float(args["x0"]), float(args["y0"])
+        x1, y1 = float(args["x1"]), float(args["y1"])
+        button = int(args.get("button", 0))
+        if button not in (0, 1, 2):
+            raise ValueError("button must be 0 (left), 1 (right) or 2 (middle)")
+        steps = max(1, min(120, int(args.get("steps", 8))))
+        plan: list[tuple] = [("move", x0, y0), ("button", button, True)]
+        for i in range(1, steps + 1):
+            t = i / steps
+            plan.append(("move", x0 + (x1 - x0) * t, y0 + (y1 - y0) * t))
+        plan.append(("button", button, False))
+        return cls._schedule_input(plan)
+
+    @classmethod
+    def _op_ui_wheel(cls, args: dict) -> dict:
+        """滚轮输入（dy 正数向上；dy 用于节点画布缩放）。"""
+        if "dy" not in args:
+            raise ValueError("dy is required")
+        dx = float(args.get("dx", 0.0))
+        dy = float(args["dy"])
+        cls._input_events.append(("wheel", dx, dy))
+        return {"dx": dx, "dy": dy, "frame": cls._input_frame}
+
+    @classmethod
+    def _op_ui_key(cls, args: dict) -> dict:
+        """按下/抬起键盘键；key 支持 ImGui 名称（escape/delete/shift…）或整数。"""
+        from imgui_bundle import imgui
+
+        raw = args.get("key")
+        if raw is None:
+            raise ValueError("key is required (name or ImGui key code)")
+        if isinstance(raw, str):
+            name = raw.strip()
+            key = getattr(imgui.Key, name.lower(), None)
+            if key is None:
+                key = getattr(imgui.Key, name, None)
+            if key is None:
+                raise ValueError(f"unknown key {raw!r}")
+            key_code = int(key)
+        else:
+            key_code = int(raw)
+        down = bool(args.get("down", True))
+        cls._input_events.append(("key", key_code, down))
+        return {"key": key_code, "down": down, "frame": cls._input_frame}
+
+    @classmethod
+    def apply_input(cls) -> None:
+        """渲染帧输入注入 — 必须在 backend new_frame 之后、imgui.new_frame 之前调用。
+
+        GLFW backend 每帧会把真实鼠标位置写回 IO；如果在 OnUpdate/pump 里
+        add_mouse_pos_event，会被真实光标覆盖，导致“点击没反应”。这里在
+        backend 之后排队，下一行 imgui.new_frame 才能消费到目标坐标。
+        """
+        cls._input_frame += 1
+        if not cls._input_events and not cls._input_actions:
+            return
+        try:
+            from imgui_bundle import imgui
+
+            io = imgui.get_io()
+        except Exception:  # noqa: BLE001 — 无 ImGui 上下文时丢弃，避免卡住队列
+            cls._input_events.clear()
+            cls._input_actions.clear()
+            return
+        if io is None:
+            cls._input_events.clear()
+            cls._input_actions.clear()
+            return
+
+        events = cls._input_events
+        cls._input_events = []
+        for step in events:
+            if step[0] == "move":
+                cls._move_os_cursor(float(step[1]), float(step[2]))
+                io.add_mouse_pos_event(float(step[1]), float(step[2]))
+            elif step[0] == "button":
+                io.add_mouse_button_event(int(step[1]), bool(step[2]))
+            elif step[0] == "key":
+                io.add_key_event(int(step[1]), bool(step[2]))
+            elif step[0] == "wheel":
+                io.add_mouse_wheel_event(float(step[1]), float(step[2]))
+
+        active: list[dict] = []
+        for action in cls._input_actions:
+            steps = action["steps"]
+            index = action["index"]
+            if index < len(steps):
+                step = steps[index]
+                if step[0] == "move":
+                    cls._move_os_cursor(float(step[1]), float(step[2]))
+                    io.add_mouse_pos_event(float(step[1]), float(step[2]))
+                elif step[0] == "button":
+                    io.add_mouse_button_event(int(step[1]), bool(step[2]))
+                action["index"] = index + 1
+            if action["index"] < len(steps):
+                active.append(action)
+        cls._input_actions = active
 
     @staticmethod
     def _op_sim_stop(args: dict) -> dict:
@@ -640,10 +936,22 @@ class LiveCommandServer:
                 str(gid): {
                     "type": str(grp.get("type", "")),
                     "alias": str(grp.get("alias", "")),
+                    "description": str(grp.get("description") or ""),
                     "version": int(grp.get("version", 1)),
                     "arms": [str(a.get("id")) for a in
                              (grp.get("params", {}).get("arms") or [])],
-                    "members": len(grp.get("members") or []),
+                    "members": len([
+                        m for m in (grp.get("members") or [])
+                        if int(m) not in {
+                            int(v) for v in (grp.get("io_nodes") or {}).values()
+                            if v is not None
+                        }
+                    ]),
+                    "io_nodes": {
+                        str(name): int(nid)
+                        for name, nid in (grp.get("io_nodes") or {}).items()
+                        if nid is not None
+                    },
                     "slots": {
                         str(name): (int(pin) if pin is not None else None)
                         for name, pin in (grp.get("slots") or {}).items()
@@ -653,6 +961,67 @@ class LiveCommandServer:
                 }
                 for gid, grp in groups.items()
             }
+        return result
+
+    @staticmethod
+    def _op_graph_group_merge(args: dict) -> dict:
+        """把选中节点合并为组（等同画布右键 Merge into Group）。args: nodes, alias(可选)。"""
+        from Application.Core.NodeGraph.group_ops import merge_nodes
+
+        canvas = _node_canvas()
+        result = merge_nodes(canvas, args.get("nodes") or args.get("node_ids") or [],
+                             args.get("alias"))
+        if not result.get("ok"):
+            raise ValueError("; ".join(result.get("errors") or ["merge failed"]))
+        from Application.Core.NodeGraph.group_nodes import ensure_group_io_nodes
+
+        ensure_group_io_nodes(canvas, str(result.get("gid") or ""))
+        print(f"[Live] group merged: {result.get('gid')} "
+              f"({result.get('nodes')} nodes)")
+        return result
+
+    @staticmethod
+    def _op_graph_group_ungroup(args: dict) -> dict:
+        """拆分组框（保留成员节点与子组）。args: group(gid / alias)。"""
+        from Application.Core.NodeGraph.group_ops import ungroup
+
+        result = ungroup(_node_canvas(), args.get("group") or args.get("gid"))
+        if not result.get("ok"):
+            raise ValueError("; ".join(result.get("errors") or ["ungroup failed"]))
+        print(f"[Live] group ungrouped: {result.get('gid')}")
+        return result
+
+    @staticmethod
+    def _op_graph_group_delete(args: dict) -> dict:
+        """删除组框（默认连同子组；只删元数据，成员节点保留）。args: group, recursive。"""
+        from Application.Core.NodeGraph.group_ops import delete_group
+
+        result = delete_group(
+            _node_canvas(),
+            args.get("group") or args.get("gid"),
+            recursive=args.get("recursive") is not False,
+        )
+        if not result.get("ok"):
+            raise ValueError("; ".join(result.get("errors") or ["delete failed"]))
+        print(f"[Live] group deleted: {result.get('gid')} "
+              f"({len(result.get('removed') or [])} group frame(s))")
+        return result
+
+    @staticmethod
+    def _op_graph_group_destroy(args: dict) -> dict:
+        """销毁组：组框、子组和全部成员节点一起删除。args: group, recursive。"""
+        from Application.Core.NodeGraph.group_ops import destroy_group
+
+        result = destroy_group(
+            _node_canvas(),
+            args.get("group") or args.get("gid"),
+            recursive=args.get("recursive") is not False,
+        )
+        if not result.get("ok"):
+            raise ValueError("; ".join(result.get("errors") or ["destroy failed"]))
+        print(f"[Live] group destroyed: {result.get('gid')} "
+              f"({len(result.get('removed_groups') or [])} group frame(s), "
+              f"{len(result.get('removed_nodes') or [])} node(s))")
         return result
 
     @staticmethod

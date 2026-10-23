@@ -31,7 +31,10 @@ class UIManager:
     # 启动时隐藏，由菜单/扩展启用路径按需打开。
     DEFAULT_PANEL_ORDER = ("Scene", "Resources", "Node Editor")
     DEFAULT_VISIBLE_PANELS = frozenset(DEFAULT_PANEL_ORDER)
-    DEFAULT_DOCK_RIGHT_FRACTION: float = 1.0 / 3.0
+    # DockSpace 宿主占菜单栏下完整区域；面板默认停靠在其中右侧的列。
+    # 保留旧名兼容: 1.0 = 宿主全宽（面板列宽度见 DEFAULT_PANEL_DOCK_FRACTION）。
+    DEFAULT_DOCK_RIGHT_FRACTION: float = 1.0
+    DEFAULT_PANEL_DOCK_FRACTION: float = 0.30
     _right_dock_id: int = 0
 
     # 底部状态栏高度 (像素)
@@ -106,9 +109,8 @@ class UIManager:
         content_top = viewport.work_pos.y
         content_h = max(1.0, viewport.work_size.y - cls.STATUS_BAR_HEIGHT)
 
-        # ── 右侧 1/3 独立 DockSpace ──
-        # 左侧 2/3 不创建 dock 节点，因此不会出现空 tab bar
-        # （那条菜单栏下的空栏正是左侧 central node 的单 tab bar）。
+        # ── 菜单栏下完整 DockSpace ──
+        # 不再只占右侧 1/3；整块工作区交给 dock host，面板可自由拆分/停靠。
         right_w = viewport.work_size.x * cls.DEFAULT_DOCK_RIGHT_FRACTION
         right_pos = imgui.ImVec2(
             viewport.work_pos.x + viewport.work_size.x - right_w,
@@ -138,14 +140,26 @@ class UIManager:
         imgui.set_next_window_size(imgui.ImVec2(right_w, content_h))
         imgui.push_style_var(imgui.StyleVar_.window_padding, imgui.ImVec2(0, 0))
         imgui.push_style_color(imgui.Col_.window_bg, imgui.ImVec4(0, 0, 0, 0))
-        imgui.begin("##RightDockHost", None, right_flags)
+        imgui.begin("##MainDockHost", None, right_flags)
         imgui.pop_style_var()
         imgui.pop_style_color()
-        right_dockspace_id = imgui.get_id("##RightDockSpace")
+        right_dockspace_id = imgui.get_id("##MainDockSpace")
         cls._right_dock_id = right_dockspace_id
         cls._dockspace_id = right_dockspace_id
         imgui.dock_space(right_dockspace_id, (0.0, 0.0),
                          imgui.DockNodeFlags_.none)
+        if first_layout and cls.DEFAULT_PANEL_DOCK_FRACTION < 0.999:
+            # 完整 DockSpace 的右侧拆出一列，三个主面板默认以标签页停靠
+            # 在这里；左侧 central node 保持空白/透明，3D 视口可见。
+            try:
+                split = imgui.internal.dock_builder_split_node(
+                    right_dockspace_id, imgui.Dir_.right,
+                    cls.DEFAULT_PANEL_DOCK_FRACTION)
+                cls._right_dock_id = int(split.id_at_dir)
+                imgui.internal.dock_builder_finish(right_dockspace_id)
+            except Exception as e:  # noqa: BLE001 — 旧 ImGui 回退到根节点
+                print(f"[UI] default right dock split failed: {e!r}")
+                cls._right_dock_id = right_dockspace_id
         imgui.end()
         cls._dock_layout_done = True
 
@@ -205,12 +219,13 @@ class UIManager:
         # 2. 重置 SceneManager 追踪数据
         scene_mgr = EditorHost.scene
         if scene_mgr is not None:
-            scene_mgr.entities.clear()
-            scene_mgr._entity_names.clear()
-            scene_mgr._entity_parent.clear()
-            scene_mgr._editor_visible.clear()
-            scene_mgr.scene_camera = None
-            scene_mgr.scene_camera_id = None
+            with scene_mgr._entities_lock:
+                scene_mgr.entities.clear()
+                scene_mgr._entity_names.clear()
+                scene_mgr._entity_parent.clear()
+                scene_mgr._editor_visible.clear()
+                scene_mgr.scene_camera = None
+                scene_mgr.scene_camera_id = None
 
         # 3. 重新创建默认实体（cameras + cube）
         scene_mgr.cam_mgr.create_defaults(scene_mgr)

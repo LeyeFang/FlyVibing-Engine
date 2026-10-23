@@ -49,6 +49,10 @@ class SceneManager:
         self.app = app
         self.scene: dict = {}      # 场景名注册表（EditorHost 是权威来源）
         self.entities: dict = {}
+        # free-threaded: 项目加载/场景同步可能在 LiveCommandServer 线程写注册表，
+        # 编辑器逻辑线程的 TextSystem 等只读扫描必须原子快照，避免
+        # "dictionary changed size during iteration"。
+        self._entities_lock = threading.RLock()
         self.scene_camera: Camera | None = None
         self.scene_camera_id: int | None = None
         self.main_camera_id: int | None = None
@@ -147,9 +151,30 @@ class SceneManager:
                 PrefabManager.instantiate_to_scene(pdata['prefab_data'], inst)
                 return
 
+    def entity_ids_snapshot(self) -> list[int]:
+        """线程安全的实体 id 快照（只读扫描入口）。"""
+        with self._entities_lock:
+            return [int(k) for k in self.entities.keys()]
+
+    def clear_entity_tracking(self) -> None:
+        """原子清空实体追踪（场景切换/项目加载；含 sid 映射与相机句柄）。"""
+        with self._entities_lock:
+            self.entities.clear()
+            self._entity_names.clear()
+            self._entity_parent.clear()
+            self._editor_visible.clear()
+            self._sid_map.clear()
+            self._eid_to_sid.clear()
+            self.main_camera_id = None
+            self.scene_camera = None
+            self.scene_camera_id = None
+            self.main_camera_2d_id = None
+            self.main_camera_overlay_id = None
+
     def _reset_state(self) -> None:
         """重置实例的追踪数据（为新世界做准备）。"""
-        self.entities.clear()
+        with self._entities_lock:
+            self.entities.clear()
         self._entity_names.clear()
         self._entity_parent.clear()
         self._editor_visible.clear()

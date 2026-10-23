@@ -151,6 +151,11 @@ def main(argv: list[str] | None = None) -> int:
         _ROOT, "Test", "_runs", f"ui_{time.strftime('%Y%m%d_%H%M%S')}", name)
 
     print(f"== UI scenario: {name} ==")
+    # 场景脚本默认把工作区当作一整块画布；真实编辑器启动布局由
+    # test_editor_settings + 实机截图覆盖（默认右侧面板列）。
+    from Application.Editor.UI.UIManager import UIManager
+    UIManager.DEFAULT_PANEL_DOCK_FRACTION = 1.0
+    UIManager._dock_layout_done = False
     boot = UiBoot(hidden=not ns.show, title=f"UI Scenario — {name}").create()
     ctx = ScenarioContext(boot, out_dir)
 

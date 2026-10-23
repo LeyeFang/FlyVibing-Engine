@@ -56,8 +56,12 @@ def _canvas() -> NodeCanvas:
             "alias": "cue_rand",
             "version": 1,
             "params": {"addr": 16376, "arms": [{"id": "left", "entity": "L", "code": 3}]},
+            "description": "Cue group description",
             "members": [a, b],
+            "io_nodes": {"start": a, "end": b},
             "slots": {"entry": canvas.nodes[b].pin_ids["exec_in"]},
+            "box": {"x": 12.5, "y": 20.0, "w": 360.0, "h": 240.0},
+            "min_box": {"w": 300.0, "h": 180.0},
         }
     }
     return canvas
@@ -81,15 +85,39 @@ def main() -> int:
           any(inst.description == "Ends the trial and advances the counter."
               for inst in restored.nodes.values()))
     check("node_groups restored", restored.node_groups.get("g1", {}).get("alias") == "cue_rand")
+    check("group box restored",
+          restored.node_groups.get("g1", {}).get("box") ==
+          {"x": 12.5, "y": 20.0, "w": 360.0, "h": 240.0})
+    check("group min box restored",
+          restored.node_groups.get("g1", {}).get("min_box") ==
+          {"w": 300.0, "h": 180.0})
+    check("group description restored",
+          restored.node_groups.get("g1", {}).get("description") ==
+          "Cue group description")
+    check("group io nodes restored",
+          restored.node_groups.get("g1", {}).get("io_nodes") ==
+          {"start": min(canvas.nodes), "end": max(canvas.nodes)})
     check("round-trip stable", restored.to_dict()["node_groups"] == data["node_groups"])
 
-    # 空元数据不写键（旧场景保持干净）
+    # 空元数据不写键；类型自带 props_text 时作为默认 description 写入。
     plain = NodeCanvas()
     plain.add_node("Constant", (0.0, 0.0))
+    plain.add_node("TimeTrigger", (0.0, 100.0))
     plain_data = plain.to_dict()
+    from Application.Core.NodeGraph import _TYPES
+
+    constant = next(inst for inst in plain.nodes.values()
+                    if inst.node_type == "Constant")
+    check("default description seeded from props_text",
+          constant.description == _TYPES["Constant"].props_text, constant.description)
+    check("empty description omitted for no-props type",
+          all("description" not in nd for nd in plain_data["nodes"].values()
+              if nd.get("node_type") == "TimeTrigger"),
+          str(plain_data["nodes"]))
+    check("default description serialized",
+          plain_data["nodes"][str(constant.id)].get("description") ==
+          _TYPES["Constant"].props_text, str(plain_data))
     check("empty alias omitted", all("alias" not in nd for nd in plain_data["nodes"].values()))
-    check("empty description omitted",
-          all("description" not in nd for nd in plain_data["nodes"].values()))
     check("empty node_groups omitted", "node_groups" not in plain_data)
 
     # clear / replace_from

@@ -34,6 +34,7 @@
 | `ui_protocol.md` | `Application/Editor/UI/**`（Panel / Widget / 样式 / 菜单 / FileDialog） | 改编辑器 UI、加内联控件、调 Add 菜单、改删除交互 |
 | `i18n_protocol.md` | `Application/Editor/I18n.py` + `Application/Editor/Locale/**` + `Utils/Dev/i18n_tool.py` + `Doc/Dev/i18n_baseline.json` | **写任何 UI 文案 / 加菜单项 / 新增语言前必读**：角色分工、键规范与可提取性、不翻译边界表（agent 面=中文不随语言变化）、**发布门（`ui_complete`，zh 已发布；未完成语言不进设置）**、运行时回退链、守卫三层与棘轮口径、新增语言 Runbook（全量适配门槛）、扩展侧约定 |
 | `node_editor_protocol.md` | `Application/Core/NodeGraph/**`（运行时）+ `Application/Editor/UI/panels/node_editor/**`（编辑器交互）+ `FlyVibing-User-And-Developer-Utils/packages/node-editor/**` | 新增/修改节点类型、求值器、图约束、图校验、MCP 文档 |
+| `node_editor_pitfalls.md` | 节点编辑器 ImGui / imgui-node-editor 交互层 | 改框选、组框、标题、resize、live UI 注入前先扫一遍：坐标空间、组中心洞、渲染帧外原生 API 崩溃等实战坑 |
 | `device_io_protocol.md` | `Application/Functions/**`（SerialParallelDevice / VirtualDevice；后者含 `HANDOFF.md`） | 设备集成、真实/空跑双后端、线程与数据落盘；Virtual 求值器已出核心 |
 | `bci_algorithm_protocol.md` | `Application/Functions/BCIAlgorithm/**`（含 `evaluator.py` / `evaluator_epoch.py` / `HANDOFF.md`） + 对应 widgets | epoch 数据集、FBCSP/CCA 节点、打包 list 超参、训练同步语义、模型注册、空采验证；求值器已出核心 |
 | `project_export_protocol.md` | `Application/Editor/ProjectManager.py` + EditorHost 场景 I/O + UI/UIManager 主菜单 + UI/FileDialog | 项目保存/另存/导出、资源路径、主菜单 File 项、迁移与打包 |

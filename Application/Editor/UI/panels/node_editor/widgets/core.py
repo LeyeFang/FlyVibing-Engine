@@ -132,20 +132,32 @@ def _draw_declared_fields(nid: int, inst, fields: list[dict]) -> None:
 # ═══════════════════════════════════════════════════════════════
 
 def _ne_combo(label: str, idx: int, items: list[str]) -> tuple[bool, int]:
-    """node editor 内 combo — 用 BeginCombo/EndCombo 避免 popup 定位偏移。"""
+    """node editor 内 combo — 用 BeginCombo/EndCombo 避免 popup 定位偏移。
+
+    ★ 必须显式钳制 item width：BeginCombo 默认使用当前窗口可用宽度，
+    而节点编辑器里的“可用宽度”会随面板横向 resize 增长，导致组合框
+    （最先暴露的是 GetTime 的 timer 下拉框）越拉越宽，整个节点卡片也
+    跟着变宽。宽度只由预览文字决定，与面板宽度无关。
+    """
     preview = items[idx] if 0 <= idx < len(items) else ""
+    preview_w = float(imgui.calc_text_size(preview).x)
+    combo_w = max(110.0, min(220.0, preview_w + 38.0))
     changed = False
     new_idx = idx
-    if imgui.begin_combo(label, preview):
-        for i, item in enumerate(items):
-            selected = (i == idx)
-            clicked, _ = imgui.selectable(item, selected)
-            if clicked:
-                changed = True
-                new_idx = i
-            if selected:
-                imgui.set_item_default_focus()
-        imgui.end_combo()
+    imgui.push_item_width(combo_w)
+    try:
+        if imgui.begin_combo(label, preview):
+            for i, item in enumerate(items):
+                selected = (i == idx)
+                clicked, _ = imgui.selectable(item, selected)
+                if clicked:
+                    changed = True
+                    new_idx = i
+                if selected:
+                    imgui.set_item_default_focus()
+            imgui.end_combo()
+    finally:
+        imgui.pop_item_width()
     return changed, new_idx
 
 

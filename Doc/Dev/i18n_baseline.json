@@ -27,7 +27,7 @@
       "reason": "快捷键提示（协议 §4 不翻译）"
     },
     {
-      "file": "Application/Editor/UI/panels/node_editor/panel.py",
+      "file": "Application/Editor/UI/panels/node_editor/validate.py",
       "text": "f",
       "reason": "报告帧号前缀（技术标记, 不翻译）"
     },

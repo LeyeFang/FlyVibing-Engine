@@ -166,6 +166,26 @@ def main() -> int:
     port = LiveCommandServer.port
     check("ephemeral port assigned", port > 0, str(port))
 
+    # ── 1b. UI 输入注入注册/参数守卫（不依赖 ImGui 上下文）──
+    print("── ui input ops ──")
+    for op_name in ("ui.mouse", "ui.mouse_button", "ui.click", "ui.drag", "ui.wheel", "ui.key"):
+        check(f"input op registered: {op_name}", op_name in LiveCommandServer._ops)
+    LiveCommandServer._input_events.clear()
+    LiveCommandServer._input_actions.clear()
+    r = roundtrip(port, "ui.mouse", {"x": 10, "y": 20})
+    check("ui.mouse queues event", bool(r.get("ok")) and
+          LiveCommandServer._input_events[-1] == ("move", 10.0, 20.0), str(r))
+    r = roundtrip(port, "ui.click", {"x": 10, "y": 20})
+    check("ui.click schedules 3 steps", bool(r.get("ok")) and
+          int((r.get("result") or {}).get("frames", 0)) == 3, str(r))
+    r = roundtrip(port, "ui.drag", {"x0": 1, "y0": 2, "x1": 3, "y1": 4, "steps": 2})
+    check("ui.drag schedules drag steps", bool(r.get("ok")) and
+          int((r.get("result") or {}).get("frames", 0)) == 5, str(r))
+    r = roundtrip(port, "ui.mouse", {"x": 1})
+    check("ui.mouse missing y rejected", not r.get("ok") and "y" in str(r.get("error")), str(r))
+    LiveCommandServer._input_events.clear()
+    LiveCommandServer._input_actions.clear()
+
     # ── 2. sim.play ──
     print("── sim.play ──")
     SimulationController._pending_start = False
@@ -271,8 +291,19 @@ def main() -> int:
         name = "Node Editor"
         _canvas = NodeCanvas()
 
+        @staticmethod
+        def _group_for_editor_id(canvas, editor_id):
+            return "g1" if int(editor_id) == 60000001 else ""
+
     _node_panel = UIManager.register(_NodePanel())
     try:
+        # ui.panel 的 Node Editor 诊断不得在渲染帧外调用 node-editor 原生
+        # get_selected_nodes()（无 editor context 会崩溃）；只读选择快照。
+        _node_panel._selection_snapshot = {60000001}
+        resp = roundtrip(port, "ui.panel", {"name": "Node Editor"})
+        view = (resp.get("result") or {}).get("view") or {}
+        check("ui.panel node view reads group from snapshot",
+              view.get("selected_groups") == ["g1"], str(view))
         resp = roundtrip(port, "graph.add", {"type": "Constant",
                                               "description": "seed value"})
         nid = int((resp.get("result") or {}).get("node_id", -1))
@@ -296,6 +327,31 @@ def main() -> int:
                          {"node": nid, "description": ""})
         check("graph.set_description clear",
               (resp.get("result") or {}).get("description") == "", str(resp))
+
+        # v5 group ops: merge / ungroup / delete (same core group_ops as canvas UI)
+        print("── graph group ops ──")
+        resp1 = roundtrip(port, "graph.add", {"type": "Constant"})
+        resp2 = roundtrip(port, "graph.add", {"type": "Constant"})
+        n1 = int((resp1.get("result") or {}).get("node_id", -1))
+        n2 = int((resp2.get("result") or {}).get("node_id", -1))
+        resp = roundtrip(port, "graph.group.merge", {"nodes": [n1, n2]})
+        gid = str((resp.get("result") or {}).get("gid") or "")
+        check("graph.group.merge ok", bool(gid), str(resp))
+        resp = roundtrip(port, "graph.list")
+        listed = (resp.get("result") or {}).get("node_groups") or {}
+        check("graph.list exposes merged group", gid in listed, str(listed.keys()))
+        resp = roundtrip(port, "graph.group.ungroup", {"group": gid})
+        check("graph.group.ungroup ok", bool((resp.get("result") or {}).get("ok")), str(resp))
+        resp = roundtrip(port, "graph.list")
+        check("graph.group.ungroup removed frame",
+              gid not in ((resp.get("result") or {}).get("node_groups") or {}), str(resp))
+        resp = roundtrip(port, "graph.group.merge", {"nodes": [n1, n2]})
+        gid2 = str((resp.get("result") or {}).get("gid") or "")
+        resp = roundtrip(port, "graph.group.delete", {"group": gid2})
+        check("graph.group.delete ok", bool((resp.get("result") or {}).get("ok")), str(resp))
+        resp = roundtrip(port, "graph.group.delete", {"group": "missing"})
+        check("graph.group.delete unknown → controlled error",
+              resp.get("ok") is False and "unknown group" in str(resp.get("error")), str(resp))
     finally:
         UIManager.unregister(_node_panel)
 

@@ -1,7 +1,7 @@
 """
 EditorMcp 独立包离线测试（无引擎、无 GUI）:
 
-  1. op 注册表 vs 引擎 LiveCommandServer 完整性（60 ops）
+  1. op 注册表 vs 引擎 LiveCommandServer 完整性（70 ops）
   2. MCP 档位: lite 6 工具 / schema 预算; full 恢复旧 45 工具 + engine_launch
   3. 兼容符号（dev shim / E2E 脚本契约）: _send/_send_raw/_capture_png/...
   4. CLI: ops / help / call（离线友好错误）/ batch / exec / 未知 op
@@ -73,7 +73,7 @@ def test_registry() -> None:
     src = os.path.join(ROOT, "Application", "Editor", "Services", "LiveCommandServer.py")
     with open(src, encoding="utf-8") as fh:
         engine_ops = set(re.findall(r'"([a-z_]+\.[a-z_.]+)":\s*cls\._op_', fh.read()))
-    check("engine ops found (60)", len(engine_ops) == 60, str(sorted(engine_ops)))
+    check("engine ops found (70)", len(engine_ops) == 70, str(sorted(engine_ops)))
     check("registry covers engine ops", engine_ops <= set(ops.OPS), str(engine_ops - set(ops.OPS)))
     check("no extra registry ops", set(ops.OPS) <= engine_ops, str(set(ops.OPS) - engine_ops))
     check("aliases resolve", ops.resolve("editor_run_pie") == ("sim.play", {}), str(ops.resolve("editor_run_pie")))

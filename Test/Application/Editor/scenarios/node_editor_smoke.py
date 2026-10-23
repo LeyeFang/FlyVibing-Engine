@@ -39,7 +39,8 @@ def _widget_graph() -> dict:
             "CreateDevicePool",     # device_pool
             "EpochCount",           # epoch
             "InitFBCSP",            # algorithm
-            "ShowMedia"]            # media
+            "ShowMedia",            # media
+            "TimeGetElapsed"]       # flow_io — combo width guard
     seq = [9000]
     nodes = {}
     for i, t in enumerate(reps, start=1):
@@ -80,6 +81,12 @@ def run(ctx) -> None:
     ctx.expect(len(canvas.nodes) == 2, "canvas state persists")
 
     # ── widget 模块覆盖: 8 个拆分子模块各画一个代表类型（空 props 默认值路径）──
+    for pname in ("Scene", "Resources"):
+        other = ctx.panel(pname)
+        if other is not None:
+            other.visible = False
+    panel.visible = True
+    ctx.frames(3)
     wg = _widget_graph()
     reps = wg.pop("_reps")
     data2, refused2 = graph_io.prepare_import(graph=wg, validate_first=False)
@@ -90,6 +97,12 @@ def run(ctx) -> None:
     ctx.expect(s3["bytes"] > 10000, f"widgets snapshot non-trivial ({s3['bytes']} bytes)")
     ctx.expect(len(canvas.nodes) == len(reps),
                f"widget graph persists ({len(canvas.nodes)}/{len(reps)})")
+    gettime_rect = panel._node_screen_rects.get(8)
+    gettime_w = (gettime_rect[2] - gettime_rect[0]) if gettime_rect else 0.0
+    # 窗口宽铺满整屏时卡片仍应是正常节点宽度；旧实现 BeginCombo 继承
+    # 可用宽度，会把卡片拉到上千像素。
+    ctx.expect(gettime_rect is not None and 20.0 < gettime_w < 500.0,
+               f"GetTime combo/card width bounded ({gettime_w:.1f}px)")
 
     # ── 组框 + 别名：元数据穿过 graph_io → 画布 → 面板绘制 ──
     gg = _tiny_graph()

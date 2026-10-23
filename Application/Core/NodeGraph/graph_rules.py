@@ -75,6 +75,8 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 |-----------|-------------------------|---------------------------|--------------------|
 | Sequence  | exec_in (exec)          | out_0,out_1,out_2 (exec) | —                  |
 | Branch    | exec_in,Condition(bool) | True,False (exec)         | —                  |
+| GroupStart| —                       | exec_out (exec)           | group entry; auto-created with group |
+| GroupEnd  | exec_in (exec)          | —                         | group exit; auto-created with group |
 
 #### Math Nodes (pure data — no exec pins)
 | type_name      | input pins                    | output pins    | props                        |

@@ -30,13 +30,13 @@
 
 ## 1. 当前盘点（2026-10-21 只读基线）
 
-- `Test/Application`：**70 个 `test_*.py`**（61 个原有测试 + `test_test_map` + 6 个 P0 测试 + `test_ui_map` + `test_group_layout`）
-  - `core`: 67
+ - `Test/Application`：**71 个 `test_*.py`**（61 个原有测试 + `test_test_map` + 6 个 P0 测试 + `test_ui_map` + `test_group_layout` + `test_group_ops`）
+ - `core`: 68
   - `manual`: 2（`test_live_ui`、`test_node_runtime`）
   - `heavy`: 1（`test_material_cycle_stress`）
-- `Test/Application/Editor/scenarios/`：6 个 UI 场景（`panels_smoke`、`menu_smoke`、`node_editor_smoke`、`node_editor_clip_smoke`、`node_editor_find`、`node_groups_smoke`）；已由 runner 自动发现，归入 `tier: gui`。
+- `Test/Application/Editor/scenarios/`：7 个 UI 场景（`panels_smoke`、`menu_smoke`、`node_editor_smoke`、`node_editor_clip_smoke`、`node_editor_find`、`node_groups_smoke`、`node_group_actions`）；已由 runner 自动发现，归入 `tier: gui`。
 - 厂家 SDK 扩展的 `Test/`：自有测试不在 `Test/Application/**`，当前不进入标准 runner。
-- 精确 AST import 统计：`Application` 下约 280 个 `.py`，测试直接 import 67 个（**仅作盲区线索，不是覆盖百分比**）。
+精确 AST import 统计：`Application` 下约 280 个 `.py`，测试直接 import 68 个（**仅作盲区线索， 不是覆盖百分比**）。
 - 主要缺口：
 - `Core/Scene`：`SceneManager`、`EntityManager`、`PrefabManager` 已有专门测试；`SceneSync`/`TransformAccessor` 目前由 SceneManager 集成测试间接覆盖，`CameraManager` 的主相机选择仍建议补独立用例。
   - `Application/Resource`：`ResourceManager` 无专门测试；Mesh/Texture/Shader 导入、默认资源、删除、路径缺少契约测试。
@@ -69,11 +69,11 @@
   - `python Test/Application/Core/test_test_map.py`
   - `python Utils/Dev/test_runner.py --only test_test_map`
 
-Phase 1 初始结果：`check` OK（62 nodes）；`test_runner --only test_test_map` 1/1 通过。当前已扩展到 **70 nodes**（新增 6 个 P0 测试 + UI map 守卫 + 组布局）。
+Phase 1 初始结果：`check` OK（62 nodes）；`test_runner --only test_test_map` 1/1 通过。当前已扩展到 **71 nodes**（新增 6 个 P0 测试 + UI map 守卫 + 组布局 + 组元数据操作）。
 
 ### Phase 2 — P0 模块测试（已完成）
 
-- [x] `Test/Application/Core/Scene/test_scene_manager.py` — 51 checks
+- [x] `Test/Application/Core/Scene/test_scene_manager.py` — 52 checks（含实体注册表并发快照）
   - CRUD/命名、父子/根/级联删除、组件增删查、编辑器/渲染可见性、Transform world/local/editor、`SyncToScene` / `SyncFromScene`、环境光/光照回退/GameType。
 - [x] `Test/Application/Core/Scene/test_prefab_manager.py` — 16 checks
   - 保存/加载/实例化、prefab-local parent remap、损坏 JSON、缺失文件/实体、Transform/MeshRenderer 恢复。
@@ -86,15 +86,15 @@ Phase 1 初始结果：`check` OK（62 nodes）；`test_runner --only test_test_
   - PathUtils 纯函数、VFS init/读写 JSON/二进制、mount 优先级、list/glob、shutdown 错误路径（`PathUtils` 已并入本文件）。
 - [x] `Test/Application/Core/Input/test_input_pipeline.py` — 19 checks
   - key/modifier、鼠标 press/drag/click 阈值、scroll/camera preset、detach 回调恢复。
-- [x] 每个新测试已更新 `Doc/Dev/test_nodes.json`（当前 70 nodes）。
+- [x] 每个新测试 已更新 `Doc/Dev/test_nodes.json`（当前 71 nodes）。
 
-Phase 2 结果：`scene 51/51`、`entity 13/13`、`prefab 16/16`、`resource 35/35`、`vfs 24/24`、`input 19/19`；统一 runner 均 PASS。全量 core：**67/67 passed**（138s，2026-10-21；Phase 2 当时 66，新增 `test_group_layout` 后 67）。
+Phase 2 结果：`scene 52/52`、`entity 13/13`、`prefab 16/16`、`resource 35/35`、`vfs 24/24`、`input 19/19`；统一 runner 均 PASS。全量 core：**68/68 passed**（2026-10-21；新增 `test_group_ops` 后 68）。
 
 Phase 2 备注：`SceneSync` / `TransformAccessor` 已由 SceneManager/SceneSync 场景测试间接覆盖；`CameraManager` 的主相机选择仍建议后续补独立用例。
 
 ### Phase 3 — UI 展开图与 GUI 场景入 runner（首版已完成）
 
-- [x] `Doc/Dev/ui_map.json`：Editor shell、Scene、Node Editor、Resources、Settings 五条主链（22 controls）
+- [x] `Doc/Dev/ui_map.json`：Editor shell、Scene、Node Editor、Resources、Settings 五条主链（23 controls）
   - [x] state：boot / project.loaded / scene.loaded / pie.running / panel.* / dialog.*
   - [x] control：`owner` / `visible_when` / `actions` / `tests` / `scenario` / `source`
 - [x] `Utils/Dev/test_map.py ui tree|show|affected|tests|check|render`
@@ -103,7 +103,7 @@ Phase 2 备注：`SceneSync` / `TransformAccessor` 已由 SceneManager/SceneSync
 - [x] UI 开发 DoD：已写入 `Doc/Dev/ui_protocol.md` §14；控件变更 → 更新 `ui_map.json` + action/test/scenario，并跑 `ui render/check` + `tier gui`
 - [x] 生成 `Doc/Dev/ui_map.md`
 
-Phase 3 结果：`ui check` **22 controls OK**；`ui coverage` public op **60/60**（4 个 agent-only）；`test_ui_map` **6/6**；`test_runner --tier gui` **6/6** （menu_smoke / node_editor_clip_smoke / node_editor_smoke / panels_smoke / node_editor_find / node_groups_smoke）。
+Phase 3 结果：`ui check` **23 controls OK**；`ui coverage` public op **63/63**（4 个 agent-only）；`test_ui_map` **6/6**；`test_runner --tier gui` **7/7**（menu_smoke / node_editor_clip_smoke / node_editor_smoke / panels_smoke / node_editor_find / node_groups_smoke / node_group_actions）。
 
 ### Phase 4 — 流程闭环
 

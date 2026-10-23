@@ -156,8 +156,7 @@ class EditorHost(Engine):
             return
         try:
             st = SceneManager._current()
-            for entity_id_str in st.entities:
-                eid = int(entity_id_str)
+            for eid in st.entity_ids_snapshot():
                 try:
                     if esper.has_component(eid, MeshRenderer):
                         renderer.enqueue(

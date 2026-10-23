@@ -48,7 +48,10 @@ class NodeCanvas(DataContract):
         nid = _gen_id()
         nd = _TYPES[type_name]
         pin_ids = {p.name: _gen_id() for p in nd.pins}
-        self._nodes[nid] = NodeInstance(nid, type_name, pos, pin_ids=pin_ids)
+        self._nodes[nid] = NodeInstance(
+            nid, type_name, pos, pin_ids=pin_ids,
+            description=nd.props_text,
+        )
         return nid
 
     def remove_node(self, nid: int) -> None:
@@ -143,6 +146,7 @@ class NodeCanvas(DataContract):
                 pin_ids = {p.name: _gen_id() for p in nd.pins}
                 self._nodes[nid] = NodeInstance(
                     nid, tn, (80, 80 + i * 200), pin_ids=pin_ids,
+                    description=nd.props_text,
                 )
 
     # ── 序列化 ───────────────────────────────────────────
@@ -239,7 +243,8 @@ class NodeCanvas(DataContract):
                 props=nd.get("props", {}),
                 pin_ids=pins,
                 alias=str(nd.get("alias") or ""),
-                description=str(nd.get("description") or ""),
+                description=(str(nd.get("description") or "")
+                             or (tdef.props_text if tdef is not None else "")),
             )
 
         # ── 恢复连线 ──

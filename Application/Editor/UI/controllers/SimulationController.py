@@ -205,8 +205,9 @@ class SimulationController:
                        editor_scene.main_camera_2d_id,
                        editor_scene.main_camera_overlay_id):
             if cam_id is not None:
-                rt.entities[str(cam_id)] = 1
-                rt._entity_names[cam_id] = editor_scene._entity_names.get(cam_id, f"Camera_{cam_id}")
+                with rt._entities_lock:
+                    rt.entities[str(cam_id)] = 1
+                    rt._entity_names[cam_id] = editor_scene._entity_names.get(cam_id, f"Camera_{cam_id}")
         # ★ 收集模板实体名称（EntitySpawn 用，不应被 EntityGet 找到）
         _template_names: set[str] = set()
         if RuntimeNodeLayer._scene is not None:
@@ -217,7 +218,9 @@ class SimulationController:
         mesh_count = 0
         skipped_templates = 0
         for eid, _ in esper.get_component(MeshRenderer):
-            if str(eid) not in rt.entities:
+            with rt._entities_lock:
+                if str(eid) in rt.entities:
+                    continue
                 name = editor_scene._entity_names.get(eid, f"Entity_{eid}")
                 if name in _template_names:
                     skipped_templates += 1

@@ -250,9 +250,12 @@ def main() -> int:
           tuple(UIManager.DEFAULT_PANEL_ORDER) ==
           ("Scene", "Resources", "Node Editor"),
           str(UIManager.DEFAULT_PANEL_ORDER))
-    check("默认右侧停靠 = 1/3",
-          abs(UIManager.DEFAULT_DOCK_RIGHT_FRACTION - 1.0 / 3.0) < 1e-9,
+    check("默认停靠 = 菜单栏下完整宽度",
+          abs(UIManager.DEFAULT_DOCK_RIGHT_FRACTION - 1.0) < 1e-9,
           str(UIManager.DEFAULT_DOCK_RIGHT_FRACTION))
+    check("三个主面板默认停靠右侧列 (0.30)",
+          abs(UIManager.DEFAULT_PANEL_DOCK_FRACTION - 0.30) < 1e-9,
+          str(UIManager.DEFAULT_PANEL_DOCK_FRACTION))
     check("扩展窗口默认隐藏",
           inspect.signature(ExtensionUI.register_window)
           .parameters["visible"].default is False)

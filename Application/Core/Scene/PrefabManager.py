@@ -345,8 +345,9 @@ def _instantiate_entity(
 
     eid = esper.create_entity(*comps) if comps else esper.create_entity()
 
-    scene.entities[str(eid)] = 1
-    scene._entity_names[eid] = ed.name
-    scene._editor_visible.add(eid)
+    with scene._entities_lock:
+        scene.entities[str(eid)] = 1
+        scene._entity_names[eid] = ed.name
+        scene._editor_visible.add(eid)
 
     return eid

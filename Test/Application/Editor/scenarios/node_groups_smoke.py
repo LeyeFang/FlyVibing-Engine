@@ -85,6 +85,16 @@ def run(ctx) -> None:
     outer = group_bounds(canvas, "g1")
     inner = group_bounds(canvas, "g2")
     ctx.expect(outer is not None and inner is not None, "both group frames have bounds")
+    io_inner = panel._group_io.get("g2") or {}
+    ctx.expect(io_inner.get("start_node") in canvas.nodes
+               and io_inner.get("end_node") in canvas.nodes,
+               f"nested group owns start/end nodes ({io_inner})")
+    ctx.expect(canvas.nodes[io_inner["start_node"]].node_type == "GroupStart"
+               and canvas.nodes[io_inner["end_node"]].node_type == "GroupEnd",
+               "nested group io nodes have the expected types")
+    slots_inner = (canvas.node_groups.get("g2") or {}).get("slots") or {}
+    ctx.expect(not slots_inner,
+               f"UI leaves member-pin slots untouched ({slots_inner})")
     ctx.expect(inner[0] >= outer[0] and inner[1] >= outer[1]
                and inner[0] + inner[2] <= outer[0] + outer[2]
                and inner[1] + inner[3] <= outer[1] + outer[3],
@@ -101,16 +111,28 @@ def run(ctx) -> None:
     from imgui_bundle import imgui, imgui_node_editor as ne
 
     group_node = panel._group_editor_id("g2")
-    ctx.frames(1)
+    ctx.frames(2)
     ne.select_node(ne.NodeId(group_node))
     frame_pos = ne.get_node_position(ne.NodeId(group_node))
     member_before = tuple(canvas.nodes[3].pos)
-    ne.set_node_position(
-        ne.NodeId(group_node),
-        imgui.ImVec2(frame_pos.x + 37.0, frame_pos.y + 23.0))
-    ctx.frames(2)
+    # 测试钩子绕过鼠标按下时序；实际守卫在 resize-like 分支验证。
+    panel._debug_force_group_drag = True
+    try:
+        ctx.frames(1)
+        ne.select_node(ne.NodeId(group_node))
+        ctx.frames(1)
+        ne.set_node_position(
+            ne.NodeId(group_node),
+            imgui.ImVec2(frame_pos.x + 37.0, frame_pos.y + 23.0))
+        ctx.frames(2)
+    finally:
+        panel._debug_force_group_drag = False
     ctx.expect(canvas.nodes[3].pos != member_before,
                "dragging a group frame moves its members")
+
+    # 面板拉伸/停靠变化触发的组框位置重算已在生产守卫中按“指针是否在
+    # 组框内 + 左键是否按住”过滤；窗口 resize 的精确注入依赖真实窗口
+    # 时序，不放进离屏 GUI 场景（实机由 ui.drag + ui.panel 诊断覆盖）。
 
     # Simulate the user moving child cards, then rearrange only that group.
     canvas.nodes[3].pos = (canvas.nodes[3].pos[0] + 111.0,
@@ -124,12 +146,28 @@ def run(ctx) -> None:
                "group-internal rearrange moves first member")
     ctx.expect(canvas.nodes[5].pos != perturbed[5],
                "group-internal rearrange moves second member")
+    # 重复重排不应让组框原点因 padding/margin 不一致而漂移。
+    box_repeat = group_bounds(canvas, "g2")
+    panel._auto_layout_group(canvas, "g2")
+    ctx.frames(1)
+    box_repeat2 = group_bounds(canvas, "g2")
+    ctx.expect(box_repeat is not None and box_repeat2 is not None
+               and abs(box_repeat2[0] - box_repeat[0]) < 1.0
+               and abs(box_repeat2[1] - box_repeat[1]) < 1.0,
+               f"repeated group rearrange keeps box origin ({box_repeat} -> {box_repeat2})")
 
+    from Application.Core.NodeGraph.group_nodes import io_node_ids
     before = {nid: tuple(inst.pos) for nid, inst in canvas.nodes.items()}
+    io_ids = set(io_node_ids(canvas, "g2").values())
     moved = panel._move_group(canvas, "g2", 30.0, 20.0)
-    ctx.expect(moved == 2, f"drag moves child group members ({moved})")
+    ctx.expect(moved == 2 + len(io_ids),
+               f"drag moves child group members + io nodes ({moved})")
     ctx.expect(canvas.nodes[3].pos == (before[3][0] + 30.0, before[3][1] + 20.0),
                "child group member follows drag")
+    ctx.expect(all(canvas.nodes[nid].pos
+                   == (before[nid][0] + 30.0, before[nid][1] + 20.0)
+                   for nid in io_ids),
+               "group start/end nodes follow drag")
     ctx.expect(canvas.nodes[2].pos == before[2],
                "sibling member outside child group stays put")
 

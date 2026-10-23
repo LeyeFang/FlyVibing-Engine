@@ -5,9 +5,10 @@
 
 ## 概览
 
-- 节点数：**70**
-- `core`：67
+- 节点数：**72**
+- `core`：68
 - `heavy`：1
+- `live`：1
 - `manual`：2
 
 ## 全部节点
@@ -27,6 +28,7 @@
 | `core.test_map` | `core` | `contract` | `core` | `Test/Application/Core/test_test_map.py` | - |
 | `core.thread_boundary` | `core` | `contract` | `core` | `Test/Application/Core/test_thread_boundary.py` | - |
 | `editor.action_contract` | `core` | `contract` | `editor` | `Test/Application/Editor/test_action_contract.py` | Application.Core.Scene.Scene<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.Gizmos.TransformGizmo<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Editor.UI.controllers.SelectionController |
+| `editor.e2e_node_group_live` | `live` | `e2e` | `editor` | `Test/Application/Editor/test_e2e_node_group_live.py` | Application.Core.NodeGraph.group_geometry<br>Application.Core.NodeGraph.group_layout<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.panels.node_editor.panel |
 | `editor.editor_mcp_package` | `core` | `contract` | `editor` | `Test/Application/Editor/test_editor_mcp_package.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.node_packs |
 | `editor.editor_settings` | `core` | `integration` | `editor` | `Test/Application/Editor/test_editor_settings.py` | Application.Core.NodeGraph<br>Application.Editor.EditorSettings<br>Application.Editor.Extensions.ExtensionUI<br>Application.Editor.I18n<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.StartupOptions<br>Application.Editor.UI.UIManager<br>Application.Editor.UI.panels.SettingsPanel<br>Application.Editor.UI.panels.node_editor.panel |
 | `editor.examples_catalog` | `core` | `integration` | `editor` | `Test/Application/Editor/test_examples_catalog.py` | Application.Editor.UI.UIManager |
@@ -59,7 +61,7 @@
 | `functions.spd_monitor` | `core` | `integration` | `functions` | `Test/Application/Functions/test_spd_monitor.py` | Application.Functions.SerialParallelDevice |
 | `media.media_node` | `core` | `integration` | `media` | `Test/Application/Media/test_media_node.py` | Application.Core.Events.Event<br>Application.Core.NodeGraph<br>Application.Core.NodeGraph.validation.checks<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.SceneManager<br>Application.Editor.UI.controllers.SimulationController<br>Application.Resource.ResourceManager |
 | `media.media_system` | `core` | `integration` | `media` | `Test/Application/Media/test_media_system.py` | Application.Core.Events.Event<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.SceneManager<br>Application.Resource.ResourceManager |
-| `nodegraph.canvas_metadata` | `core` | `unit` | `nodegraph` | `Test/Application/NodeGraph/test_canvas_metadata.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.canvas<br>Application.Core.Scene.Scene |
+| `nodegraph.canvas_metadata` | `core` | `unit` | `nodegraph` | `Test/Application/NodeGraph/test_canvas_metadata.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.canvas<br>Application.Core.NodeGraph.group_geometry<br>Application.Core.NodeGraph.group_nodes<br>Application.Core.NodeGraph.group_ops<br>Application.Core.Scene.Scene |
 | `nodegraph.canvas_optional_pin_ids` | `core` | `unit` | `nodegraph` | `Test/Application/NodeGraph/test_canvas_optional_pin_ids.py` | Application.Core.NodeGraph |
 | `nodegraph.compare_timer_lazy` | `core` | `unit` | `nodegraph` | `Test/Application/NodeGraph/test_compare_timer_lazy.py` | Application.Core.NodeGraph |
 | `nodegraph.entity_group_visible` | `core` | `integration` | `nodegraph` | `Test/Application/NodeGraph/test_entity_group_visible.py` | Application.Core.Events.Event<br>Application.Core.NodeGraph<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.SceneManager<br>Application.Resource.ResourceManager |
@@ -69,6 +71,7 @@
 | `nodegraph.graph_io` | `core` | `integration` | `nodegraph` | `Test/Application/NodeGraph/test_graph_io.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.canvas |
 | `nodegraph.graph_validation` | `core` | `integration` | `nodegraph` | `Test/Application/NodeGraph/test_graph_validation.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.validation |
 | `nodegraph.group_layout` | `core` | `unit` | `nodegraph` | `Test/Application/NodeGraph/test_group_layout.py` | Application.Editor.UI.panels.node_editor.group_layout<br>Application.Core.NodeGraph.canvas |
+| `nodegraph.group_ops` | `core` | `unit` | `core.nodegraph` | `Test/Application/NodeGraph/test_group_ops.py` | Application.Core.NodeGraph.group_ops<br>Application.Core.NodeGraph.group_geometry<br>Application.Core.NodeGraph.group_nodes |
 | `nodegraph.mi_groups` | `core` | `integration` | `nodegraph` | `Test/Application/NodeGraph/test_mi_groups.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.evaluators.math<br>Application.Functions.SerialParallelDevice |
 | `nodegraph.node_editor_mcp` | `core` | `integration` | `nodegraph` | `Test/Application/NodeGraph/test_node_editor_mcp.py` | - |
 | `nodegraph.node_pack` | `core` | `unit` | `nodegraph` | `Test/Application/NodeGraph/test_node_pack.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.evaluator_engine<br>Application.Core.NodeGraph.node_packs<br>Application.Functions.SerialParallelDevice |

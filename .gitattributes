@@ -1,0 +1,4 @@
+# Windows batch files must be checked out with CRLF; LF-only .bat files
+# produce truncated/fragmented command errors under cmd.exe (startup.bat).
+*.bat text eol=crlf
+*.cmd text eol=crlf

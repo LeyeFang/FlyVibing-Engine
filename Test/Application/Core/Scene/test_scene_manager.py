@@ -243,6 +243,35 @@ def main() -> int:
               and all(st2.GetEntityByName(ed.name) != -1 for ed in scene.entities.values()),
               f"{len(loaded_infos)} vs {len(scene.entities)}")
 
+        # ── 8. registry snapshot vs concurrent scene load ───────
+        print("-- registry snapshot / concurrent writes --")
+        import threading
+
+        race_errors: list[str] = []
+
+        def _writer() -> None:
+            try:
+                for i in range(1500):
+                    key = str(9_000_000 + i)
+                    with st._entities_lock:
+                        st.entities[key] = 1
+                    with st._entities_lock:
+                        st.entities.pop(key, None)
+            except Exception as exc:  # noqa: BLE001
+                race_errors.append(repr(exc))
+
+        worker = threading.Thread(target=_writer, name="registry-writer")
+        worker.start()
+        snapshots = 0
+        for _ in range(1500):
+            ids = st.entity_ids_snapshot()
+            if all(isinstance(eid, int) for eid in ids):
+                snapshots += 1
+        worker.join(timeout=5)
+        check("entity_ids_snapshot stays valid during concurrent writes",
+              snapshots == 1500 and not race_errors,
+              f"snapshots={snapshots} errors={race_errors[:2]}")
+
     finally:
         _ev.app_callback_func = orig_cb
         try:

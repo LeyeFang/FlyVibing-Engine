@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "description": "Editor UI state/control map. source paths are relative to repo root; actions reference ui_protocol action ids.",
-  "agent_only": ["renderer.snapshot", "threads.snapshot", "frame.request", "frame.fetch"],
+  "agent_only": ["renderer.snapshot", "threads.snapshot", "frame.request", "frame.fetch", "ui.mouse", "ui.mouse_button", "ui.click", "ui.drag", "ui.wheel", "ui.key", "graph.group.delete"],
   "states": [
     {"id": "editor.boot", "label": "Editor boot", "requires": []},
     {"id": "editor.workspace", "label": "Workspace visible", "requires": ["editor.boot"]},
@@ -16,6 +16,7 @@
     {"id": "add_menu.open", "label": "Node Editor Add menu open", "requires": ["panel.node_editor.visible"]},
     {"id": "find.open", "label": "Node Editor Find window open", "requires": ["panel.node_editor.visible"]},
     {"id": "groups.open", "label": "Node Editor Groups window open", "requires": ["panel.node_editor.visible"]},
+    {"id": "group.context_menu.open", "label": "Node/group context menu open", "requires": ["panel.node_editor.visible"]},
     {"id": "scene.context_menu.open", "label": "Entity context menu open", "requires": ["panel.scene.visible", "scene.loaded"]},
     {"id": "validate.open", "label": "Graph validate dialog open", "requires": ["panel.node_editor.visible"]},
     {"id": "extension.window.visible", "label": "Extension window visible", "requires": ["project.loaded"]}
@@ -146,10 +147,10 @@
       "owner": "NodeEditorPanel",
       "source": "Application/Editor/UI/panels/node_editor/panel.py",
       "visible_when": ["panel.node_editor.visible"],
-      "actions": ["graph.list", "graph.types", "graph.add", "graph.link", "graph.set_props", "graph.set_description", "graph.fit", "graph.export", "graph.import", "graph.validate.start", "graph.validate.state", "graph.validate.report", "graph.validate.cancel"],
-      "opens": ["editor.node_editor.add_menu", "editor.node_editor.node_card", "editor.node_editor.validate_dialog", "editor.node_editor.find_window", "editor.node_editor.groups_window"],
+      "actions": ["graph.list", "graph.types", "graph.add", "graph.link", "graph.set_props", "graph.set_description", "graph.group.merge", "graph.group.ungroup", "graph.group.destroy", "graph.fit", "graph.export", "graph.import", "graph.validate.start", "graph.validate.state", "graph.validate.report", "graph.validate.cancel"],
+      "opens": ["editor.node_editor.add_menu", "editor.node_editor.node_card", "editor.node_editor.validate_dialog", "editor.node_editor.find_window", "editor.node_editor.groups_window", "editor.node_editor.group_context_menu"],
       "tests": ["nodegraph.node_editor_mcp", "editor.examples_catalog"],
-      "scenarios": ["node_editor_smoke", "node_editor_clip_smoke", "node_editor_find", "node_groups_smoke"]
+      "scenarios": ["node_editor_smoke", "node_editor_clip_smoke", "node_editor_find", "node_groups_smoke", "node_group_actions"]
     },
     {
       "id": "editor.node_editor.find_window",
@@ -172,10 +173,23 @@
       "owner": "NodeEditorPanel",
       "source": "Application/Editor/UI/panels/node_editor/panel.py",
       "visible_when": ["groups.open"],
-      "actions": [],
+      "actions": ["graph.group.ungroup", "graph.group.destroy"],
       "opens": [],
       "tests": [],
-      "scenarios": ["node_groups_smoke"]
+      "scenarios": ["node_groups_smoke", "node_group_actions"]
+    },
+    {
+      "id": "editor.node_editor.group_context_menu",
+      "label": "Node/group context menu",
+      "kind": "context_menu",
+      "parent": "editor.panel.node_editor",
+      "owner": "NodeEditorPanel",
+      "source": "Application/Editor/UI/panels/node_editor/panel.py",
+      "visible_when": ["group.context_menu.open"],
+      "actions": ["graph.group.merge", "graph.group.ungroup", "graph.group.destroy"],
+      "opens": [],
+      "tests": ["editor.live_command_server"],
+      "scenarios": ["node_group_actions"]
     },
     {
       "id": "editor.node_editor.add_menu",

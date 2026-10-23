@@ -241,7 +241,9 @@ def tick(engine) -> int:
     engine_key = getattr(engine, '__name__', type(engine).__name__)
     try:
         st = SceneManager._state_for(engine_key)
-        own = set(st.entities.keys())
+        # free-threaded: project load / scene sync may mutate the registry on
+        # another thread.  Take one locked snapshot, never iterate the live dict.
+        own = {str(eid) for eid in st.entity_ids_snapshot()}
     except KeyError:
         own = set()
 

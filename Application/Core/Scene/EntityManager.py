@@ -44,9 +44,10 @@ class EntityManager:
         else:
             entity_id = esper.create_entity(Transform())
         # 以下操作不依赖 esper（仅使用 SceneManager 追踪数据）
-        st.entities[f'{entity_id}'] = 1
-        st._editor_visible.add(entity_id)
-        st._entity_names[entity_id] = name if name else f"Entity_{entity_id}"
+        with st._entities_lock:
+            st.entities[f'{entity_id}'] = 1
+            st._editor_visible.add(entity_id)
+            st._entity_names[entity_id] = name if name else f"Entity_{entity_id}"
         # 注册 MeshRenderer 到渲染器
         for comp in components:
             if isinstance(comp, MeshRenderer):
@@ -60,21 +61,22 @@ class EntityManager:
     def delete(self, entity_id: int) -> bool:
         """删除实体及其所有子实体。返回是否成功删除。线程安全。"""
         st = self._mgr
-        if f'{entity_id}' not in st.entities:
-            return False
+        with st._entities_lock:
+            if f'{entity_id}' not in st.entities:
+                return False
 
-        # 递归删除子实体
-        children = self.get_children(entity_id)
-        for child_id in children:
-            self.delete(child_id)
+            # 递归删除子实体（RLock: 子实体 delete 可重入）
+            children = self.get_children(entity_id)
+            for child_id in children:
+                self.delete(child_id)
 
-        # 从父实体解除关系
-        st._entity_parent.pop(entity_id, None)
+            # 从父实体解除关系
+            st._entity_parent.pop(entity_id, None)
 
-        # 清理追踪数据
-        st.entities.pop(f'{entity_id}', None)
-        st._entity_names.pop(entity_id, None)
-        st._editor_visible.discard(entity_id)
+            # 清理追踪数据
+            st.entities.pop(f'{entity_id}', None)
+            st._entity_names.pop(entity_id, None)
+            st._editor_visible.discard(entity_id)
 
         # 通知渲染器注销 GPU 资源
         _renderer = getattr(st.app, 'renderer', None)
@@ -105,12 +107,14 @@ class EntityManager:
 
     def get_children(self, entity_id: int) -> list[int]:
         st = self._mgr
-        return [cid for cid, pid in st._entity_parent.items() if pid == entity_id]
+        with st._entities_lock:
+            return [cid for cid, pid in st._entity_parent.items() if pid == entity_id]
 
     def get_roots(self) -> list[int]:
         st = self._mgr
-        all_ids = list(st.entities.keys())
-        return [int(eid) for eid in all_ids if int(eid) not in st._entity_parent]
+        with st._entities_lock:
+            return [eid for eid in st.entity_ids_snapshot()
+                    if eid not in st._entity_parent]
 
     # ════════════════════════════════════════════════════════════
     # 命名
@@ -128,9 +132,11 @@ class EntityManager:
 
     def get_id_by_name(self, name: str) -> int:
         """按名称查找实体 ID。未找到返回 -1。"""
-        for eid, ename in self._mgr._entity_names.items():
-            if ename == name:
-                return eid
+        mgr = self._mgr
+        with mgr._entities_lock:
+            for eid, ename in mgr._entity_names.items():
+                if ename == name:
+                    return eid
         return -1
 
     # ════════════════════════════════════════════════════════════
@@ -138,13 +144,15 @@ class EntityManager:
     # ════════════════════════════════════════════════════════════
 
     def exists(self, entity_id: int) -> bool:
-        return f'{entity_id}' in self._mgr.entities
+        st = self._mgr
+        with st._entities_lock:
+            return f'{entity_id}' in st.entities
 
     def get_all_infos(self) -> list[dict]:
         """返回所有实体的基本信息列表（供 ScenePanel 树使用）。"""
         st = self._mgr
         result = []
-        all_ids = [int(k) for k in st.entities.keys()]
+        all_ids = st.entity_ids_snapshot()
         for entity_id in all_ids:
             info: dict = {
                 'entity_id': entity_id,
@@ -177,8 +185,7 @@ class EntityManager:
         """返回拥有指定组件的所有 (entity_id, component_instance) 列表。"""
         result = []
         st = self._mgr
-        for entity_id_str in list(st.entities.keys()):
-            eid = int(entity_id_str)
+        for eid in st.entity_ids_snapshot():
             try:
                 if esper.has_component(eid, component_type):
                     result.append((eid, esper.component_for_entity(eid, component_type)))

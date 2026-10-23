@@ -110,6 +110,13 @@ class EditorImguiLayer(Layer):
         EditorSettings.apply_pending()
         imgui.backends.glfw_new_frame()
         imgui.backends.opengl3_new_frame()
+        # agent 输入注入必须位于 backend 之后：否则真实鼠标状态会覆盖
+        # ui.mouse/ui.click 的目标坐标（见 LiveCommandServer.apply_input）。
+        try:
+            from Application.Editor.Services.LiveCommandServer import LiveCommandServer
+            LiveCommandServer.apply_input()
+        except Exception:  # noqa: BLE001 — 无 live server/无头测试跳过
+            pass
         imgui.new_frame()
         UIManager.draw_all()
         imgui.render()

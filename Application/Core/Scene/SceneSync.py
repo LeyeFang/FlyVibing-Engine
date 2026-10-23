@@ -53,8 +53,7 @@ class SceneSync:
         scene.entities.clear()
         max_sid = 0
 
-        for entity_id_str in list(st.entities.keys()):
-            eid = int(entity_id_str)
+        for eid in st.entity_ids_snapshot():
             # ★ 跳过摄像机实体 — 相机由 prefab 管理，不写入场景文件
             try:
                 if esper.has_component(eid, Camera):
@@ -122,21 +121,10 @@ class SceneSync:
 
         # ── 清空现有实体 + 映射表 ──
         if clear_existing:
-            for entity_id_str in list(st.entities.keys()):
-                eid = int(entity_id_str)
+            for eid in st.entity_ids_snapshot():
                 self._mgr.entity_mgr.delete(eid)
             esper.clear_database()
-            st.entities.clear()
-            st._entity_names.clear()
-            st._entity_parent.clear()
-            st._editor_visible.clear()
-            st._sid_map.clear()
-            st._eid_to_sid.clear()
-            st.main_camera_id = None
-            st.scene_camera = None
-            st.scene_camera_id = None
-            st.main_camera_2d_id = None
-            st.main_camera_overlay_id = None
+            st.clear_entity_tracking()
             # ★ 安全验证: esper 世界确实被清空
             try:
                 remaining = list(esper.get_component(Transform))
@@ -180,11 +168,12 @@ class SceneSync:
                 new_eid = esper.create_entity(Transform())
 
             # ★ 建立 sid ↔ eid 双向映射
-            st._sid_map[sid] = new_eid
-            st._eid_to_sid[new_eid] = sid
-            st.entities[f'{new_eid}'] = 1
-            st._entity_names[new_eid] = ed.name
-            st._editor_visible.add(new_eid)
+            with st._entities_lock:
+                st._sid_map[sid] = new_eid
+                st._eid_to_sid[new_eid] = sid
+                st.entities[f'{new_eid}'] = 1
+                st._entity_names[new_eid] = ed.name
+                st._editor_visible.add(new_eid)
 
             if ed.parent_id is not None:
                 _pending_parents[new_eid] = ed.parent_id  # parent_sid
@@ -216,8 +205,7 @@ class SceneSync:
 
         # ── 恢复 2D 摄像机 ──
         st.main_camera_2d_id = None
-        for entity_id_str in st.entities:
-            eid = int(entity_id_str)
+        for eid in st.entity_ids_snapshot():
             try:
                 if esper.has_component(eid, Camera):
                     cam = esper.component_for_entity(eid, Camera)
@@ -232,8 +220,8 @@ class SceneSync:
 
         # ── 兜底: 无摄像机 → 创建默认 ──
         has_camera = any(
-            esper.has_component(int(eid_str), Camera)
-            for eid_str in st.entities
+            esper.has_component(eid, Camera)
+            for eid in st.entity_ids_snapshot()
         )
         if not has_camera:
             self._mgr.cam_mgr.create_defaults(st)

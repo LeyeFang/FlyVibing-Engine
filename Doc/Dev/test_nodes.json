@@ -324,6 +324,26 @@
       "visualizes": []
     },
     {
+      "id": "editor.e2e_node_group_live",
+      "path": "Test/Application/Editor/test_e2e_node_group_live.py",
+      "tier": "live",
+      "kind": "e2e",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.NodeGraph.group_geometry",
+        "Application.Core.NodeGraph.group_layout",
+        "Application.Editor.Services.LiveCommandServer",
+        "Application.Editor.UI.panels.node_editor.panel"
+      ],
+      "requires": [
+        "running editor (MGE_EDITOR_MCP_PORT)"
+      ],
+      "exercises": [],
+      "visualizes": [
+        "node group frame/title/description/exec pills"
+      ]
+    },
+    {
       "id": "editor.live_command_server",
       "path": "Test/Application/Editor/test_live_command_server.py",
       "tier": "core",
@@ -729,6 +749,9 @@
       "covers": [
         "Application.Core.NodeGraph",
         "Application.Core.NodeGraph.canvas",
+        "Application.Core.NodeGraph.group_geometry",
+        "Application.Core.NodeGraph.group_nodes",
+        "Application.Core.NodeGraph.group_ops",
         "Application.Core.Scene.Scene"
       ],
       "requires": [],
@@ -1113,6 +1136,21 @@
         "Application.Core.Scene.SceneManager",
         "Application.Editor.UI.controllers.SimulationController",
         "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.group_ops",
+      "path": "Test/Application/NodeGraph/test_group_ops.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core.nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph.group_ops",
+        "Application.Core.NodeGraph.group_geometry",
+        "Application.Core.NodeGraph.group_nodes"
       ],
       "requires": [],
       "exercises": [],

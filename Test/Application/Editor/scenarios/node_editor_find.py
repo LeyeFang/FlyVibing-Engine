@@ -27,9 +27,15 @@ def _graph() -> dict:
     left = mk("Print", "left cue")
     right = mk("Print", "right cue")
     other = mk("Print", "status")
+    # Deliberately identical display labels: Find Node must use stable ids,
+    # not the visible alias/type text, for imgui item identity.
+    unnamed = [mk("Branch"), mk("Branch"), mk("Compare"), mk("Compare")]
+    nodes = {"1": event, "2": left, "3": right, "4": other}
+    for i, nd in enumerate(unnamed, start=5):
+        nodes[str(i)] = nd
     return {
         "version": "0.1.0",
-        "nodes": {"1": event, "2": left, "3": right, "4": other},
+        "nodes": nodes,
         "links": {
             "1": {"from_pin": event["pin_ids"]["exec"],
                   "to_pin": left["pin_ids"]["exec_in"]},
@@ -64,6 +70,9 @@ def run(ctx) -> None:
     panel._find_open = True
     panel._find_query = "cue"
     ctx.frames(2)
+    from imgui_bundle import imgui_node_editor as ne
+    ctx.expect(ne.get_current_zoom() >= 0.55,
+               f"persisted node view is readable (zoom={ne.get_current_zoom():.3f})")
     hits = panel._find_results(canvas)
     ctx.expect(len(hits) == 2, f"alias query returns two cues ({len(hits)})")
     ctx.expect({canvas.nodes[n].alias for n in hits} == {"left cue", "right cue"},
@@ -86,3 +95,10 @@ def run(ctx) -> None:
     ctx.frames(1)
     ctx.expect(len(panel._find_results(canvas)) == before - 1,
                "empty query lists remaining nodes")
+    unnamed_nodes = [nid for nid, inst in canvas.nodes.items()
+                     if not getattr(inst, "alias", "")]
+    ctx.expect(len(unnamed_nodes) >= 4,
+               f"duplicate unnamed labels exercised ({len(unnamed_nodes)})")
+    snap_all = ctx.snapshot("find_all_duplicate_labels")
+    ctx.expect(snap_all["bytes"] > 10000,
+               f"duplicate-label list snapshot non-trivial ({snap_all['bytes']} bytes)")

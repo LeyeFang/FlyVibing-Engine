@@ -46,9 +46,105 @@ TIER_RE = re.compile(r"TIER\s*[:=]\s*['\"]?(core|gui|heavy|live|manual)", re.IGN
 
 GUI_HINTS = ("gizmo", "grid", "outliner")
 HEAVY_HINTS = ("export_game_bundle",)
-LIVE_PREFIX = "e2e_"
+LIVE_PREFIX = ("e2e_", "test_e2e_")
 MANUAL_HINTS = ("live_ui", "node_runtime")  # 交互式预览/演示 — 不进自动批次
+TEST_MAP_PATH = "Doc/Dev/test_nodes.json"
+UI_MAP_PATH = "Doc/Dev/ui_map.json"
 
+
+def _repo_rel(path: str) -> str:
+    """规范化为仓库相对路径（统一 / 分隔）。"""
+    raw = str(path or "").strip().replace("\\", "/")
+    if not raw:
+        return ""
+    if os.path.isabs(raw):
+        try:
+            raw = os.path.relpath(raw, ROOT).replace("\\", "/")
+        except ValueError:
+            pass
+    if raw.startswith("./"):
+        raw = raw[2:]
+    return raw
+
+
+def _module_name(rel: str) -> str:
+    rel = _repo_rel(rel)
+    if rel.endswith(".py"):
+        rel = rel[:-3]
+    return rel.replace("/", ".")
+
+
+def _affected_names(paths: list[str]) -> tuple[set[str], dict[str, str]]:
+    """源码/场景路径 → 相关测试节点名 + GUI scenario 名。
+
+    数据源是两份已有地图:
+      - test_nodes.json: covers 模块 → test_*.py
+      - ui_map.json:      source 路径 → scenarios
+    后者不能省略；节点编辑器 panel 的回归场景只记录在 ui_map 里。
+    """
+    names: set[str] = set()
+    reasons: dict[str, str] = {}
+    rels = {r for r in (_repo_rel(p) for p in paths) if r}
+    modules = {_module_name(r) for r in rels}
+
+    nodes_path = Path(ROOT) / TEST_MAP_PATH
+    if nodes_path.is_file():
+        try:
+            data = json.loads(nodes_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        for node in data.get("nodes") or []:
+            covers = {str(c) for c in (node.get("covers") or [])}
+            if not (covers & modules):
+                continue
+            path = _repo_rel(node.get("path") or "")
+            if path:
+                names.add(Path(path).stem)
+                reasons[Path(path).stem] = f"covers:{','.join(sorted(covers & modules))}"
+
+    ui_path = Path(ROOT) / UI_MAP_PATH
+    if ui_path.is_file():
+        try:
+            ui = json.loads(ui_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            ui = {}
+        for ctrl in ui.get("controls") or []:
+            src = _repo_rel(ctrl.get("source") or "")
+            if src not in rels:
+                continue
+            for scenario in ctrl.get("scenarios") or []:
+                name = str(scenario)
+                names.add(name)
+                reasons.setdefault(name, f"ui:{ctrl.get('id')}")
+
+    return names, reasons
+
+
+def _changed_paths() -> list[str]:
+    """git 工作区改动文件（不依赖 commit；失败时返回空列表）。"""
+    try:
+        proc = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    out: list[str] = []
+    for line in proc.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        rel = _repo_rel(path)
+        if rel:
+            out.append(rel)
+    return out
 
 def _classify(path: Path, rel: str) -> str:
     try:
@@ -212,9 +308,15 @@ def run_one(rel: str, path: Path, runs_dir: Path, timeout: float,
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="test_runner", description="统一测试运行器（子进程隔离 + 紧凑摘要）")
-    parser.add_argument("--tier", choices=("core", "gui", "heavy", "live", "all"), default="core")
+    parser.add_argument("--tier", choices=("core", "gui", "heavy", "live", "all"),
+                        default=None,
+                        help="默认 core；--affected/--changed 时默认 all（只跑命中的测试）")
     parser.add_argument("--only", default="", help="路径子串过滤（如 editor / functions / graph）")
     parser.add_argument("--exclude", default="", help="路径子串排除")
+    parser.add_argument("--affected", nargs="+", default=[],
+                        help="按改动源码路径选择相关测试（test_nodes 覆盖 + ui_map 场景）")
+    parser.add_argument("--changed", action="store_true",
+                        help="用 git status 的改动文件调用 --affected")
     parser.add_argument("--timeout", type=float, default=600.0)
     parser.add_argument("--list", action="store_true", help="只列出发现的测试与档位")
     parser.add_argument("--json", action="store_true", help="末尾输出单行 JSON 摘要")
@@ -228,26 +330,46 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, ValueError):
         pass
 
+    affected_paths = list(ns.affected)
+    if ns.changed:
+        changed = _changed_paths()
+        affected_paths.extend(p for p in changed if p not in affected_paths)
+    affected_names: set[str] = set()
+    affected_reasons: dict[str, str] = {}
+    if affected_paths:
+        affected_names, affected_reasons = _affected_names(affected_paths)
+        if not affected_names:
+            print("no related tests for affected paths:")
+            for p in affected_paths:
+                print(f"  - {p}")
+            return 2
+
     tests = discover(ns.only or None)
     if ns.exclude:
         tests = [t for t in tests if ns.exclude.lower() not in t[0].lower()]
+    if affected_names:
+        tests = [t for t in tests if Path(t[0]).stem in affected_names]
 
     if ns.list:
         for rel, _p, tier in tests:
-            print(f"[{tier:6s}] {rel}")
+            reason = affected_reasons.get(Path(rel).stem, "")
+            print(f"[{tier:6s}] {rel}" + (f"  ({reason})" if reason else ""))
+        if affected_names and not tests:
+            print("no discovered tests matched affected selection")
         return 0
 
-    selected = [t for t in tests if ns.tier == "all" or t[2] == ns.tier]
+    tier = ns.tier or ("all" if affected_paths else "core")
+    selected = [t for t in tests if tier == "all" or t[2] == tier]
     skipped = len(tests) - len(selected)
     if not selected:
-        print(f"no tests for tier={ns.tier} (discovered {len(tests)})")
+        print(f"no tests for tier={tier} (discovered {len(tests)})")
         return 0
 
     runs_dir = Path(ROOT) / "Test" / "_runs" / f"run_{time.strftime('%Y%m%d_%H%M%S')}"
     runs_dir.mkdir(parents=True, exist_ok=True)
 
     rounds = max(1, ns.stress)
-    print(f"== test_runner | tier={ns.tier} | {len(selected)} tests"
+    print(f"== test_runner | tier={tier} | {len(selected)} tests"
           f"{f' x{rounds} rounds' if rounds > 1 else ''} | runs: {runs_dir.relative_to(ROOT)} ==")
     results: list[dict] = []
     t0 = time.time()
@@ -278,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
     summary = (
         f"SUMMARY: {passed_n}/{len(by_name)} passed{rounds_info}"
         f" | failed: {', '.join(failed_names) if failed_names else '-'}"
-        f" | tier={ns.tier} | skipped={skipped} | runs: {runs_dir.relative_to(ROOT)}"
+        f" | tier={tier} | skipped={skipped} | runs: {runs_dir.relative_to(ROOT)}"
     )
     print(summary)
     if ns.json:
@@ -289,7 +411,7 @@ def main(argv: list[str] | None = None) -> int:
                     first_fail_logs[n] = x["log"]
                     break
         print(json.dumps({
-            "tier": ns.tier,
+            "tier": tier,
             "total": len(by_name),
             "passed": passed_n,
             "failed": failed_names,

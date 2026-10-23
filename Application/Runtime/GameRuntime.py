@@ -186,13 +186,14 @@ class GameRuntime(Engine):
                     print(f"[GameRuntime] host protected_entity_ids failed: {e}")
             # ★ 使用 SceneManager.DeleteEntity 递归删除子实体，
             #    避免 esper.delete_entity 裸删导致子实体泄露
-            for eid_str in list(cls.scene.entities.keys()):
-                if eid_str in protected:
+            for eid in cls.scene.entity_ids_snapshot():
+                if str(eid) in protected:
                     continue
-                cls.scene.DeleteEntity(int(eid_str))
-            cls.scene.entities.clear()
-            cls.scene._entity_names.clear()
-            cls.scene._entity_parent.clear()
+                cls.scene.DeleteEntity(eid)
+            with cls.scene._entities_lock:
+                cls.scene.entities.clear()
+                cls.scene._entity_names.clear()
+                cls.scene._entity_parent.clear()
         # 必须在 run_state=False 之前派发事件 —
         # 否则渲染线程的 finally 块会先清空 layer_stack，DebugLayer 收不到事件。
         EngineLifecycleEvent.Pack(stage="stop", message="Stopped and cleaned up", engine=cls)

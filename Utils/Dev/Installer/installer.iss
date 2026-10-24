@@ -9,7 +9,7 @@
   #define StageDir "..\build\stage"
 #endif
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 #ifndef PlatformTag
   #define PlatformTag "Windows-x64"
@@ -60,8 +60,8 @@ Name: "{group}\Uninstall FlyVibingEngine"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\FlyVibingEngine"; Filename: "{app}\startup.bat"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Registry]
-; PATH entry (HKA = HKCU\Environment or HKLM\...\Environment per install mode)
-Root: HKA; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Tasks: addtopath; Check: NeedsAddPath('{app}')
+; PATH is written from [Code]: HKA only switches the hive and would create the
+; nonexistent HKEY_LOCAL_MACHINE\Environment key in all-users mode.
 ; .myproj file association (opens the editor with the file path as argument)
 Root: HKA; Subkey: "Software\Classes\.myproj"; ValueType: string; ValueName: ""; ValueData: "FlyVibingEngine.Project"; Flags: uninsdeletekey; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\FlyVibingEngine.Project"; ValueType: string; ValueName: ""; ValueData: "FlyVibingEngine Project"; Flags: uninsdeletekey; Tasks: fileassoc
@@ -97,6 +97,29 @@ begin
     exit;
   end;
   Result := Pos(';' + Uppercase(Param) + ';', ';' + Uppercase(OrigPath) + ';') = 0;
+end;
+
+procedure AddToPathIfNeeded();
+var
+  AppDir, OrigPath, NewPath: string;
+begin
+  AppDir := ExpandConstant('{app}');
+  if not NeedsAddPath(AppDir) then
+    exit;
+  if RegQueryStringValue(EnvRegRoot(), EnvRegSubKey(), 'Path', OrigPath) and (OrigPath <> '') then
+    NewPath := OrigPath + ';' + AppDir
+  else
+    NewPath := AppDir;
+  if RegWriteExpandStringValue(EnvRegRoot(), EnvRegSubKey(), 'Path', NewPath) then
+    Log('PATH updated: ' + NewPath)
+  else
+    Log('WARNING: could not update PATH in ' + EnvRegSubKey());
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if (CurStep = ssPostInstall) and WizardIsTaskSelected('addtopath') then
+    AddToPathIfNeeded();
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

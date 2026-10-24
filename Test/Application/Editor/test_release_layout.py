@@ -95,6 +95,12 @@ def main() -> int:
           and "OutputBaseFilename=FlyVibingEngine-Setup-{#AppVersion}-{#PlatformTag}" in iss,
           "installer.iss output name missing platform tag")
 
+    check("installer PATH is written with the install-mode subkey",
+          'Root: HKA; Subkey: "Environment"' not in iss
+          and "procedure AddToPathIfNeeded" in iss
+          and "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment" in iss,
+          "PATH must not target HKLM\\Environment directly")
+
     with open(os.path.join(INSTALLER_DIR, "package_release.py"), encoding="utf-8") as fh:
         packager = fh.read()
     check("packager uses canonical folder",

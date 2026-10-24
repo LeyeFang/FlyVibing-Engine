@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.1 — 2026-10-24
+
+### English
+
+- **Installer fix** — all-users installs no longer fail with
+  `Error creating registry key: HKEY_LOCAL_MACHINE\Environment` (code 87).
+  The PATH entry is now written to the correct hive/subkey via
+  `[Code]`; per-user installs still use `HKCU\Environment`.
+
+### 简体中文
+
+- **安装器修复** — 选择“所有用户”安装时不再报
+  `Error creating registry key: HKEY_LOCAL_MACHINE\Environment`（code 87）。
+  PATH 写入改由 `[Code]` 按安装模式选择正确的注册表根与子键；当前用户安装仍写
+  `HKCU\Environment`。
+
 ## 1.0.0 — 2026-10-24
 
 ### English

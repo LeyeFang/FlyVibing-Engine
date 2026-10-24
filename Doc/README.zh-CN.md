@@ -38,8 +38,8 @@ FlyVibingEngine 是一个用于构建、预览和运行实验范式的 Python �
 ### 从源码运行
 
 ```powershell
-git clone https://github.com/LeyeFang/MyGameEngine-Python.git
-cd MyGameEngine-Python
+git clone https://github.com/LeyeFang/FlyVibing-Engine.git
+cd FlyVibing-Engine
 Utils\Dev\setup_env.bat
 startup.bat
 ```
@@ -71,7 +71,7 @@ Utils\User\player.bat path\to\project.myproj
 
 | 仓库 | 范围 |
 |---|---|
-| **MyGameEngine-Python**（本仓库） | 引擎、编辑器、运行时、内置模块与引擎研发工具 |
+| **FlyVibing-Engine**（本仓库） | 引擎、编辑器、运行时、内置模块与引擎研发工具 |
 | [**FlyVibing-User-And-Developer-Utils**](https://github.com/LeyeFang/FlyVibing-User-And-Developer-Utils) | 创作与自动化工具链：`editor-mcp`、`node-editor`、`extension-kit` 与 agent skills |
 
 两个仓库并排开发时：

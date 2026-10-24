@@ -38,8 +38,8 @@ Run the separately distributed `FlyVibingEngine-Setup-*.exe` installer, then lau
 ### Run from source
 
 ```powershell
-git clone https://github.com/LeyeFang/MyGameEngine-Python.git
-cd MyGameEngine-Python
+git clone https://github.com/LeyeFang/FlyVibing-Engine.git
+cd FlyVibing-Engine
 Utils\Dev\setup_env.bat
 startup.bat
 ```
@@ -72,7 +72,7 @@ Projects can also be exported from the editor through **File ▸ Export**. The e
 
 | Repository | Scope |
 |---|---|
-| **MyGameEngine-Python** (this repository) | Engine, editor, runtime, built-in modules, engine development tools |
+| **FlyVibing-Engine** (this repository) | Engine, editor, runtime, built-in modules, engine development tools |
 | [**FlyVibing-User-And-Developer-Utils**](https://github.com/LeyeFang/FlyVibing-User-And-Developer-Utils) | Authoring and automation toolchain: `editor-mcp`, `node-editor`, `extension-kit`, and agent skills |
 
 To work on both repositories side by side:

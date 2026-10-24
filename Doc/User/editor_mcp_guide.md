@@ -1,6 +1,6 @@
 # 编辑器 MCP 助手命令手册（User Guide）
 
-> 适用：MyGameEngine-Python 编辑器 + VS Code / GitHub Copilot 聊天。
+> 适用：FlyVibing-Engine 编辑器 + VS Code / GitHub Copilot 聊天。
 > 本文面向**编辑器使用者**：用自然语言指挥 AI 助手实时操作运行中的编辑器。
 > （开发/协议细节见 `Doc/Dev/editor_live_protocol.md`，本文不含内部原理。）
 

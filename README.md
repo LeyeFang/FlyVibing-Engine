@@ -117,6 +117,7 @@ See [`Doc/User/editor_mcp_guide.md`](Doc/User/editor_mcp_guide.md) for the user 
 | Rebuild the offline wheelhouse | `.venv-py314t\Scripts\python.exe Utils\Dev\collect_wheels.py` |
 | Prepare the bundled runtime image | `.venv-py314t\Scripts\python.exe Utils\Dev\prepare_runtime.py` |
 | Build the Windows installer | `.venv-py314t\Scripts\python.exe Utils\Dev\Installer\build_installer.py` |
+| Assemble the release folder | `.venv-py314t\Scripts\python.exe Utils\Dev\Installer\package_release.py` |
 
 Development follows the protocols in `Doc/Dev/`. Changes should pass the relevant tests and update the corresponding protocol document.
 

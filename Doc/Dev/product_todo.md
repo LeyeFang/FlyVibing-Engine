@@ -45,6 +45,7 @@
 | 组成员增删 GUI | **已完成** | 节点拖入组框 → 加入 `members` 并只扩不缩；拖出 → 移出并收紧剩余成员；`_apply_node_drop` + `node_group_actions` 覆盖 |
 | 组框命名 | **已完成** | Groups 窗口 `Group name`、右键 `Rename Group`、双击标题内联编辑 → `rename_group` 同步 `node_groups[gid].alias`；重名拒绝 |
 | 组描述 | **已完成** | Groups 窗口 `Description` 输入框、双击描述行内联编辑；标题行 `Description/Hide` 按钮与普通节点一致，默认展开；空描述有浅色占位 |
+| 示例工程组重整 | **已完成（1.0.0）** | `refresh_examples.py` 为 MI/RestingState 写入组描述、box、GroupStart/End；RestingState 新增 `@resting_block` 嵌套 `@open_phase/@closed_phase/@cycle`；`test_examples_catalog` 断言组视觉元数据 |
 | 组 exec in/out | **已完成（2026-10-23 修订）** | 每组自动维护真实 `GroupStart`/`GroupEnd` 普通节点（仅 exec_out / exec_in）；编辑器渲染为组框左右端口槽内的 `Group entry/exit` pill，pin 内容带 `●` 并用 pivot 对齐外缘；随组创建、布局、删除；不隐藏成员 Pin、不写 slots，入口可自由拖到任意成员；`e2e_node_group_live` 用真实鼠标验证 |
 | 组框配色 | **已完成** | 中性浅灰底 + 浅灰描边；当前组用金色描边强调；不再用天蓝色 |
 | 多选节点 | **已完成** | Shift+click 累加；框选用屏幕矩形命中，只选真实节点，不选组框 |
@@ -98,11 +99,11 @@
 
 | 事项 | 状态 | 说明 |
 |---|---|---|
-| 版本号 / 品牌收口 | 待做 | 引擎名统一 FlyVibing；检查 `AppIdentity`、窗口标题、导出包名、文档 |
-| Release 内容冻结 | 待做 | 先完成 3a–3c + BCI/Virtual 出核心 + core 全绿 |
-| 安装器 / 导出成品 | 待做 | Windows 安装包、runtime wheelhouse、示例工程、许可证 |
-| Release notes / 兼容矩阵 | 待做 | engine / extension api_version / Python 3.14t / 依赖版本 |
-| 发布后回归 | 待做 | 干净机器安装 + 打开示例 + PIE + 导出成品 |
+| 版本号 / 品牌收口 | **已完成（1.0.0）** | `pyproject.toml` 与 `installer.iss` 版本统一 1.0.0；`AppIdentity`/窗口标题保持 FlyVibingEngine |
+| Release 内容冻结 | **已完成** | core **68/68**、GUI **7/7**；节点组、示例、安装器改动已入本版 |
+| 安装器 / 导出成品 | **已完成** | `Utils/Dev/Installer/dist/FlyVibingEngine-Setup-1.0.0.exe`（约 206 MB）；内置 runtime、wheelhouse、工具链与 `Examples/` |
+| Release notes / 兼容矩阵 | **已完成** | 根目录 `CHANGELOG.md`（中英）；Windows 10/11 x64、Python 3.14t、`engine-editor-mcp` 0.5.x / `flyvibing-node-editor` 0.1.x |
+| 发布后回归 | **部分完成** | 已完成 staging 内置 runtime 导入、两个示例 `--dry-run`、安装版编辑器启动/打开 MI；干净机安装待执行 |
 
 ## 5. macOS 适配与发布（1.0 之后）
 

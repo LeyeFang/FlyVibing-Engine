@@ -60,6 +60,7 @@ Projects can also be exported from the editor through **File ▸ Export**. The e
 |---|---|
 | `Application/` | Engine, editor, and runtime source (`Core/`, `Editor/`, `Runtime/`, `Functions/`) |
 | `Application/Functions/` | Built-in modules and extensions: device I/O, signal processing, BCI algorithms, virtual devices |
+| `Examples/` | Bundled MI and RestingState example projects (nested node groups, descriptions, entry/exit ports) |
 | `Resource/` | Fonts, icons, materials, meshes, shaders, textures, and prefabs; `wheels/` contains the offline dependency manifests and bootstrap wheel |
 | `Utils/Dev/` | Development environment, test runner, wheel collection, runtime preparation, and installer build |
 | `Utils/User/` | Files shipped with exported games (`player.bat`) |

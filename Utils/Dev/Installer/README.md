@@ -36,6 +36,7 @@ FlyVibingEngine 的 **Windows GUI 安装包**（Inno Setup 6），内置 Python 
 
 ```
 Application/            引擎源码
+Examples/               内置 MI / RestingState 示例工程
 Resource/               内置资源 + runtime(内置 Python) + wheels(离线 wheelhouse)
 Doc/  Utils/User/       文档与用户层工具（Dev 工具链不进包）
 startup.bat             启动器（优先用内置 runtime; dev 环境自动回退 venv）

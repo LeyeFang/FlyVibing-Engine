@@ -398,8 +398,8 @@
           "id": 161,
           "node_type": "OnGameStart",
           "pos": [
-            80,
-            80
+            80.0,
+            364.0
           ],
           "props": {},
           "pin_ids": {
@@ -412,8 +412,8 @@
           "id": 163,
           "node_type": "OnFrameUpdate",
           "pos": [
-            80,
-            280
+            80.0,
+            80.0
           ],
           "props": {},
           "pin_ids": {
@@ -427,8 +427,8 @@
           "id": 166,
           "node_type": "OnGameStop",
           "pos": [
-            80,
-            480
+            80.0,
+            472.0
           ],
           "props": {},
           "pin_ids": {
@@ -441,8 +441,8 @@
           "id": 200,
           "node_type": "EntitySpawn",
           "pos": [
-            0,
-            0
+            2525.0,
+            3112.0
           ],
           "props": {
             "template": "Cross"
@@ -459,8 +459,8 @@
           "id": 201,
           "node_type": "EntitySpawn",
           "pos": [
-            0,
-            0
+            4970.0,
+            80.0
           ],
           "props": {
             "template": "LeftCue"
@@ -477,8 +477,8 @@
           "id": 202,
           "node_type": "EntitySpawn",
           "pos": [
-            0,
-            0
+            5360.0,
+            80.0
           ],
           "props": {
             "template": "RightCue"
@@ -495,8 +495,8 @@
           "id": 203,
           "node_type": "EntitySpawn",
           "pos": [
-            0,
-            0
+            5750.0,
+            80.0
           ],
           "props": {
             "template": "NullCue"
@@ -513,8 +513,8 @@
           "id": 204,
           "node_type": "EntitySpawn",
           "pos": [
-            0,
-            0
+            6140.0,
+            80.0
           ],
           "props": {
             "template": "TaskCue"
@@ -531,8 +531,8 @@
           "id": 205,
           "node_type": "EntityGet",
           "pos": [
-            0,
-            0
+            6530.0,
+            80.0
           ],
           "props": {
             "entity_name": "LeftCue"
@@ -550,8 +550,8 @@
           "id": 206,
           "node_type": "EntityGetTree",
           "pos": [
-            0,
-            0
+            6920.0,
+            304.0
           ],
           "props": {},
           "pin_ids": {
@@ -566,8 +566,8 @@
           "id": 207,
           "node_type": "EntityGet",
           "pos": [
-            0,
-            0
+            6920.0,
+            80.0
           ],
           "props": {
             "entity_name": "RightCue"
@@ -585,8 +585,8 @@
           "id": 208,
           "node_type": "EntityGetTree",
           "pos": [
-            0,
-            0
+            7310.0,
+            304.0
           ],
           "props": {},
           "pin_ids": {
@@ -601,8 +601,8 @@
           "id": 209,
           "node_type": "EntityGet",
           "pos": [
-            0,
-            0
+            7310.0,
+            80.0
           ],
           "props": {
             "entity_name": "NullCue"
@@ -620,8 +620,8 @@
           "id": 210,
           "node_type": "EntityGetTree",
           "pos": [
-            0,
-            0
+            7700.0,
+            304.0
           ],
           "props": {},
           "pin_ids": {
@@ -636,8 +636,8 @@
           "id": 211,
           "node_type": "EntityGet",
           "pos": [
-            0,
-            0
+            7700.0,
+            80.0
           ],
           "props": {
             "entity_name": "TaskCue"
@@ -655,8 +655,8 @@
           "id": 212,
           "node_type": "EntityGetTree",
           "pos": [
-            0,
-            0
+            8090.0,
+            260.0
           ],
           "props": {},
           "pin_ids": {
@@ -671,8 +671,8 @@
           "id": 213,
           "node_type": "EntityListMerge",
           "pos": [
-            0,
-            0
+            7700.0,
+            460.0
           ],
           "props": {},
           "pin_ids": {
@@ -688,8 +688,8 @@
           "id": 214,
           "node_type": "EntityListMerge",
           "pos": [
-            0,
-            0
+            8090.0,
+            416.0
           ],
           "props": {},
           "pin_ids": {
@@ -705,8 +705,8 @@
           "id": 215,
           "node_type": "EntityListMerge",
           "pos": [
-            0,
-            0
+            8480.0,
+            236.0
           ],
           "props": {},
           "pin_ids": {
@@ -722,8 +722,8 @@
           "id": 216,
           "node_type": "EntityListSetVisible",
           "pos": [
-            0,
-            0
+            8090.0,
+            80.0
           ],
           "props": {},
           "pin_ids": {
@@ -739,22 +739,23 @@
           "id": 217,
           "node_type": "Constant",
           "pos": [
-            0,
-            0
+            80.0,
+            212.0
           ],
           "props": {
             "value": 0.0
           },
           "pin_ids": {
             "Result": 10059
-          }
+          },
+          "description": "A number value"
         },
         "218": {
           "id": 218,
           "node_type": "NewTimer",
           "pos": [
-            0,
-            0
+            8480.0,
+            80.0
           ],
           "props": {
             "mode": "manual",
@@ -772,8 +773,8 @@
           "id": 219,
           "node_type": "SetTimer",
           "pos": [
-            0,
-            0
+            8870.0,
+            80.0
           ],
           "props": {
             "operate": "set_time",
@@ -793,8 +794,8 @@
           "id": 220,
           "node_type": "Sequence",
           "pos": [
-            320.0,
-            2260.0
+            570.0,
+            176.0
           ],
           "props": {},
           "pin_ids": {
@@ -812,8 +813,8 @@
           "id": 221,
           "node_type": "TimeTrigger",
           "pos": [
-            540.0,
-            2260.0
+            1450.0,
+            904.0
           ],
           "props": {
             "mode": "manual",
@@ -840,8 +841,8 @@
           "id": 223,
           "node_type": "TimeTrigger",
           "pos": [
-            760.0,
-            2260.0
+            1450.0,
+            1252.0
           ],
           "props": {
             "mode": "manual",
@@ -868,8 +869,8 @@
           "id": 224,
           "node_type": "TimeTrigger",
           "pos": [
-            100.0,
-            2440.0
+            1450.0,
+            1600.0
           ],
           "props": {
             "mode": "manual",
@@ -896,8 +897,8 @@
           "id": 231,
           "node_type": "SetTimer",
           "pos": [
-            320.0,
-            2440.0
+            3405.0,
+            2908.0
           ],
           "props": {
             "operate": "set_time",
@@ -914,10 +915,11 @@
           "description": "Rewind the phase timer so the 0 s trigger fires again."
         },
         "242": {
+          "id": 242,
           "node_type": "EntityGet",
           "pos": [
-            540.0,
-            460.0
+            2625.0,
+            780.0
           ],
           "props": {
             "entity_name": "L_arrow_body"
@@ -931,10 +933,11 @@
           "description": "Resolve runtime entity 'L_arrow_body' (spawned from its scene template)."
         },
         "243": {
+          "id": 243,
           "node_type": "EntityGet",
           "pos": [
-            760.0,
-            460.0
+            3015.0,
+            812.0
           ],
           "props": {
             "entity_name": "L_arrow_head"
@@ -948,10 +951,11 @@
           "description": "Resolve runtime entity 'L_arrow_head' (spawned from its scene template)."
         },
         "244": {
+          "id": 244,
           "node_type": "ParallelSend",
           "pos": [
-            540.0,
-            640.0
+            3015.0,
+            1484.0
           ],
           "props": {
             "mode": "pin",
@@ -966,10 +970,11 @@
           "description": "Send cue code 3 to parallel address 16376."
         },
         "245": {
+          "id": 245,
           "node_type": "Constant",
           "pos": [
-            760.0,
-            640.0
+            2625.0,
+            1604.0
           ],
           "props": {
             "value": 3
@@ -980,10 +985,11 @@
           "description": "Cue code 3 for arm 'left'."
         },
         "246": {
+          "id": 246,
           "node_type": "EntityPack",
           "pos": [
-            100.0,
-            640.0
+            3405.0,
+            452.0
           ],
           "props": {},
           "pin_ids": {
@@ -997,10 +1003,11 @@
           "description": "Pack arm 'left' mesh entities into one list."
         },
         "247": {
+          "id": 247,
           "node_type": "EntityListSetVisible",
           "pos": [
-            320.0,
-            640.0
+            3795.0,
+            452.0
           ],
           "props": {},
           "pin_ids": {
@@ -1012,10 +1019,11 @@
           "description": "Show all parts of arm 'left' in one atomic batch."
         },
         "248": {
+          "id": 248,
           "node_type": "EntityGet",
           "pos": [
-            100.0,
-            820.0
+            2625.0,
+            1156.0
           ],
           "props": {
             "entity_name": "R_arrow_head"
@@ -1029,10 +1037,11 @@
           "description": "Resolve runtime entity 'R_arrow_head' (spawned from its scene template)."
         },
         "249": {
+          "id": 249,
           "node_type": "EntityGet",
           "pos": [
-            320.0,
-            820.0
+            3015.0,
+            1036.0
           ],
           "props": {
             "entity_name": "R_arrow_body"
@@ -1046,10 +1055,11 @@
           "description": "Resolve runtime entity 'R_arrow_body' (spawned from its scene template)."
         },
         "250": {
+          "id": 250,
           "node_type": "ParallelSend",
           "pos": [
-            100.0,
-            1000.0
+            3015.0,
+            1708.0
           ],
           "props": {
             "mode": "pin",
@@ -1064,10 +1074,11 @@
           "description": "Send cue code 4 to parallel address 16376."
         },
         "251": {
+          "id": 251,
           "node_type": "Constant",
           "pos": [
-            320.0,
-            1000.0
+            2625.0,
+            1756.0
           ],
           "props": {
             "value": 4
@@ -1078,10 +1089,11 @@
           "description": "Cue code 4 for arm 'right'."
         },
         "252": {
+          "id": 252,
           "node_type": "EntityPack",
           "pos": [
-            540.0,
-            820.0
+            3405.0,
+            680.0
           ],
           "props": {},
           "pin_ids": {
@@ -1095,10 +1107,11 @@
           "description": "Pack arm 'right' mesh entities into one list."
         },
         "253": {
+          "id": 253,
           "node_type": "EntityListSetVisible",
           "pos": [
-            760.0,
-            820.0
+            3795.0,
+            632.0
           ],
           "props": {},
           "pin_ids": {
@@ -1110,10 +1123,11 @@
           "description": "Show all parts of arm 'right' in one atomic batch."
         },
         "254": {
+          "id": 254,
           "node_type": "EntityGet",
           "pos": [
-            540.0,
-            1000.0
+            2625.0,
+            1380.0
           ],
           "props": {
             "entity_name": "part1"
@@ -1127,10 +1141,11 @@
           "description": "Resolve runtime entity 'part1' (spawned from its scene template)."
         },
         "255": {
+          "id": 255,
           "node_type": "EntityGet",
           "pos": [
-            760.0,
-            1000.0
+            3015.0,
+            1260.0
           ],
           "props": {
             "entity_name": "part2"
@@ -1144,10 +1159,11 @@
           "description": "Resolve runtime entity 'part2' (spawned from its scene template)."
         },
         "256": {
+          "id": 256,
           "node_type": "ParallelSend",
           "pos": [
-            540.0,
-            1180.0
+            3015.0,
+            1932.0
           ],
           "props": {
             "mode": "pin",
@@ -1162,10 +1178,11 @@
           "description": "Send cue code 5 to parallel address 16376."
         },
         "257": {
+          "id": 257,
           "node_type": "Constant",
           "pos": [
-            760.0,
-            1180.0
+            2625.0,
+            1908.0
           ],
           "props": {
             "value": 5
@@ -1176,10 +1193,11 @@
           "description": "Cue code 5 for arm 'rest'."
         },
         "258": {
+          "id": 258,
           "node_type": "EntityPack",
           "pos": [
-            100.0,
-            1180.0
+            3405.0,
+            908.0
           ],
           "props": {},
           "pin_ids": {
@@ -1193,10 +1211,11 @@
           "description": "Pack arm 'rest' mesh entities into one list."
         },
         "259": {
+          "id": 259,
           "node_type": "EntityListSetVisible",
           "pos": [
-            320.0,
-            1180.0
+            3795.0,
+            812.0
           ],
           "props": {},
           "pin_ids": {
@@ -1208,10 +1227,11 @@
           "description": "Show all parts of arm 'rest' in one atomic batch."
         },
         "260": {
+          "id": 260,
           "node_type": "Random",
           "pos": [
-            100.0,
-            100.0
+            2625.0,
+            424.0
           ],
           "props": {
             "distribution": "discrete",
@@ -1228,10 +1248,11 @@
           "description": "Group entry: pick one of 3 cue arms uniformly."
         },
         "261": {
+          "id": 261,
           "node_type": "Constant",
           "pos": [
-            320.0,
-            100.0
+            2625.0,
+            272.0
           ],
           "props": {
             "value": 1
@@ -1242,10 +1263,11 @@
           "description": "Arm 'left' selector value (1)."
         },
         "262": {
+          "id": 262,
           "node_type": "Compare",
           "pos": [
-            540.0,
-            100.0
+            3015.0,
+            272.0
           ],
           "props": {
             "operation": "eq"
@@ -1259,10 +1281,11 @@
           "description": "Check whether the random draw equals arm 'left'."
         },
         "263": {
+          "id": 263,
           "node_type": "Branch",
           "pos": [
-            760.0,
-            100.0
+            3405.0,
+            272.0
           ],
           "props": {},
           "pin_ids": {
@@ -1274,10 +1297,11 @@
           "description": "If arm 'left' was selected, run its cue actions."
         },
         "264": {
+          "id": 264,
           "node_type": "Constant",
           "pos": [
-            100.0,
-            280.0
+            2625.0,
+            628.0
           ],
           "props": {
             "value": 2
@@ -1288,10 +1312,11 @@
           "description": "Arm 'right' selector value (2)."
         },
         "265": {
+          "id": 265,
           "node_type": "Compare",
           "pos": [
-            320.0,
-            280.0
+            3015.0,
+            452.0
           ],
           "props": {
             "operation": "eq"
@@ -1305,10 +1330,11 @@
           "description": "Check whether the random draw equals arm 'right'."
         },
         "266": {
+          "id": 266,
           "node_type": "Branch",
           "pos": [
-            540.0,
-            280.0
+            3795.0,
+            272.0
           ],
           "props": {},
           "pin_ids": {
@@ -1320,10 +1346,11 @@
           "description": "If arm 'right' was selected, run its cue actions."
         },
         "267": {
+          "id": 267,
           "node_type": "Constant",
           "pos": [
-            760.0,
-            280.0
+            2625.0,
+            1004.0
           ],
           "props": {
             "value": 3
@@ -1334,10 +1361,11 @@
           "description": "Arm 'rest' selector value (3)."
         },
         "268": {
+          "id": 268,
           "node_type": "Compare",
           "pos": [
-            100.0,
-            460.0
+            3015.0,
+            632.0
           ],
           "props": {
             "operation": "eq"
@@ -1351,10 +1379,11 @@
           "description": "Check whether the random draw equals arm 'rest'."
         },
         "269": {
+          "id": 269,
           "node_type": "Branch",
           "pos": [
-            320.0,
-            460.0
+            4185.0,
+            272.0
           ],
           "props": {},
           "pin_ids": {
@@ -1366,10 +1395,11 @@
           "description": "If arm 'rest' was selected, run its cue actions."
         },
         "270": {
+          "id": 270,
           "node_type": "TimeGetElapsed",
           "pos": [
-            100.0,
-            1360.0
+            1060.0,
+            424.0
           ],
           "props": {
             "timer": "trial_phase"
@@ -1382,10 +1412,11 @@
           "description": "Window clock 'trial_phase' (empty = global time)."
         },
         "271": {
+          "id": 271,
           "node_type": "Constant",
           "pos": [
-            320.0,
-            1360.0
+            1060.0,
+            272.0
           ],
           "props": {
             "value": 2.0
@@ -1396,10 +1427,11 @@
           "description": "Window start 2s."
         },
         "272": {
+          "id": 272,
           "node_type": "Constant",
           "pos": [
-            540.0,
-            1360.0
+            1060.0,
+            580.0
           ],
           "props": {
             "value": 6.0
@@ -1410,10 +1442,11 @@
           "description": "Window end 6s."
         },
         "273": {
+          "id": 273,
           "node_type": "Compare",
           "pos": [
-            760.0,
-            1360.0
+            1450.0,
+            272.0
           ],
           "props": {
             "operation": "gte"
@@ -1427,10 +1460,11 @@
           "description": "elapsed >= start"
         },
         "274": {
+          "id": 274,
           "node_type": "Compare",
           "pos": [
-            100.0,
-            1540.0
+            1450.0,
+            452.0
           ],
           "props": {
             "operation": "lt"
@@ -1444,10 +1478,11 @@
           "description": "elapsed < end"
         },
         "275": {
+          "id": 275,
           "node_type": "Compare",
           "pos": [
-            320.0,
-            1540.0
+            1840.0,
+            272.0
           ],
           "props": {
             "operation": "and"
@@ -1461,10 +1496,11 @@
           "description": "Window active (start <= elapsed < end)."
         },
         "276": {
+          "id": 276,
           "node_type": "EntityGet",
           "pos": [
-            540.0,
-            1540.0
+            1450.0,
+            632.0
           ],
           "props": {
             "entity_name": "TaskCue"
@@ -1478,10 +1514,11 @@
           "description": "Resolve runtime entity 'TaskCue'."
         },
         "277": {
+          "id": 277,
           "node_type": "EntitySetRenderVisible",
           "pos": [
-            760.0,
-            1540.0
+            1840.0,
+            452.0
           ],
           "props": {},
           "pin_ids": {
@@ -1493,10 +1530,11 @@
           "description": "Write visibility every frame (group owns enter/exit)."
         },
         "278": {
+          "id": 278,
           "node_type": "EntityGet",
           "pos": [
-            100.0,
-            1720.0
+            2430.0,
+            2300.0
           ],
           "props": {
             "entity_name": "LeftCue"
@@ -1510,10 +1548,11 @@
           "description": "Resolve runtime entity 'LeftCue'."
         },
         "279": {
+          "id": 279,
           "node_type": "EntityGetTree",
           "pos": [
-            320.0,
-            1720.0
+            2820.0,
+            2524.0
           ],
           "props": {},
           "pin_ids": {
@@ -1524,10 +1563,11 @@
           "description": "Collect 'LeftCue' and all descendants."
         },
         "280": {
+          "id": 280,
           "node_type": "EntityGet",
           "pos": [
-            540.0,
-            1720.0
+            2820.0,
+            2300.0
           ],
           "props": {
             "entity_name": "RightCue"
@@ -1541,10 +1581,11 @@
           "description": "Resolve runtime entity 'RightCue'."
         },
         "281": {
+          "id": 281,
           "node_type": "EntityGetTree",
           "pos": [
-            760.0,
-            1720.0
+            3210.0,
+            2524.0
           ],
           "props": {},
           "pin_ids": {
@@ -1555,10 +1596,11 @@
           "description": "Collect 'RightCue' and all descendants."
         },
         "282": {
+          "id": 282,
           "node_type": "EntityGet",
           "pos": [
-            100.0,
-            1900.0
+            3210.0,
+            2300.0
           ],
           "props": {
             "entity_name": "NullCue"
@@ -1572,10 +1614,11 @@
           "description": "Resolve runtime entity 'NullCue'."
         },
         "283": {
+          "id": 283,
           "node_type": "EntityGetTree",
           "pos": [
-            320.0,
-            1900.0
+            3600.0,
+            2300.0
           ],
           "props": {},
           "pin_ids": {
@@ -1586,10 +1629,11 @@
           "description": "Collect 'NullCue' and all descendants."
         },
         "284": {
+          "id": 284,
           "node_type": "EntityGet",
           "pos": [
-            540.0,
-            1900.0
+            3600.0,
+            2456.0
           ],
           "props": {
             "entity_name": "TaskCue"
@@ -1603,10 +1647,11 @@
           "description": "Resolve runtime entity 'TaskCue'."
         },
         "285": {
+          "id": 285,
           "node_type": "EntityGetTree",
           "pos": [
-            760.0,
-            1900.0
+            3990.0,
+            2300.0
           ],
           "props": {},
           "pin_ids": {
@@ -1617,10 +1662,11 @@
           "description": "Collect 'TaskCue' and all descendants."
         },
         "286": {
+          "id": 286,
           "node_type": "EntityListMerge",
           "pos": [
-            100.0,
-            2080.0
+            3600.0,
+            2680.0
           ],
           "props": {},
           "pin_ids": {
@@ -1632,10 +1678,11 @@
           "description": "Merge entity tree lists."
         },
         "287": {
+          "id": 287,
           "node_type": "EntityListMerge",
           "pos": [
-            320.0,
-            2080.0
+            3990.0,
+            2456.0
           ],
           "props": {},
           "pin_ids": {
@@ -1647,10 +1694,11 @@
           "description": "Merge entity tree lists."
         },
         "288": {
+          "id": 288,
           "node_type": "EntityListMerge",
           "pos": [
-            540.0,
-            2080.0
+            4380.0,
+            2300.0
           ],
           "props": {},
           "pin_ids": {
@@ -1662,10 +1710,11 @@
           "description": "Merge entity tree lists."
         },
         "289": {
+          "id": 289,
           "node_type": "Constant",
           "pos": [
-            760.0,
-            2080.0
+            2430.0,
+            2524.0
           ],
           "props": {
             "value": 0.0
@@ -1676,10 +1725,11 @@
           "description": "Visible=0 for this group."
         },
         "290": {
+          "id": 290,
           "node_type": "EntityListSetVisible",
           "pos": [
-            100.0,
-            2260.0
+            3990.0,
+            2636.0
           ],
           "props": {},
           "pin_ids": {
@@ -1689,6 +1739,110 @@
             "exec_out": 10336
           },
           "description": "Apply visibility to the whole entity tree in one batch."
+        },
+        "10337": {
+          "id": 10337,
+          "node_type": "GroupStart",
+          "pos": [
+            2533.0,
+            234.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_out": 10338
+          },
+          "description": "Group entry: connect exec_out to any member node"
+        },
+        "10339": {
+          "id": 10339,
+          "node_type": "GroupEnd",
+          "pos": [
+            4333.0,
+            2034.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10340
+          },
+          "description": "Group exit: connect any member node here"
+        },
+        "10341": {
+          "id": 10341,
+          "node_type": "GroupStart",
+          "pos": [
+            968.0,
+            234.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_out": 10342
+          },
+          "description": "Group entry: connect exec_out to any member node"
+        },
+        "10343": {
+          "id": 10343,
+          "node_type": "GroupEnd",
+          "pos": [
+            1988.0,
+            734.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10344
+          },
+          "description": "Group exit: connect any member node here"
+        },
+        "10345": {
+          "id": 10345,
+          "node_type": "GroupStart",
+          "pos": [
+            2338.0,
+            2262.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_out": 10346
+          },
+          "description": "Group entry: connect exec_out to any member node"
+        },
+        "10347": {
+          "id": 10347,
+          "node_type": "GroupEnd",
+          "pos": [
+            4528.0,
+            2782.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10348
+          },
+          "description": "Group exit: connect any member node here"
+        },
+        "10349": {
+          "id": 10349,
+          "node_type": "GroupStart",
+          "pos": [
+            478.0,
+            138.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_out": 10350
+          },
+          "description": "Group entry: connect exec_out to any member node"
+        },
+        "10351": {
+          "id": 10351,
+          "node_type": "GroupEnd",
+          "pos": [
+            4628.0,
+            3010.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10352
+          },
+          "description": "Group exit: connect any member node here"
         }
       },
       "links": {
@@ -1838,263 +1992,327 @@
           "to_pin": 10134
         },
         "549": {
+          "id": 549,
           "from_pin": 10167,
           "to_pin": 10170
         },
         "550": {
+          "id": 550,
           "from_pin": 10178,
           "to_pin": 10177
         },
         "551": {
+          "id": 551,
           "from_pin": 10169,
           "to_pin": 10179
         },
         "552": {
+          "id": 552,
           "from_pin": 10173,
           "to_pin": 10180
         },
         "553": {
+          "id": 553,
           "from_pin": 10171,
           "to_pin": 10185
         },
         "554": {
+          "id": 554,
           "from_pin": 10183,
           "to_pin": 10186
         },
         "555": {
+          "id": 555,
           "from_pin": 10188,
           "to_pin": 10174
         },
         "556": {
+          "id": 556,
           "from_pin": 10190,
           "to_pin": 10193
         },
         "557": {
+          "id": 557,
           "from_pin": 10201,
           "to_pin": 10200
         },
         "558": {
+          "id": 558,
           "from_pin": 10192,
           "to_pin": 10202
         },
         "559": {
+          "id": 559,
           "from_pin": 10196,
           "to_pin": 10203
         },
         "560": {
+          "id": 560,
           "from_pin": 10194,
           "to_pin": 10208
         },
         "561": {
+          "id": 561,
           "from_pin": 10206,
           "to_pin": 10209
         },
         "562": {
+          "id": 562,
           "from_pin": 10211,
           "to_pin": 10197
         },
         "563": {
+          "id": 563,
           "from_pin": 10213,
           "to_pin": 10216
         },
         "564": {
+          "id": 564,
           "from_pin": 10224,
           "to_pin": 10223
         },
         "565": {
+          "id": 565,
           "from_pin": 10215,
           "to_pin": 10225
         },
         "566": {
+          "id": 566,
           "from_pin": 10219,
           "to_pin": 10226
         },
         "567": {
+          "id": 567,
           "from_pin": 10217,
           "to_pin": 10231
         },
         "568": {
+          "id": 568,
           "from_pin": 10229,
           "to_pin": 10232
         },
         "569": {
+          "id": 569,
           "from_pin": 10234,
           "to_pin": 10220
         },
         "570": {
+          "id": 570,
           "from_pin": 10239,
           "to_pin": 10241
         },
         "571": {
+          "id": 571,
           "from_pin": 10240,
           "to_pin": 10242
         },
         "572": {
+          "id": 572,
           "from_pin": 10244,
           "to_pin": 10246
         },
         "573": {
+          "id": 573,
           "from_pin": 10239,
           "to_pin": 10250
         },
         "574": {
+          "id": 574,
           "from_pin": 10249,
           "to_pin": 10251
         },
         "575": {
+          "id": 575,
           "from_pin": 10253,
           "to_pin": 10255
         },
         "576": {
+          "id": 576,
           "from_pin": 10248,
           "to_pin": 10254
         },
         "577": {
+          "id": 577,
           "from_pin": 10239,
           "to_pin": 10259
         },
         "578": {
+          "id": 578,
           "from_pin": 10258,
           "to_pin": 10260
         },
         "579": {
+          "id": 579,
           "from_pin": 10262,
           "to_pin": 10264
         },
         "580": {
+          "id": 580,
           "from_pin": 10257,
           "to_pin": 10263
         },
         "581": {
+          "id": 581,
           "from_pin": 10247,
           "to_pin": 10166
         },
         "582": {
+          "id": 582,
           "from_pin": 10256,
           "to_pin": 10189
         },
         "583": {
+          "id": 583,
           "from_pin": 10265,
           "to_pin": 10212
         },
         "584": {
+          "id": 584,
           "from_pin": 10075,
           "to_pin": 10245
         },
         "585": {
+          "id": 585,
           "from_pin": 10268,
           "to_pin": 10284
         },
         "586": {
+          "id": 586,
           "from_pin": 10269,
           "to_pin": 10272
         },
         "587": {
+          "id": 587,
           "from_pin": 10269,
           "to_pin": 10276
         },
         "588": {
+          "id": 588,
           "from_pin": 10270,
           "to_pin": 10273
         },
         "589": {
+          "id": 589,
           "from_pin": 10271,
           "to_pin": 10277
         },
         "590": {
+          "id": 590,
           "from_pin": 10275,
           "to_pin": 10280
         },
         "591": {
+          "id": 591,
           "from_pin": 10279,
           "to_pin": 10281
         },
         "592": {
+          "id": 592,
           "from_pin": 10285,
           "to_pin": 10288
         },
         "593": {
+          "id": 593,
           "from_pin": 10287,
           "to_pin": 10289
         },
         "594": {
+          "id": 594,
           "from_pin": 10283,
           "to_pin": 10290
         },
         "595": {
+          "id": 595,
           "from_pin": 10295,
           "to_pin": 10296
         },
         "596": {
+          "id": 596,
           "from_pin": 10302,
           "to_pin": 10303
         },
         "597": {
+          "id": 597,
           "from_pin": 10293,
           "to_pin": 10299
         },
         "598": {
+          "id": 598,
           "from_pin": 10309,
           "to_pin": 10310
         },
         "599": {
+          "id": 599,
           "from_pin": 10300,
           "to_pin": 10306
         },
         "600": {
+          "id": 600,
           "from_pin": 10316,
           "to_pin": 10317
         },
         "601": {
+          "id": 601,
           "from_pin": 10307,
           "to_pin": 10313
         },
         "602": {
+          "id": 602,
           "from_pin": 10297,
           "to_pin": 10320
         },
         "603": {
+          "id": 603,
           "from_pin": 10304,
           "to_pin": 10321
         },
         "604": {
+          "id": 604,
           "from_pin": 10322,
           "to_pin": 10324
         },
         "605": {
+          "id": 605,
           "from_pin": 10311,
           "to_pin": 10325
         },
         "606": {
+          "id": 606,
           "from_pin": 10326,
           "to_pin": 10328
         },
         "607": {
+          "id": 607,
           "from_pin": 10318,
           "to_pin": 10329
         },
         "608": {
+          "id": 608,
           "from_pin": 10314,
           "to_pin": 10333
         },
         "609": {
+          "id": 609,
           "from_pin": 10330,
           "to_pin": 10334
         },
         "610": {
+          "id": 610,
           "from_pin": 10332,
           "to_pin": 10335
         },
         "611": {
+          "id": 611,
           "from_pin": 10068,
           "to_pin": 10267
         },
         "612": {
+          "id": 612,
           "from_pin": 10097,
           "to_pin": 10292
         }
       },
-      "next_id": 10236,
+      "next_id": 10353,
       "node_groups": {
         "g1": {
           "type": "cue_n_way",
@@ -2130,6 +2348,24 @@
             ]
           },
           "members": [
+            242,
+            243,
+            244,
+            245,
+            246,
+            247,
+            248,
+            249,
+            250,
+            251,
+            252,
+            253,
+            254,
+            255,
+            256,
+            257,
+            258,
+            259,
             260,
             261,
             262,
@@ -2140,24 +2376,8 @@
             267,
             268,
             269,
-            242,
-            243,
-            246,
-            247,
-            244,
-            245,
-            248,
-            249,
-            252,
-            253,
-            250,
-            251,
-            254,
-            255,
-            258,
-            259,
-            256,
-            257
+            10337,
+            10339
           ],
           "chain_members": [
             260,
@@ -2228,7 +2448,23 @@
             "entry": 10245,
             "done": null
           },
-          "parent": "g4"
+          "parent": "g4",
+          "description": "Pick one of three cue arms, show its two mesh parts, and send code 3/4/5.",
+          "box": {
+            "x": 2525.0,
+            "y": 176.0,
+            "w": 1920.0,
+            "h": 1900.0
+          },
+          "min_box": {
+            "w": 1920.0,
+            "h": 1900.0
+          },
+          "layout_version": 3,
+          "io_nodes": {
+            "start": 10337,
+            "end": 10339
+          }
         },
         "g2": {
           "type": "cue_window",
@@ -2250,7 +2486,9 @@
             274,
             275,
             276,
-            277
+            277,
+            10341,
+            10343
           ],
           "chain_members": [
             270,
@@ -2266,7 +2504,23 @@
             "entry": 10267,
             "done": 10291
           },
-          "parent": "g4"
+          "parent": "g4",
+          "description": "2-6 s overlay: write TaskCue visibility every frame inside the window.",
+          "box": {
+            "x": 960.0,
+            "y": 176.0,
+            "w": 1140.0,
+            "h": 600.0
+          },
+          "min_box": {
+            "w": 1140.0,
+            "h": 600.0
+          },
+          "layout_version": 3,
+          "io_nodes": {
+            "start": 10341,
+            "end": 10343
+          }
         },
         "g3": {
           "type": "hide_group",
@@ -2294,7 +2548,9 @@
             287,
             288,
             289,
-            290
+            290,
+            10345,
+            10347
           ],
           "chain_members": [
             278,
@@ -2315,7 +2571,23 @@
             "entry": 10292,
             "done": 10336
           },
-          "parent": "g4"
+          "parent": "g4",
+          "description": "At 6 s, batch-hide every cue root and child, then enter rest.",
+          "box": {
+            "x": 2330.0,
+            "y": 2204.0,
+            "w": 2310.0,
+            "h": 620.0
+          },
+          "min_box": {
+            "w": 2310.0,
+            "h": 620.0
+          },
+          "layout_version": 3,
+          "io_nodes": {
+            "start": 10345,
+            "end": 10347
+          }
         },
         "g4": {
           "type": "container",
@@ -2337,6 +2609,29 @@
             ]
           },
           "members": [
+            220,
+            221,
+            223,
+            224,
+            231,
+            242,
+            243,
+            244,
+            245,
+            246,
+            247,
+            248,
+            249,
+            250,
+            251,
+            252,
+            253,
+            254,
+            255,
+            256,
+            257,
+            258,
+            259,
             260,
             261,
             262,
@@ -2347,24 +2642,6 @@
             267,
             268,
             269,
-            242,
-            243,
-            246,
-            247,
-            244,
-            245,
-            248,
-            249,
-            252,
-            253,
-            250,
-            251,
-            254,
-            255,
-            258,
-            259,
-            256,
-            257,
             270,
             271,
             272,
@@ -2386,11 +2663,8 @@
             288,
             289,
             290,
-            220,
-            221,
-            223,
-            224,
-            231
+            10349,
+            10351
           ],
           "children": [
             "g1",
@@ -2400,7 +2674,23 @@
           "slots": {
             "entry": 10066,
             "done": 10135
-          }
+          },
+          "description": "One trial: class cue 0-6 s, task cue overlay 2-6 s, rest 6-10 s.",
+          "box": {
+            "x": 470.0,
+            "y": 80.0,
+            "w": 4270.0,
+            "h": 2972.0
+          },
+          "io_nodes": {
+            "start": 10349,
+            "end": 10351
+          },
+          "min_box": {
+            "w": 4270.0,
+            "h": 2972.0
+          },
+          "layout_version": 3
         }
       }
     }

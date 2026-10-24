@@ -954,9 +954,9 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
                     if key == "start_node":
                         imgui.text(t("node_editor.group_entry"))
                         imgui.same_line(0.0, 5.0)
-                        imgui.text_colored(dot_col, "●")
+                        imgui.text_colored(dot_col, "•")
                     else:
-                        imgui.text_colored(dot_col, "●")
+                        imgui.text_colored(dot_col, "•")
                         imgui.same_line(0.0, 5.0)
                         imgui.text(t("node_editor.group_exit"))
                 finally:

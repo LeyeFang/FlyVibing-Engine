@@ -132,7 +132,7 @@ def _io_layout(box: tuple[float, float, float, float]
     """组框边缘的入口/出口锚点（实际位置由 panel 每帧贴边绘制）。"""
     x, y, w, h = (float(v) for v in box)
     start = (x + 8.0, y + 58.0)
-    end = (x + max(8.0, w - 168.0), y + max(58.0, h - 42.0))
+    end = (x + max(8.0, w - 112.0), y + max(58.0, h - 42.0))
     return start, end
 
 

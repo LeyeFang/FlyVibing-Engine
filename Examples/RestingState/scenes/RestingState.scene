@@ -107,8 +107,8 @@
           "id": 161,
           "node_type": "OnGameStart",
           "pos": [
-            80,
-            80
+            80.0,
+            364.0
           ],
           "props": {},
           "pin_ids": {
@@ -121,8 +121,8 @@
           "id": 163,
           "node_type": "OnFrameUpdate",
           "pos": [
-            80,
-            280
+            80.0,
+            80.0
           ],
           "props": {},
           "pin_ids": {
@@ -136,8 +136,8 @@
           "id": 166,
           "node_type": "OnGameStop",
           "pos": [
-            80,
-            480
+            80.0,
+            472.0
           ],
           "props": {},
           "pin_ids": {
@@ -150,8 +150,8 @@
           "id": 200,
           "node_type": "EntitySpawn",
           "pos": [
-            0,
-            0
+            1450.0,
+            2156.0
           ],
           "props": {
             "template": "Cross"
@@ -168,8 +168,8 @@
           "id": 201,
           "node_type": "EntityGet",
           "pos": [
-            0,
-            0
+            2820.0,
+            80.0
           ],
           "props": {
             "entity_name": "Cross"
@@ -187,22 +187,23 @@
           "id": 202,
           "node_type": "EntityGetTree",
           "pos": [
-            0,
-            0
+            3210.0,
+            260.0
           ],
           "props": {},
           "pin_ids": {
             "Entity": 10007,
             "Entities": 10008,
             "Count": 10009
-          }
+          },
+          "description": "Root + all descendants (pre-order)"
         },
         "203": {
           "id": 203,
           "node_type": "EntityListSetVisible",
           "pos": [
-            0,
-            0
+            3210.0,
+            80.0
           ],
           "props": {},
           "pin_ids": {
@@ -218,22 +219,23 @@
           "id": 204,
           "node_type": "Constant",
           "pos": [
-            0,
-            0
+            80.0,
+            212.0
           ],
           "props": {
             "value": 0.0
           },
           "pin_ids": {
             "Result": 10014
-          }
+          },
+          "description": "A number value"
         },
         "205": {
           "id": 205,
           "node_type": "NewTimer",
           "pos": [
-            0,
-            0
+            3600.0,
+            80.0
           ],
           "props": {
             "mode": "manual",
@@ -251,8 +253,8 @@
           "id": 206,
           "node_type": "SetTimer",
           "pos": [
-            0,
-            0
+            3990.0,
+            80.0
           ],
           "props": {
             "operate": "set_time",
@@ -272,8 +274,8 @@
           "id": 207,
           "node_type": "Sequence",
           "pos": [
-            0,
-            0
+            570.0,
+            176.0
           ],
           "props": {},
           "pin_ids": {
@@ -291,8 +293,8 @@
           "id": 208,
           "node_type": "TimeTrigger",
           "pos": [
-            0,
-            0
+            1060.0,
+            272.0
           ],
           "props": {
             "mode": "manual",
@@ -319,8 +321,8 @@
           "id": 209,
           "node_type": "TimeTrigger",
           "pos": [
-            0,
-            0
+            1450.0,
+            1068.0
           ],
           "props": {
             "mode": "manual",
@@ -347,8 +349,8 @@
           "id": 210,
           "node_type": "TimeTrigger",
           "pos": [
-            0,
-            0
+            1450.0,
+            1712.0
           ],
           "props": {
             "mode": "manual",
@@ -375,8 +377,8 @@
           "id": 211,
           "node_type": "EntityGet",
           "pos": [
-            0,
-            0
+            1450.0,
+            272.0
           ],
           "props": {
             "entity_name": "Cross"
@@ -394,22 +396,23 @@
           "id": 212,
           "node_type": "EntityGetTree",
           "pos": [
-            0,
-            0
+            1840.0,
+            452.0
           ],
           "props": {},
           "pin_ids": {
             "Entity": 10064,
             "Entities": 10065,
             "Count": 10066
-          }
+          },
+          "description": "Root + all descendants (pre-order)"
         },
         "213": {
           "id": 213,
           "node_type": "EntityListSetVisible",
           "pos": [
-            0,
-            0
+            1840.0,
+            272.0
           ],
           "props": {},
           "pin_ids": {
@@ -425,22 +428,23 @@
           "id": 214,
           "node_type": "Constant",
           "pos": [
-            0,
-            0
+            1060.0,
+            620.0
           ],
           "props": {
             "value": 1.0
           },
           "pin_ids": {
             "Result": 10071
-          }
+          },
+          "description": "A number value"
         },
         "215": {
           "id": 215,
           "node_type": "Constant",
           "pos": [
-            0,
-            0
+            1060.0,
+            772.0
           ],
           "props": {
             "value": 1.0
@@ -455,8 +459,8 @@
           "id": 216,
           "node_type": "ParallelSend",
           "pos": [
-            0,
-            0
+            2230.0,
+            272.0
           ],
           "props": {
             "mode": "pin",
@@ -475,8 +479,8 @@
           "id": 217,
           "node_type": "Constant",
           "pos": [
-            0,
-            0
+            1450.0,
+            1416.0
           ],
           "props": {
             "value": 2.0
@@ -491,8 +495,8 @@
           "id": 218,
           "node_type": "ParallelSend",
           "pos": [
-            0,
-            0
+            1840.0,
+            1068.0
           ],
           "props": {
             "mode": "pin",
@@ -511,8 +515,8 @@
           "id": 219,
           "node_type": "SetTimer",
           "pos": [
-            0,
-            0
+            1840.0,
+            1712.0
           ],
           "props": {
             "operate": "set_time",
@@ -527,6 +531,110 @@
           },
           "alias": "next_block",
           "description": "Rewind the block timer to repeat the open/closed cycle."
+        },
+        "10353": {
+          "id": 10353,
+          "node_type": "GroupStart",
+          "pos": [
+            968.0,
+            234.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_out": 10354
+          },
+          "description": "Group entry: connect exec_out to any member node"
+        },
+        "10355": {
+          "id": 10355,
+          "node_type": "GroupEnd",
+          "pos": [
+            2378.0,
+            874.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10356
+          },
+          "description": "Group exit: connect any member node here"
+        },
+        "10357": {
+          "id": 10357,
+          "node_type": "GroupStart",
+          "pos": [
+            1358.0,
+            1030.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_out": 10358
+          },
+          "description": "Group entry: connect exec_out to any member node"
+        },
+        "10359": {
+          "id": 10359,
+          "node_type": "GroupEnd",
+          "pos": [
+            1988.0,
+            1518.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10360
+          },
+          "description": "Group exit: connect any member node here"
+        },
+        "10361": {
+          "id": 10361,
+          "node_type": "GroupStart",
+          "pos": [
+            1358.0,
+            1674.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_out": 10362
+          },
+          "description": "Group entry: connect exec_out to any member node"
+        },
+        "10363": {
+          "id": 10363,
+          "node_type": "GroupEnd",
+          "pos": [
+            1988.0,
+            1814.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10364
+          },
+          "description": "Group exit: connect any member node here"
+        },
+        "10365": {
+          "id": 10365,
+          "node_type": "GroupStart",
+          "pos": [
+            478.0,
+            138.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_out": 10366
+          },
+          "description": "Group entry: connect exec_out to any member node"
+        },
+        "10367": {
+          "id": 10367,
+          "node_type": "GroupEnd",
+          "pos": [
+            2478.0,
+            1862.0
+          ],
+          "props": {},
+          "pin_ids": {
+            "exec_in": 10368
+          },
+          "description": "Group exit: connect any member node here"
         }
       },
       "links": {
@@ -641,7 +749,156 @@
           "to_pin": 10082
         }
       },
-      "next_id": 10085
+      "next_id": 10369,
+      "node_groups": {
+        "g1": {
+          "type": "container",
+          "version": 1,
+          "alias": "resting_block",
+          "description": "One resting-state block: open phase, closed phase, then timer reset.",
+          "params": {
+            "children": [
+              "g2",
+              "g3",
+              "g4"
+            ]
+          },
+          "members": [
+            207,
+            208,
+            209,
+            210,
+            211,
+            212,
+            213,
+            214,
+            215,
+            216,
+            217,
+            218,
+            219,
+            10365,
+            10367
+          ],
+          "parent": "",
+          "children": [
+            "g2",
+            "g3",
+            "g4"
+          ],
+          "box": {
+            "x": 470.0,
+            "y": 80.0,
+            "w": 2120.0,
+            "h": 1824.0
+          },
+          "io_nodes": {
+            "start": 10365,
+            "end": 10367
+          },
+          "min_box": {
+            "w": 2120.0,
+            "h": 1824.0
+          },
+          "layout_version": 3
+        },
+        "g2": {
+          "type": "container",
+          "version": 1,
+          "alias": "open_phase",
+          "description": "0 s: show the fixation cross and send parallel code 1 (eyes open).",
+          "params": {},
+          "members": [
+            208,
+            211,
+            212,
+            213,
+            214,
+            215,
+            216,
+            10353,
+            10355
+          ],
+          "parent": "g1",
+          "children": [],
+          "box": {
+            "x": 960.0,
+            "y": 176.0,
+            "w": 1530.0,
+            "h": 740.0
+          },
+          "min_box": {
+            "w": 1530.0,
+            "h": 740.0
+          },
+          "layout_version": 3,
+          "io_nodes": {
+            "start": 10353,
+            "end": 10355
+          }
+        },
+        "g3": {
+          "type": "container",
+          "version": 1,
+          "alias": "closed_phase",
+          "description": "20 s: send parallel code 2 (eyes closed); the cross stays visible.",
+          "params": {},
+          "members": [
+            209,
+            217,
+            218,
+            10357,
+            10359
+          ],
+          "parent": "g1",
+          "children": [],
+          "box": {
+            "x": 1350.0,
+            "y": 972.0,
+            "w": 750.0,
+            "h": 588.0
+          },
+          "min_box": {
+            "w": 750.0,
+            "h": 588.0
+          },
+          "layout_version": 3,
+          "io_nodes": {
+            "start": 10357,
+            "end": 10359
+          }
+        },
+        "g4": {
+          "type": "container",
+          "version": 1,
+          "alias": "cycle",
+          "description": "40 s: rewind the block timer and repeat the open/closed cycle.",
+          "params": {},
+          "members": [
+            210,
+            219,
+            10361,
+            10363
+          ],
+          "parent": "g1",
+          "children": [],
+          "box": {
+            "x": 1350.0,
+            "y": 1616.0,
+            "w": 750.0,
+            "h": 240.0
+          },
+          "min_box": {
+            "w": 750.0,
+            "h": 240.0
+          },
+          "layout_version": 3,
+          "io_nodes": {
+            "start": 10361,
+            "end": 10363
+          }
+        }
+      }
     }
   }
 }

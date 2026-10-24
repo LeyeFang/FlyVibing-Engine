@@ -113,6 +113,52 @@ def main() -> int:
     check("MI multi-entity arms", all(len(a.get("entities") or []) == 2 for a in arms),
           str(arms))
 
+    from Application.Core.NodeGraph.group_geometry import GROUP_LAYOUT_VERSION
+
+    def _check_group_visuals(label: str, graph: dict) -> None:
+        nodes = graph["nodes"]
+        groups = graph.get("node_groups") or {}
+        described = [gid for gid, grp in groups.items() if grp.get("description")]
+        check(f"{label} group descriptions", len(described) == len(groups),
+              f"{len(described)}/{len(groups)}")
+        missing_io: list[str] = []
+        bad_io: list[str] = []
+        bad_box: list[str] = []
+        for gid, grp in groups.items():
+            raw_io = grp.get("io_nodes") or {}
+            start = nodes.get(str(raw_io.get("start"))) or {}
+            end = nodes.get(str(raw_io.get("end"))) or {}
+            if not start or not end:
+                missing_io.append(gid)
+            elif (start.get("node_type") != "GroupStart"
+                  or end.get("node_type") != "GroupEnd"):
+                bad_io.append(gid)
+            box = grp.get("box") or {}
+            if not (float(box.get("w") or 0) > 1 and float(box.get("h") or 0) > 1):
+                bad_box.append(gid)
+            if int(grp.get("layout_version") or 0) != GROUP_LAYOUT_VERSION:
+                bad_box.append(gid)
+        check(f"{label} groups have entry/exit nodes", not missing_io,
+              str(missing_io))
+        check(f"{label} entry/exit node types", not bad_io, str(bad_io))
+        check(f"{label} groups have current boxes", not bad_box, str(bad_box))
+
+    _check_group_visuals("MI", mi)
+    _check_group_visuals("Resting", resting)
+
+    rest_groups = resting.get("node_groups") or {}
+    rest_alias = {grp.get("alias"): grp for grp in rest_groups.values()}
+    check("Resting has four phase groups", len(rest_groups) == 4,
+          str(list(rest_groups)))
+    rb = rest_alias.get("resting_block") or {}
+    check("Resting outer children",
+          rb.get("children") == ["g2", "g3", "g4"], str(rb.get("children")))
+    check("Resting child parents",
+          all((rest_alias.get(a) or {}).get("parent") == "g1"
+              for a in ("open_phase", "closed_phase", "cycle")),
+          str({a: (rest_alias.get(a) or {}).get("parent")
+               for a in ("open_phase", "closed_phase", "cycle")}))
+
     rest_aliases = {nd.get("alias") for nd in resting["nodes"].values()
                     if nd.get("alias")}
     check("Resting key aliases", {"start", "phase", "tt_open", "tt_closed"} <= rest_aliases,

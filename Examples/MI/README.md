@@ -9,6 +9,8 @@
   三个子组由外层 `container` 组 `@trial` 嵌套。
 - 关键节点带 `@alias` 与 `description`；外层组别名 `@trial`，子组别名
   `@class_cue` / `@task_cue` / `@rest_cue`。
+- 每个组框都有描述（标题行 `Description` 可折叠）和 `Group entry/exit`
+  圆点端口；组框可直接拖动、右下角缩放，成员可拖入拖出。
 - 并行口地址 `0x3FF8`，class cue 提示码 3/4/5。
 
 ## 阶段语义

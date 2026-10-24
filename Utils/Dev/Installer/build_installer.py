@@ -24,6 +24,7 @@ build_installer.py — FlyVibingEngine 离线安装包构建（staging + Inno Se
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 import shutil
 import subprocess
@@ -71,7 +72,7 @@ def _stage_engine_tree(skip_runtime: bool) -> None:
         dst = os.path.join(STAGE, item)
         if os.path.isdir(dst):
             shutil.rmtree(dst)
-    for item in ("Application", "Resource", "Doc"):
+    for item in ("Application", "Resource", "Doc", "Examples"):
         src = os.path.join(ROOT, item)
         skip_top = ("runtime",) if (skip_runtime and item == "Resource") else ()
         _copy_tree(src, os.path.join(STAGE, item), skip_top=skip_top)
@@ -81,9 +82,10 @@ def _stage_engine_tree(skip_runtime: bool) -> None:
     shutil.copy2(os.path.join(utils_src, "__init__.py"),
                  os.path.join(STAGE, "Utils", "__init__.py"))
     shutil.copy2(os.path.join(ROOT, "startup.bat"), os.path.join(STAGE, "startup.bat"))
-    notices = os.path.join(ROOT, "THIRD_PARTY_NOTICES.md")
-    if os.path.isfile(notices):
-        shutil.copy2(notices, os.path.join(STAGE, "THIRD_PARTY_NOTICES.md"))
+    for name in ("LICENSE", "README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md"):
+        src = os.path.join(ROOT, name)
+        if os.path.isfile(src):
+            shutil.copy2(src, os.path.join(STAGE, name))
 
 
 def _install_engine_deps() -> None:
@@ -104,17 +106,37 @@ def _install_engine_deps() -> None:
 
 
 def _install_editor_mcp() -> None:
-    """独立 MCP 包 → staged runtime site-packages + PATH 启动器。"""
-    src = os.path.join(ROOT, "Utils", "ExtDev", "EditorMcp", "src", "engine_editor_mcp")
-    dst = os.path.join(STAGE, "Resource", "runtime", "Lib", "site-packages", "engine_editor_mcp")
-    shutil.copytree(src, dst, dirs_exist_ok=True)
+    """工具链 wheel → staged runtime site-packages + PATH 启动器。
+
+    优先使用同级工具仓 dist/ 的最新 wheel；工具仓不在时回退到历史内嵌
+    source，保证单仓 checkout 也能做布局验证。
+    """
+    site_packages = os.path.join(STAGE, "Resource", "runtime", "Lib", "site-packages")
+    tools_dist = os.path.join(os.path.dirname(ROOT),
+                              "FlyVibing-User-And-Developer-Utils", "dist")
+    installed: list[str] = []
+    if os.path.isdir(tools_dist):
+        for pattern in ("engine_editor_mcp-*.whl", "flyvibing_node_editor-*.whl"):
+            wheels = sorted(glob.glob(os.path.join(tools_dist, pattern)))
+            if not wheels:
+                continue
+            wheel = wheels[-1]
+            print(f"[installer] install {os.path.basename(wheel)} -> staged runtime")
+            subprocess.run([VENV_PY, "-m", "pip", "install", "--quiet", "--no-deps",
+                            "--target", site_packages, "--upgrade", wheel], check=True)
+            installed.append(os.path.basename(wheel))
+    if not installed:
+        src = os.path.join(ROOT, "Utils", "ExtDev", "EditorMcp", "src", "engine_editor_mcp")
+        dst = os.path.join(site_packages, "engine_editor_mcp")
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+        print("[installer] WARNING: toolchain wheels not found; used embedded engine_editor_mcp")
     cmd_path = os.path.join(STAGE, "engine-editor-mcp.cmd")
     with open(cmd_path, "w", encoding="ascii", newline="") as fh:
         fh.write("@echo off\r\n"
                  "set \"PYEXE=%~dp0Resource\\runtime\\python3.14t.exe\"\r\n"
                  "if not exist \"%PYEXE%\" set \"PYEXE=%~dp0Resource\\runtime\\python.exe\"\r\n"
                  "\"%PYEXE%\" -m engine_editor_mcp %*\r\n")
-    print("[installer] engine-editor-mcp package + launcher staged")
+    print("[installer] editor MCP + node editor toolchain staged", installed)
 
 
 def _write_quickstart(version: str) -> None:
@@ -124,7 +146,8 @@ def _write_quickstart(version: str) -> None:
         f"Version: {version}\r\n"
         "\r\n"
         "1) Launch the editor: double-click startup.bat (or the Start menu shortcut).\r\n"
-        "2) Projects: inside the editor use File > Open Project (.myproj).\r\n"
+        "2) Projects: use File > Open Project (.myproj), or File > Open Example\r\n"
+        "   for the bundled MI / RestingState examples under Examples/.\r\n"
         "3) AI agent (MCP): while the editor is running, register in your agent workspace\r\n"
         "   .vscode/mcp.json:\r\n"
         "     { \"servers\": { \"engine-editor-live\": {\r\n"

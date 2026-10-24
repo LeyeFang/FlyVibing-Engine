@@ -26,9 +26,22 @@ FlyVibingEngine 的 **Windows GUI 安装包**（Inno Setup 6），内置 Python 
 # 出安装包
 .venv-py314t\Scripts\python.exe Utils/Dev/Installer/build_installer.py
 #   → Utils/Dev/Installer/dist/FlyVibingEngine-Setup-<version>.exe
+
+# 组装发布目录（exe + checksum + changelog + license + quick start）
+.venv-py314t\Scripts\python.exe Utils/Dev/Installer/package_release.py
+#   → Utils/Dev/Installer/dist/FlyVibingEngine-<version>-Windows-x64/
+#   --zip 可额外生成同名 zip（仅用于离线分发）
 ```
 
 选项：`--skip-runtime`（仅布局调试，包不可运行）、`--no-compile`（只做 staging）、`--keep-stage`（增量）。
+
+## 发布物取舍
+
+- **主下载 = 安装器 exe**。GitHub Release 直接挂 exe，不要让用户先解压。
+- 同时挂 `CHECKSUMS.sha256`、`CHANGELOG.md`、`README-INSTALL.txt`（小文件，可直接查看/校验）。
+- **不要默认打 zip**：zip 会隐藏 exe、多一步解压，且 Windows 可能给解压后的 exe 加 Mark-of-the-Web。
+- 只有“离线实验室拷贝/无网络分发”才用 `--zip` 作为可选附加资产；portable 运行时另做独立 zip，不要和安装器混在一起。
+- 构建中间产物统一留在 `Utils/Dev/Installer/dist/`；仓库根目录不再放 `dist/`。
 
 工具缺失时：`winget install -e --id JRSoftware.InnoSetup`。
 
@@ -43,6 +56,20 @@ startup.bat             启动器（优先用内置 runtime; dev 环境自动回
 engine-editor-mcp.cmd   MCP 启动器（PATH 任务注册后三方工作区直接调用）
 README-INSTALL.txt      快照说明
 ```
+
+最终发布目录只保留当前版本：
+
+```
+Utils/Dev/Installer/dist/FlyVibingEngine-<version>-Windows-x64/
+    FlyVibingEngine-Setup-<version>.exe
+    CHECKSUMS.sha256
+    CHANGELOG.md
+    LICENSE
+    README-INSTALL.txt
+    release-manifest.json
+```
+
+旧安装包归档在 `dist/archive/<version>/`，不参与发布。
 
 依赖补齐：staging 时用 `pip --no-index -r Resource/wheels/requirements.export.txt`
 把**开发版全量依赖**装进 `stage/Resource/runtime/Lib/site-packages`（安装版 = 开发版环境），

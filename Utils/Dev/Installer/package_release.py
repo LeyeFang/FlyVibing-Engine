@@ -3,12 +3,13 @@
 The installer itself stays the primary download.  This script adds the small
 files that make a release auditable without hiding the ``.exe`` inside a zip:
 
-    FlyVibingEngine-<version>-Windows-x64/
-        FlyVibingEngine-Setup-<version>.exe
+    dist/releases/v<version>/<platform>-<arch>/
+        FlyVibingEngine-Setup-<version>-<Platform>-<Arch>.exe
         CHECKSUMS.sha256
         CHANGELOG.md
         LICENSE
         README-INSTALL.txt
+        release-manifest.json
 
 Usage:
     .venv-py314t\\Scripts\\python.exe Utils/Dev/Installer/package_release.py
@@ -27,9 +28,18 @@ import zipfile
 from datetime import date
 from pathlib import Path
 
+from release_layout import (
+    ARCH,
+    BUILD_DIR,
+    PLATFORM,
+    PLATFORM_SLUG,
+    PRODUCT,
+    installer_name,
+    platform_dir,
+)
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent.parent
-DIST = HERE / "dist"
 STAGE = HERE / "build" / "stage"
 
 
@@ -65,14 +75,14 @@ def main() -> int:
     args = parser.parse_args()
 
     version = str(args.version or _version())
-    installer = DIST / f"FlyVibingEngine-Setup-{version}.exe"
+    installer = BUILD_DIR / installer_name(version)
     if not installer.is_file():
         raise SystemExit(
             f"installer not found: {installer}\n"
             "  build it first: python Utils/Dev/Installer/build_installer.py"
         )
 
-    out = DIST / f"FlyVibingEngine-{version}-Windows-x64"
+    out = platform_dir(version)
     if out.is_dir() and not args.no_clean:
         shutil.rmtree(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -91,9 +101,11 @@ def main() -> int:
     (out / "CHECKSUMS.sha256").write_text("\n".join(lines) + "\n", encoding="ascii")
 
     manifest = {
-        "product": "FlyVibingEngine",
+        "product": PRODUCT,
         "version": version,
-        "platform": "windows-x64",
+        "platform": PLATFORM,
+        "arch": ARCH,
+        "platform_slug": PLATFORM_SLUG,
         "built": date.today().isoformat(),
         "installer": installer.name,
         "sha256": _sha256(installer),
@@ -107,11 +119,12 @@ def main() -> int:
         print(f"  {path.name:40} {path.stat().st_size:>12,} bytes")
 
     if args.zip:
-        zip_path = DIST / f"FlyVibingEngine-{version}-Windows-x64.zip"
+        zip_name = f"{PRODUCT}-{version}-{PLATFORM}-{ARCH}.zip"
+        zip_path = out.parent / zip_name
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for path in sorted(out.iterdir()):
                 if path.is_file():
-                    zf.write(path, arcname=f"{out.name}/{path.name}")
+                    zf.write(path, arcname=f"{PRODUCT}-{version}-{PLATFORM}-{ARCH}/{path.name}")
         print(f"[release] zip: {zip_path} ({zip_path.stat().st_size:,} bytes)")
     return 0
 

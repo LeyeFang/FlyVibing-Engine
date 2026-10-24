@@ -11,8 +11,11 @@
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
+#ifndef PlatformTag
+  #define PlatformTag "Windows-x64"
+#endif
 #ifndef OutputDir
-  #define OutputDir "..\dist"
+  #define OutputDir "..\dist\build"
 #endif
 
 [Setup]
@@ -24,7 +27,7 @@ DefaultDirName={autopf}\FlyVibingEngine
 DefaultGroupName=FlyVibingEngine
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
-OutputBaseFilename=FlyVibingEngine-Setup-{#AppVersion}
+OutputBaseFilename=FlyVibingEngine-Setup-{#AppVersion}-{#PlatformTag}
 Compression=lzma2/fast
 SolidCompression=yes
 WizardStyle=modern

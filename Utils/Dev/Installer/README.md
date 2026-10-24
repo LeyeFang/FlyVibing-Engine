@@ -23,13 +23,13 @@ FlyVibingEngine 的 **Windows GUI 安装包**（Inno Setup 6），内置 Python 
 .venv-py314t\Scripts\python.exe Utils/Dev/collect_wheels.py        # 从 PyPI 补全 Resource/wheels
 .venv-py314t\Scripts\python.exe Utils/Dev/prepare_runtime.py       # 若 Resource/runtime 缺失
 
-# 出安装包
+# 出安装包（中间产物）
 .venv-py314t\Scripts\python.exe Utils/Dev/Installer/build_installer.py
-#   → Utils/Dev/Installer/dist/FlyVibingEngine-Setup-<version>.exe
+#   → Utils/Dev/Installer/dist/build/FlyVibingEngine-Setup-<version>-Windows-x64.exe
 
-# 组装发布目录（exe + checksum + changelog + license + quick start）
+# 组装统一发布目录（exe + checksum + changelog + license + quick start）
 .venv-py314t\Scripts\python.exe Utils/Dev/Installer/package_release.py
-#   → Utils/Dev/Installer/dist/FlyVibingEngine-<version>-Windows-x64/
+#   → Utils/Dev/Installer/dist/releases/v<version>/windows-x64/
 #   --zip 可额外生成同名 zip（仅用于离线分发）
 ```
 
@@ -41,7 +41,8 @@ FlyVibingEngine 的 **Windows GUI 安装包**（Inno Setup 6），内置 Python 
 - 同时挂 `CHECKSUMS.sha256`、`CHANGELOG.md`、`README-INSTALL.txt`（小文件，可直接查看/校验）。
 - **不要默认打 zip**：zip 会隐藏 exe、多一步解压，且 Windows 可能给解压后的 exe 加 Mark-of-the-Web。
 - 只有“离线实验室拷贝/无网络分发”才用 `--zip` 作为可选附加资产；portable 运行时另做独立 zip，不要和安装器混在一起。
-- 构建中间产物统一留在 `Utils/Dev/Installer/dist/`；仓库根目录不再放 `dist/`。
+- 构建中间产物统一留在 `Utils/Dev/Installer/dist/build/`；
+  可上传产物统一在 `Utils/Dev/Installer/dist/releases/`；仓库根目录不再放 `dist/`。
 
 工具缺失时：`winget install -e --id JRSoftware.InnoSetup`。
 
@@ -57,17 +58,31 @@ engine-editor-mcp.cmd   MCP 启动器（PATH 任务注册后三方工作区直�
 README-INSTALL.txt      快照说明
 ```
 
-最终发布目录只保留当前版本：
+最终发布目录按“版本 / 平台”统一：
 
 ```
-Utils/Dev/Installer/dist/FlyVibingEngine-<version>-Windows-x64/
-    FlyVibingEngine-Setup-<version>.exe
+Utils/Dev/Installer/dist/releases/v<version>/<platform>-<arch>/
+    FlyVibingEngine-Setup-<version>-Windows-x64.exe
     CHECKSUMS.sha256
     CHANGELOG.md
     LICENSE
     README-INSTALL.txt
     release-manifest.json
 ```
+
+命名规范：`<Product>-Setup-<Version>-<Platform>-<Arch>.exe`；
+未来 macOS/Linux 使用同目录层级，例如 `releases/v1.0.0/macos-arm64/`
+与 `FlyVibingEngine-Setup-1.0.0-macOS-arm64.dmg`。
+
+发布规范（所有平台一致）：
+
+- **唯一上传根**：`Utils/Dev/Installer/dist/releases/v<version>/<platform>-<arch>/`。
+- **文件名显式带平台/架构**：`Windows-x64`、`macOS-arm64`、`Linux-x64`；
+  目录 slug 用小写（`windows-x64`），文件名保留平台显示大小写。
+- **构建中间产物**只放 `dist/build/`，不得成为下载链接。
+- **不要手写平台名/文件名**：所有构建、打包脚本统一 import `release_layout.py`
+  的 `installer_name()` / `platform_dir()`；新增平台只传 `platform`、`arch`、
+  `extension` 参数，不改目录结构。
 
 旧安装包归档在 `dist/archive/<version>/`，不参与发布。
 

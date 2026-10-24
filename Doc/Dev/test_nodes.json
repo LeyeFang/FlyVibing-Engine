@@ -454,6 +454,17 @@
       "visualizes": []
     },
     {
+      "id": "editor.release_layout",
+      "path": "Test/Application/Editor/test_release_layout.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "editor",
+      "covers": [],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "editor.scene_panel_interactions",
       "path": "Test/Application/Editor/test_scene_panel_interactions.py",
       "tier": "core",

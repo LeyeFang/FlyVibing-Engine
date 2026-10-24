@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**72**
-- `core`：68
+- 节点数：**73**
+- `core`：69
 - `heavy`：1
 - `live`：1
 - `manual`：2
@@ -42,6 +42,7 @@
 | `editor.node_runtime` | `manual` | `manual` | `editor` | `Test/Application/Editor/test_node_runtime.py` | Application.Core.Events.Event<br>Application.Core.NodeGraph<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorCamera<br>Application.Editor.EditorHost<br>Application.Editor.UI.UIManager<br>Application.Editor.UI.controllers.ResourceBrowserController<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Editor.UI.controllers.SelectionController<br>Application.Editor.UI.controllers.SimulationController<br>Application.Editor.UI.controllers.ViewportController<br>Application.Editor.UI.panels<br>Application.Resource.ResourceManager<br>Application.Runtime.GameRuntime<br>Application.Runtime.RuntimeNodeLayer |
 | `editor.pie_settings` | `core` | `integration` | `editor` | `Test/Application/Editor/test_pie_settings.py` | Application.Core.Scene.Scene<br>Application.Core.Window.glfwWindow<br>Application.Editor.UI.controllers.SimulationController<br>Application.Runtime.RuntimeWindow |
 | `editor.project_asset_commit` | `core` | `integration` | `editor` | `Test/Application/Editor/test_project_asset_commit.py` | Application.Core.Engine<br>Application.Core.Events<br>Application.Core.NodeGraph.canvas<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.ProjectManager<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Resource.Material<br>Application.Resource.ResourceManager |
+| `editor.release_layout` | `core` | `integration` | `editor` | `Test/Application/Editor/test_release_layout.py` | - |
 | `editor.scene_panel_interactions` | `core` | `ui-behavior` | `editor` | `Test/Application/Editor/test_scene_panel_interactions.py` | Application.Editor.Services.ControllerRegistry<br>Application.Editor.UI.controllers.ResourceBrowserController<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Editor.UI.controllers.SimulationController<br>Application.Editor.UI.controllers.ViewportController<br>Application.Editor.UI.panels.ScenePanel |
 | `editor.ui_map` | `core` | `integration` | `editor` | `Test/Application/Editor/test_ui_map.py` | - |
 | `editor.ui_text_safety` | `core` | `contract` | `editor` | `Test/Application/Editor/test_ui_text_safety.py` | - |

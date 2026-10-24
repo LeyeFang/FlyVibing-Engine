@@ -10,7 +10,8 @@ build_installer.py — FlyVibingEngine 离线安装包构建（staging + Inno Se
          --target <stage>/Resource/runtime/Lib/site-packages（安装版 = 开发版环境）
        - 独立包: FlyVibing-User-And-Developer-Utils/packages/editor-mcp/src/engine_editor_mcp → runtime site-packages
        - 启动器: <stage>/engine-editor-mcp.cmd（PATH 注册后可供 agent 工作区直接调用）
-  3. ISCC 编译 installer.iss → Utils/Dev/Installer/dist/FlyVibingEngine-Setup-<ver>.exe
+  3. ISCC 编译 installer.iss → Utils/Dev/Installer/dist/build/FlyVibingEngine-Setup-<ver>-Windows-x64.exe
+   （再执行 package_release.py 进入 dist/releases/v<ver>/windows-x64/）
 
 用法:
   .venv-py314t\\Scripts\\python.exe Utils/Dev/Installer/build_installer.py [--skip-runtime] [--no-compile] [--keep-stage]
@@ -29,11 +30,12 @@ import os
 import shutil
 import subprocess
 
+from release_layout import ARCH, BUILD_DIR, PLATFORM, installer_name
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 BUILD = os.path.join(HERE, "build")
 STAGE = os.path.join(BUILD, "stage")
-DIST = os.path.join(HERE, "dist")
 ISS = os.path.join(HERE, "installer.iss")
 VENV_PY = os.path.join(ROOT, ".venv-py314t", "Scripts", "python.exe")
 WHEELS = os.path.join(ROOT, "Resource", "wheels")
@@ -221,13 +223,14 @@ def main() -> int:
         print("  install Inno Setup then re-run:  winget install -e --id JRSoftware.InnoSetup")
         return 3
 
-    os.makedirs(DIST, exist_ok=True)
+    os.makedirs(BUILD_DIR, exist_ok=True)
     print(f"[installer] compiling with {iscc} ...")
     subprocess.run(
-        [iscc, f"/DStageDir={STAGE}", f"/DAppVersion={version}", f"/DOutputDir={DIST}", ISS],
+        [iscc, f"/DStageDir={STAGE}", f"/DAppVersion={version}",
+         f"/DPlatformTag={PLATFORM}-{ARCH}", f"/DOutputDir={BUILD_DIR}", ISS],
         check=True,
     )
-    exe = os.path.join(DIST, f"FlyVibingEngine-Setup-{version}.exe")
+    exe = os.path.join(BUILD_DIR, installer_name(version))
     if os.path.isfile(exe):
         print(f"[installer] DONE: {exe}  ({os.path.getsize(exe) / 1e6:.0f} MB)")
         return 0

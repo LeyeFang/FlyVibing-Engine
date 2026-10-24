@@ -100,8 +100,8 @@
 | 事项 | 状态 | 说明 |
 |---|---|---|
 | 版本号 / 品牌收口 | **已完成（1.0.0）** | `pyproject.toml` 与 `installer.iss` 版本统一 1.0.0；`AppIdentity`/窗口标题保持 FlyVibingEngine |
-| Release 内容冻结 | **已完成** | core **68/68**、GUI **7/7**；节点组、示例、安装器改动已入本版 |
-| 安装器 / 导出成品 | **已完成** | `Utils/Dev/Installer/dist/FlyVibingEngine-Setup-1.0.0.exe`（约 206 MB）；内置 runtime、wheelhouse、工具链与 `Examples/` |
+| Release 内容冻结 | **已完成** | core **69/69**、GUI **7/7**；节点组、示例、安装器改动已入本版 |
+| 安装器 / 导出成品 | **已完成** | `Utils/Dev/Installer/dist/releases/v1.0.0/windows-x64/`；安装器 `FlyVibingEngine-Setup-1.0.0-Windows-x64.exe`（约 206 MB），内置 runtime、wheelhouse、工具链与 `Examples/` |
 | Release notes / 兼容矩阵 | **已完成** | 根目录 `CHANGELOG.md`（中英）；Windows 10/11 x64、Python 3.14t、`engine-editor-mcp` 0.5.x / `flyvibing-node-editor` 0.1.x |
 | 发布后回归 | **部分完成** | 已完成 staging 内置 runtime 导入、两个示例 `--dry-run`、安装版编辑器启动/打开 MI；干净机安装待执行 |
 

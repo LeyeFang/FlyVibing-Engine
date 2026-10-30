@@ -363,7 +363,7 @@ def _draw_new_timer_widgets(nid: int, inst, _canvas) -> None:
     if mode == "manual":
         v = inst.props.get("timer_name", "timer")
         imgui.push_item_width(130)
-        changed, nv = imgui.input_text(t("common.name") + f"##nt_name_{nid}", v, 64)
+        changed, nv = imgui.input_text(t("common.name") + f"##nt_name_{nid}", v, 0)
         if changed:
             inst.props["timer_name"] = nv
         imgui.pop_item_width()

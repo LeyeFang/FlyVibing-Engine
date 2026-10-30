@@ -21,6 +21,8 @@ class NodeCanvas(DataContract):
     def __init__(self):
         self._nodes: dict[int, NodeInstance] = {}
         self._links: dict[int, LinkInstance] = {}
+        # 外部/扩展修改计数 — Node Editor 面板用它失效屏幕矩形缓存并请求重绘。
+        self._revision: int = 0
         # 节点组元数据（tools 层宏的记账; 引擎只做不透明保留 — 不参与求值）。
         # 结构见 flyvibing_node_editor.node_groups; 空 dict = 无组。
         self.node_groups: dict = {}
@@ -34,6 +36,16 @@ class NodeCanvas(DataContract):
     @property
     def links(self) -> dict[int, LinkInstance]:
         return self._links
+
+    @property
+    def revision(self) -> int:
+        """画布变更计数（扩展/工具修改节点后通知 UI）。"""
+        return self._revision
+
+    def mark_changed(self) -> int:
+        """标记画布已变更；返回新 revision。"""
+        self._revision += 1
+        return self._revision
 
     # ── 节点 CRUD ──────────────────────────────────────────
 
@@ -52,6 +64,7 @@ class NodeCanvas(DataContract):
             nid, type_name, pos, pin_ids=pin_ids,
             description=nd.props_text,
         )
+        self.mark_changed()
         return nid
 
     def remove_node(self, nid: int) -> None:
@@ -67,6 +80,7 @@ class NodeCanvas(DataContract):
         for lid in to_del:
             del self._links[lid]
         del self._nodes[nid]
+        self.mark_changed()
 
     def add_link(self, from_pin: int, to_pin: int) -> int:
         """添加一条连线，返回连线 ID（重复返回 -1）"""
@@ -76,10 +90,12 @@ class NodeCanvas(DataContract):
                 return -1
         lid = _gen_id()
         self._links[lid] = LinkInstance(lid, from_pin, to_pin)
+        self.mark_changed()
         return lid
 
     def remove_link(self, lid: int) -> None:
-        self._links.pop(lid, None)
+        if self._links.pop(lid, None) is not None:
+            self.mark_changed()
 
     # ── Pin 查找 ───────────────────────────────────────────
 
@@ -148,6 +164,7 @@ class NodeCanvas(DataContract):
                     nid, tn, (80, 80 + i * 200), pin_ids=pin_ids,
                     description=nd.props_text,
                 )
+        self.mark_changed()
 
     # ── 序列化 ───────────────────────────────────────────
 

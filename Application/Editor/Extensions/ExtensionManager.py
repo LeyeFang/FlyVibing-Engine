@@ -4,11 +4,11 @@
 开发规范: Doc/ExtDev/extension_dev_protocol.md
 
 M0 实装范围:
-  - 发现: 内置 `Application/Functions/**/extension.json` + 用户目录（env `MGE_EXTENSIONS_DIR` 或
-    %APPDATA%/MyGameEngine/extensions）
+  - 发现: 内置 `Application/Functions/**/extension.json` + 用户目录（env
+    `FVE_EXTENSIONS_DIR` / 旧 `MGE_EXTENSIONS_DIR`，或 `%APPDATA%/FlyVibingEngine/extensions`）
   - manifest 校验（id / api_version / entry; 非法 → broken 隔离展示）
-  - 启停: 持久化到 `Application/Editor/Config/extensions.json`（env `MGE_EXTENSIONS_STATE` 可覆盖;
-    测试沙箱用）
+  - 启停: 持久化到 `%APPDATA%/FlyVibingEngine/editor_state/extensions.json`（env
+    `FVE_EXTENSIONS_STATE` / 旧 `MGE_EXTENSIONS_STATE` 可覆盖; 测试沙箱用）
   - ops 贡献: ctx.ops.register → LiveCommandServer 扩展注册表（ext.<id>.* 强制前缀）
   - nodes 贡献: ctx.nodes.register_pack → NodePackRegistry（节点类型/evaluator/控件字段）
   - 异常遏制: 加载失败 → broken（菜单/op 可见错误原因, 不拖垮编辑器）
@@ -104,8 +104,9 @@ class _ExtensionNodeRegistrar:
     - 第三方/运行期 pack 可在这里显式注册，disable/unload 时反注册本次注册的 pack。
     """
 
-    def __init__(self, owner_id: str) -> None:
+    def __init__(self, owner_id: str, extension_dir: str = "") -> None:
         self._owner = owner_id
+        self._extension_dir = extension_dir
         self._registered: set[str] = set()
 
     def register_pack(self, pack: dict) -> dict:
@@ -113,6 +114,9 @@ class _ExtensionNodeRegistrar:
         pack = dict(pack or {})
         pack.setdefault("owner", self._owner)
         pack.setdefault("id", f"{self._owner}.{pack.get('name', 'pack')}")
+        # 记录来源目录 — 游戏导出按需收集扩展时用；不改变运行期求值。
+        if self._extension_dir:
+            pack.setdefault("dir", self._extension_dir)
         result = NodePackRegistry.register(pack)
         self._registered.add(str(result["pack"]))
         return result
@@ -164,12 +168,11 @@ class ExtensionManager:
     @classmethod
     def _state_path(cls) -> str:
         return AppIdentity.env_get("EXTENSIONS_STATE") or os.path.join(
-            cls._engine_root(), "Application", "Editor", "Config", "extensions.json")
+            AppIdentity.data_dir("editor_state"), "extensions.json")
 
     @classmethod
     def _data_dir(cls, ext_id: str) -> str:
-        base = AppIdentity.env_get("EXTENSIONS_DATA") or os.path.join(
-            cls._engine_root(), "Application", "Editor", "Config", "extensions_data")
+        base = AppIdentity.env_get("EXTENSIONS_DATA") or AppIdentity.data_dir("extensions_data")
         return os.path.join(base, ext_id)
 
     # ── 状态持久化 ───────────────────────────────────────────────
@@ -403,7 +406,7 @@ class ExtensionManager:
                 extension_dir=info.dir, data_dir=data_dir, engine_root=cls._engine_root())
             ctx.ops = _ExtensionOpRegistrar(info.id)
             if "nodes" in [str(c) for c in (info.capabilities or [])]:
-                ctx.nodes = _ExtensionNodeRegistrar(info.id)
+                ctx.nodes = _ExtensionNodeRegistrar(info.id, info.dir)
                 cls._node_facades[info.id] = ctx.nodes
             try:
                 from Application.Editor.Extensions.ExtensionUI import ExtensionUI
@@ -415,7 +418,7 @@ class ExtensionManager:
             if "graph" in [str(c) for c in (info.capabilities or [])]:
                 try:
                     from Application.Editor.Extensions.ExtensionGraph import ExtensionGraph
-                    ctx.graph = ExtensionGraph
+                    ctx.graph = ExtensionGraph(info.id)
                 except Exception:  # noqa: BLE001 — 无编辑器环境允许为空
                     ctx.graph = None
 

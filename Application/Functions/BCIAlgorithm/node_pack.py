@@ -37,6 +37,7 @@ def register() -> dict:
         "id": "bci",
         "name": "BCI Algorithm",
         "owner": "bci",
+        "signature": "@Official",
         "nodes": [
             {
                 "type": "InitFBCSP", "label": "Init FBCSP", "category": "Algorithm", "color": algo,

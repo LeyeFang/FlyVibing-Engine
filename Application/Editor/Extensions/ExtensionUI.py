@@ -40,17 +40,23 @@ class ExtensionPanel(BasePanel):
 
     def __init__(self, name: str, draw_fn, ext_id: str,
                  visible: bool = True, flags: imgui.WindowFlags = imgui.WindowFlags_.none,
-                 on_closed=None, close_policy: str = "hide") -> None:
+                 on_closed=None, close_policy: str = "hide",
+                 show_on_enable: bool = True,
+                 first_pos: tuple[float, float] | None = None,
+                 first_size: tuple[float, float] | None = None) -> None:
         super().__init__()
         self.name = str(name)
         self.visible = bool(visible)
         self.flags = flags
+        self.first_use_pos = first_pos
+        self.first_use_size = first_size
         self._draw_fn = draw_fn
         self._ext_id = ext_id
         self._error_streak = 0
         self._last_error = ""
         self._on_closed = on_closed          # callable(name) — 宿主钩子（由 ExtensionUI 组装）
         self.close_policy = str(close_policy)
+        self.show_on_enable = bool(show_on_enable)
 
     # ── 供 ExtensionUI / ExtensionManager 读取 ──
     @property
@@ -102,7 +108,10 @@ class ExtensionUI:
     # ── 注册 / 注销 ──────────────────────────────────────────────
 
     def register_window(self, name: str, draw_fn, visible: bool = False, flags=None,
-                        close_policy: str = "hide") -> str:
+                        close_policy: str = "hide",
+                        show_on_enable: bool = True,
+                        first_pos: tuple[float, float] | None = None,
+                        first_size: tuple[float, float] | None = None) -> str:
         """注册扩展窗口。
 
         Args:
@@ -114,6 +123,11 @@ class ExtensionUI:
             close_policy: 窗口关闭（X）语义 —
                 "hide"（默认）仅隐藏 / "disable" 关闭即请求停用扩展（菜单勾选同步消失） /
                 "custom" 仅回调 on_ui_event。生命周期完备性见 dev protocol §7。
+            show_on_enable: enable 时是否自动弹出。主面板保持 True；
+                附属/管理窗口设 False（由主面板按钮或 View 菜单按需打开）。
+            first_pos: 首次出现位置 (x, y)（None = ImGui 默认级联）。
+                附属窗口用它错开主面板。
+            first_size: 首次出现尺寸 (w, h)（None = 自动适应内容）。
         Returns:
             注册后的窗口名（与 name 相同 — 供 unregister_window 使用）。
         """
@@ -129,7 +143,10 @@ class ExtensionUI:
                                visible=visible,
                                flags=flags if flags is not None else imgui.WindowFlags_.none,
                                on_closed=self._make_on_closed(close_policy),
-                               close_policy=close_policy)
+                               close_policy=close_policy,
+                               show_on_enable=show_on_enable,
+                               first_pos=first_pos,
+                               first_size=first_size)
         UIManager.register(panel)
         return full
 
@@ -160,6 +177,18 @@ class ExtensionUI:
             return UIManager.unregister(panel)
         return False
 
+    def show_window(self, name: str) -> bool:
+        """把本扩展的某个窗口置为可见（供面板内“打开 XXX”按钮使用，与 View 菜单同路径）。
+
+        Returns: 是否找到并打开了该窗口（非本扩展/不存在 → False，不抛错）。
+        """
+        from Application.Editor.UI.UIManager import UIManager
+        panel = UIManager.find(str(name))
+        if isinstance(panel, ExtensionPanel) and panel.ext_id == self._ext_id:
+            panel.visible = True
+            return True
+        return False
+
     # ── 宿主保险丝（ExtensionManager 卸载路径调用） ───────────────
 
     @classmethod
@@ -172,12 +201,14 @@ class ExtensionUI:
 
     @classmethod
     def show_all(cls, ext_id: str) -> None:
-        """把某扩展的全部窗口置为可见（enable 时宿主重置 — “勾选启用 = 想看面板”）。
+        """把某扩展的主窗口置为可见（enable 时宿主重置 — “勾选启用 = 想看面板”）。
 
         配合 close_policy="hide": 用户 X 隐藏后, 再次勾选启用即重新打开
         （菜单勾选/窗口可见性闭环）; 由 ExtensionManager.enable 调用。
+        注册时 `show_on_enable=False` 的附属窗口不受影响（按需打开）。
         """
         from Application.Editor.UI.UIManager import UIManager
         for panel in list(UIManager._panels):
-            if isinstance(panel, ExtensionPanel) and panel.ext_id == ext_id:
+            if (isinstance(panel, ExtensionPanel) and panel.ext_id == ext_id
+                    and getattr(panel, "show_on_enable", True)):
                 panel.visible = True

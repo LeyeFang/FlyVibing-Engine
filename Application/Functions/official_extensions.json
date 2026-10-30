@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "description": "Mainline extension allowlist for the Windows installer. Game exports use on-demand scene node detection instead; this file never grants permission to redistribute third-party/local fixtures.",
+  "extensions": [
+    {"id": "sigproc", "dir": "SignalProcess"},
+    {"id": "bci", "dir": "BCIAlgorithm"},
+    {"id": "device", "dir": "SerialParallelDevice"},
+    {"id": "virtual", "dir": "VirtualDevice"}
+  ]
+}

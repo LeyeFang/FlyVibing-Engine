@@ -192,6 +192,7 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
         self._editor_context: node_ed.EditorContext | None = None
         self._editor_initialized: bool = False
         self._canvas_initialized: bool = False
+        self._canvas_revision: int = -1
         self._add_popup_pos: imgui.ImVec2 = imgui.ImVec2(0, 0)
         # Add 菜单打开的屏幕中心 → 在 ne.begin 后解析成画布坐标（新节点落点）
         self._add_screen_center: imgui.ImVec2 = imgui.ImVec2(0, 0)
@@ -381,6 +382,17 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
         self._ensure_default_scene()
 
         canvas = self._canvas
+        # 扩展/agent 直接改画布时 revision 变化；清掉屏幕矩形/组框缓存，
+        # 让本轮立即按新节点布局重绘（不强制 fit，保留用户当前视图）。
+        _revision = int(getattr(canvas, "revision", 0) or 0)
+        if _revision != self._canvas_revision:
+            self._canvas_revision = _revision
+            self._node_screen_rects.clear()
+            self._group_screen_rects.clear()
+            self._group_frame_rects.clear()
+            rendered = getattr(self, "_rendered_nids", None)
+            if rendered is not None:
+                rendered.clear()
         avail = imgui.get_content_region_avail()
         if avail.x <= 0 or avail.y <= 0:
             return
@@ -1467,6 +1479,14 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
                 imgui.text(f"#{nid}")
                 imgui.pop_style_color(1)
 
+            # 提供者签名（@Official / @Author）— 固定位于节点标题下一行，
+            # 与 description 解耦；颜色弱化，不抢标题。
+            signature = str(getattr(nd, "signature", "") or "")
+            if signature:
+                imgui.push_style_color(imgui.Col_.text, _col(TEXT_DISABLED))
+                imgui.text(signature)
+                imgui.pop_style_color(1)
+
             # 静态说明文字不再占卡片高度；NodeCanvas 已将其作为默认
             # description 写入实例，需要时在 Description 展开区查看。
             self._draw_description(nid, inst)
@@ -1533,8 +1553,11 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
         """绘制节点的所有引脚 + 分隔线。"""
         pins = get_visible_pins(inst, nd, canvas)
 
-        # ── 第 1 步: 计算节点宽度（基于标题 + 所有 pin 原始文字） ──
+        # ── 第 1 步: 计算节点宽度（基于标题 + 签名 + 所有 pin 原始文字） ──
         _title_w = imgui.calc_text_size(f"  {node_label(nd.type_name, nd.label)}  ").x
+        _signature = str(getattr(nd, "signature", "") or "")
+        if _signature:
+            _title_w = max(_title_w, imgui.calc_text_size(_signature).x + 12.0)
         _max_pin_text_w = max(
             (imgui.calc_text_size(f"> {p.name}").x for p in pins),
             default=0,

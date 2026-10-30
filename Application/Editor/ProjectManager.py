@@ -29,6 +29,11 @@ from typing import Optional
 # 守卫: Test/Application/Editor/test_utils_layout.py::test_utils_export_selection
 UTILS_EXPORT_SKIP_DIRS = {"dist", "tmp"}
 
+# 编辑器本地状态（启用扩展、窗口布局、PIE 设置等）不能进入游戏层或安装包。
+# 这些文件是 git-ignored、按机器生成的；导出后由运行时/编辑器首次启动自动重建。
+# 相对 engine root 的路径；守卫: test_export_game_bundle / test_release_layout。
+LOCAL_STATE_DIRS = ("Application/Editor/Config",)
+
 
 class ProjectManager:
     """项目文件管理器 — 纯数据层，不依赖渲染/窗口。"""
@@ -512,6 +517,9 @@ class ProjectManager:
         # ── 5. 游戏层（include_player）: 清单 + 冻结引擎 + Python 环境 + 启动器 ──
         game_info: dict | None = None
         export_excluded: set[str] = set()
+        ext_details: dict = {"mode": "project_only", "scene_node_types": [],
+                             "required_dirs": [], "non_mainline": [],
+                             "unresolved_types": []}
         if include_player:
             # 5a. game.json（播放器清单）
             cls._write_json(os.path.join(out_dir, "game.json"), {
@@ -529,7 +537,20 @@ class ProjectManager:
             })
 
             # 5b. 冻结引擎副本（Resource 不含 wheels/ 与 runtime/ — 另放顶层）
-            export_excluded = cls._export_excluded_paths(engine_root)
+            # 游戏层按需带扩展：只收场景实际用到的 node pack；export:false 仍排除。
+            # 安装包不复用该规则（mainline allowlist，版权边界更严格）。
+            scene_types = cls._scene_node_types(out_dir, scenes_rel)
+            required_ext_dirs, ext_warnings, ext_details = cls._resolve_export_extensions(
+                engine_root, scene_types
+            )
+            warnings.extend(ext_warnings)
+            export_excluded = (cls._export_excluded_paths(engine_root, required_ext_dirs)
+                               | cls._local_state_paths(engine_root))
+            ext_details = dict(ext_details)
+            ext_details["required_dirs"] = [
+                os.path.relpath(p, engine_root).replace("\\", "/")
+                for p in sorted(required_ext_dirs)
+            ]
             app_files, app_bytes = cls._copy_tree_for_export(
                 os.path.join(engine_root, "Application"),
                 os.path.join(out_dir, "Application"), warnings,
@@ -649,6 +670,7 @@ class ProjectManager:
             "files": ["export_manifest.json", proj_file] + files,
             "export_excluded": [os.path.relpath(p, engine_root).replace("\\", "/")
                                  for p in sorted(export_excluded)],
+            "extensions": ext_details,
             "game": game_info,
             "warnings": warnings,
         })
@@ -660,6 +682,7 @@ class ProjectManager:
             "assets": copied,
             "bytes": total_bytes,
             "game": game_info,
+            "extensions": ext_details,
             "export_excluded": [os.path.relpath(p, cls._get_engine_root()).replace("\\", "/")
                                 for p in sorted(export_excluded)],
             "warnings": warnings,
@@ -690,13 +713,17 @@ class ProjectManager:
         return None
 
     @staticmethod
-    def _export_excluded_paths(engine_root: str) -> set[str]:
-        """扫描 `Application/Functions/**/extension.json`，返回 `export:false` 的绝对目录集。
+    def _export_excluded_paths(engine_root: str, required_dirs: set[str] | None = None) -> set[str]:
+        """扫描 `Application/Functions/**/extension.json`，返回不进入游戏层的绝对目录集。
 
-        Local/third-party fixtures can opt out of the游戏层 without touching this file:
-        `{"id": "myplugin", "export": false}`。默认 true（官方扩展行为不变）。
+        - `export:false` 永远排除（扩展作者/用户的明确 opt-out）；
+        - `required_dirs` 非 None 时按需分发：只保留场景实际用到的扩展目录，
+          未用到的官方扩展不随游戏包分发（安装包走独立 allowlist，见
+          `Utils/Dev/Installer/build_installer.py`）。
         """
         excluded: set[str] = set()
+        required = (None if required_dirs is None else
+                    {os.path.normcase(os.path.abspath(p)) for p in required_dirs})
         funcs = os.path.join(engine_root, "Application", "Functions")
         if not os.path.isdir(funcs):
             return excluded
@@ -709,9 +736,139 @@ class ProjectManager:
                     data = json.load(fh)
             except (OSError, ValueError):
                 continue
-            if isinstance(data, dict) and data.get("export", True) is False:
+            if not isinstance(data, dict):
+                continue
+            key = os.path.normcase(os.path.abspath(dirpath))
+            if data.get("export", True) is False:
+                excluded.add(os.path.abspath(dirpath))
+            elif required is not None and key not in required:
                 excluded.add(os.path.abspath(dirpath))
         return excluded
+
+    @staticmethod
+    def _local_state_paths(engine_root: str) -> set[str]:
+        """返回不随游戏层/安装包分发的编辑器本地状态目录（绝对路径）。"""
+        return {
+            os.path.abspath(os.path.join(engine_root, *rel.split("/")))
+            for rel in LOCAL_STATE_DIRS
+        }
+
+    @staticmethod
+    def _scene_node_types(out_dir: str, scenes_rel: list[str]) -> set[str]:
+        """从已写出的导出场景收集 node_type（不加载引擎、不执行节点）。"""
+        types: set[str] = set()
+        for rel in scenes_rel:
+            path = os.path.join(out_dir, rel)
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+            except (OSError, ValueError):
+                continue
+            graph = data.get("node_graph") if isinstance(data, dict) else None
+            if graph is None and isinstance(data, dict):
+                # Scene.save_to_file writes {"version": ..., "scene": {...}};
+                # tolerate both wrapped and bare scene JSON (tests/fixtures).
+                nested = data.get("scene")
+                if isinstance(nested, dict):
+                    graph = nested.get("node_graph")
+            nodes = graph.get("nodes") if isinstance(graph, dict) else None
+            if isinstance(nodes, dict):
+                values = nodes.values()
+            elif isinstance(nodes, list):
+                values = nodes
+            else:
+                values = ()
+            for node in values:
+                if not isinstance(node, dict):
+                    continue
+                node_type = node.get("node_type") or node.get("type")
+                if node_type:
+                    types.add(str(node_type))
+        return types
+
+    @staticmethod
+    def _official_extension_ids(engine_root: str) -> set[str]:
+        """Read the mainline installer allowlist (empty when unavailable)."""
+        path = os.path.join(engine_root, "Application", "Functions",
+                            "official_extensions.json")
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            return set()
+        return {
+            str(entry.get("id"))
+            for entry in (data.get("extensions") or ())
+            if isinstance(entry, dict) and entry.get("id")
+        }
+
+    @classmethod
+    def _resolve_export_extensions(
+        cls, engine_root: str, scene_types: set[str]
+    ) -> tuple[set[str], list[str], dict]:
+        """按场景实际节点类型选出随游戏层分发的扩展目录。
+
+        游戏导出是用户态、按需的：只带当前工程真正用到的扩展节点包；
+        `export:false` 仍是一票否决（第三方 fixture 可明确拒绝再分发）。
+        安装包则走独立 official allowlist，见 build_installer.py。
+        """
+        from Application.Core.NodeGraph.node_packs import NodePackRegistry
+
+        warnings: list[str] = []
+        required, unresolved = NodePackRegistry.extension_dirs_for_types(scene_types)
+        funcs = os.path.abspath(os.path.join(engine_root, "Application", "Functions"))
+        official_ids = cls._official_extension_ids(engine_root)
+        kept: set[str] = set()
+        non_mainline: list[str] = []
+        for directory in sorted(required):
+            abs_dir = os.path.abspath(directory)
+            try:
+                under_funcs = os.path.commonpath([abs_dir, funcs]) == funcs
+            except ValueError:
+                under_funcs = False
+            if not under_funcs:
+                warnings.append(
+                    f"extension node pack outside Application/Functions cannot be "
+                    f"bundled into the game: {abs_dir}"
+                )
+                continue
+            manifest = os.path.join(abs_dir, "extension.json")
+            manifest_id = os.path.basename(abs_dir)
+            try:
+                with open(manifest, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                if isinstance(data, dict):
+                    manifest_id = str(data.get("id") or manifest_id)
+                    if data.get("export", True) is False:
+                        warnings.append(
+                            f"scene uses nodes from extension '{manifest_id}' but its "
+                            f"extension.json declares export:false — excluded from game"
+                        )
+                        continue
+            except (OSError, ValueError):
+                warnings.append(
+                    f"extension manifest unreadable, directory kept for game export: {manifest}"
+                )
+            if official_ids and manifest_id not in official_ids:
+                non_mainline.append(manifest_id)
+                warnings.append(
+                    f"non-mainline extension '{manifest_id}' is included in the game export "
+                    f"because the scene uses its nodes; verify redistribution rights"
+                )
+            kept.add(abs_dir)
+        for node_type in sorted(unresolved):
+            warnings.append(
+                f"scene node type '{node_type}' has no registered extension directory — "
+                f"game may fail to load this graph"
+            )
+        details = {
+            "mode": "on_demand",
+            "scene_node_types": sorted(scene_types),
+            "required_dirs": sorted(kept),
+            "non_mainline": sorted(non_mainline),
+            "unresolved_types": sorted(unresolved),
+        }
+        return kept, warnings, details
 
     @staticmethod
     def _copy_tree_for_export(src: str, dst: str, warnings: list[str],

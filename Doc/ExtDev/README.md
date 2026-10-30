@@ -17,4 +17,8 @@ engine-editor-cli doc search <关键词>                    # 跨主题检索
 
 章节：1 从这里开始 · 2 官方示例扩展 · 3 获取方式与生态 · 4 硬性约定速览 · 5 文档地图
 
+工具仓开发指南索引：`FlyVibing-User-And-Developer-Utils/docs/DEVELOPMENT_GUIDES.md`
+（扩展 / 编辑器 UI / 节点包 / Example 四条路径）。扩展正文与 CLI 文档的唯一来源仍是
+`packages/editor-mcp/src/engine_editor_mcp/docs_content/extdev/**`。
+
 文档源文件：工具仓 `packages/editor-mcp/src/engine_editor_mcp/docs_content/extdev/README.md`。

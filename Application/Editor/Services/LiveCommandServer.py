@@ -1037,7 +1037,7 @@ class LiveCommandServer:
 
     @staticmethod
     def _op_graph_types(args: dict) -> dict:
-        """发现可用节点类型（含扩展 node_pack）: type/label/category/owner/pins。
+        """发现可用节点类型（含扩展 node_pack）: type/label/category/owner/signature/pins。
 
         args: owner（可选 — 只看某扩展，如 "device"）；category（可选）。
         """
@@ -1100,6 +1100,7 @@ class LiveCommandServer:
             raise ValueError(f"node {nid} not found")
         props = args.get("props") or {}
         inst.props.update(dict(props))
+        canvas.mark_changed()
         return {"node_id": nid, "props": dict(inst.props)}
 
     @staticmethod
@@ -1112,6 +1113,7 @@ class LiveCommandServer:
             raise ValueError(f"node {nid} not found")
         if "description" in args and args.get("description") is not None:
             inst.description = str(args.get("description") or "")
+            canvas.mark_changed()
         return {"node_id": nid, "description": str(inst.description or "")}
 
     @staticmethod

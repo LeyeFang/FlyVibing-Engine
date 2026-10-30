@@ -33,12 +33,17 @@ from __future__ import annotations
 
 # ── 公开 API ────────────────────────────────────────────────
 from .api import (
+    DeviceNotReady,
     start,
     stop,
+    stop_all,
     send,
     write_parallel,
     parallel_ready,
     is_running,
+    io_owner,
+    set_reset_delay,
+    reset_delay_ms,
 )
 
 # ── 设备身份（逻辑设备名 → 物理端口; 协议 device_io_protocol §10） ──
@@ -67,12 +72,17 @@ from .test_hooks import (
 )
 
 __all__ = [
+    "DeviceNotReady",
     "start",
     "stop",
+    "stop_all",
     "send",
     "write_parallel",
     "parallel_ready",
     "is_running",
+    "io_owner",
+    "set_reset_delay",
+    "reset_delay_ms",
     "SerialTask",
     "ParallelTask",
     "PARALLEL_ADDRS",

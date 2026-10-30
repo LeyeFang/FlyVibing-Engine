@@ -1,6 +1,7 @@
 {
   "version": "0.1.0",
   "name": "RestingState",
+  "provider": "@Official",
   "startup_scene": "scenes\\RestingState.scene",
   "scenes": [
     "scenes\\RestingState.scene"

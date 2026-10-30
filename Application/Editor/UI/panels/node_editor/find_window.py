@@ -9,16 +9,18 @@ from Application.Editor.I18n import t
 
 
 class FindWindowMixin:
-    """按 alias / type / label / description 搜索节点。"""
+    """按 alias / type / label / description / provider 搜索节点。"""
 
     @staticmethod
     def _node_search_blob(inst) -> str:
         ndef = _TYPES.get(inst.node_type)
         label = ndef.label if ndef else inst.node_type
+        signature = getattr(ndef, "signature", "") if ndef else ""
         parts = [
             str(getattr(inst, "alias", "") or ""),
             str(inst.node_type),
             str(label),
+            str(signature),
             str(getattr(inst, "description", "") or ""),
         ]
         parts.extend(str(v) for v in (inst.props or {}).values()

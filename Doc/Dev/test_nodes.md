@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**73**
-- `core`：69
+- 节点数：**77**
+- `core`：73
 - `heavy`：1
 - `live`：1
 - `manual`：2
@@ -32,9 +32,11 @@
 | `editor.editor_mcp_package` | `core` | `contract` | `editor` | `Test/Application/Editor/test_editor_mcp_package.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.node_packs |
 | `editor.editor_settings` | `core` | `integration` | `editor` | `Test/Application/Editor/test_editor_settings.py` | Application.Core.NodeGraph<br>Application.Editor.EditorSettings<br>Application.Editor.Extensions.ExtensionUI<br>Application.Editor.I18n<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.StartupOptions<br>Application.Editor.UI.UIManager<br>Application.Editor.UI.panels.SettingsPanel<br>Application.Editor.UI.panels.node_editor.panel |
 | `editor.examples_catalog` | `core` | `integration` | `editor` | `Test/Application/Editor/test_examples_catalog.py` | Application.Editor.UI.UIManager |
+| `editor.export_extension_scope` | `core` | `integration` | `editor` | `Test/Application/Editor/test_export_extension_scope.py` | Application.Editor.ProjectManager |
 | `editor.export_game_bundle` | `core` | `integration` | `editor` | `Test/Application/Editor/test_export_game_bundle.py` | Application.Core.Engine<br>Application.Core.NodeGraph.canvas<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.ProjectManager<br>Application.Resource.ResourceManager |
 | `editor.i18n_coverage` | `core` | `contract` | `editor` | `Test/Application/Editor/test_i18n_coverage.py` | Application.Core.NodeGraph.node_types<br>Application.Editor.DisplayLabels<br>Application.Editor.EditorSettings<br>Application.Editor.I18n<br>Application.Editor.UI.panels.SettingsPanel<br>Application.Editor.UI.panels.node_editor.styling |
 | `editor.imgui_hygiene` | `core` | `contract` | `editor` | `Test/Application/Editor/test_imgui_hygiene.py` | - |
+| `editor.imgui_input_flags` | `core` | `contract` | `editor` | `Test/Application/Editor/test_imgui_input_flags.py` | Application.Editor.UI.panels.ScenePanel<br>Application.Editor.UI.panels.node_editor.widgets.flow_io<br>Application.Functions.SerialParallelDevice.extension |
 | `editor.imgui_stack_pairing` | `core` | `contract` | `editor` | `Test/Application/Editor/test_imgui_stack_pairing.py` | - |
 | `editor.light_gizmo` | `core` | `integration` | `editor` | `Test/Application/Editor/test_light_gizmo.py` | Application.Core.Scene.BasicComponents<br>Application.Core.Scene.GizmoQuery<br>Application.Core.Scene.SceneManager<br>Application.Editor.Gizmos.LightIconGizmo |
 | `editor.live_command_server` | `core` | `integration` | `editor` | `Test/Application/Editor/test_live_command_server.py` | Application.Core.Engine<br>Application.Core.Events.Event<br>Application.Core.Input.InputState<br>Application.Core.NodeGraph<br>Application.Core.NodeGraph.canvas<br>Application.Core.Scene.BasicComponents<br>Application.Core.ThreadRegistry<br>Application.Editor.EditorHost<br>Application.Editor.Gizmos.Grid<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.BasePanel<br>Application.Editor.UI.UIManager<br>Application.Editor.UI.controllers.SimulationController<br>Application.Editor.UI.controllers.ViewportController |
@@ -42,12 +44,14 @@
 | `editor.node_runtime` | `manual` | `manual` | `editor` | `Test/Application/Editor/test_node_runtime.py` | Application.Core.Events.Event<br>Application.Core.NodeGraph<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorCamera<br>Application.Editor.EditorHost<br>Application.Editor.UI.UIManager<br>Application.Editor.UI.controllers.ResourceBrowserController<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Editor.UI.controllers.SelectionController<br>Application.Editor.UI.controllers.SimulationController<br>Application.Editor.UI.controllers.ViewportController<br>Application.Editor.UI.panels<br>Application.Resource.ResourceManager<br>Application.Runtime.GameRuntime<br>Application.Runtime.RuntimeNodeLayer |
 | `editor.pie_settings` | `core` | `integration` | `editor` | `Test/Application/Editor/test_pie_settings.py` | Application.Core.Scene.Scene<br>Application.Core.Window.glfwWindow<br>Application.Editor.UI.controllers.SimulationController<br>Application.Runtime.RuntimeWindow |
 | `editor.project_asset_commit` | `core` | `integration` | `editor` | `Test/Application/Editor/test_project_asset_commit.py` | Application.Core.Engine<br>Application.Core.Events<br>Application.Core.NodeGraph.canvas<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.ProjectManager<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Resource.Material<br>Application.Resource.ResourceManager |
+| `editor.pulse_examples` | `core` | `integration` | `editor` | `Test/Application/Editor/test_pulse_examples.py` | Examples/tools/pulse_pipeline.py<br>Examples/tools/apply_pulse_pipeline.py<br>Examples/SerialPulse/scenes/SerialPulse.scene<br>Examples/ParallelPulse/scenes/ParallelPulse.scene<br>Application.Core.NodeGraph.validation.dry_run |
 | `editor.release_layout` | `core` | `integration` | `editor` | `Test/Application/Editor/test_release_layout.py` | - |
 | `editor.scene_panel_interactions` | `core` | `ui-behavior` | `editor` | `Test/Application/Editor/test_scene_panel_interactions.py` | Application.Editor.Services.ControllerRegistry<br>Application.Editor.UI.controllers.ResourceBrowserController<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Editor.UI.controllers.SimulationController<br>Application.Editor.UI.controllers.ViewportController<br>Application.Editor.UI.panels.ScenePanel |
 | `editor.ui_map` | `core` | `integration` | `editor` | `Test/Application/Editor/test_ui_map.py` | - |
 | `editor.ui_text_safety` | `core` | `contract` | `editor` | `Test/Application/Editor/test_ui_text_safety.py` | - |
 | `editor.utils_layout` | `core` | `contract` | `editor` | `Test/Application/Editor/test_utils_layout.py` | Application.Editor.ProjectManager |
 | `extensions.extension_boundary` | `core` | `integration` | `extensions` | `Test/Application/Extensions/test_extension_boundary.py` | - |
+| `extensions.extension_graph` | `core` | `contract` | `extensions` | `Test/Application/Extensions/test_extension_graph.py` | Application.Editor.Extensions.ExtensionGraph |
 | `extensions.extension_manager` | `core` | `integration` | `extensions` | `Test/Application/Extensions/test_extension_manager.py` | Application.Editor.Extensions.ExtensionManager<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.UIManager |
 | `extensions.extension_review` | `core` | `contract` | `extensions` | `Test/Application/Extensions/test_extension_review.py` | - |
 | `extensions.extension_ui` | `core` | `ui-behavior` | `extensions` | `Test/Application/Extensions/test_extension_ui.py` | Application.Core.Extension.ExtensionBase<br>Application.Editor.Extensions.ExtensionManager<br>Application.Editor.Extensions.ExtensionUI<br>Application.Editor.UI.UIManager |

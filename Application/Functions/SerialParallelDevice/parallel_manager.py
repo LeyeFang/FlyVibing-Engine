@@ -64,6 +64,8 @@ def handle_parallel(task: ParallelTask) -> None:
     observe_parallel_write(task.address, task.data)
 
     if has_nonzero:
+        # 复位延迟可配置（state._reset_delay — api.set_reset_delay / 面板）
         state._reset_schedule.append(
-            (time.perf_counter() + 0.005, task.address, len(task.data))
+            (time.perf_counter() + float(state._reset_delay),
+             task.address, len(task.data))
         )

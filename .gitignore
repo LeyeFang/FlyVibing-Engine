@@ -67,6 +67,7 @@ Utils/ExtDev/
 # 内置扩展跟踪策略（白名单式, 2026-10-16）: Application/Functions 默认整体忽略 —
 # 仅官方扩展显式放行; Gtec（社区插件本地夹具）不在白名单 → 天然忽略。
 Application/Functions/*
+!Application/Functions/official_extensions.json
 !Application/Functions/SignalProcess/
 !Application/Functions/BCIAlgorithm/
 !Application/Functions/SerialParallelDevice/

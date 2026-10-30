@@ -1,6 +1,7 @@
 # Device (Serial/Parallel) Extension — TODO（状态档案）
 
-> 状态: **v0.3.0 — 监视面板 + 逻辑设备名 + NodePack 注入 + 自动重绑已交付；2026-10-20 起由现任维护 agent 接手（core 58/58 全绿）**
+> 状态: **v0.5.0 — 监视面板 + Device Manager（绑定/改绑/解绑 + 节点影响确认）+ 枚举端口下拉 + 逻辑设备名 + NodePack 注入 + 自动重绑
+>   + 并口写入修复（byte 单字节默认 / 载荷预览 / 面板自持 I/O 租约 / 脉冲宽度可调）**
 > **接手入口: `HANDOFF.md`（交接书）+ `HANDOFF_PROMPT.md`（启动提示词）— 新维护者先读这两份**
 > **2026-10-20 节点包迁移**: `Doc/NODE_PACK_MIGRATION_2026-10-20.md`（已迁出核心；Serial 侧收尾清单）
 > 开发规范: `engine-editor-cli doc show extdev/extension_dev_protocol` · 架构: `engine-editor-cli doc show dev/extension_protocol`
@@ -14,7 +15,7 @@
 |---|---|---|
 | 设备 API | `Application/Functions/SerialParallelDevice/api.py`（+ `__init__` 门面） | 串口/并口打开/写/读; 线程 `spd-io`（已在 ThreadRegistry 注册） |
 | 监视能力 | `Application/Functions/SerialParallelDevice/monitor.py`（新 2026-10-11） | 端口枚举 / RX poll（io_thread ≤50ms）/ 事件环缓 (500) / 统计 |
-| 扩展本体 | `Application/Functions/SerialParallelDevice/extension.py`（新 2026-10-11） | 监视面板（Serial/Parallel 页） + `ext.device.*` ops + 设置持久化 |
+| 扩展本体 | `Application/Functions/SerialParallelDevice/extension.py`（新 2026-10-11） | 监视面板（Serial/Parallel 页）+ **Device Manager 面板**（绑定/改绑/解绑，改动前弹窗列出受影响节点）+ `ext.device.*` ops + 设置持久化 |
 | IO 线程 | `Application/Functions/SerialParallelDevice/io_thread.py` | 委托线程（thread boundary 白名单 delegated） |
 | 节点族 | `Application/Functions/SerialParallelDevice/node_pack.py` | Serial/Parallel Send 类型+求值器+fields；`NodePackRegistry` 自动发现 |
 | USB 指纹/自动重绑 | `identity.py` + `extension.py::_op_autobind` | serial > vid:pid；歧义显式拒绝 |

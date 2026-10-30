@@ -93,6 +93,7 @@
 | 面板横向 resize 不缩放节点 | **已完成** | 节点编辑器 `CanvasSizeMode.center_only`；实测 docked/floating 宽度 468→761，zoom=0.9336 与节点屏幕宽度 121.1 均保持不变；GetTime 的 combo item width 显式钳制 110–220px（不再取面板可用宽度），GetTime 卡片宽度保持 79.2px |
 | 实机 UI 输入注入 | **已完成** | live ops `ui.mouse` / `ui.mouse_button` / `ui.click` / `ui.drag` / `ui.wheel` / `ui.key`；在 backend `new_frame` 后注入并同步 GLFW 光标/焦点；`ui.panel` 返回 Node Editor view 诊断（组标题/组框矩形）。节点编辑器诊断不再在渲染帧外调用原生 `get_selected_nodes()`（无 editor context 会崩溃），改用纯 Python 选择快照 |
 | 卡片说明文字 | **已完成** | 移除卡片底部浅色 `props_text`；默认写入 `NodeInstance.description`，在 Description 展开区编辑 |
+| 提供者签名 | **已完成（2026-10-29）** | 节点卡标题下灰色 `@Official` / `@Author`（`NodeTypeDef.signature`；核心/官方 pack 默认 `@Official`，运行期 pack 默认 `@Community`）；Example 菜单显示 `名称 @Provider`，社区示例从 `%APPDATA%/FlyVibingEngine/examples` 读取，不写主线 `Examples/` |
 | 面板代码拆分 | **已完成** | `panel.py` 约 1000 行（原约 1860）；选择/组菜单/组窗口/IO/Find/Validate 拆为独立 mixin 模块 |
 
 ## 4. FlyVibing 1.0.1 Release
@@ -149,3 +150,33 @@
 |---|---|---|
 | 2026-10-21 | 手动加载 MI-SSSEP 工程时 `TextSystem.tick` 抛 `dictionary changed size during iteration` | `SceneManager` 增加实体注册表 RLock + `entity_ids_snapshot()`；SceneSync / EntityManager / PrefabManager / EditorHost / EditorLayer / SimulationController 的写入与迭代统一走锁；`test_scene_manager` 增加并发快照回归（52 checks） |
 | 2026-10-21 | `startup.bat` 在 PowerShell 下出现 `'al'`/`'hon'` 等碎片命令错误 | 文件由 LF-only 转为 CRLF；`startup.bat` 启动输出已验证干净 |
+| 2026-10-27 | 物理显示器拔除、向日葵远程直连时，编辑器/PIE/导出成品窗口看似全白 | **环境呈现问题，非引擎回归**；独立 GLFW 探针前缓冲为绿色、系统截图为白色；归档 `remote_display_white_screen.md`，不改渲染/场景/导出逻辑 |
+| 2026-10-29 | 安装包 staging 复制本地扩展 fixture；游戏导出与安装包误共用 `export:false` 语义 | 安装包改用 `Application/Functions/official_extensions.json` mainline allowlist；游戏导出改为场景节点按需 + `export:false` opt-out；`test_release_layout.py` / `test_export_extension_scope.py` 锁定两条策略，避免错杀官方扩展或漏掉本地 fixture |
+| 2026-10-29 | 扩展无法创建/检索自己的节点并刷新 GUI（设备扩展反馈） | `ctx.graph` 增加 `owned_nodes` / `find_type` / `add_node` / `update_node` / `set_props` / `replace_props` / `remove_node` / `add_link` / `remove_link` / `request_redraw`；默认限制本扩展 owner；`NodeCanvas.revision` 驱动面板缓存失效；`test_extension_graph.py` 覆盖 |
+
+## 8. 运行时场景 / 游戏内 GUI / 输入（默认方案已预设，待复核）
+
+> 详细设计稿：`runtime_scene_ui_input_plan.md`（2026-10-27）。
+> 用户已确认先做 Utils/B0（2026-10-29）；其余默认方案仍可复核，不阻塞 B0 开工。
+> 拆成 **A 运行时场景生命周期** 与 **B 运行时交互层（GUI + 输入）** 两个工作流；GUI 与输入必须共用事件消费顺序。
+
+| 事项 | 状态 | MVP 验收 |
+|---|---|---|
+| A1 `RuntimeSceneService` + 安全帧边界切换/清理 | 待开工（默认方案） | 无头测试：请求→替换→旧实体/GPU 清理；旧图停止、新图 `OnGameStart` |
+| A2 `SwitchScene` 节点 + 相机/game_type/背景色/模板重建 | 待开工（默认方案） | 2D/3D/overlay 场景切换首帧相机正确；场景缺失可回滚 |
+| A3 PIE/导出成品场景切换 e2e | 待开工（默认方案） | PIE 不污染编辑器；成品可见新场景且无旧实体残留 |
+| B0 Utils 虚拟输入高层封装（鼠标/键盘/组合键、editor/PIE/game 目标） | 下一迭代（已规划） | agent 脚本可拖拽场景镜头、缩放/右键节点图；无手工点击 |
+| B1 `UIWidget` + 屏幕空间 `UISystem`（button/label/panel/popup） | 待开工（默认方案） | 无 ImGui 依赖；hover/pressed/click；PIE 截图 |
+| B2 运行时输入队列 + `OnKeyPressed`/`OnMouseClicked` + UI 优先消费 | 待开工（默认方案） | 节点只触发一次；UI 点击不穿透；PIE/导出一致 |
+| B3 Popup/modal + ESC 策略 + 焦点/禁用态 | 待开工（默认方案） | 弹窗拦截下层；ESC 先关弹窗；按钮禁用不可点 |
+| B4 UI 实体进场景保存/加载 + 编辑器预览 | 待开工（默认方案） | UI 实体保存/加载往返；编辑器中可摆放；导出一致 |
+| B5 两个官方 Example 的 ESC 退出 + 清理 | 待开工（默认方案） | MI/RestingState ESC 停止，无设备/媒体/GPU 残留；成品同语义 |
+| B6 运行时 UI/输入测试、文档、示例 | 待开工（默认方案） | `test_runtime_ui` / `test_runtime_input` / e2e；协议与指南同步 |
+
+### 默认决策（待复核）
+
+1. 场景切换：设备/BCI 会话保留；场景变量、计时器、旧图状态重置；持久变量后置。
+2. UI 架构：实体化 `UIWidget` + 屏幕空间 `UISystem`，不采用 imgui-bundle。
+3. MVP 控件：`button/label/panel/popup`；文本输入、滚动视图、复杂布局后置。
+4. ESC：保留“ESC 关闭窗口”安全网 + 工程开关；有 modal 时先关弹窗。
+5. UI 坐标：先以 1920×1080 参考分辨率 + 像素偏移，后续再加自适应锚点。

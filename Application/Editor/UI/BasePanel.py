@@ -19,6 +19,11 @@ class BasePanel(ABC):
     # 空 = 直接用 `name`（英文标识符）。imgui 窗口 ID 恒为 `###<name>`，
     # 因此标题文案随语言变化不影响 dock 布局与状态身份。
     title_key: str = ""
+    # 首次出现位置（None = 交给 ImGui 默认级联）。
+    # 扩展的附属窗口（如设备管理）用它避免叠在主面板上。
+    first_use_pos: tuple[float, float] | None = None
+    # 首次出现尺寸（None = 自动适应内容）。附属窗口用它固定布局宽度。
+    first_use_size: tuple[float, float] | None = None
 
     def __init__(
         self
@@ -77,6 +82,14 @@ class BasePanel(ABC):
             label = f"{t(self.title_key)}###{self.name}"
         else:
             label = self.name
+        if self.first_use_pos is not None:
+            imgui.set_next_window_pos(
+                (float(self.first_use_pos[0]), float(self.first_use_pos[1])),
+                imgui.Cond_.first_use_ever)
+        if self.first_use_size is not None:
+            imgui.set_next_window_size(
+                (float(self.first_use_size[0]), float(self.first_use_size[1])),
+                imgui.Cond_.first_use_ever)
         expanded, self.visible = imgui.begin(
             label, self.visible, self.flags
         )

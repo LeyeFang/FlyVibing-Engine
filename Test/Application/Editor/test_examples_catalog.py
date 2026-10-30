@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 
 _d = os.path.dirname(os.path.abspath(__file__))
 while _d and not os.path.exists(os.path.join(_d, "_path_setup.py")):
@@ -62,6 +63,9 @@ def main() -> int:
           rest_project.get("name") == "RestingState"
           and rest_project.get("startup_scene") == "scenes\\RestingState.scene",
           str(rest_project))
+    check("official projects carry provider metadata",
+          mi_project.get("provider") == "@Official"
+          and rest_project.get("provider") == "@Official")
     check("README index exists", os.path.isfile(os.path.join(EXAMPLES, "README.md")))
 
     from Application.Editor.UI.UIManager import UIManager
@@ -71,6 +75,38 @@ def main() -> int:
     check("File menu lists RestingState",
           catalog.get("RestingState") == os.path.join(
               REST_DIR, "RestingState.myproj"), str(catalog))
+    check("official MI provider signature",
+          UIManager._example_provider(os.path.join(MI_DIR, "MI.myproj")) == "@Official")
+    check("official RestingState provider signature",
+          UIManager._example_provider(os.path.join(
+              REST_DIR, "RestingState.myproj")) == "@Official")
+
+    # 社区 Example 注入: 用户目录，不写仓库 Examples/
+    with tempfile.TemporaryDirectory(prefix="mge_user_examples_") as user_root:
+        community = os.path.join(user_root, "Community", "Community.myproj")
+        os.makedirs(os.path.dirname(community))
+        with open(community, "w", encoding="utf-8") as fh:
+            json.dump({"name": "Community", "provider": "ACME"}, fh)
+        no_provider = os.path.join(user_root, "NoProvider", "NoProvider.myproj")
+        os.makedirs(os.path.dirname(no_provider))
+        with open(no_provider, "w", encoding="utf-8") as fh:
+            json.dump({"name": "NoProvider"}, fh)
+        old = {k: os.environ.get(k) for k in ("FVE_EXAMPLES_DIR", "MGE_EXAMPLES_DIR")}
+        os.environ["FVE_EXAMPLES_DIR"] = user_root
+        try:
+            user_catalog = dict(UIManager._example_projects())
+            check("user example directory is scanned",
+                  user_catalog.get("Community") == community, str(user_catalog))
+            check("explicit provider is normalized",
+                  UIManager._example_provider(community) == "@ACME")
+            check("user example defaults to @Community",
+                  UIManager._example_provider(no_provider) == "@Community")
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
     from flyvibing_node_editor.node_graph_validator import validate_static
 

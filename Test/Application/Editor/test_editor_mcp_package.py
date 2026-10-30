@@ -103,6 +103,9 @@ def test_registry() -> None:
     NodePackRegistry.register(probe)
     check("runtime pack registered", "ext.probe.Node" in _TYPES
           and NodePackRegistry.owner_of("ext.probe.Node") == "probe_owner")
+    probe_sig = {item["type"]: item for item in NodePackRegistry.catalog()}.get(
+        "ext.probe.Node", {}).get("signature")
+    check("runtime pack defaults to @Community", probe_sig == "@Community", str(probe_sig))
     check("runtime pack fields",
           NodePackRegistry.fields_for("ext.probe.Node"),
           str(NodePackRegistry.fields_for("ext.probe.Node")))

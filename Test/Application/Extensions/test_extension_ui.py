@@ -139,6 +139,20 @@ def main() -> int:
         ExtensionUI.show_all("extA")
         check("show_all 重置可见 (enable 恢复路径)", ps.visible is True)
 
+        # 按需窗口（show_on_enable=False）: show_all 不弹它, 但 show_window 能单独打开
+        ui_a.register_window("Test OnDemand", draw_ok, show_on_enable=False,
+                             first_pos=(300.0, 200.0), first_size=(480.0, 320.0))
+        od = UIManager.find("Test OnDemand")
+        ExtensionUI.show_all("extA")
+        check("show_on_enable=False 的窗口不被 show_all 弹出", od.visible is False)
+        check("show_window 打开本扩展窗口",
+              ui_a.show_window("Test OnDemand") is True and od.visible is True)
+        check("他人无法 show_window 本扩展窗口",
+              ui_b.show_window("Test OnDemand") is False)
+        check("first_pos/first_size 已记录",
+              tuple(od.first_use_pos) == (300.0, 200.0)
+              and tuple(od.first_use_size) == (480.0, 320.0))
+
         # ── 8. 语言层强制（UIExtensionBase） ────────────────
         print("── language enforcement ──")
         from Application.Core.Extension.ExtensionBase import ExtensionBase, UIExtensionBase

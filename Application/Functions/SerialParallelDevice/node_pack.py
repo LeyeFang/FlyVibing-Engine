@@ -94,6 +94,7 @@ def register() -> dict:
         "id": "device",
         "name": "Device (Serial/Parallel)",
         "owner": "device",
+        "signature": "@Official",
         "nodes": [
             {
                 "type": "SerialSend",

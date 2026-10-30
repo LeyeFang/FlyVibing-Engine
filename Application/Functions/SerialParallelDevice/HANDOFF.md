@@ -9,6 +9,11 @@
 > 改由本目录 `node_pack.py` 注入；Serial 侧待补项见 `Doc/NODE_PACK_MIGRATION_2026-10-20.md`。
 > **v0.3.0（2026-10-20）**: `node_pack.py` 已自动发现注入；新增 `ext.device.autobind`
 > （USB 指纹自动重绑）+ 面板 `Auto-detect`。
+> **v0.4.0（2026-10-30）**: 面板重构 — ①**Port 改为枚举下拉**（不再手输；当前值不在枚举里时
+> 显示 `(not found)` / `(alias)`）；②新增独立面板 **Device Manager**（按需窗口,
+> 不在 enable 时自动弹）：发现端口 + 绑定/改绑/解绑 + 节点迁移；③**改绑/解绑前弹窗确认**，
+> 列出当前场景引用该别名/端口的节点（解绑后它们会变成 `device_alias_unresolved`）。
+> 表单采用左置标签（`_form_label`），与设备族面板同一视觉语言。
 
 ---
 
@@ -60,12 +65,23 @@
 
 ## 4. 现状与已知坑
 
-- **已交付**: 监视面板（含 Device names 段）/ 9 ops（含 `autobind`）/ 设备名闭环 / 面板↔场景同步 / NodePack 注入；
+- **v0.5.0（2026-10-30）并口面板修复 + I/O 线程租约**:
+  1. **面板写并口前必须取租约**: 旧面板 Write 不调 `start()` → `write_parallel` 见 `_running=False`
+     只 print 就丢，UI 毫无提示（"设备收不到并口"的真因之一）。现面板写/发前 `start("editor")`，
+     并以 `strict=True` 入队（失败抛 `DeviceNotReady` → 面板错误行）。
+  2. **默认格式必须 `byte`**: `"bytes"` = float32 LE 4 字节，写 `1.0` 落 base 的是 `0x00`（设备看不见）,
+     且 +2/+3 在标准 LPT 上是控制/状态寄存器。节点评估器一直用 `"byte"` —— 这就是"图能跑、面板不能"的原因。
+     面板现默认 `byte`，写入前显示 `-> 0x3FF8 <- 01 (1B)` 预览；旧 settings（schema 1）自动迁移。
+  3. **I/O 线程所有权 = 单线程 + 租约**（`state._leases` / `io_owner()`）: `runtime`（GameRuntime）优先，
+     `editor`（面板/ops）按需取；`stop(owner)` 只释放自己的租约 → PIE 运行期间关面板**不会**停 I/O，
+     PIE 停止后面板调试的线程继续。**不要**给编辑器单开第二条线程（驱动/串口句柄/复位调度只有一份）。
+  4. 复位延迟（脉冲宽度）可配: `set_reset_delay(ms)` / 面板 `Pulse` 下拉（1/5/10/25/50 ms，全局设置）。
+- **已交付**: 监视面板（Port 枚举下拉 / 发送区 / 事件流）+ **Device Manager 面板**（绑定/改绑/解绑，改动前确认受影响节点）/ 9 ops（含 `autobind`）/ 设备名闭环 / 面板↔场景同步 / NodePack 注入；
   单扩展 `review_extension.py Application/Functions/SerialParallelDevice` = **18 pass / 0 warn / 0 fail**；core 全套 **58/58** 绿；
   三件套直跑 **32/32 · 33/33 · 14/14**；autobind **27/27**；node_pack **17/17**；scalar_math **10/10**（2026-10-20 复核）。
 - **测试资产**: `Test/Application/Functions/test_device_alias.py`（32/32，设备名闭环，含注册表沙箱 `MGE_DEVICES_FILE`）、
   `Test/Application/Functions/test_device_autobind.py`（27/27，指纹/唯一候选/歧义/dry-run/面板端口跟随）、
-  `Test/Application/Functions/test_serial_parallel_device.py`（33/33）、
+  `Test/Application/Functions/test_serial_parallel_device.py`（v0.5.0: 64/64，含租约/严格写入/复位延迟/载荷校验）、
   `Test/Application/Functions/test_spd_monitor.py`（14/14）、
   `Test/Application/NodeGraph/test_node_pack.py`（17/17，自动发现/无连线持久化/反注册）、
   `Test/Application/NodeGraph/test_scalar_math_ops.py`（10/10，短名/长名/未知操作）、

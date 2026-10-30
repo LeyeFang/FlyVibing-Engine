@@ -14,11 +14,13 @@ def encode(value, fmt: str = "string") -> bytes:
 
     Args:
         value:  数字或字符串
-        fmt:    "string" → str(value).encode("utf-8")
-                "bytes"  → struct.pack("<f", float(value))
+        fmt:    "string" → str(value).encode("utf-8") (+ "\\n" 终止符)
+                "bytes"  → struct.pack("<f", float(value)) — float32 小端 4 字节
+                "byte"   → struct.pack("<B", 1..255) — uint8 单字节（0 为复位保留,
+                           复位由 I/O 线程自动写入, 不经本函数）
 
     Returns:
-        编码后的字节串。非法 value 时静默回退为 0.0 / 空串。
+        编码后的字节串。非法 value 时静默回退为 0.0 / 1 / 空串。
     """
     if fmt == "bytes":
         try:

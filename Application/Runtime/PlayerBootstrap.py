@@ -391,9 +391,10 @@ def run(source: str, max_frames: int = 0) -> int:
 
     # ── 收尾: 设备 I/O 线程 + EEG 会话安全网（与 GameRuntime.stop 语义一致）──
     try:
-        from Application.Functions.SerialParallelDevice import stop as spd_stop
+        # 成品退出 = 进程结束: 释放全部租约（编辑器面板/调试残留一起清）
+        from Application.Functions.SerialParallelDevice import stop_all as spd_stop_all
 
-        spd_stop()
+        spd_stop_all()
     except Exception:
         pass
     try:

@@ -17,6 +17,7 @@ def register() -> dict:
         "id": "virtual",
         "name": "Virtual Device",
         "owner": "virtual",
+        "signature": "@Official",
         "nodes": [
             {
                 "type": "CreateDevicePool", "label": "Create Device Pool",

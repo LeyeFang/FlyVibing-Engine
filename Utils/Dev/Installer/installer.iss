@@ -54,6 +54,12 @@ Name: "fileassoc"; Description: "Associate .myproj project files with FlyVibingE
 [Files]
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
+[InstallDelete]
+; Legacy (< 1.0.2) extension enablement lived inside the install tree and leaked
+; local plugin names (for example gtec) into released products. New state lives
+; under %APPDATA%\FlyVibingEngine\editor_state\; remove the stale file on upgrade.
+Type: files; Name: "{app}\Application\Editor\Config\extensions.json"
+
 [Icons]
 Name: "{group}\FlyVibingEngine"; Filename: "{app}\startup.bat"; WorkingDir: "{app}"
 Name: "{group}\Uninstall FlyVibingEngine"; Filename: "{uninstallexe}"

@@ -283,6 +283,36 @@ def main() -> int:
     check("status 含 devices 视图",
           any(d.get("alias") == "@lab2" for d in st.get("devices", [])), str(st.get("devices")))
 
+    # ── 7. Device Manager: 影响文案 + 节点引用统计（改动前置确认） ──
+    print("-- 7. device manager impact / node refs --")
+    impact_unbind = ext_mod.describe_binding_impact(
+        "unbind", "lab2", "COM5", "", 9600, ["#5 SerialSend"])
+    check("unbind 文案列出受影响节点",
+          any("#5 SerialSend" in line for line in impact_unbind), str(impact_unbind))
+    check("unbind 文案提示指向空",
+          any("device_alias_unresolved" in line for line in impact_unbind), str(impact_unbind))
+    impact_none = ext_mod.describe_binding_impact("unbind", "lab2", "COM5", "", 9600, [])
+    check("无引用时文案说明没有节点受影响",
+          any("No scene node" in line for line in impact_none), str(impact_none))
+    impact_rebind = ext_mod.describe_binding_impact(
+        "rebind", "lab2", "COM5", "COM7", 115200, ["#5 SerialSend", "#6 SerialSend"])
+    check("rebind 文案含 old -> new 与波特率",
+          any("COM5 -> COM7 @115200" in line for line in impact_rebind), str(impact_rebind))
+    check("rebind 文案说明节点将改走新端口",
+          any("will talk to COM7" in line for line in impact_rebind), str(impact_rebind))
+    many = ext_mod.describe_binding_impact(
+        "unbind", "lab2", "COM5", "", 9600, [f"#{i} SerialSend" for i in range(12)])
+    check("超过 8 个引用时截断显示",
+          any("… and 4 more" in line for line in many), str(many))
+
+    refs = ext._node_refs("lab", "COM5")
+    check("_node_refs 汇总 @别名 与物理端口引用",
+          refs == ["#5 SerialSend"], str(refs))
+    check("_node_refs 无引用 → 空列表", ext._node_refs("lab2", "COM5") == [],
+          str(ext._node_refs("lab2", "COM5")))
+    check("_alias_summary 列出绑定",
+          "@lab2 -> COM5" in ext._alias_summary(), ext._alias_summary())
+
     # ── 收尾 ──
     reg._reset_for_tests()
     if os.path.exists(_REG_FILE):

@@ -5,7 +5,8 @@ build_installer.py — FlyVibingEngine 离线安装包构建（staging + Inno Se
   1. 校验 Resource/runtime/python3.14t.exe 存在（缺失 → 先运行 Utils/Dev/prepare_runtime.py）
   2. staging → Utils/Dev/Installer/build/stage
        - 引擎树: Application/ Resource/ Doc/ Utils/User/ startup.bat（排除 __pycache__ 等;
-         Dev 工具链不进安装包）
+         Application/Functions 仅保留 official_extensions.json allowlist;
+         Application/Editor/Config 本地状态不进包; Dev 工具链不进安装包）
        - 引擎依赖补齐: pip --no-index -r Resource/wheels/requirements.export.txt
          --target <stage>/Resource/runtime/Lib/site-packages（安装版 = 开发版环境）
        - 独立包: FlyVibing-User-And-Developer-Utils/packages/editor-mcp/src/engine_editor_mcp → runtime site-packages
@@ -26,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
 import shutil
 import subprocess
@@ -43,6 +45,12 @@ RUNTIME = os.path.join(ROOT, "Resource", "runtime")
 
 _SKIP_DIRS = {"__pycache__", ".git", ".venv-py314t", ".vscode", "build", "dist", "tmp"}
 _SKIP_SUFFIX = (".pyc", ".pyo")
+_OFFICIAL_MANIFEST = "official_extensions.json"
+
+# 编辑器本地状态（git-ignored；扩展启用表、PIE/UI 布局、插件数据）不进安装包。
+# 与 Application/Editor/ProjectManager.LOCAL_STATE_DIRS 保持同一契约；
+# 守卫: Test/Application/Editor/test_release_layout.py。
+_LOCAL_STATE_DIRS = ("Application/Editor/Config",)
 
 
 def _version() -> str:
@@ -53,9 +61,12 @@ def _version() -> str:
     return str(data["project"]["version"])
 
 
-def _copy_tree(src: str, dst: str, skip_top: tuple[str, ...] = ()) -> None:
+def _copy_tree(src: str, dst: str, skip_top: tuple[str, ...] = (),
+               exclude_paths: set[str] | None = None) -> None:
+    blocked = {os.path.normcase(os.path.abspath(p)) for p in (exclude_paths or ())}
     for base, dirs, files in os.walk(src):
-        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
+        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS
+                   and os.path.normcase(os.path.abspath(os.path.join(base, d))) not in blocked]
         if base == src and skip_top:
             dirs[:] = [d for d in dirs if d not in skip_top]
         rel = os.path.relpath(base, src)
@@ -67,17 +78,91 @@ def _copy_tree(src: str, dst: str, skip_top: tuple[str, ...] = ()) -> None:
             shutil.copy2(os.path.join(base, fname), os.path.join(out, fname))
 
 
+def _official_extension_dirs(functions_root: str) -> set[str]:
+    """读取 mainline allowlist，返回允许进入安装包的扩展目录（绝对路径）。
+
+    安装包是版权边界更严格的发行物：只允许 `Application/Functions` 下
+    `official_extensions.json` 明确列出的官方扩展。`export:false` 只控制
+    游戏导出，不在这里生效（官方扩展可能对 game 关闭但仍是主线安装包的一部分）。
+    """
+    manifest = os.path.join(functions_root, _OFFICIAL_MANIFEST)
+    if not os.path.isfile(manifest):
+        raise RuntimeError(
+            f"installer allowlist missing: {manifest} "
+            "(mainline installer must not fall back to scanning local extensions)"
+        )
+    try:
+        with open(manifest, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(f"installer allowlist unreadable: {manifest}: {exc}") from exc
+
+    entries = data.get("extensions") if isinstance(data, dict) else None
+    if not isinstance(entries, list) or not entries:
+        raise RuntimeError(f"installer allowlist has no extensions: {manifest}")
+
+    base = os.path.abspath(functions_root)
+    official: set[str] = set()
+    for entry in entries:
+        dir_name = str((entry or {}).get("dir") or "").strip() if isinstance(entry, dict) else ""
+        ext_id = str((entry or {}).get("id") or "").strip() if isinstance(entry, dict) else ""
+        if not dir_name or not ext_id:
+            raise RuntimeError(f"installer allowlist entry requires id+dir: {entry!r}")
+        directory = os.path.abspath(os.path.join(base, dir_name))
+        try:
+            if os.path.commonpath([directory, base]) != base:
+                raise ValueError("path escapes Functions")
+        except ValueError as exc:
+            raise RuntimeError(f"installer allowlist path escapes Functions: {dir_name}") from exc
+        ext_manifest = os.path.join(directory, "extension.json")
+        if not os.path.isfile(ext_manifest):
+            raise RuntimeError(f"official extension missing manifest: {ext_manifest}")
+        try:
+            with open(ext_manifest, "r", encoding="utf-8") as fh:
+                actual = str(json.load(fh).get("id") or "")
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(f"official extension manifest unreadable: {ext_manifest}: {exc}") from exc
+        if actual != ext_id:
+            raise RuntimeError(
+                f"official extension id mismatch: {dir_name} declares {actual!r}, "
+                f"allowlist wants {ext_id!r}"
+            )
+        official.add(directory)
+    return official
+
+
+def _nonofficial_extension_dirs(functions_root: str) -> set[str]:
+    """返回不在 mainline allowlist 内的顶层扩展目录（安装包 staging 必须排除）。"""
+    official = _official_extension_dirs(functions_root)
+    base = os.path.abspath(functions_root)
+    blocked: set[str] = set()
+    if not os.path.isdir(base):
+        return blocked
+    for name in os.listdir(base):
+        path = os.path.abspath(os.path.join(base, name))
+        if os.path.isdir(path) and path not in official:
+            blocked.add(path)
+    return blocked
+
+
 def _stage_engine_tree(skip_runtime: bool) -> None:
     # Application/Doc/Utils 完全由源树生成 — 即使 --keep-stage 也先清空，
-    # 避免旧插件/已删除文件（如历史 Gtec 副本）残留进安装包。
+    # 避免旧插件/已删除文件残留进安装包。安装包只允许 mainline allowlist 中的官方扩展；
+    # `export:false` 只属于游戏导出语义，不在这里“错杀”官方扩展。
     for item in ("Application", "Doc", "Utils"):
         dst = os.path.join(STAGE, item)
         if os.path.isdir(dst):
             shutil.rmtree(dst)
+    installer_blocked = _nonofficial_extension_dirs(
+        os.path.join(ROOT, "Application", "Functions"))
+    local_state = {os.path.abspath(os.path.join(ROOT, *rel.split("/")))
+                   for rel in _LOCAL_STATE_DIRS}
+    app_blocked = installer_blocked | local_state
     for item in ("Application", "Resource", "Doc", "Examples"):
         src = os.path.join(ROOT, item)
         skip_top = ("runtime",) if (skip_runtime and item == "Resource") else ()
-        _copy_tree(src, os.path.join(STAGE, item), skip_top=skip_top)
+        _copy_tree(src, os.path.join(STAGE, item), skip_top=skip_top,
+                   exclude_paths=app_blocked if item == "Application" else None)
     # Utils: 安装版只收 User 层（Dev 工具链 = 开发者专用, 不进产品）
     utils_src = os.path.join(ROOT, "Utils")
     _copy_tree(os.path.join(utils_src, "User"), os.path.join(STAGE, "Utils", "User"))

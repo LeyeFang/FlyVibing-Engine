@@ -62,6 +62,36 @@ def _write(path: str, content: str) -> None:
         fh.write(content)
 
 
+def _check_default_state_paths() -> None:
+    """Default extension state/data must live under APPDATA, never the engine repo."""
+    from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+
+    keys = ("APPDATA", "FVE_EXTENSIONS_STATE", "MGE_EXTENSIONS_STATE",
+            "FVE_EXTENSIONS_DATA", "MGE_EXTENSIONS_DATA",
+            "FVE_DATA_DIR", "MGE_DATA_DIR")
+    saved = {k: os.environ.get(k) for k in keys}
+    try:
+        with tempfile.TemporaryDirectory(prefix="mge_ext_home_") as home:
+            os.environ["APPDATA"] = home
+            for key in keys[1:]:
+                os.environ.pop(key, None)
+            state = os.path.abspath(ExtensionManager._state_path())
+            data = os.path.abspath(ExtensionManager._data_dir("demo"))
+            root = os.path.abspath(ExtensionManager._engine_root())
+            home_abs = os.path.abspath(home)
+            check("extension state defaults under APPDATA", state.startswith(home_abs + os.sep), state)
+            check("extension data defaults under APPDATA", data.startswith(home_abs + os.sep), data)
+            check("extension state/data outside engine repo",
+                  not state.startswith(root + os.sep) and not data.startswith(root + os.sep),
+                  f"{state} / {data}")
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def main() -> int:
     print("=" * 60)
     print("Extension manager — discovery/enable/disable/containment (headless)")
@@ -214,10 +244,14 @@ def main() -> int:
         from Application.Editor.UI.UIManager import UIManager
         check("监视面板窗口已注册 (ctx.ui.register_window)",
               UIManager.find("Serial/Parallel Monitor") is not None)
+        check("设备管理窗口已注册 (按需窗口)",
+              UIManager.find("Device Manager") is not None
+              and UIManager.find("Device Manager").show_on_enable is False)
         ExtensionManager.disable("device")
         check("device 卸载 → 窗口与 ops 同时清理",
               "ext.device.status" not in LiveCommandServer.extension_ops_snapshot()
-              and UIManager.find("Serial/Parallel Monitor") is None)
+              and UIManager.find("Serial/Parallel Monitor") is None
+              and UIManager.find("Device Manager") is None)
 
         # ── 6c. capabilities ui ↔ UIExtensionBase 校验（语言层第二道闸） ──
         r = ExtensionManager.enable("uext_ui_missing")
@@ -247,6 +281,8 @@ def main() -> int:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
+    _check_default_state_paths()
 
     total = _RESULTS["pass"] + _RESULTS["fail"]
     status = "OK" if _RESULTS["fail"] == 0 else "FAIL"

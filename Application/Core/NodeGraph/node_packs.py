@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from Application.Core import AppIdentity
+from Application.Core.Signature import COMMUNITY_PROVIDER, normalize_provider
 
 from .data_model import NodeTypeDef, PinDef, _gen_id
 from .evaluator_engine import register_evaluator, unregister_evaluator
@@ -65,6 +66,7 @@ class NodePackRegistry:
         pack 结构:
           {
             "id": "device", "name": "Device (Serial/Parallel)", "owner": "device",
+            "signature": "@Official",   # 节点卡标题下灰色提供者签名
             "nodes": [{
               "type": "SerialSend", "label": "Serial Send", "category": "IO",
               "color": (0.878, 0.620, 0.314), "props_text": "...",
@@ -108,6 +110,10 @@ class NodePackRegistry:
             label = str(node.get("label") or type_name)
             category = str(node.get("category") or "Extension")
             color = node.get("color") or (0.55, 0.55, 0.55)
+            signature = normalize_provider(
+                node.get("signature") or pack.get("signature"),
+                default=COMMUNITY_PROVIDER,
+            )
             pins = [_pin_from_spec(p) for p in (node.get("pins") or [])]
             if not pins:
                 raise NodePackError(f"node type {type_name!r} requires at least one pin")
@@ -123,7 +129,7 @@ class NodePackRegistry:
                 fields.append(dict(spec))
             prepared.append((type_name, NodeTypeDef(
                 type_name, label, category, tuple(color), pins,
-                str(node.get("props_text") or ""),
+                str(node.get("props_text") or ""), signature,
             ), node, fields))
 
         # 校验全部通过后再落地，避免半注册。
@@ -144,6 +150,9 @@ class NodePackRegistry:
             "owner": owner,
             "menu": list(pack.get("menu") or []),
             "types": registered_types,
+            # 内置发现时记录来源目录；运行期 ctx.nodes 注册的第三方 pack 可为空。
+            # 游戏导出按需收集扩展目录时使用（不依赖 Editor）。
+            "dir": str(pack.get("dir") or cls._packs.get(pack_id, {}).get("dir") or ""),
         }
         return {"pack": pack_id, "owner": owner, "types": sorted(registered_types)}
 
@@ -177,6 +186,34 @@ class NodePackRegistry:
         return "core" if type_name in _TYPES else ""
 
     @classmethod
+    def extension_dirs_for_types(cls, types) -> tuple[set[str], set[str]]:
+        """按场景节点类型收集需要随游戏分发的扩展目录。
+
+        Returns:
+            (dirs, unresolved_types) — dirs 为绝对路径；core 类型不需要目录。
+            运行期通过 ctx.nodes 注册、但没有来源目录的 pack 会进入 unresolved。
+        """
+        cls.load_all()
+        owner_dirs: dict[str, str] = {}
+        for pack in cls._packs.values():
+            directory = str(pack.get("dir") or "").strip()
+            if directory:
+                owner_dirs[str(pack.get("owner") or "")] = os.path.abspath(directory)
+
+        dirs: set[str] = set()
+        unresolved: set[str] = set()
+        for type_name in sorted({str(t) for t in (types or ()) if str(t).strip()}):
+            owner = cls.owner_of(type_name)
+            if owner == "core":
+                continue
+            directory = owner_dirs.get(owner)
+            if directory:
+                dirs.add(directory)
+            else:
+                unresolved.add(type_name)
+        return dirs, unresolved
+
+    @classmethod
     def fields_for(cls, type_name: str) -> list[dict]:
         """声明式控件字段（扩展节点在 Node Editor 卡片内自动渲染）。"""
         return list(cls._fields.get(type_name) or [])
@@ -205,6 +242,7 @@ class NodePackRegistry:
                 "label": nd.label,
                 "category": nd.category,
                 "owner": type_owner,
+                "signature": getattr(nd, "signature", "@Official"),
                 "props_text": nd.props_text,
                 "fields": cls.fields_for(type_name),
                 "pins": [
@@ -288,6 +326,7 @@ class NodePackRegistry:
         if not isinstance(pack, dict):
             raise NodePackError("register()/get_pack() must return a dict")
         pack.setdefault("owner", owner)
+        pack.setdefault("dir", str(path.parent))
         return cls.register(pack)
 
     @classmethod

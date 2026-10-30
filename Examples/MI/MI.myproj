@@ -1,6 +1,7 @@
 {
   "version": "0.1.0",
   "name": "MI",
+  "provider": "@Official",
   "startup_scene": "scenes\\MI.scene",
   "scenes": [
     "scenes\\MI.scene"

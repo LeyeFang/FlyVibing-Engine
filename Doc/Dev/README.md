@@ -44,6 +44,8 @@
 | `test_protocol.md` | `Test/**` + `Utils/Dev/test_runner.py` + `Test/Application/Editor/ui_scenario.py` + `_ui_boot.py` | 新增/修改测试、UI 场景回放、排查测试互相干扰时必读：档位 / 沙箱 / 输出契约 / 重置清单 |
 | `test_map_todo.md` + `test_nodes.md` + `ui_map.md` | `Doc/Dev/{test_nodes,ui_map}.json` + `Utils/Dev/test_map.py` | 测试节点地图 / UI 展开图 / 跨会话任务上下文：一个测试文件=一个节点、`ui tree`、affected 查询、map check；修改测试、控件或定位回归范围前先查 |
 | `product_todo.md` | 扩展剥离 / 节点编辑器 UX / 1.0 Release / macOS | 产品级待办与暂缓决策（CI、社区扩展仓库治理、组编辑后续、Release 清单） |
+| `remote_display_white_screen.md` | 远程/无物理显示器下 OpenGL 窗口呈现 | 用户报告“白屏”、远程开发、PIE/成品窗口看似全白时先读；区分渲染缺陷与呈现层问题 |
+| `runtime_scene_ui_input_plan.md` | `RuntimeSceneService` / `UISystem` / 运行时输入 | 规划运行时场景切换、无 imgui 游戏内 GUI、键鼠/ESC 输入与 UI 事件消费顺序时读 |
 | `threading_protocol.md` | `Application/Core/ThreadRegistry.py` + 全体线程启动点 + `Utils/Dev/thread_probe.py` | **新开线程/跨线程通信/服务进程集成前必读**：三通道纪律、心跳注册四步、实时探针、检查单 |
 | `media_protocol.md` | `Application/Core/Media/**` + `ShowMedia` 节点 + `MediaPlayer` 组件 + `TextureUpdateCommand` 链 | 改动态媒体（GIF/视频/音频）、媒体节点、动态纹理上传：架构决议 **v2**（编辑器=模板 / PIE 唯一由 GameRuntime 控制 / 节点建图才生效）、数据流、注册点、验收证据 |
 | `rendering_protocol.md` | `Application/Core/Renderer/**` + `Resource/Shaders/**` + `Test/Application/Renderer/**` | 改渲染器/渲染命令/shader/纹理上传/overlay，或需要像素级验证时必读：后端现状（OpenGL 一等公民）、线程纪律、资源模型、**验证体系**（GL 像素探针 + 金标准）、agent 工具（`renderer.snapshot` / CLI `probe`）、**§7 渲染目标(RT)**、**§8 光照体系** |

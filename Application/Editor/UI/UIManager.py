@@ -1,7 +1,14 @@
+import json
 import os
 
 from imgui_bundle import imgui
 
+from Application.Core import AppIdentity
+from Application.Core.Signature import (
+    COMMUNITY_PROVIDER,
+    DEFAULT_PROVIDER,
+    normalize_provider,
+)
 from Application.Editor.UI.BasePanel import BasePanel
 from Application.Editor.UI.PanelStyle import apply_custom_style
 from Application.Editor.UI.FileDialog import FileDialog
@@ -289,12 +296,19 @@ class UIManager:
 
     @classmethod
     def _example_dirs(cls) -> list[str]:
-        """示例工程目录（开发区优先，发布区预留）。"""
+        """示例工程目录：官方 Examples / 测试夹具 / 用户注入目录。
+
+        社区示例必须放在用户数据目录（`%APPDATA%/FlyVibingEngine/examples`）或
+        `FVE_EXAMPLES_DIR` / 旧 `MGE_EXAMPLES_DIR` 指向的目录，不能写进仓库
+        `Examples/`，否则会污染主线发布。
+        """
         repo = os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.abspath(__file__)))))
+        user_root = AppIdentity.env_get("EXAMPLES_DIR") or AppIdentity.data_dir("examples")
         return [
             os.path.join(repo, "Examples"),
             os.path.join(repo, "Test", "TestProject", "Examples"),
+            user_root,
         ]
 
     @classmethod
@@ -323,6 +337,44 @@ class UIManager:
              for label, folder, path in raw),
             key=lambda item: item[0].lower(),
         )
+
+    @staticmethod
+    def _example_provider(path: str) -> str:
+        """Read an Example provider signature (`.myproj.provider`/`author`)."""
+        repo = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))))
+        official_root = os.path.abspath(os.path.join(repo, "Examples"))
+        test_root = os.path.abspath(os.path.join(repo, "Test", "TestProject", "Examples"))
+        abs_path = os.path.abspath(path)
+        if abs_path.startswith(official_root + os.sep):
+            default = DEFAULT_PROVIDER
+        elif abs_path.startswith(test_root + os.sep):
+            default = "@Test"
+        else:
+            default = COMMUNITY_PROVIDER
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            return default
+        if not isinstance(data, dict):
+            return default
+        return normalize_provider(
+            data.get("provider") or data.get("signature") or data.get("author"),
+            default=default,
+        )
+
+    @staticmethod
+    def _draw_example_menu_item(label: str, provider: str, path: str) -> bool:
+        """Project name + muted provider, e.g. ``MI @Official`` (not right-aligned)."""
+        imgui.push_id(path)
+        label_w = max(1.0, imgui.calc_text_size(label).x)
+        clicked, _ = imgui.selectable(
+            f"{label}##example_item", False, 0, imgui.ImVec2(label_w, 0.0))
+        imgui.same_line(0.0, 0.0)
+        imgui.text_disabled(f" {provider}")
+        imgui.pop_id()
+        return bool(clicked)
 
     @classmethod
     def _on_save_project(cls) -> None:
@@ -396,8 +448,10 @@ class UIManager:
                 if examples:
                     if imgui.begin_menu(t("menu.file.open_example")):
                         for label, path in examples:
-                            if imgui.menu_item(label, "", False, True)[0]:
+                            provider = cls._example_provider(path)
+                            if cls._draw_example_menu_item(label, provider, path):
                                 cls._do_open_project(path)
+                                imgui.close_current_popup()
                         imgui.end_menu()
                 imgui.separator()
                 from Application.Editor.ProjectManager import ProjectManager

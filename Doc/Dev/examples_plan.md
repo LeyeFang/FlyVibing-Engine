@@ -63,6 +63,20 @@ Examples 目录：`Examples/`（正式示例，可提交；`Test/TestProject/Exa
 - `Test/_runs/ng_cue_demo/CueGroup_Demo.scene`：MI 模板实体 + `EntitySpawn×2` + `cue_n_way` 组，
   带 `@start` / `@cue_rand` 别名；L1 + L2 通过；用于 GUI 看组框。
 
+### 2.4b 脉冲链路示例（2026-10-30）— ✅ 已建 + 可覆写
+
+- `Examples/SerialPulse`：**每 1 s 串口发一个码，1..10 循环**；`Examples/ParallelPulse` 同款并口版。
+  两者同一套 19 节点 / 20 连线骨架：`OnGameStart → Spawn → 归零 → NewTimer → SetTimer(-1)`，
+  `OnFrameUpdate → Sequence → TimeTrigger(timer@0) → Compare(gt)+Branch → VarSet`，
+  **只有一个发送节点**（`SerialSend` / `ParallelSend`），设备参数集中一处。
+- 节点身份 = `description` 前缀 `[pulse:<tag>:<slot>]`；`Examples/tools/pulse_pipeline.py` 提供
+  模板 + `plan()` / `apply()`，`Examples/tools/apply_pulse_pipeline.py` 是 live 入口
+  （`graph.add` / `graph.set_props` / `graph.link`）：首次创建、再次运行即**覆写同一批节点**
+  （默认只同步命令行显式给出的参数，`overwrite=1` 才整体压回模板）。
+- 证据：L2 干跑 780 帧 = 12 次发送（1..10,1,2，间隔 59–61 帧）；实机 PIE
+  `SerialPulse` TX `1.0\n … 10.0\n` 回绕、`ParallelPulse` PX `0x01..0x0A` 回绕（并口另有 5 ms 复位写）；
+  `Test/Application/Editor/test_pulse_examples.py` **42/42**。
+
 ### 2.5 Examples 工程（2026-10-18 已拆分）
 
 - 位置：`Examples/MI/MI.myproj` 与 `Examples/RestingState/RestingState.myproj`；

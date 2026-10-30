@@ -30,6 +30,7 @@ _REPO = os.path.dirname(_ROOT) if _ROOT else ""   # _ROOT = Test/ → 仓库根�
 
 # 内置扩展白名单（主团队自研 —— 新增必须显式改这里, 见 extension_protocol.md §9 R2）
 _BUILTIN_WHITELIST = {"sigproc", "bci", "device", "virtual"}
+_OFFICIAL_MANIFEST = os.path.join("Application", "Functions", "official_extensions.json")
 # 本地兼容夹具（社区插件恢复副本, git-ignored — 仅作扩展体系兼容性测试;
 # 见 Application/Functions/Gtec/LOCAL_COMPAT.md 与 test_gtec_compat.py）
 _LOCAL_COMPAT_IDS = {"gtec"}
@@ -84,6 +85,11 @@ def _builtin_ids() -> dict:
     return found
 
 
+def _official_manifest() -> dict:
+    with open(os.path.join(_REPO, _OFFICIAL_MANIFEST), "r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
 def _brand_hits() -> list:
     hits: list[str] = []
     for rel in _SCAN_ROOTS:
@@ -128,10 +134,26 @@ def main() -> int:
     ids = set(inv.values())
     check("plugin dirs discovered", len(inv) >= 1, str(inv))
     extra = ids - _BUILTIN_WHITELIST - _LOCAL_COMPAT_IDS
-    check("inventory ⊆ team whitelist", not extra,
+    check("inventory <= team whitelist", not extra,
           f"unexpected: {sorted(extra)} (inv={inv})")
     check("whitelist entries present", _BUILTIN_WHITELIST <= ids,
           f"missing: {sorted(_BUILTIN_WHITELIST - ids)} (inv={inv})")
+    official = {str(e.get("id")) for e in _official_manifest().get("extensions", [])
+                if isinstance(e, dict)}
+    check("mainline allowlist matches team whitelist",
+          official == _BUILTIN_WHITELIST,
+          f"allowlist={sorted(official)} whitelist={sorted(_BUILTIN_WHITELIST)}")
+    check("local compat fixture is not in mainline allowlist",
+          not (_LOCAL_COMPAT_IDS & official),
+          str(sorted(_LOCAL_COMPAT_IDS & official)))
+    try:
+        with open(os.path.join(_REPO, ".gitignore"), "r", encoding="utf-8") as fh:
+            ignore_text = fh.read()
+        check("mainline allowlist is not git-ignored",
+              "!Application/Functions/official_extensions.json" in ignore_text,
+              "add the allowlist exception to .gitignore")
+    except OSError:
+        check("mainline allowlist is not git-ignored", False, ".gitignore unreadable")
 
     # ── 2. 品牌词切断扫描（R1 的事故回归网） ──
     print("── brand tripwire ──")

@@ -132,6 +132,13 @@ def main() -> int:
         manifest = json.load(fh)
     check("manifest has game section", isinstance(manifest.get("game"), dict))
     check("manifest status", manifest.get("status") != "in_progress")
+    excluded_manifest = {str(p).replace("\\", "/") for p in manifest.get("export_excluded", [])}
+    check("manifest records editor local state exclusion",
+          "Application/Editor/Config" in excluded_manifest,
+          str(sorted(excluded_manifest)))
+    check("editor local state is not copied into game layer",
+          not os.path.exists(os.path.join(OUT, "Application", "Editor", "Config")),
+          "extensions.json / settings.json leaked into the exported game")
 
     # run_game.cmd 保持 ASCII（代码页安全）
     with open(os.path.join(OUT, "run_game.cmd"), "rb") as fh:
@@ -171,6 +178,13 @@ def main() -> int:
         with open(probe, "w", encoding="utf-8") as fh:
             fh.write("must not be exported")
         probe_made = True
+    local_state_dir = os.path.join(ROOT, "Application", "Editor", "Config")
+    local_probe = os.path.join(local_state_dir, "_export_probe.txt")
+    local_probe_made = False
+    if os.path.isdir(local_state_dir):
+        with open(local_probe, "w", encoding="utf-8") as fh:
+            fh.write("local editor state must not be exported")
+        local_probe_made = True
     summary2 = ProjectManager.export_project_bundle(DIST_PARENT)
     check("re-export succeeds", summary2 is not None)
     check("re-export keeps game layer", summary2 is not None and isinstance(summary2.get("game"), dict))
@@ -185,6 +199,17 @@ def main() -> int:
               any(str(p).replace("\\", "/").endswith(probe_rel) for p in excluded),
               str(excluded))
         os.remove(probe)
+    if local_probe_made:
+        check("editor local state is not copied on re-export",
+              not os.path.isfile(os.path.join(OUT, "Application", "Editor", "Config",
+                                              "_export_probe.txt")),
+              "local editor state leaked on re-export")
+        excluded = (summary2 or {}).get("export_excluded") or []
+        check("manifest records editor local state exclusion",
+              any(str(p).replace("\\", "/").endswith("Application/Editor/Config")
+                  for p in excluded),
+              str(excluded))
+        os.remove(local_probe)
 
     print()
     print("=" * 60)

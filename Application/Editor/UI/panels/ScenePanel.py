@@ -649,8 +649,9 @@ class ScenePanel(BasePanel):
 
         # ── 实体名称（可编辑）+ ID（灰色） ──
         name_buf = summary.name or ""
+        # imgui_bundle: 第三位置参数是 flags（不是缓冲区长度）→ 固定 0
         changed, new_name = imgui.input_text(
-            "##entity_name", name_buf, 256,
+            "##entity_name", name_buf, 0,
         )
         if changed:
             self._browser_ctrl.set_name(entity_id, new_name)
@@ -829,8 +830,9 @@ class ScenePanel(BasePanel):
                                 imgui.set_item_default_focus()
                         imgui.end_combo()
                 else:
+                    # 512 曾被当成 flags(=ReadOnly) → 字符串字段不可编辑; 这里固定 0
                     changed, new_value = imgui.input_text(
-                        f"##{comp_name}_{fname}_{entity_id}", fval, 512)
+                        f"##{comp_name}_{fname}_{entity_id}", fval, 0)
             elif isinstance(fval, int):
                 changed, new_value = imgui.drag_int(fname, fval, 0.25, 0, 4096)
             elif isinstance(fval, float):
@@ -956,7 +958,7 @@ class ScenePanel(BasePanel):
             imgui.end_disabled()
 
         # ── Name 可编辑 ──
-        changed, new_name = imgui.input_text(t("scene.material.name") + "##mat_name", current_name, 64)
+        changed, new_name = imgui.input_text(t("scene.material.name") + "##mat_name", current_name, 0)
         if changed and new_name.strip():
             self._browser_ctrl.set_material_name(entity_id, new_name.strip())
 

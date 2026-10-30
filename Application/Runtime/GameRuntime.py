@@ -118,8 +118,9 @@ class GameRuntime(Engine):
                 cls._frame_sync = bridge.frame_sync  # 共享同一个 FrameSync
                 cls._is_frame_sync_master = False
             # ── 启动设备 I/O 线程 ──
+            #    owner="runtime": PIE 持有租约 → 编辑器面板交权（关闭面板不会停线程）
             from Application.Functions.SerialParallelDevice import start as spd_start
-            spd_start()
+            spd_start("runtime")
             # ── 清理上次运行可能残留的 EEG 会话（异常退出保护）──
             try:  # 设备层缺省时跳过（可选组件）
                 from Application.Functions.VirtualDevice import close_all
@@ -160,7 +161,7 @@ class GameRuntime(Engine):
         """阻塞启动 (导出模式)。"""
         cls.init(window_type=window_type, renderer_type=renderer_type)
         from Application.Functions.SerialParallelDevice import start as spd_start
-        spd_start()
+        spd_start("runtime")
         EngineLifecycleEvent.Pack(stage="start", message="Started in export mode", engine=cls)
         super().run()
 
@@ -171,9 +172,10 @@ class GameRuntime(Engine):
     @classmethod
     def stop(cls) -> None:
         """请求停止 Runtime 并清理状态，允许再次 start()。"""
-        # ── 停止设备 I/O 线程 ──
+        # ── 释放设备 I/O 租约 ──
+        #    仅释放 runtime 租约: 编辑器面板若仍持有租约（调试中），线程继续运行
         from Application.Functions.SerialParallelDevice import stop as spd_stop
-        spd_stop()
+        spd_stop("runtime")
         # ── 清理 Runtime 实体（保留宿主保护实体）──
         if cls.scene is not None:
             # ★ 保护实体由宿主注入（编辑器摄像机等）; 独立运行默认空集 → 全部清理

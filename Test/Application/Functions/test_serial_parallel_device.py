@@ -5,9 +5,13 @@ Test: SerialParallelDevice — 串口/并口 I/O 模块单元测试
 测试范围:
   - protocol.encode/decode  所有格式 (string / bytes / byte)
   - I/O 线程生命周期         start / stop / is_running
+  - 租约所有权              editor / runtime 交权（单线程, 多租约）
+  - 严格写入                strict=True → DeviceNotReady（面板/op 路径）
   - 串口 send()             无真实串口时不崩溃
   - 并口 write_parallel()   无驱动时优雅降级
-  - Mock 并口驱动            验证写入 + 5ms 自动复位
+  - Mock 并口驱动            验证写入 + 自动复位
+  - 复位延迟可配置          set_reset_delay(ms) → 调度截止时间
+  - 面板载荷校验            extension.parallel_payload（byte/bytes/string）
   - uint8 钳位              0→1, 256→255, 负数→1
 
 运行: python Test/Application/Functions/test_serial_parallel_device.py
@@ -310,6 +314,161 @@ def test_stop_flushes_resets():
 
 
 # ═══════════════════════════════════════════════════════════════
+# I/O 线程所有权租约（editor / runtime 交权）
+# ═══════════════════════════════════════════════════════════════
+
+def test_lease_ownership():
+    print("── Lease Ownership (editor / runtime) ──")
+    from Application.Functions.SerialParallelDevice import io_owner
+
+    if is_running():
+        stop()
+    check(io_owner() == "none", f"no lease → owner none (got {io_owner()})")
+
+    start("editor")
+    time.sleep(0.05)
+    check(is_running() and io_owner() == "editor",
+          f"editor lease → running, owner editor (got {io_owner()})")
+
+    start("runtime")
+    check(is_running() and io_owner() == "runtime",
+          f"runtime lease → owner runtime (got {io_owner()})")
+
+    # ★ 交权: PIE 运行期间编辑器释放租约不得停线程
+    stop("editor")
+    check(is_running(), "editor release keeps thread alive while runtime holds")
+    check(io_owner() == "runtime", f"owner still runtime (got {io_owner()})")
+
+    # ★ 反向: PIE 停止但编辑器仍在调试 → 线程继续
+    start("editor")
+    stop("runtime")
+    check(is_running(), "runtime release keeps thread alive while editor holds")
+    check(io_owner() == "editor", f"owner falls back to editor (got {io_owner()})")
+
+    stop("editor")
+    time.sleep(0.1)
+    check(not is_running(), "last lease released → thread stopped")
+    check(io_owner() == "none", "owner none after all leases released")
+
+
+# ═══════════════════════════════════════════════════════════════
+# 严格写入（面板/op 路径 — 禁止静默丢弃）
+# ═══════════════════════════════════════════════════════════════
+
+def test_strict_writes():
+    print("── Strict Writes ──")
+    from Application.Functions.SerialParallelDevice import DeviceNotReady
+
+    mock_pp = MagicMock()
+    mock_pp.out8 = MagicMock()
+    _test_inject_parallel(mock_pp)
+
+    if is_running():
+        stop()
+    time.sleep(0.05)
+
+    # 未运行 → 默认模式返回 False（节点评估器路径不打断图执行）
+    check(write_parallel(0x378, 1, "byte") is False,
+          "write_parallel → False when not running (default)")
+
+    raised = False
+    try:
+        write_parallel(0x378, 1, "byte", strict=True)
+    except DeviceNotReady:
+        raised = True
+    check(raised, "strict parallel write raises DeviceNotReady")
+
+    raised = False
+    try:
+        send("COM_TEST", 9600, b"x", strict=True)
+    except DeviceNotReady:
+        raised = True
+    check(raised, "strict serial send raises DeviceNotReady")
+
+    # 运行中 → 入队成功返回 True
+    _test_clear_reset_schedule()
+    start()
+    time.sleep(0.05)
+    check(write_parallel(0x378, 1, "byte", strict=True) is True,
+          "strict write returns True when running")
+    _wait_until(lambda: len(_test_get_reset_schedule()) >= 1, timeout=1.0)
+    check(len(_test_get_reset_schedule()) >= 1, "mock driver got the strict write")
+    stop()
+    time.sleep(0.1)
+    _test_inject_parallel(None)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 复位延迟可配置（脉冲宽度）
+# ═══════════════════════════════════════════════════════════════
+
+def test_reset_delay_setting():
+    print("── Configurable Reset Delay ──")
+    from Application.Functions.SerialParallelDevice import (
+        reset_delay_ms, set_reset_delay)
+
+    mock_pp = MagicMock()
+    mock_pp.out8 = MagicMock()
+    _test_inject_parallel(mock_pp)
+    _test_clear_reset_schedule()
+
+    check(abs(reset_delay_ms() - 5.0) < 0.001, f"default 5 ms (got {reset_delay_ms()})")
+    check(abs(set_reset_delay(25) - 0.025) < 1e-9, "set_reset_delay(25) → 0.025 s")
+    check(abs(reset_delay_ms() - 25.0) < 0.001, f"reads back 25 ms (got {reset_delay_ms()})")
+    check(abs(set_reset_delay(0) - 0.001) < 1e-9, "lower bound clamp → 1 ms")
+    set_reset_delay(25)
+
+    start()
+    time.sleep(0.05)
+    t0 = time.perf_counter()
+    _test_clear_reset_schedule()
+    write_parallel(0x378, 1, "byte", strict=True)
+    sched = []
+    for _ in range(50):
+        sched = _test_get_reset_schedule()
+        if sched:
+            break
+        time.sleep(0.002)
+    check(len(sched) == 1, f"reset scheduled with configured delay (got {len(sched)})")
+    if sched:
+        delay_ms = (sched[0][0] - t0) * 1000.0
+        check(delay_ms >= 20.0, f"reset deadline ≈ 25 ms (got {delay_ms:.1f} ms)")
+
+    _wait_until(lambda: len(_test_get_reset_schedule()) == 0, timeout=1.0)
+    check(len(_test_get_reset_schedule()) == 0, "configured reset consumed")
+
+    set_reset_delay(5)                      # 恢复默认（后续用例依赖）
+    stop()
+    time.sleep(0.1)
+    _test_inject_parallel(None)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 面板载荷校验（extension.parallel_payload — 纯函数）
+# ═══════════════════════════════════════════════════════════════
+
+def test_parallel_payload():
+    print("── Panel Payload Validation ──")
+    from Application.Functions.SerialParallelDevice import extension as spd_ext
+    payload = spd_ext.parallel_payload
+
+    check(payload("1", "byte") == b"\x01", "byte '1' → 01")
+    check(payload("1.0", "byte") == b"\x01", "byte '1.0' → 01 (numeric text)")
+    check(payload("255", "byte") == b"\xff", "byte '255' → ff")
+    for bad in ("0", "256", "-3", "abc", ""):
+        raised = False
+        try:
+            payload(bad, "byte")
+        except ValueError:
+            raised = True
+        check(raised, f"byte '{bad}' rejected")
+
+    check(payload("1.0", "bytes") == struct.pack("<f", 1.0),
+          "bytes '1.0' → float32 LE (00 00 80 3F)")
+    check(payload("hi", "string") == b"hi\n", "string 'hi' → hi + LF")
+
+
+# ═══════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════
 
@@ -320,10 +479,14 @@ if __name__ == "__main__":
 
     test_protocol()
     test_thread_lifecycle()
+    test_lease_ownership()
+    test_strict_writes()
     test_serial_send()
     test_parallel_no_driver()
     test_parallel_mock()
+    test_reset_delay_setting()
     test_stop_flushes_resets()
+    test_parallel_payload()
 
     print()
     print("=" * 60)

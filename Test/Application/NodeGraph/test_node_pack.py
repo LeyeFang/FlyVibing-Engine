@@ -42,6 +42,17 @@ check("ParallelSend evaluator registered", "ParallelSend" in _EVALUATORS)
 fields = NodePackRegistry.fields_for("SerialSend")
 check("SerialSend fields include serial_port",
       any(f.get("kind") == "serial_port" for f in fields), str(fields))
+check("core node signature defaults to @Official",
+      getattr(_TYPES.get("EntitySpawn"), "signature", "") == "@Official",
+      str(getattr(_TYPES.get("EntitySpawn"), "signature", "")))
+check("official extension pack carries @Official",
+      getattr(_TYPES.get("SerialSend"), "signature", "") == "@Official",
+      str(getattr(_TYPES.get("SerialSend"), "signature", "")))
+from Application.Core.Signature import COMMUNITY_PROVIDER, normalize_provider
+check("community provider defaults explicitly",
+      normalize_provider(None, default=COMMUNITY_PROVIDER) == "@Community")
+check("provider normalization adds @",
+      normalize_provider("ACME") == "@ACME")
 menu = NodePackRegistry.menu_sections()
 device_menu = dict(menu).get("Device") or []
 check("menu has Device/Serial",

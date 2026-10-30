@@ -58,6 +58,12 @@ engine-editor-mcp.cmd   MCP 启动器（PATH 任务注册后三方工作区直�
 README-INSTALL.txt      快照说明
 ```
 
+> **安装包 = mainline allowlist**：仅 `Application/Functions/official_extensions.json` 列出的官方扩展进入 staging；
+> 本地/第三方目录（含 `export:false` 与未登记目录）全部排除。`export:false` 只用于 **游戏导出**，不在这里生效，
+> 避免把官方扩展误杀。`Application/Editor/Config/`（git-ignored 本地状态）同样不进包。
+> 游戏导出是另一条规则（按场景节点按需 + `export:false` opt-out），详见 `Doc/Dev/project_export_protocol.md`；
+> 不要把两者混用。回归：`Test/Application/Editor/test_release_layout.py`。
+
 最终发布目录按“版本 / 平台”统一：
 
 ```

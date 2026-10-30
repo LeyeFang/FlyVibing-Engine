@@ -52,6 +52,9 @@ class NodeTypeDef:
     accent_color: tuple[float, float, float]
     pins: list[PinDef]
     props_text: str = ""
+    # 节点提供者签名 — 编辑器标题下灰色小字（@Official / @Author）。
+    # 核心节点默认官方；扩展 pack 可显式覆盖，默认 @Community。
+    signature: str = "@Official"
 
 
 @dataclass

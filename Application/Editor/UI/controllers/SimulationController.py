@@ -274,6 +274,7 @@ class SimulationController:
 
         from Application.Runtime.RuntimeLayer import RuntimeLayer
         from Application.Runtime.RuntimeDebugLayer import RuntimeDebugLayer
+        from Application.Runtime.RuntimeInputLayer import RuntimeInputLayer
         from Application.Runtime.RuntimeNodeLayer import RuntimeNodeLayer
 
         # ── 注入节点图 (若有) ──
@@ -317,6 +318,10 @@ class SimulationController:
             RuntimeWindow._transparent = False
             RuntimeWindow._topmost = False
             RuntimeWindow._click_through = False
+
+        # ★ 输入层最后 push（栈顶）→ 事件派发时先于 Debug/Overlay 收到键鼠；
+        #   OnUpdate 不依赖层顺序（RuntimeNodeLayer 主动 drain）。
+        GameRuntime.push_layer(RuntimeInputLayer)
 
         # ── 应用 PIE 窗口偏好 (Play 下方 Settings: 全屏 / 窗口化尺寸) ──
         cls._apply_pie_window_prefs(gt)

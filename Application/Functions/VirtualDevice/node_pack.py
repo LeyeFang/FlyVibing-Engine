@@ -10,9 +10,12 @@ from __future__ import annotations
 
 def register() -> dict:
     # Evaluators live in this extension directory; register them with the pack.
-    from Application.Functions.VirtualDevice import evaluator_pool, evaluator_siggen  # noqa: F401
+    from Application.Functions.VirtualDevice import (  # noqa: F401
+        evaluator_data, evaluator_pool, evaluator_siggen,
+    )
     pool = (0.930, 0.780, 0.220)
     sig = (0.350, 0.780, 0.850)
+    save = (0.850, 0.620, 0.220)
     return {
         "id": "virtual",
         "name": "Virtual Device",
@@ -107,6 +110,30 @@ def register() -> dict:
                            {"key": "pool", "label": "Pool", "kind": "text", "default": "global"}],
             },
             {
+                "type": "SaveDeviceData", "label": "Save Device Data",
+                "category": "Device", "color": save,
+                "props_text": "Save recording without stopping (session|buffer; pump first)",
+                "pins": [
+                    {"name": "exec_in", "kind": "exec", "direction": "input"},
+                    {"name": "exec_out", "kind": "exec", "direction": "output"},
+                    {"name": "Path", "kind": "data", "direction": "output", "data_type": "string"},
+                    {"name": "MetaPath", "kind": "data", "direction": "output", "data_type": "string"},
+                    {"name": "Samples", "kind": "data", "direction": "output", "data_type": "int"},
+                    {"name": "Duration", "kind": "data", "direction": "output", "data_type": "float"},
+                    {"name": "Written", "kind": "data", "direction": "output", "data_type": "int"},
+                    {"name": "Ok", "kind": "data", "direction": "output", "data_type": "int"},
+                ],
+                "fields": [
+                    {"key": "device_name", "label": "Device", "kind": "text"},
+                    {"key": "pool", "label": "Pool", "kind": "text", "default": "global"},
+                    {"key": "save_scope", "label": "Scope", "kind": "enum",
+                     "choices": [["Session", "session"], ["Buffer", "buffer"]],
+                     "default": "session"},
+                    {"key": "pump", "label": "Pump", "kind": "bool", "default": True},
+                    {"key": "tag", "label": "Tag", "kind": "text"},
+                ],
+            },
+            {
                 "type": "GetSigGenData", "label": "Get SigGen Data",
                 "category": "SigGen", "color": sig,
                 "props_text": "Copy of window buffer (channels x samples)",
@@ -127,6 +154,9 @@ def register() -> dict:
                 ("Stop SigGen Record", "StopSigGenRecord"),
                 ("Kill SigGen Device", "KillSigGenDevice"),
                 ("Get SigGen Data", "GetSigGenData"),
+            ]),
+            ("Save", [
+                ("Save Device Data", "SaveDeviceData"),
             ]),
             ("Pool", [
                 ("Create Device Pool", "CreateDevicePool"),

@@ -9,7 +9,7 @@
   #define StageDir "..\build\stage"
 #endif
 #ifndef AppVersion
-  #define AppVersion "1.0.1"
+  #define AppVersion "1.0.2"
 #endif
 #ifndef PlatformTag
   #define PlatformTag "Windows-x64"

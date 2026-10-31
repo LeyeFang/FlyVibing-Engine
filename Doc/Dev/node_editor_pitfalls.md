@@ -288,6 +288,27 @@
 - `test_group_ops`：destroy 清空成员节点；metadata delete 只移除内部节点。
 - `node_group_actions`：Destroy 后成员节点消失；空白右键保持无选择状态。
 
+## 13.1 右键菜单必须按“点击”而非“按下”打开
+
+**现象**
+- 画布右键本来用于平移拖拽；一按下就 `open_popup`，右键拖拽会被菜单打断，
+  框选/平移都不可用，且菜单会在拖拽过程中误弹。
+
+**约定**
+- 右键按下只记录起点（必须在 `_canvas_rect` 内）；释放时若仍在画布内且位移
+  `<= 6px` 才打开 `###node_group_context`，位移超过阈值或拖出画布视为拖拽，
+  不弹菜单。
+- 右键拖拽释放后必须保持菜单关闭；右键点击节点/组框/空白仍按原语义提供
+  Delete/Merge/Group 菜单。
+- Utils 输入队列的 `ui.drag(button=1)` 与 `ui.click(button=1)` 分别覆盖
+  “右键拖拽”和“右键点击”两种语义，可直接做回归。
+- 阈值统一来自 `Application.Core.Input.Gesture.CLICK_MOVE_THRESHOLD`；节点图
+  框选、右键菜单、RuntimeInputLayer 不再各自写 `6.0`。
+
+**回归**
+- `test_node_graph_gestures_live`：左键拉框选中节点、右键拖拽平移且
+  `context_open=false`、右键原地点击后 `context_open=true`。
+
 ## 14. Fit 不能早于组框尺寸注册
 
 **现象**
@@ -310,5 +331,51 @@
 **回归**
 - `test_e2e_node_group_live`：从空画布导入组后 Fit，组框/成员/端口必须
   达到可读尺寸；随后拖标题、缩放组框、拖入拖出成员和端口拖线全部通过。
+
+## 15. 引脚类型契约归声明方，读取方不得改写（2026-10-31）
+
+**现象**
+- `EntityGet` 的 `Name` 引脚接 `StringConst("HUD")` → 运行到该节点即
+  `ValueError: could not convert string to float: 'HUD'`，整条 exec 链中断；
+  同类问题还存在于 `VarSet.Name` / `NewTimer.Name` / `entity_ref` / `variant` /
+  `vec3` 等 50 个非 `float` 输入引脚（ENGINE_GAPS O5）。
+
+**根因**
+- `_read_data_input`（定义在 `evaluators/math.py`）无条件 `float(val)`，却被
+  10+ 个模块当作公共读取 API 使用 —— 声明层（`PinDef.data_type`）与读取层
+  各有一套规则；另外 `_walk_exec` 没有节点级 try/except，数据节点懒求值那条路
+  反而有，错误策略不一致。
+
+**约定**
+- 读取输入一律走 `evaluators/inputs.py::read_pin`：按 `PinDef.data_type` 转换
+  （`string`→str、`bool`、`int`、`float`，`entity_ref`/`entity_list`/`variant`/
+  `vec3`/`device` 原样透传）；数值转换失败回默认值 + 告警一次，**不抛**。
+- 新增求值器不要再 import `_read_data_input`；需要特定类型时用
+  `read_float` / `read_int` / `read_bool` / `read_str`。
+- `GraphEvaluator._walk_exec` 按节点捕获异常（限流打印，首次 + 每 100 次），
+  只跳过该分支下游 —— 单个节点的数据错误不得拖垮整帧。
+
+**回归**
+- `test_pin_value_coercion`（16 项）：字符串 / entity_ref / vec3 透传、
+  数值失败回默认、bool 解析、`TimeDelay` 已移除。
+- `test_graph_node_error_isolation`（7 项）：异常不外抛、下游跳过、日志限流。
+
+## 16. `TimeDelay` 已移除（2026-10-31）
+
+**根因**
+- 它只在整条 exec 链被**逐帧重入**时才推进（`_exec_visited` 去重 +
+  `_blocked` 截断）：挂在 `OnGameStart` 单次链上会永久挂起；要"延时"就得让
+  上游每帧重跑，副作用被重复执行。且时长只读 `Seconds` 输入引脚，
+  `props.duration` 静默失效 —— 几乎所有扩展开发者都会踩坑后改 `TimeTrigger`。
+
+**约定**
+- 时间推进统一用 `TimeTrigger(mode=manual, time=N)` 挂在 `OnFrameUpdate` 链上
+  （到点触发一次；重复触发需提高阈值或使用命名 Timer）。
+- 含 `TimeDelay` 的旧场景：`NodeCanvas.from_dict` 保留节点并打印显式告警
+  （`unknown node type(s), kept as-is` + 迁移提示），不会静默丢节点。
+- tools 侧 `rules.md` / `graph_flow.py`（`[GATE]` 分类）已同步移除该类型。
+
+**回归**
+- `test_pin_value_coercion`：`"TimeDelay" not in _TYPES` 且求值器未注册。
 
 

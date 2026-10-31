@@ -53,6 +53,7 @@ class ExtensionInfo:
     entry: str = ""
     capabilities: list = field(default_factory=list)
     requires: list = field(default_factory=list)
+    provider: str = ""                # Example 默认签名（manifest provider/signature；空 = @<id>）
     export: bool = True               # 是否随 Project Export 游戏层分发（manifest export:false 可关）
     dir: str = ""
     manifest_path: str = ""
@@ -77,6 +78,7 @@ class ExtensionInfo:
             "enabled": self.enabled, "loaded": self.loaded, "loadable": self.loadable,
             "error": self.error, "dir": self.dir, "ops": list(self.ops),
             "capabilities": list(self.capabilities), "requires": list(self.requires),
+            "provider": self.provider,
             "export": bool(self.export),
         }
 
@@ -148,6 +150,7 @@ class ExtensionManager:
     _infos: dict[str, ExtensionInfo] = {}
     _instances: dict[str, ExtensionBase] = {}
     _node_facades: dict[str, _ExtensionNodeRegistrar] = {}
+    _example_facades: dict[str, object] = {}
     _scanned: bool = False
 
     # 挂起停用请求（窗口 X 关闭等可从渲染线程发起 — 实际执行在主线程 pump）
@@ -263,6 +266,7 @@ class ExtensionManager:
             info.entry = str(data.get("entry") or "")
             info.capabilities = list(data.get("capabilities") or [])
             info.requires = list(data.get("requires") or [])
+            info.provider = str(data.get("provider") or data.get("signature") or "")
             info.export = bool(data.get("export", True))
             if not _ID_RE.match(info.id):
                 raise ValueError(f"invalid id {info.id!r} (expect [a-z][a-z0-9_]*)")
@@ -402,12 +406,25 @@ class ExtensionManager:
             ctx = ExtensionContext(
                 extension_id=info.id, name=info.name, version=info.version,
                 manifest={"id": info.id, "name": info.name, "version": info.version,
-                          "maturity": info.maturity, "capabilities": list(info.capabilities)},
+                          "maturity": info.maturity, "provider": info.provider,
+                          "capabilities": list(info.capabilities)},
                 extension_dir=info.dir, data_dir=data_dir, engine_root=cls._engine_root())
             ctx.ops = _ExtensionOpRegistrar(info.id)
             if "nodes" in [str(c) for c in (info.capabilities or [])]:
                 ctx.nodes = _ExtensionNodeRegistrar(info.id, info.dir)
                 cls._node_facades[info.id] = ctx.nodes
+            # ctx.examples: 扩展自带 Examples/ 自动登记；显式声明 "examples"
+            # 才注入 register/unregister 门面（协议 §6.2）。
+            try:
+                from Application.Editor.Extensions.ExtensionExamples import _ExtensionExamplesRegistrar
+                caps = [str(c) for c in (info.capabilities or [])]
+                if "examples" in caps or os.path.isdir(os.path.join(info.dir, "Examples")):
+                    facade = _ExtensionExamplesRegistrar(info.id, info.dir, info.provider)
+                    cls._example_facades[info.id] = facade
+                    if "examples" in caps:
+                        ctx.examples = facade
+            except Exception:  # noqa: BLE001 — 示例目录异常不拖垮扩展加载
+                traceback.print_exc()
             try:
                 from Application.Editor.Extensions.ExtensionUI import ExtensionUI
                 ctx.ui = ExtensionUI(info.id, instance)
@@ -434,6 +451,7 @@ class ExtensionManager:
             cls._instances.pop(info.id, None)
             cls._purge_ops(info.id)
             cls._purge_nodes(info.id)
+            cls._purge_examples(info.id)
             cls._purge_ui(info.id)
 
     @classmethod
@@ -450,6 +468,7 @@ class ExtensionManager:
                 traceback.print_exc()
         cls._purge_ops(info.id)
         cls._purge_nodes(info.id)
+        cls._purge_examples(info.id)
         cls._purge_ui(info.id)
         info.loaded = False
         print(f"[Extensions] unloaded: {info.id}")
@@ -471,6 +490,19 @@ class ExtensionManager:
                 facade.unregister_all()
             except Exception:  # noqa: BLE001 — 卸载失败不拖垮其余清理
                 traceback.print_exc()
+
+    @classmethod
+    def _purge_examples(cls, ext_id: str) -> None:
+        """移除扩展示例根目录 — 与 ctx.nodes / ctx.ui 同一套卸载生命周期。"""
+        facade = cls._example_facades.pop(ext_id, None)
+        try:
+            if facade is not None:
+                facade.unregister_all()
+            else:
+                from Application.Editor.Extensions.ExtensionExamples import ExtensionExamplesRegistry
+                ExtensionExamplesRegistry.unregister_owner(ext_id)
+        except Exception:  # noqa: BLE001 — 卸载失败不拖垮其余清理
+            traceback.print_exc()
 
     @classmethod
     def _purge_ui(cls, ext_id: str) -> None:

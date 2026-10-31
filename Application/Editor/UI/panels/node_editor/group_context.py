@@ -9,6 +9,7 @@ from Application.Core.NodeGraph.group_nodes import (
     ensure_group_io_nodes,
     group_io_owner,
 )
+from Application.Core.Input.Gesture import moved
 from Application.Core.NodeGraph.group_ops import (
     destroy_group,
     merge_nodes,
@@ -99,6 +100,7 @@ class GroupContextMixin:
         self._group_context_kind = kind
         self._group_context_gid = gid
         self._group_context_selection = selected
+        self._group_context_open = True
         imgui.open_popup("###node_group_context")
 
     def _merge_group_from_selection(self, canvas: NodeCanvas, ne) -> None:
@@ -156,9 +158,52 @@ class GroupContextMixin:
         self._destroy_group_action(canvas, ne, gid)
 
     def _draw_group_context_menu(self, canvas: NodeCanvas, ne) -> None:
+        # 右键在节点图里同时承担“平移拖拽”和“打开菜单”。如果按下即
+        # open_popup，右键拖拽会被菜单打断，框选/平移都不可用。这里按
+        # 点击语义处理：按下记录起点，释放时位移 <= 阈值才打开菜单。
+        mouse = getattr(self, "_mouse_screen", None)
+        if mouse is None:
+            try:
+                raw = imgui.get_mouse_pos()
+                mouse = (float(raw.x), float(raw.y))
+            except Exception:  # noqa: BLE001
+                mouse = None
+
         if imgui.is_mouse_clicked(1):
-            self._open_group_context(canvas, ne)
-        if not imgui.begin_popup("###node_group_context"):
+            rect = getattr(self, "_canvas_rect", None)
+            inside = bool(
+                mouse is not None and rect is not None
+                and rect[0] <= mouse[0] <= rect[2]
+                and rect[1] <= mouse[1] <= rect[3]
+            )
+            self._ctx_press_screen = tuple(mouse) if inside and mouse else None
+            self._ctx_press_moved = False
+
+        if self._ctx_press_screen is not None and mouse is not None:
+            if imgui.is_mouse_down(1):
+                if moved(self._ctx_press_screen, mouse):
+                    self._ctx_press_moved = True
+            elif not imgui.is_mouse_released(1):
+                # 焦点丢失/窗口外释放：不要让旧起点卡住下一次右键。
+                self._ctx_press_screen = None
+                self._ctx_press_moved = False
+
+        if imgui.is_mouse_released(1):
+            rect = getattr(self, "_canvas_rect", None)
+            release_inside = bool(
+                mouse is not None and rect is not None
+                and rect[0] <= mouse[0] <= rect[2]
+                and rect[1] <= mouse[1] <= rect[3]
+            )
+            if (self._ctx_press_screen is not None
+                    and not self._ctx_press_moved and release_inside):
+                self._open_group_context(canvas, ne)
+            self._ctx_press_screen = None
+            self._ctx_press_moved = False
+
+        self._group_context_open = bool(
+            imgui.begin_popup("###node_group_context"))
+        if not self._group_context_open:
             return
         try:
             kind = self._group_context_kind

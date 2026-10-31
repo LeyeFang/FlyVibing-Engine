@@ -1,7 +1,7 @@
 # 运行时场景 / 游戏内 GUI / 输入 — 下一阶段规划（v1）
 
-> 状态：**B0（Utils 虚拟输入）已纳入下一迭代；A1-A3 / B1-B6 为默认方案，待复核**（2026-10-29）。本文件是设计讨论稿，不代表已实现。
-> B0 先解决“agent 能像人一样操作编辑器/PIE/成品窗口”，再做 GameRuntime 输入层；两者都遵守同一坐标系与 ESC 语义。
+> 状态：**B2 输入队列/事件节点已落地（2026-10-31）**；B0（Utils 虚拟输入）、B1（UIWidget/UISystem）、B3 modal/焦点仍待推进；A1-A3 待复核。本文件是设计讨论稿，与已实现部分不一致处以实现为准。
+> B2 已提供 `RuntimeInputLayer` + `RuntimeInputFrame`、`OnKeyPressed` / `OnKeyReleased` / `OnMouseClicked`、`IsKeyDown` / `IsMouseButtonDown` / `GetMousePosition`，PIE 与导出均压入输入层；ESC 默认安全关闭，`set_escape_exit(False)` 后由节点接管。UI 命中与 modal 焦点仍需 B1/B3。
 > 关联：`node_editor_protocol.md`、`runtime_packaging_protocol.md`、`threading_protocol.md`、`rendering_protocol.md`、`text_protocol.md`、`media_protocol.md`。
 
 ## 0. 结论先行
@@ -159,12 +159,12 @@ GUI 和输入必须一起做：按钮点击、弹窗焦点、模态遮罩、ESC 
 
 但只加一个 Layer 还不够，必须同时处理 4 个边界：
 
-1. **层顺序**：`RuntimeDebugLayer` 会消费所有非静默事件；输入层必须压在它上面（或让 DebugLayer 不消费输入事件），否则收不到鼠标/键盘；
-2. **线程**：窗口事件在渲染/主线程到达，`OnUpdate` 可能在 PIE 逻辑线程；输入层内部用锁保护队列，逻辑线程每帧 drain 成 `InputFrame` 快照；
-3. **ESC**：`glfwWindow._make_key_hook()` 当前在 Escape Release 时先发 `WindowCloseEvent`，而 `Engine._on_event()` 对它的 `run_state=False` 处理**不看 consumed**；要做“节点/弹窗优先”的 ESC 策略，必须让 Engine 尊重 `WindowCloseEvent.consumed`（或把关闭决策移到输入层）；
-4. **注入**：Utils 的 `target=pie|game` 不能直接 import GameRuntime；应通过引擎公开的 `input.*` op / 调试注入队列写入同一个 `RuntimeInputLayer`，与真实窗口事件同源。
+1. **层顺序（已处理）**：`RuntimeDebugLayer` 仍消费普通非静默事件，但 `WindowCloseEvent` 只打印不 consume；`RuntimeInputLayer` 最后 push 到栈顶，键鼠先到输入层，再由 Debug/Overlay/引擎处理。
+2. **线程（已处理）**：窗口事件在渲染/主线程到达，`OnUpdate` 在 PIE 逻辑线程；`RuntimeInputLayer` 内部锁保护队列，`RuntimeNodeLayer` 每逻辑帧 drain 成 `RuntimeInputFrame` 快照。
+3. **ESC（已处理）**：`WindowCloseEvent` 带 `source`（`escape` / `window`）；`Engine._on_event()` 只在 `not event.consumed` 时退出。默认 `exit_on_escape=True` 保留安全网；`RuntimeInputLayer.set_escape_exit(False)` 后由节点/弹窗 consume。
+4. **注入（进行中）**：Utils 的 `target=pie|game` 不应直接 import GameRuntime；应通过公开 `input.*` op / 调试注入队列调用 `RuntimeInputLayer.inject_*`，与真实窗口事件同源。
 
-因此推荐顺序仍是：先 B0（Utils 先把 editor/PIE 输入做成稳定高层 API），再在 B2 把 `RuntimeInputLayer` 压进 `GameRuntime`；层本身不依赖 Editor，导出成品与 PIE 共用。
+B2 已把 `RuntimeInputLayer` 压进 `GameRuntime`；层本身不依赖 Editor，导出成品与 PIE 共用。B0 的 Utils 高层封装仍可继续补齐。
 
 #### B.3.1 先做 Utils 虚拟输入迭代（agent 验证通道）
 
@@ -191,11 +191,12 @@ GUI 和输入必须一起做：按钮点击、弹窗焦点、模态遮罩、ESC 
 
 - 新增 `RuntimeInputLayer`（或 `InputSystem`）：
   - 主线程接收 `KeyboardButtonEvent` / `MouseButtonEvent` / `MouseMoveEvent` / `ScrollerEvent`；
-  - 写入线程安全队列；逻辑线程在 `OnUpdate` 首部 drain；
+  - 写入线程安全队列；逻辑线程由 `RuntimeNodeLayer.OnUpdate` drain；
   - 提供当前帧 `InputFrame` 快照给 `ExecutionContext`。
 - 节点：
   - `OnKeyPressed` / `OnKeyReleased`（key + mods）
-  - `OnMouseClicked`（button + 可选 UI widget 过滤）
+  - `OnMouseClicked`（button + 可选 UI widget 过滤；按下后原地释放 <=6px，
+    拖拽不会触发）
   - 数据节点 `IsKeyDown` / `GetMousePosition`（可选）
 - 消费顺序（固定）：
   1. UI（modal → 高 z → 命中控件）
@@ -216,8 +217,8 @@ GUI 和输入必须一起做：按钮点击、弹窗焦点、模态遮罩、ESC 
 |---|---|---|
 | B0 | Utils 虚拟输入高层封装（鼠标/键盘/组合键、editor/PIE/game 目标） | agent 脚本可拖拽场景镜头、缩放/右键节点图；无手工点击 |
 | B1 | UIWidget 组件 + UISystem 屏幕空间 quad/label + hover/pressed/click | 无头 + PIE 截图：按钮颜色/文字变化；点击命中；无 imgui 依赖 |
-| B2 | 输入队列 + `OnKeyPressed` / `OnMouseClicked` + UI 消费顺序 | 键/鼠标节点只触发一次；UI 点击不穿透；PIE/导出一致 |
-| B3 | Popup/modal + ESC 策略 + 焦点/禁用态 | 弹窗拦截下层；ESC 关闭弹窗；按钮禁用不可点 |
+| B2 | **✅ 已落地输入队列** + `OnKeyPressed` / `OnKeyReleased` / `OnMouseClicked`；UI 消费顺序待 B1 | 键/鼠标节点只触发一次；`OnMouseClicked` 只在原地释放（<=6px）触发，拖拽不误点；PIE/导出同一套 `RuntimeInputLayer`（`test_runtime_input`） |
+| B3 | Popup/modal + ESC 策略 + 焦点/禁用态 | 弹窗拦截下层；ESC 关闭弹窗；按钮禁用不可点；`set_escape_exit(False)` 已支持节点接管 ESC |
 | B4 | 场景持久化 + 编辑器 Inspector/场景面板 UI 预览 | UI 实体保存/加载；编辑器中可摆放；PIE 与导出一致 |
 | B5 | 两个官方 Example 的 ESC 退出 + 清理 | MI/RestingState：ESC 停止、无设备/媒体/GPU 残留；成品同语义 |
 | B6 | 测试/文档/示例 | `test_runtime_ui`、`test_runtime_input`、e2e 场景；更新协议与 TODO |

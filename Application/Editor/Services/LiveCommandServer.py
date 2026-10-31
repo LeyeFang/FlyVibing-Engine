@@ -331,6 +331,7 @@ class LiveCommandServer:
             "scene.create": cls._op_scene_create,
             "scene.save": cls._op_scene_save,
             "scene.load": cls._op_scene_load,
+            "device.save": cls._op_device_save,
             "resource.list": cls._op_resource_list,
             "resource.find": cls._op_resource_find,
             "resource.material.get": cls._op_resource_material_get,
@@ -343,6 +344,36 @@ class LiveCommandServer:
         from Application.Core.ThreadRegistry import ThreadRegistry
 
         return ThreadRegistry.snapshot()
+
+    @staticmethod
+    def _op_device_save(args: dict) -> dict:
+        """不停采保存设备会话（与图节点 SaveDeviceData 同实现）。
+
+        args: device/device_name（空 = 自动绑定唯一会话）、save_scope/
+              scope（session|buffer）、elapsed_s、pool、tag、pump。
+        """
+        from Application.Functions.VirtualDevice import save_record
+
+        def _as_bool(value, default=True):
+            if value is None:
+                return default
+            if isinstance(value, bool):
+                return value
+            return str(value).strip().lower() not in ("", "0", "false", "no", "off")
+
+        try:
+            elapsed = float(args.get("elapsed_s", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            elapsed = 0.0
+        name = str(args.get("device") or args.get("device_name") or "").strip()
+        scope = str(args.get("save_scope") or args.get("scope") or "session").strip().lower()
+        pool = str(args.get("pool") or "").strip() or None
+        ok, detail, info = save_record(
+            name, save_scope=scope, elapsed_s=elapsed, pool=pool,
+            tag=str(args.get("tag") or ""), pump=_as_bool(args.get("pump", True)))
+        result = {"ok": bool(ok), "detail": detail}
+        result.update(info)
+        return result
 
     @staticmethod
     def _op_renderer_snapshot(args: dict) -> dict:
@@ -571,8 +602,11 @@ class LiveCommandServer:
             except Exception:  # noqa: BLE001
                 mouse_view = None
                 mouse_down = False
+            canvas_rect = getattr(panel, "_canvas_rect", None)
             state["view"] = {
                 "canvas_w": float(getattr(panel, "_last_canvas_width", 0.0) or 0.0),
+                "canvas_rect": ([round(float(v), 1) for v in canvas_rect]
+                                if canvas_rect else None),
                 "zoom": float(getattr(panel, "_last_zoom", 0.0) or 0.0),
                 "mouse": mouse_view,
                 "mouse_down": mouse_down,
@@ -580,6 +614,11 @@ class LiveCommandServer:
                 "selected_nodes": selected,
                 "selected_groups": selected_groups,
                 "last_box_apply": getattr(panel, "_last_box_apply", {}),
+                "context_open": bool(getattr(panel, "_group_context_open", False)),
+                "context_kind": str(getattr(panel, "_group_context_kind", "") or ""),
+                "context_gid": str(getattr(panel, "_group_context_gid", "") or ""),
+                "context_selection": sorted(int(n) for n in
+                                             (getattr(panel, "_group_context_selection", set()) or set())),
                 "box": {
                     "selecting": bool(getattr(panel, "_box_selecting", False)),
                     "released": bool(getattr(panel, "_box_select_released", False)),

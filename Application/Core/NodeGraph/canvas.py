@@ -243,6 +243,7 @@ class NodeCanvas(DataContract):
         data_model._next_id = max(data_model._next_id, max_id + 1)
 
         # ── 恢复节点 ──
+        unknown: dict[str, list[int]] = {}
         for nid_str, nd in data.get("nodes", {}).items():
             nid = int(nid_str)
             ntype = nd["node_type"]
@@ -253,6 +254,9 @@ class NodeCanvas(DataContract):
                 for p in tdef.pins:
                     if p.name not in pins:
                         pins[p.name] = _gen_id()
+            else:
+                # 已移除 / 未注册的类型 — 不丢节点，但必须显式告警（不静默）
+                unknown.setdefault(str(ntype), []).append(nid)
             canvas._nodes[nid] = NodeInstance(
                 id=nid,
                 node_type=ntype,
@@ -263,6 +267,19 @@ class NodeCanvas(DataContract):
                 description=(str(nd.get("description") or "")
                              or (tdef.props_text if tdef is not None else "")),
             )
+
+        if unknown:
+            detail = "; ".join(
+                f"{name} (node {', '.join(str(n) for n in ids[:5])}"
+                + (", ..." if len(ids) > 5 else "") + ")"
+                for name, ids in sorted(unknown.items())
+            )
+            print(f"[NodeCanvas] WARNING: unknown node type(s), kept as-is: {detail}")
+            if "TimeDelay" in unknown:
+                print("  TimeDelay was removed — migrate to TimeTrigger "
+                      "(mode=manual, time=N) on an OnFrameUpdate chain.")
+            else:
+                print("  Check that the owning extension / node pack is enabled.")
 
         # ── 恢复连线 ──
         for lid_str, ld in data.get("links", {}).items():

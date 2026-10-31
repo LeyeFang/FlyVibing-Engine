@@ -35,7 +35,7 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 3. NEVER connect exec→data or data→exec
 4. One output pin can fan out to multiple input pins (both exec and data)
 5. An input pin can only receive from ONE output pin
-6. Event nodes (OnGameStart/OnFrameUpdate/OnGameStop) have NO input exec pins — they are graph roots
+6. Event nodes (OnGameStart/OnFrameUpdate/OnGameStop/OnKeyPressed/OnKeyReleased/OnMouseClicked) have NO input exec pins — they are graph roots
 7. device pins connect device→device: Init*Device.device (output) → AddToDevicePool.device (input). These are NOT exec/data pins.
 8. A device output pin feeds AT MOST ONE AddToDevicePool (a device belongs to one pool — exclusive membership). Devices never added to a pool stay in the implicit "global" pool.
 
@@ -43,12 +43,17 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 - OnGameStart: fires ONCE when the game begins. Use for initialization (set variables, spawn entities).
 - OnFrameUpdate: fires EVERY FRAME. Use for per-frame checks (TimeTrigger, input polling).
 - OnGameStop: fires ONCE when the game ends. Use for cleanup.
+- OnKeyPressed / OnKeyReleased / OnMouseClicked: fire once per matching input event.
+  OnMouseClicked fires on release only when the press moved <= 6 px (a drag does not click).
+  Props: key ("Space"/"A"/"Escape"/code), mods ("any"/"none"/"Shift"/"Ctrl+Shift"),
+  button ("Left"/"Right"/"Middle"/"Any"), repeat (OnKeyPressed only).
 - Exec chain: _walk_exec follows exec output→input links depth-first.
-- Data nodes (Constant/Scale, StringConst, PathVar, Compare, ScalarMath, MakeList, MakeVec3, BreakVec3, VecMath, Random, legacy math):
+- Data nodes (Constant/Scale, StringConst, PathVar, IsKeyDown, IsMouseButtonDown,
+  GetMousePosition, Compare, ScalarMath, MakeList, MakeVec3, BreakVec3, VecMath, Random, legacy math):
   NO exec pins. Evaluated LAZILY when their output pin is read via a data link.
 - Mixed nodes (VarGet): have BOTH exec_in and data output pins. Exec triggers read; data output
   is then available for downstream data links. When data-read without exec context, lazy-eval works too.
-- _blocked pattern: TimeDelay and TimeTrigger set _blocked=True to pause exec chain.
+- _blocked pattern: TimeTrigger sets _blocked=True to pause exec chain.
   Branch sets _blocked=True after manually walking the matching branch.
 - Variable store: ctx._variables persists across frames. VarSet writes, VarGet reads.
   Variables are NOT cleared between triggers — use them for state (counters, timers).
@@ -69,6 +74,16 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 | OnGameStart    | exec (exec)                  | fires once at game start         |
 | OnFrameUpdate  | exec (exec), delta (float)   | fires every frame                |
 | OnGameStop     | exec (exec)                  | fires once at game stop          |
+| OnKeyPressed   | exec, Key (int), Mods (int)  | props: key, mods, repeat         |
+| OnKeyReleased  | exec, Key (int), Mods (int)  | props: key, mods                 |
+| OnMouseClicked | exec, Button/Mods/X/Y (int)  | props: button, mods              |
+
+#### Input Data Nodes (pure data — no exec pins)
+| type_name         | output pins          | props | notes |
+|-------------------|----------------------|-------|-------|
+| IsKeyDown         | Down (int 0/1)       | key   | current held state |
+| IsMouseButtonDown | Down (int 0/1)       | button| current held state |
+| GetMousePosition  | X (int), Y (int)     | —     | window/framebuffer pixels |
 
 #### Flow Nodes
 | type_name | input pins              | output pins               | props              |
@@ -101,7 +116,6 @@ When writing a graph, assign pin IDs sequentially starting from a high base (e.g
 |----------------|--------------------------|--------------------------------|------------------------|
 | TimeGetElapsed | exec_in (exec)           | exec_out (exec), Elapsed(float)| —                      |
 | TimeGetDelta   | exec_in (exec)           | exec_out (exec), Delta(float)  | —                      |
-| TimeDelay      | exec_in,Seconds(float)   | exec_out (exec)                | —                      |
 | TimeTrigger    | exec_in,Time(float)      | Elapsed(float), out_0..out_7(exec×8) | mode: manual/pin, time: float, timer: named timer (empty=global) |
 | NewTimer       | exec_in,Name(string)     | exec_out (exec)                 | mode: manual/pin, timer_name     |
 | SetTimer       | exec_in,Value(float)     | exec_out (exec)                 | operate: reset/set_time, mode: manual/pin, timer_name, value, create_if_missing(default true) |
@@ -194,6 +208,7 @@ Property pins use _SKIP sentinel: unconnected (pin mode) or unchecked (manual mo
 | ParallelSend | exec_in,Address(int),Value(var)        | exec_out | mode: manual/pin, address: int (0x3FF8 LPT1, 0x3FF0 LPT2, 0x3FE8 LPT3), value: 1-255 |
 | PathVar      | —                                      | Path (string) | browse_mode: directory/file, path: string |
 | TextFileWrite| exec_in,FilePath(string),FileName(string),Value(var) | exec_out | mode: manual/pin, write_mode: w/a, delimiter: none/space/newline/tab/comma, file_path, file_name, value |
+| SaveData     | exec_in,Data(var),FilePath(string),FileName(string) | exec_out,Path(string),MetaPath(string),Rows(int),Cols(int),Samples(int),Written(int),Ok(int) | mode: manual/pin, format: npz/npy/csv/json, file_path, file_name, unique, tag, key, compress, save_meta, csv_delimiter, csv_header, csv_mode, json_indent, value (manual fallback) |
 
 SerialSend format "string"→UTF-8, "bytes"→float32 LE 4 bytes. Port/BaudRate always read from node props; Value from upstream pin.
 ParallelSend always sends uint8 (1-255, 0 reserved for auto-reset after 5ms).
@@ -270,7 +285,7 @@ Epoch dataset rules (CRITICAL):
 
 BCI algorithm rules (CRITICAL):
 1. InitFBCSP registers a spec (hyperparams) under model_name; TrainFBCSP(train) binds the spec + an Epoch dataset (both by name; empty + single canvas source = auto-bind) and registers the trained model under the SAME key; TestFBCSP binds a trained model by name.
-2. Training = SYNCHRONIZED WAIT: TrainFBCSP blocks the exec flow while a service thread trains (progress via logs); on completion the SAME exec walk continues downstream exactly once (one-shot, like TimeTrigger). Put it on a repeatedly-triggered chain — an OnGameStart-only chain would stall forever (TimeDelay has the same limitation). Dry-run trains synchronously (deterministic).
+2. Training = SYNCHRONIZED WAIT: TrainFBCSP blocks the exec flow while a service thread trains (progress via logs); on completion the SAME exec walk continues downstream exactly once (one-shot, like TimeTrigger). Put it on a repeatedly-triggered chain — an OnGameStart-only chain would stall forever. Dry-run trains synchronously (deterministic).
 3. Training needs EXACTLY 2 classes in the dataset (first append fixes channels/fs). Classifier math: closed-form LDA or linear SVM (scipy.optimize, deterministic) — no sklearn dependency.
 4. mode=load bypasses training and registers a model from model_path (offline pipeline entry); save_path (train mode) writes the trained model as npz.
 5. TestCCA is training-free: references = sin/cos harmonics of each candidate frequency; Label = argmax canonical correlation (index into freqs), Score = that correlation, Freq = its value. At least 2 frequencies required (no upper limit).
@@ -347,6 +362,30 @@ OnFrameUpdate → VarGet("next_time") → TimeTrigger(mode=pin)
 Key: TextFileWrite creates the directory and file automatically. FileName "experiment_log" becomes "experiment_log.txt".
 Use StringConst for static strings, VarGet for dynamic values (but note VarGet returns float — use StringConst for file names).
 PathVar provides a reusable directory path that can fan out to multiple TextFileWrite nodes.
+
+#### Pattern 7b: Save array/trial data (SaveData — algorithm-facing)
+```
+OnKeyPressed(key="Space", mods="any")
+  → SaveData(
+      mode="pin",
+      format="npz", key="epoch", compress=true, save_meta=true, unique=true,
+      FilePath←PathVar(browse_mode=directory, path="D:/Data/"),
+      FileName←StringConst(value="trial"),
+      Data←<algorithm/data node>
+    )
+  → Print(Value←SaveData.Path)   // optional audit trail
+```
+SaveData writes `{file_path}/{file_name}_{timestamp}_{tag}.npz` (+ `.meta.json`) and returns
+Path/MetaPath/Rows/Cols/Samples/Written/Ok. Use it for arrays/tables; keep TextFileWrite
+for human-readable logs. `format` supports `npz` (multi-array dict), `npy`, `csv`, `json`.
+`unique=false` overwrites the given name; dry-run validates shape/path without writing.
+
+SaveData is the algorithm-facing data path (npy/npz/csv/json + optional `.meta.json`).
+It is intentionally separate from TextFileWrite (human-readable `.txt` logs):
+- Data pin accepts arrays/lists/scalars/dicts (dict → multiple NPZ arrays or CSV columns).
+- `unique=true` appends timestamp + optional tag; `false` overwrites the target name.
+- Outputs Path/MetaPath/Rows/Cols/Samples/Written/Ok for downstream logging/branching.
+- dry-run computes the path and row/col counts without creating files.
 
 ---
 

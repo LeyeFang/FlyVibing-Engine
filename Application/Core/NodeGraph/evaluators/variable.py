@@ -29,7 +29,8 @@ def _eval_var_set(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> Non
     else:
         value = _read_data_input(node_id, "Value", ctx, g, 0)
 
-    ctx.set_var(str(name), float(value))
+    # Value 引脚声明为 variant — 保留原类型（数值/字符串/引用都可由 VarGet 取回）
+    ctx.set_var(str(name), value)
 
 register_evaluator("VarSet", _eval_var_set)
 
@@ -45,7 +46,7 @@ def _eval_var_get(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> Non
         return
     value = ctx.get_var(str(name))
     if value is not None:
-        _write_data_output(node_id, "Value", float(value), ctx, g)
+        _write_data_output(node_id, "Value", value, ctx, g)
 
 register_evaluator("VarGet", _eval_var_get)
 

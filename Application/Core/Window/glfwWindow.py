@@ -424,7 +424,7 @@ class glfwWindow(Window):
         _kls = cls
         def hook(key, scancode, action, mods):
             if key == glfw.KEY_ESCAPE and action == glfw.RELEASE:
-                WindowCloseEvent.Pack(engine=_kls._engine)
+                WindowCloseEvent.Pack(source="escape", engine=_kls._engine)
             KeyboardButtonEvent.Pack(key, scancode, action, mods, engine=_kls._engine)
         return hook
 

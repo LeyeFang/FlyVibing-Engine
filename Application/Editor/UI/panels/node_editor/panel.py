@@ -238,6 +238,10 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
         self._group_context_gid: str = ""
         self._group_context_selection: set[int] = set()
         self._group_action_error: str = ""
+        # 右键“点击 vs 拖拽”判别：菜单只在原地释放时打开，右键拖动画布不弹菜单。
+        self._group_context_open: bool = False
+        self._ctx_press_screen: tuple[float, float] | None = None
+        self._ctx_press_moved: bool = False
         # 节点编辑器只在 begin/end 内提供可靠的 canvas→screen 映射。
         # 框选/组框命中在 end() 之后执行，必须使用绘制帧内缓存的屏幕矩形。
         self._node_screen_rects: dict[int, tuple[float, float, float, float]] = {}

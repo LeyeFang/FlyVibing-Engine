@@ -22,6 +22,9 @@
 | 文档 | 场景 README：范式、时间线、地址/码值表、如何改臂/参数 |
 
 Examples 目录：`Examples/`（正式示例，可提交；`Test/TestProject/Examples/` 仅作开发备用，File 菜单两者都扫）。
+扩展自带示例放 `<extension_dir>/Examples/`：启用时宿主自动登记（`ExtensionExamplesRegistry`），
+停用即移除；额外根目录用 `capabilities:["examples"]` + `ctx.examples.register`（详见
+`extdev/example_development.md` §1.2）。
 
 ---
 

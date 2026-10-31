@@ -15,6 +15,7 @@ VirtualDevice — 设备层门面（虚拟信号发生器设备族的完整模�
 公开 API:
     init_session(name, cfg, dry_run)          → (session | None, detail)
     start_record(name, elapsed_s, pool, record) → (ok, detail)   record=False = 仅监视
+    save_record(name, scope, elapsed_s, pool, tag, pump) → (ok, detail, info)  不停采保存
     stop_record(name, scope, elapsed_s, pool, save) → (ok, detail)   save=False = 弃录
     kill_device(name, pool)                   → (ok, detail)
     get_data(name, elapsed_s, pool)           → (result | None, detail)
@@ -40,6 +41,7 @@ VirtualDevice — 设备层门面（虚拟信号发生器设备族的完整模�
 
 from __future__ import annotations
 
+import inspect
 import os
 from typing import Optional
 
@@ -95,6 +97,7 @@ __all__ = [
     "channel_names_for",
     "init_session",
     "start_record",
+    "save_record",
     "stop_record",
     "measure_impedance",
     "get_trigger_events",
@@ -215,6 +218,80 @@ def start_record(name: str, elapsed_s: float = 0.0, pool: Optional[str] = None,
     except Exception as e:
         return False, f"start failed: {e}"
     return True, f"'{session.name}' {'recording' if record else 'monitoring'} started"
+
+
+def _save_accepts(session, *names: str) -> list[str]:
+    """session.save 接受的保存扩展参数（兼容 vendor / 旧实现）。"""
+    try:
+        params = inspect.signature(session.save).parameters
+    except (TypeError, ValueError):
+        return list(names)
+    var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+    return [name for name in names if var_kw or name in params]
+
+
+def save_record(name: str, save_scope: str = "session", elapsed_s: float = 0.0,
+                pool: Optional[str] = None, tag: str = "", pump: bool = True):
+    """不停采保存当前录制（或窗口）— 图节点 / agent op 的共同实现。
+
+    Returns: (ok, detail, info)。info 含 paths / meta_path / samples /
+             duration_s / written / scope / state。
+
+    pump=True 时先按 elapsed_s 补齐后端数据；对仍使用旧式
+    `save(scope)` 签名的 vendored session，则用公开的 get_data() 完成 pump
+    后再调用 save，避免写出版本落后的空文件。
+    """
+    session, why = resolve_session(name, pool=pool)
+    if session is None:
+        return False, why, {}
+    scope = str(save_scope or "session").strip().lower()
+    if scope not in ("session", "buffer"):
+        scope = "session"
+    accepted = _save_accepts(session, "elapsed_s", "pump", "tag")
+    try:
+        if accepted:
+            kwargs = {}
+            if "elapsed_s" in accepted:
+                kwargs["elapsed_s"] = float(elapsed_s)
+            if "pump" in accepted:
+                kwargs["pump"] = bool(pump)
+            if "tag" in accepted:
+                kwargs["tag"] = str(tag or "")
+            result = session.save(scope, **kwargs)
+        else:
+            # 旧式 session.save(scope) 不含 pump：先走公开 get_data 触发 pump
+            if pump and str(getattr(session, "state", "")) in ("recording", "monitoring"):
+                session.get_data(float(elapsed_s))
+            result = session.save(scope)
+    except Exception as e:  # noqa: BLE001 — 设备层错误转为受控 detail
+        return False, f"save failed: {e}", {}
+
+    paths = [str(p) for p in getattr(result, "paths", [])]
+    meta_path = next((p for p in paths if p.lower().endswith(".json")), "")
+    samples = int(getattr(result, "samples", 0) or 0)
+    duration = float(getattr(result, "duration_s", 0.0) or 0.0)
+    written = bool(getattr(result, "written", False))
+    info = {
+        "paths": paths,
+        "meta_path": meta_path,
+        "samples": samples,
+        "duration_s": duration,
+        "written": written,
+        "scope": scope,
+        "tag": str(tag or ""),
+        "state": str(getattr(session, "state", "")),
+        "sample_count": int(getattr(session, "sample_count", 0) or 0),
+    }
+    where = " → ".join(paths) if paths else "(save failed — see console)"
+    if written:
+        detail = (f"'{session.name}' saved {samples} samples ({duration:.2f}s, "
+                  f"scope={scope}) → {where}")
+    else:
+        detail = (f"'{session.name}' [dry-run: not written]; would save "
+                  f"{samples} samples ({duration:.2f}s, scope={scope}) → {where}")
+    if samples == 0 and scope == "session" and info["state"] == "monitoring":
+        detail += " (monitoring has no recording data — use save_scope=buffer)"
+    return True, detail, info
 
 
 def stop_record(name: str, save_scope: str = "session", elapsed_s: float = 0.0,

@@ -57,6 +57,7 @@ IO_COLOR         = (0.878, 0.620, 0.314)
 BASIC_COLOR      = (0.580, 0.580, 0.620)
 MEDIA_COLOR      = (0.870, 0.350, 0.400)
 TEXT_COLOR       = (0.420, 0.780, 0.560)
+INPUT_COLOR      = (0.920, 0.550, 0.420)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -78,3 +79,4 @@ from . import io         # noqa: E402, F401
 # 不再 import 旧 node_types 文件，避免和动态 pack 重复注册。
 from . import media      # noqa: E402, F401
 from . import text       # noqa: E402, F401
+from . import input      # noqa: E402, F401

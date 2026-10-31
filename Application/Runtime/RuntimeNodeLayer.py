@@ -3,8 +3,9 @@ RuntimeNodeLayer — 由节点图驱动的 GameRuntime Layer。
 
 职责:
   - OnAttach:  从 NodeCanvas 构建 GraphEvaluator，触发 OnGameStart
-  - OnUpdate:  更新 ExecutionContext（deltaTime），触发 OnFrameUpdate，
-               + 同步场景摄像机矩阵到渲染器
+  - OnUpdate:  更新 ExecutionContext（deltaTime），drain RuntimeInputLayer
+               快照并触发 OnKeyPressed/OnKeyReleased/OnMouseClicked，
+               再触发 OnFrameUpdate，最后同步场景摄像机矩阵到渲染器
   - OnDetach:  触发 OnGameStop
 
 节点图来源:
@@ -31,6 +32,7 @@ from Application.Core.NodeGraph.evaluator_engine import (
     GraphEvaluator,
     ExecutionContext,
 )
+from Application.Runtime.RuntimeInputLayer import RuntimeInputLayer
 
 
 class RuntimeNodeLayer(Layer):
@@ -80,6 +82,36 @@ class RuntimeNodeLayer(Layer):
         if cls._context.stop_requested and cls._context.on_stop_request is None:
             from Application.Runtime.GameRuntime import GameRuntime
             GameRuntime.run_state = False
+
+    @classmethod
+    def _dispatch_input_events(cls) -> None:
+        """取输入快照并逐个触发输入事件节点。
+
+        只有匹配的事件节点会继续执行 exec 链；无输入层时得到空快照，
+        数据节点仍可读取当前鼠标/按住状态。
+        """
+        if cls._context is None or cls._evaluator is None:
+            return
+        frame = RuntimeInputLayer.drain_frame()
+        cls._context.input = frame
+
+        try:
+            for record in frame.key_presses:
+                cls._context.input_event = record
+                cls._evaluator.trigger("OnKeyPressed", cls._context)
+            for record in frame.key_repeats:
+                cls._context.input_event = record
+                cls._evaluator.trigger("OnKeyPressed", cls._context)
+            for record in frame.key_releases:
+                cls._context.input_event = record
+                cls._evaluator.trigger("OnKeyReleased", cls._context)
+            # 点击语义 = 按下+未拖动释放；右键拖拽只产生 press/release，
+            # 不会误触发 OnMouseClicked。
+            for record in frame.mouse_clicks:
+                cls._context.input_event = record
+                cls._evaluator.trigger("OnMouseClicked", cls._context)
+        finally:
+            cls._context.input_event = None
 
     # ════════════════════════════════════════════════════════════
     # Layer 生命周期
@@ -131,6 +163,7 @@ class RuntimeNodeLayer(Layer):
         cls._evaluator = None
         cls._context = None
         cls._pending_start = False
+        RuntimeInputLayer.reset()
         LayerLifecycleEvent.Pack(
             layer_name=cls.__name__, stage="detach", engine=cls._engine
         )
@@ -150,6 +183,9 @@ class RuntimeNodeLayer(Layer):
             # ── 延迟的 OnGameStart: 在逻辑线程首次 OnUpdate 执行 ──
             if cls._pending_start:
                 cls._pending_start = False
+                # 让 OnGameStart 里的输入数据节点也能读到当前按住状态；
+                # 队列中的边沿事件仍留到下一个正式逻辑帧派发。
+                cls._context.input = RuntimeInputLayer.current_frame()
                 cls._evaluator.trigger("OnGameStart", cls._context)
                 print("[RuntimeNodeLayer] Graph execution started")
                 # ★ ExitGame 等节点请求停止 (宿主未注册回调时的兜底)
@@ -164,6 +200,8 @@ class RuntimeNodeLayer(Layer):
                 if cls._engine is not None:
                     cls._context.delta_time = cls._engine.get_delta_time()
                     cls._context.elapsed_time = cls._engine.get_elapsed_time()
+                # ★ 输入快照 + 输入事件节点（在帧更新前派发）
+                cls._dispatch_input_events()
                 cls._evaluator.trigger("OnFrameUpdate", cls._context)
 
                 # ★ ExitGame 等节点请求停止 (宿主未注册回调时的兜底)

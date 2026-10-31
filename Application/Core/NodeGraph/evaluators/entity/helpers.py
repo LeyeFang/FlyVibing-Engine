@@ -3,30 +3,23 @@
 from __future__ import annotations
 
 from ...evaluator_engine import ExecutionContext, GraphEvaluator
+from ..inputs import read_pin
 
 
 def resolve_entity_id(node_id: int, pin_name: str,
                       ctx: ExecutionContext, g: GraphEvaluator) -> int | None:
     """从 data input pin 解析实体 ID — 支持 int / float / EntityRef 三种类型。
 
-    直接使用 g._read_input 绕过 _read_data_input 的 float() 强转，
-    避免 EntityRef → float 的 TypeError。
+    走统一的类型感知读取层；entity_ref 引脚原样返回，不会被 float() 强转。
     """
     from .lifecycle import EntityRef  # noqa: F811
-    inst = g._canvas.nodes[node_id]
-    nd = g._types[inst.node_type]
-    for p in nd.pins:
-        if p.name == pin_name and p.direction == "input":
-            inst_pin_id = inst.pin_ids.get(p.name)
-            if inst_pin_id is not None:
-                val = g._read_input(inst_pin_id, ctx)
-                if val is None:
-                    return None
-                if isinstance(val, EntityRef):
-                    return val.eid
-                if isinstance(val, (int, float)):
-                    return int(val)
-                return None
+    val = read_pin(node_id, pin_name, ctx, g, None)
+    if val is None:
+        return None
+    if isinstance(val, EntityRef):
+        return val.eid
+    if isinstance(val, (int, float)):
+        return int(val)
     return None
 
 
@@ -52,15 +45,8 @@ def normalize_entity_list(value) -> list[int]:
 
 def read_entity_list(node_id: int, pin_name: str,
                      ctx: ExecutionContext, g: GraphEvaluator) -> list[int]:
-    """读取 entity_list 输入（不经过 float() 强转）。"""
-    inst = g._canvas.nodes[node_id]
-    nd = g._types[inst.node_type]
-    for p in nd.pins:
-        if p.name == pin_name and p.direction == "input":
-            inst_pin_id = inst.pin_ids.get(p.name)
-            if inst_pin_id is not None:
-                return normalize_entity_list(g._read_input(inst_pin_id, ctx))
-    return []
+    """读取 entity_list 输入（类型感知读取；不做 float() 强转）。"""
+    return normalize_entity_list(read_pin(node_id, pin_name, ctx, g, None))
 
 
 def collect_descendants(scene, entity_id: int) -> list[int]:

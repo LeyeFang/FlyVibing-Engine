@@ -220,6 +220,26 @@
       ]
     },
     {
+      "id": "editor.node_graph_gestures_live",
+      "path": "Test/Application/Editor/test_node_graph_gestures_live.py",
+      "tier": "live",
+      "kind": "e2e",
+      "owner": "editor",
+      "covers": [
+        "Application.Editor.Services.LiveCommandServer",
+        "Application.Editor.UI.panels.node_editor.group_context",
+        "Application.Editor.UI.panels.node_editor.panel",
+        "Application.Editor.UI.panels.node_editor.selection"
+      ],
+      "requires": [
+        "running editor (MGE_EDITOR_MCP_PORT)"
+      ],
+      "exercises": [],
+      "visualizes": [
+        "node graph box select / right drag pan / right click context menu"
+      ]
+    },
+    {
       "id": "editor.editor_mcp_package",
       "path": "Test/Application/Editor/test_editor_mcp_package.py",
       "tier": "core",
@@ -602,6 +622,21 @@
       "visualizes": []
     },
     {
+      "id": "extensions.extension_examples",
+      "path": "Test/Application/Extensions/test_extension_examples.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "extensions",
+      "covers": [
+        "Application.Editor.Extensions.ExtensionExamples",
+        "Application.Editor.Extensions.ExtensionManager",
+        "Application.Editor.UI.UIManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "extensions.extension_review",
       "path": "Test/Application/Extensions/test_extension_review.py",
       "tier": "core",
@@ -762,6 +797,23 @@
       "visualizes": []
     },
     {
+      "id": "functions.device_save",
+      "path": "Test/Application/Functions/test_device_save.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "functions",
+      "covers": [
+        "Application.Editor.Services.LiveCommandServer",
+        "Application.Functions.VirtualDevice",
+        "Application.Functions.VirtualDevice.Device",
+        "Application.Functions.VirtualDevice.evaluator_data",
+        "Application.Functions.VirtualDevice.node_pack"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "functions.spd_monitor",
       "path": "Test/Application/Functions/test_spd_monitor.py",
       "tier": "core",
@@ -848,6 +900,48 @@
       "owner": "nodegraph",
       "covers": [
         "Application.Core.NodeGraph"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.save_data",
+      "path": "Test/Application/NodeGraph/test_save_data.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.evaluators.io"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.pin_value_coercion",
+      "path": "Test/Application/NodeGraph/test_pin_value_coercion.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.evaluators.inputs"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.node_error_isolation",
+      "path": "Test/Application/NodeGraph/test_graph_node_error_isolation.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.evaluator_engine"
       ],
       "requires": [],
       "exercises": [],
@@ -1160,6 +1254,23 @@
       "covers": [
         "Application.Core.Events.Event",
         "Application.Core.NodeGraph",
+        "Application.Runtime.RuntimeNodeLayer"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "runtime.input",
+      "path": "Test/Application/Runtime/test_runtime_input.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "runtime",
+      "covers": [
+        "Application.Core.Events.Event",
+        "Application.Core.Input.InputBinding",
+        "Application.Core.NodeGraph",
+        "Application.Runtime.RuntimeInputLayer",
         "Application.Runtime.RuntimeNodeLayer"
       ],
       "requires": [],

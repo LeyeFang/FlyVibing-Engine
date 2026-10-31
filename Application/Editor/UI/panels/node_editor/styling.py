@@ -87,6 +87,16 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ("On Game Start", "OnGameStart"),
         ("On Frame Update", "OnFrameUpdate"),
         ("On Game Stop", "OnGameStop"),
+        ("On Key Pressed", "OnKeyPressed"),
+        ("On Key Released", "OnKeyReleased"),
+        ("On Mouse Clicked", "OnMouseClicked"),
+    ]),
+
+    # ── 输入状态 (纯数据节点) ─────────────────────────────
+    ("Input", [
+        ("Is Key Down", "IsKeyDown"),
+        ("Is Mouse Button Down", "IsMouseButtonDown"),
+        ("Get Mouse Position", "GetMousePosition"),
     ]),
 
     # ── 执行流控制 ──────────────────────────────────────────
@@ -133,7 +143,6 @@ MENU_SECTIONS: list[tuple[str, list]] = [
             ("Get Date", "TimeGetDate"),
         ]),
         ("Control", [
-            ("Delay", "TimeDelay"),
             ("Time Trigger", "TimeTrigger"),
         ]),
         ("Timer", [
@@ -185,6 +194,7 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ("File", [
             ("Path", "PathVar"),
             ("Write Text File", "TextFileWrite"),
+            ("Save Data", "SaveData"),
         ]),
     ]),
 

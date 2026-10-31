@@ -8,23 +8,20 @@ Evaluators: 数学节点 (Add, Subtract, Multiply, Divide, RandomUniform, Random
 import random
 
 from ..evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
+from .inputs import read_pin
 
 
 # ── 辅助：读取 data input pin 的值 ────────────────────────────
 
 def _read_data_input(node_id: int, pin_name: str, ctx: ExecutionContext,
-                     g: GraphEvaluator, default: float = 0.0) -> float:
-    """读取指定 data input pin 的值，若未连接则返回 default。"""
-    inst = g._canvas.nodes[node_id]
-    nd = g._types[inst.node_type]
-    for p in nd.pins:
-        if p.name == pin_name and p.direction == "input":
-            inst_pin_id = inst.pin_ids.get(p.name)
-            if inst_pin_id is not None:
-                val = g._read_input(inst_pin_id, ctx)
-                if val is not None:
-                    return float(val)
-    return default
+                     g: GraphEvaluator, default: float = 0.0):
+    """读取指定 data input pin 的值，若未连接则返回 default。
+
+    历史名保留（10+ 模块 import 此处）；实际转换收敛在 `evaluators.inputs.read_pin`:
+    按引脚声明的 `data_type` 转换，字符串/实体引用/variant 不再被 float() 强转。
+    数值引脚行为与旧实现一致（失败回 default，不抛）。
+    """
+    return read_pin(node_id, pin_name, ctx, g, default)
 
 
 def _write_data_output(node_id: int, pin_name: str, value: float,

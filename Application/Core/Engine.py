@@ -541,11 +541,11 @@ class Engine:
             if event.consumed:
                 break
             layer.OnEvent(event)
-        # 2. Window 事件
-        if cls.window is not None:
+        # 2. Window 事件（已被 Layer 消费的事件不再下发窗口）
+        if cls.window is not None and not event.consumed:
             cls.window.OnEvent(event)
-        # 3. 全局终止事件
-        if isinstance(event, WindowCloseEvent):
+        # 3. 全局终止事件 — 尊重 consumed（ESC/弹窗可拦截关闭）
+        if isinstance(event, WindowCloseEvent) and not event.consumed:
             cls.run_state = False
         # 4. 兜底: 生命周期事件若未被任何 Layer 消费，由 Engine 直接打印
         #    处理 DebugLayer 自身 attach/detach 时暂无其他 Layer 能打印的情况

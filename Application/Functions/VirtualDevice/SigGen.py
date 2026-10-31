@@ -199,16 +199,22 @@ class VirtualSigGenBackend(DeviceBackend):
         idx = start + np.arange(count, dtype=np.float64)
         t = idx / float(cfg.sampling_rate)
         ch_idx = np.arange(cfg.channels, dtype=np.float64)
-        freqs = cfg.frequency + ch_idx * cfg.freq_step          # 通道 i: f0 + i·Δf
-        wave = cfg.amplitude_uv * np.sin(2.0 * np.pi * np.outer(t, freqs))
-        if cfg.noise_uv > 0.0 and self._rng is not None:
-            wave = wave + self._rng.normal(0.0, cfg.noise_uv,
+        # 干跑时为 device 配置也会用本合成器 — DeviceConfig 没有信号源字段，取默认值
+        f0 = float(getattr(cfg, "frequency", 10.0) or 10.0)
+        fstep = float(getattr(cfg, "freq_step", 0.0) or 0.0)
+        freqs = f0 + ch_idx * fstep          # 通道 i: f0 + i·Δf
+        wave = float(getattr(cfg, "amplitude_uv", 50.0) or 0.0) * \
+            np.sin(2.0 * np.pi * np.outer(t, freqs))
+        noise = float(getattr(cfg, "noise_uv", 0.0) or 0.0)
+        if noise > 0.0 and self._rng is not None:
+            wave = wave + self._rng.normal(0.0, noise,
                                            size=(count, cfg.channels))
-        if cfg.trigger_every_s > 0.0 and cfg.sampling_rate > 0:
+        trig_every = float(getattr(cfg, "trigger_every_s", 0.0) or 0.0)
+        if trig_every > 0.0 and cfg.sampling_rate > 0:
             # 合成触发: 每 trigger_every_s 一个 10ms 脉冲, 码值 1..4 循环
             # （模拟"16 线合并"附加通道 — 供采集/显示/导出全链验证）
             fs = max(1, int(cfg.sampling_rate))
-            period = max(1, int(round(cfg.trigger_every_s * fs)))
+            period = max(1, int(round(trig_every * fs)))
             width = max(1, int(round(0.01 * fs)))
             stride = start + np.arange(count, dtype=np.int64)
             pulse = (stride % period) < width
@@ -232,6 +238,11 @@ class VirtualSigGenBackend(DeviceBackend):
         cfg = self._cfg
         if cfg is None:
             return {"backend": type(self).__name__, "stub": self._dry}
+        # 干跑时 device 配置也会走这里 — 信号源字段缺省取默认值
+        f0 = float(getattr(cfg, "frequency", 10.0) or 10.0)
+        fstep = float(getattr(cfg, "freq_step", 0.0) or 0.0)
+        amp = float(getattr(cfg, "amplitude_uv", 50.0) or 0.0)
+        noise = float(getattr(cfg, "noise_uv", 0.0) or 0.0)
         return {
             "backend": type(self).__name__,
             "stub": self._dry,
@@ -239,7 +250,7 @@ class VirtualSigGenBackend(DeviceBackend):
             "device_type": "VirtualSigGen" + (" (dry-run)" if self._dry else ""),
             "device_information": (
                 f"virtual signal generator: {cfg.channels}ch @ {cfg.sampling_rate}Hz, "
-                f"f0={cfg.frequency}Hz +{cfg.freq_step}Hz/ch, "
-                f"amp={cfg.amplitude_uv}uV, noise={cfg.noise_uv}uV, seed={cfg.seed}"
+                f"f0={f0}Hz +{fstep}Hz/ch, "
+                f"amp={amp}uV, noise={noise}uV, seed={getattr(cfg, 'seed', 0)}"
             ),
         }

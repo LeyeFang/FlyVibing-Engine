@@ -91,7 +91,7 @@
 | 点击目标节点 / 框选误选 | **已完成** | 框选起点必须位于 `_canvas_rect` 内；工具栏/3D 视口点击不再产生陈旧起点；`node_group_actions` 覆盖“视口点击 → 画布空白点击不误选” |
 | 面板缩放不拖动节点 | **已完成** | 组框位移仅在左键按住且指针在组框内时解释为拖拽；窗口 resize 不再平移成员 |
 | 面板横向 resize 不缩放节点 | **已完成** | 节点编辑器 `CanvasSizeMode.center_only`；实测 docked/floating 宽度 468→761，zoom=0.9336 与节点屏幕宽度 121.1 均保持不变；GetTime 的 combo item width 显式钳制 110–220px（不再取面板可用宽度），GetTime 卡片宽度保持 79.2px |
-| 实机 UI 输入注入 | **已完成** | live ops `ui.mouse` / `ui.mouse_button` / `ui.click` / `ui.drag` / `ui.wheel` / `ui.key`；在 backend `new_frame` 后注入并同步 GLFW 光标/焦点；`ui.panel` 返回 Node Editor view 诊断（组标题/组框矩形）。节点编辑器诊断不再在渲染帧外调用原生 `get_selected_nodes()`（无 editor context 会崩溃），改用纯 Python 选择快照 |
+| 实机 UI 输入注入 | **已完成** | live ops `ui.mouse` / `ui.mouse_button` / `ui.click` / `ui.drag` / `ui.wheel` / `ui.key`；在 backend `new_frame` 后注入并同步 GLFW 光标/焦点；`ui.panel` 返回 Node Editor view 诊断（`canvas_rect` / 节点/组框矩形 / `context_open` / `context_kind`）。节点编辑器诊断不再在渲染帧外调用原生 `get_selected_nodes()`（无 editor context 会崩溃），改用纯 Python 选择快照；`test_node_graph_gestures_live` 覆盖拉框、右键拖拽、右键菜单 |
 | 卡片说明文字 | **已完成** | 移除卡片底部浅色 `props_text`；默认写入 `NodeInstance.description`，在 Description 展开区编辑 |
 | 提供者签名 | **已完成（2026-10-29）** | 节点卡标题下灰色 `@Official` / `@Author`（`NodeTypeDef.signature`；核心/官方 pack 默认 `@Official`，运行期 pack 默认 `@Community`）；Example 菜单显示 `名称 @Provider`，社区示例从 `%APPDATA%/FlyVibingEngine/examples` 读取，不写主线 `Examples/` |
 | 面板代码拆分 | **已完成** | `panel.py` 约 1000 行（原约 1860）；选择/组菜单/组窗口/IO/Find/Validate 拆为独立 mixin 模块 |
@@ -105,6 +105,16 @@
 | 安装器 / 导出成品 | **已完成** | `Utils/Dev/Installer/dist/releases/v1.0.1/windows-x64/`；安装器 `FlyVibingEngine-Setup-1.0.1-Windows-x64.exe`（约 206 MB），内置 runtime、wheelhouse、工具链与 `Examples/` |
 | Release notes / 兼容矩阵 | **已完成** | 根目录 `CHANGELOG.md`（中英）；Windows 10/11 x64、Python 3.14t、`engine-editor-mcp` 0.5.x / `flyvibing-node-editor` 0.1.x |
 | 发布后回归 | **部分完成** | 已完成 staging 内置 runtime 导入、两个示例 `--dry-run`、安装版编辑器启动/打开 MI；干净机安装待执行 |
+
+## 4.1 FlyVibing 1.0.2 Release（2026-10-31）
+
+| 事项 | 状态 | 说明 |
+|---|---|---|
+| 版本号收口 | **已完成（1.0.2）** | `pyproject.toml` / `installer.iss` / 根目录 `CHANGELOG.md` 统一 1.0.2 |
+| 工具链对齐 | **已完成** | `engine-editor-mcp` 0.6.0、`flyvibing-node-editor` 0.1.1、`flyvibing-extension-kit` 0.1.1；安装包内置同一组 wheel |
+| Release 内容冻结 | **已完成** | core **77/77**（含 SaveData / GameRuntime input / 节点图手势）；本版含设备免停止保存、通用 File IO `SaveData`、Runtime 输入系统、右键菜单手势语义 |
+| 安装器成品 | **已完成** | `Utils/Dev/Installer/dist/releases/v1.0.2/windows-x64/`：`FlyVibingEngine-Setup-1.0.2-Windows-x64.exe`（约 213 MB），`CHECKSUMS.sha256` 与 `release-manifest.json` 已生成 |
+| 发布后回归 | **部分完成** | staging 内置 runtime 已能导入工具链与节点注册表（83 类型）；live 手势回归、干净机安装待执行 |
 
 ## 5. macOS 适配与发布（1.0 之后）
 
@@ -153,6 +163,8 @@
 | 2026-10-27 | 物理显示器拔除、向日葵远程直连时，编辑器/PIE/导出成品窗口看似全白 | **环境呈现问题，非引擎回归**；独立 GLFW 探针前缓冲为绿色、系统截图为白色；归档 `remote_display_white_screen.md`，不改渲染/场景/导出逻辑 |
 | 2026-10-29 | 安装包 staging 复制本地扩展 fixture；游戏导出与安装包误共用 `export:false` 语义 | 安装包改用 `Application/Functions/official_extensions.json` mainline allowlist；游戏导出改为场景节点按需 + `export:false` opt-out；`test_release_layout.py` / `test_export_extension_scope.py` 锁定两条策略，避免错杀官方扩展或漏掉本地 fixture |
 | 2026-10-29 | 扩展无法创建/检索自己的节点并刷新 GUI（设备扩展反馈） | `ctx.graph` 增加 `owned_nodes` / `find_type` / `add_node` / `update_node` / `set_props` / `replace_props` / `remove_node` / `add_link` / `remove_link` / `request_redraw`；默认限制本扩展 owner；`NodeCanvas.revision` 驱动面板缓存失效；`test_extension_graph.py` 覆盖 |
+| 2026-10-30 | 扩展自带 Example 在 `File ▸ Open Example` 不可见，作者只能复制到用户目录并自行判重/清理 | 新增 `ExtensionExamplesRegistry`：扩展 enable 时自动登记 `<extension_dir>/Examples`，disable/unload 自动移除；manifest `provider` / `.myproj.provider` 决定签名；声明 `capabilities:["examples"]` 注入 `ctx.examples.register/unregister` 支持额外只读根目录；宿主不复制、不覆盖用户示例；旧式 `.injected.json` 副本在源根注册时去重；`test_extension_examples.py` 覆盖 |
+| 2026-10-31 | 图内无法在录制中途保存数据，无法用 GetData 与落盘标签互证（设备/信号处理扩展反馈） | `RecordingSession.save` 支持 `elapsed_s/pump/tag`（保存前 pump、微秒+序号唯一路径）；门面 `save_record`、节点 `SaveDeviceData`（Path/MetaPath/Samples/Duration/Written/Ok）、agent op `device.save` 共用实现；兼容旧式 `save(scope)` vendor（先 `get_data` pump）；`test_device_save.py` 覆盖 |
 
 ## 8. 运行时场景 / 游戏内 GUI / 输入（默认方案已预设，待复核）
 
@@ -167,11 +179,11 @@
 | A3 PIE/导出成品场景切换 e2e | 待开工（默认方案） | PIE 不污染编辑器；成品可见新场景且无旧实体残留 |
 | B0 Utils 虚拟输入高层封装（鼠标/键盘/组合键、editor/PIE/game 目标） | 下一迭代（已规划） | agent 脚本可拖拽场景镜头、缩放/右键节点图；无手工点击 |
 | B1 `UIWidget` + 屏幕空间 `UISystem`（button/label/panel/popup） | 待开工（默认方案） | 无 ImGui 依赖；hover/pressed/click；PIE 截图 |
-| B2 运行时输入队列 + `OnKeyPressed`/`OnMouseClicked` + UI 优先消费 | 待开工（默认方案） | 节点只触发一次；UI 点击不穿透；PIE/导出一致 |
+| B2 运行时输入队列 + `OnKeyPressed`/`OnMouseClicked` + UI 优先消费 | **输入队列/事件节点已落地**；UI 优先消费待 B1 | `RuntimeInputLayer` + `RuntimeInputFrame`；点击=原地释放（拖拽不触发）；`test_runtime_input` 覆盖键盘/鼠标/ESC；PIE/导出共用 |
 | B3 Popup/modal + ESC 策略 + 焦点/禁用态 | 待开工（默认方案） | 弹窗拦截下层；ESC 先关弹窗；按钮禁用不可点 |
 | B4 UI 实体进场景保存/加载 + 编辑器预览 | 待开工（默认方案） | UI 实体保存/加载往返；编辑器中可摆放；导出一致 |
 | B5 两个官方 Example 的 ESC 退出 + 清理 | 待开工（默认方案） | MI/RestingState ESC 停止，无设备/媒体/GPU 残留；成品同语义 |
-| B6 运行时 UI/输入测试、文档、示例 | 待开工（默认方案） | `test_runtime_ui` / `test_runtime_input` / e2e；协议与指南同步 |
+| B6 运行时 UI/输入测试、文档、示例 | **输入部分已落地**；UI/e2e 待 B1/B3 | `test_runtime_input` 已接入 core；`test_runtime_ui`/e2e 待补 |
 
 ### 默认决策（待复核）
 

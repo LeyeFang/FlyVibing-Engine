@@ -375,6 +375,11 @@ def run(source: str, max_frames: int = 0) -> int:
         _AutoExitLayer._max_frames = max_frames
         layers.append(_AutoExitLayer)
 
+    # ★ 输入层最后 push（栈顶）— 与 PIE 顺序一致。
+    from Application.Runtime.RuntimeInputLayer import RuntimeInputLayer
+
+    layers.append(RuntimeInputLayer)
+
     for layer in layers:
         GameRuntime.push_layer(layer)
 

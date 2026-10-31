@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from Application.Core.Input import IsShiftPressed
+from Application.Core.Input import IsShiftPressed, moved
 from Application.Core.NodeGraph import NodeCanvas
 
 
@@ -77,8 +77,7 @@ class SelectionMixin:
         if self._box_selecting and self._box_start_screen is not None \
                 and imgui.is_mouse_down(0):
             mouse_now = self._mouse_screen_pos()
-            if (abs(mouse_now[0] - self._box_start_screen[0]) > 6.0
-                    or abs(mouse_now[1] - self._box_start_screen[1]) > 6.0):
+            if moved(self._box_start_screen, mouse_now):
                 self._box_drag_seen = True
         if imgui.is_mouse_clicked(0):
             mouse = self._mouse_screen_pos()
@@ -168,7 +167,7 @@ class SelectionMixin:
         # 点击会带 1–3 px 抖动；低于 6 px 不当作框选，避免“点一下却选中
         # 旁边节点”的误触。即使矩形很大，只要本次按下期间没有真正拖动，
         # 也绝不应用（旧起点/焦点丢失后残留的矩形就是这么误选远处节点的）。
-        if x1 - x0 < 6.0 and y1 - y0 < 6.0:
+        if not moved(start, mouse):
             if self._box_select_released:
                 self._reset_box_state()
             return

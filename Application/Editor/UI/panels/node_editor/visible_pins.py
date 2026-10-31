@@ -149,6 +149,16 @@ def _v_text_file_write(inst, nd, canvas=None) -> list:
     return [p for p in nd.pins if p.name not in hidden]
 
 
+@rule("SaveData")
+def _v_save_data(inst, nd, canvas=None) -> list:
+    """FilePath 由 widget 展示；Manual 模式隐藏 FileName（Data 始终可见）。"""
+    mode = inst.props.get("mode", "manual")
+    hidden = {"FilePath"}
+    if mode == "manual":
+        hidden.add("FileName")
+    return [p for p in nd.pins if p.name not in hidden]
+
+
 @rule("TimeTrigger")
 def _v_time_trigger(inst, nd, canvas=None) -> list:
     """动态 exec_out 引脚：有连线的全显示 + 一个空余。"""

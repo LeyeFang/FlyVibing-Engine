@@ -241,6 +241,123 @@ def _draw_text_file_write_widgets(nid: int, inst, _canvas) -> None:
     imgui.pop_item_width()
 
 
+# ── SaveData ───────────────────────────────────────────────
+
+@register("SaveData")
+def _draw_save_data_widgets(nid: int, inst, _canvas) -> None:
+    """格式/命名/元数据 + 目录浏览 + Manual/Pin 模式。"""
+    imgui.dummy(imgui.ImVec2(0, 2))
+    imgui.push_item_width(110)
+
+    # 格式
+    fmt = str(inst.props.get("format", "npz")).lower()
+    fmt_labels = ["NPZ (arrays)", "NPY (single)", "CSV (table)", "JSON"]
+    fmt_keys = ["npz", "npy", "csv", "json"]
+    try:
+        fmt_idx = fmt_keys.index(fmt)
+    except ValueError:
+        fmt_idx = 0
+    changed, new_idx = _ne_combo(t("widget.save.format") + f"##sd_fmt_{nid}", fmt_idx, fmt_labels)
+    if changed:
+        inst.props["format"] = fmt_keys[new_idx]
+        fmt = fmt_keys[new_idx]
+
+    # 唯一文件名 + tag
+    unique = bool(inst.props.get("unique", True))
+    changed, unique = imgui.checkbox(t("widget.save.unique") + f"##sd_uniq_{nid}", unique)
+    if changed:
+        inst.props["unique"] = bool(unique)
+    if unique:
+        tag = str(inst.props.get("tag", ""))
+        changed, tag = imgui.input_text(t("widget.save.tag") + f"##sd_tag_{nid}", tag)
+        if changed:
+            inst.props["tag"] = tag
+
+    # 元数据 / 压缩 / key
+    save_meta = bool(inst.props.get("save_meta", True))
+    changed, save_meta = imgui.checkbox(t("widget.save.meta") + f"##sd_meta_{nid}", save_meta)
+    if changed:
+        inst.props["save_meta"] = bool(save_meta)
+
+    if fmt == "npz":
+        compress = bool(inst.props.get("compress", True))
+        changed, compress = imgui.checkbox(t("widget.save.compress") + f"##sd_comp_{nid}", compress)
+        if changed:
+            inst.props["compress"] = bool(compress)
+        key = str(inst.props.get("key", "data"))
+        changed, key = imgui.input_text(t("widget.save.key") + f"##sd_key_{nid}", key)
+        if changed:
+            inst.props["key"] = key
+
+    if fmt == "csv":
+        delim = str(inst.props.get("csv_delimiter", "comma"))
+        delim_labels = [t("widget.flow.delim_comma"), t("widget.flow.delim_tab"),
+                        t("widget.flow.delim_space"), t("widget.flow.delim_semicolon")]
+        delim_keys = ["comma", "tab", "space", "semicolon"]
+        try:
+            delim_idx = delim_keys.index(delim)
+        except ValueError:
+            delim_idx = 0
+        changed, new_idx = _ne_combo(t("widget.flow.delimiter") + f"##sd_delim_{nid}",
+                                     delim_idx, delim_labels)
+        if changed:
+            inst.props["csv_delimiter"] = delim_keys[new_idx]
+
+        csv_mode = str(inst.props.get("csv_mode", "w"))
+        if imgui.radio_button(t("widget.flow.write_new") + f"##sd_w_{nid}", csv_mode == "w"):
+            inst.props["csv_mode"] = "w"
+        imgui.same_line()
+        if imgui.radio_button(t("widget.flow.write_append") + f"##sd_a_{nid}", csv_mode == "a"):
+            inst.props["csv_mode"] = "a"
+
+        header = str(inst.props.get("csv_header", ""))
+        changed, header = imgui.input_text(t("widget.save.header") + f"##sd_hdr_{nid}", header)
+        if changed:
+            inst.props["csv_header"] = header
+
+    imgui.dummy(imgui.ImVec2(0, 2))
+
+    # FilePath Browse
+    if imgui.button(t("widget.flow.browse_dir") + f"##sd_btn_{nid}"):
+        from Application.Editor.UI.FileDialog import FileDialog
+        FileDialog.open_directory(
+            lambda p, i=inst: i.props.__setitem__("file_path", p),
+            start_dir=inst.props.get("file_path", ""),
+        )
+    imgui.same_line()
+    fp = str(inst.props.get("file_path", ""))
+    if fp:
+        display_fp = fp if len(fp) <= 35 else "..." + fp[-32:]
+        imgui.text_disabled(display_fp)
+    else:
+        imgui.text_disabled(t("widget.flow.no_dir"))
+
+    imgui.dummy(imgui.ImVec2(0, 2))
+
+    # 模式切换
+    mode = inst.props.get("mode", "manual")
+    if imgui.radio_button(t("common.manual") + f"##sd_mode_man_{nid}", mode == "manual"):
+        inst.props["mode"] = "manual"
+    imgui.same_line()
+    if imgui.radio_button(t("common.pin") + f"##sd_mode_pin_{nid}", mode == "pin"):
+        inst.props["mode"] = "pin"
+
+    if mode == "manual":
+        fname = str(inst.props.get("file_name", "data"))
+        changed, nf = imgui.input_text(t("widget.flow.file_name") + f"##sd_fn_{nid}", fname)
+        if changed:
+            inst.props["file_name"] = nf
+        imgui.same_line()
+        imgui.text_disabled("." + fmt)
+
+        val = str(inst.props.get("value", ""))
+        changed, nv = imgui.input_text(t("common.value") + f"##sd_val_{nid}", val)
+        if changed:
+            inst.props["value"] = nv
+
+    imgui.pop_item_width()
+
+
 # ── ScalarMath ─────────────────────────────────────────────
 
 @register("ScalarMath")

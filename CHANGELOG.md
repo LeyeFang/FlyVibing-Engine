@@ -4,6 +4,40 @@
 
 ### English
 
+- **Pin-type-aware input reading** — new `evaluators.inputs.read_pin()` is the single
+  reader for data inputs: it converts by the pin's declared `data_type` (`string` → str,
+  `bool`, `int`, `float`, everything else passed through) and falls back to the default
+  with a one-time warning instead of raising. Fixes `EntityGet.Name` crashing on a
+  string input (`float("HUD")`), plus the same class of failure on `VarSet.Name`,
+  `NewTimer.Name`, and `entity_ref` / `variant` / `vec3` pins. `VarSet` / `VarGet` now
+  keep `variant` values as-is instead of forcing `float()`.
+- **Node-level error isolation** — `GraphEvaluator._walk_exec` catches evaluator
+  exceptions per node, logs them throttled (first + every 100th), and skips only that
+  branch instead of aborting the whole exec chain / frame.
+- **`TimeDelay` removed** — the node only advanced when the whole exec chain re-entered
+  every frame (`_exec_visited` + `_blocked`), and its `props.duration` was ignored
+  (duration came only from the `Seconds` pin). Use
+  `TimeTrigger(mode=manual, time=N)` on an `OnFrameUpdate` chain. Scenes that still
+  contain `TimeDelay` keep the node on load and now print an explicit migration warning.
+
+### 简体中文
+
+- **按引脚类型读取输入** — 新增 `evaluators.inputs.read_pin()` 作为数据输入的唯一读取入口：
+  按 `PinDef.data_type` 转换（`string`→str、`bool`、`int`、`float`，其余原样透传），
+  数值转换失败回默认值并告警一次，不再抛异常。修复 `EntityGet.Name` 接字符串时的
+  `float("HUD")` 崩溃，以及 `VarSet.Name` / `NewTimer.Name` / `entity_ref` / `variant` /
+  `vec3` 引脚的同类问题；`VarSet` / `VarGet` 不再强制 `float()`，保留 `variant` 原值。
+- **节点级异常隔离** — `GraphEvaluator._walk_exec` 按节点捕获求值异常，限流打印
+  （首次 + 每 100 次），只跳过该分支下游，不再中断整条 exec 链 / 整帧。
+- **移除 `TimeDelay`** — 该节点只有整条 exec 链被逐帧重入时才推进
+  （`_exec_visited` + `_blocked`），且 `props.duration` 不生效（时长只读 `Seconds` 引脚）。
+  时间推进请用 `TimeTrigger(mode=manual, time=N)` 挂在 `OnFrameUpdate` 链上。
+  含 `TimeDelay` 的旧场景加载时保留节点并给出显式迁移告警。
+
+## 1.0.2 — 2026-10-31
+
+### English
+
 - **Distribution policies split** — game export is now user-specific and
   on-demand: only extension node packs referenced by the project scenes are
   copied, and `export:false` remains a hard opt-out. The installer uses a
@@ -24,8 +58,41 @@
   `add_node` / `update_node` / `set_props` / `replace_props` / `remove_node`,
   link add/remove, and `request_redraw()`. Mutations bump a canvas revision
   and request an editor repaint; extension writes are limited to its own owner.
+- **Device save without Stop** — `RecordingSession.save(scope, elapsed_s, pump=True, tag="")`,
+  facade `save_record(...)`, graph node `SaveDeviceData` (Device ▸ Save), and
+  agent op `device.save` share one implementation. Saves pump first, keep the
+  session recording, and use microsecond/tag-specific unique file names.
+- **Generic File IO SaveData** — new `SaveData` node (IO ▸ File) writes arrays,
+  tables, dicts and JSON-compatible values to `npz`/`npy`/`csv`/`json` with an
+  optional `.meta.json` sidecar (format/shape/dtype/rows/cols/samples). It is
+  separate from `TextFileWrite`: `unique` naming, tag, compression, CSV header/
+  delimiter/append mode and dry-run are built in; `SaveData` outputs Path,
+  MetaPath, Rows, Cols, Samples, Written and Ok for downstream logic.
+- **GameRuntime input** — `RuntimeInputLayer` queues keyboard/mouse events on
+  the render thread and exposes immutable `RuntimeInputFrame` snapshots to the
+  logic tick. New graph nodes `OnKeyPressed`, `OnKeyReleased`, `OnMouseClicked`,
+  `IsKeyDown`, `IsMouseButtonDown`, `GetMousePosition`. ESC remains a safe
+  window-close by default; `RuntimeInputLayer.set_escape_exit(False)` lets graph
+  nodes own ESC. `Engine` now respects `WindowCloseEvent.consumed`.
+  `OnMouseClicked` uses click semantics: press+release with <=6 px movement;
+  right/left drag does not fire a click.
+- **Node graph gesture semantics** — the canvas context menu now opens on
+  right-button *release* only when the press did not move more than 6 px.
+  Right-drag keeps panning the canvas and no longer opens the menu; left-drag
+  remains box selection. `ui.drag`/`ui.click` accept the same button semantics,
+  covered by the live `node_graph_gestures` regression.
+- **Extension-contributed Examples** — an extension's bundled
+  `<extension_dir>/Examples/` is registered while the extension is enabled and
+  removed on disable/unload, so `File ▸ Open Example` discovers it without
+  copying into the user tree. Declare `capabilities:["examples"]` to use
+  `ctx.examples.register/unregister` for extra read-only roots; manifest
+  `provider` / `.myproj.provider` supplies the muted signature.
 - **Extension docs** — UI, node-pack, and Example development guides moved to
   the `FlyVibing-User-And-Developer-Utils` repository as the single source.
+
+Compatibility: Windows 10/11 x64; Python 3.14 free-threaded runtime;
+`engine-editor-mcp` 0.6.x / `flyvibing-node-editor` 0.1.x /
+`flyvibing-extension-kit` 0.1.x.
 
 ### 简体中文
 
@@ -46,8 +113,36 @@
   `update_node` / `set_props` / `replace_props` / `remove_node`、连线增删与
   `request_redraw()`。变更会递增 canvas revision 并请求编辑器重绘；扩展写入
   默认限制在自身 owner。
+- **设备不停采保存** — `RecordingSession.save(scope, elapsed_s, pump=True, tag="")`、
+  门面 `save_record(...)`、图节点 `SaveDeviceData`（Device ▸ Save）与 agent op
+  `device.save` 共用同一实现；保存前 pump、不改变录制状态，文件名含微秒/标签，
+  同一秒连续保存不会覆盖。
+- **通用 File IO 数据保存** — 新节点 `SaveData`（IO ▸ File）把数组/表格/
+  dict/JSON 值落盘为 `npz`/`npy`/`csv`/`json`，可选 `.meta.json` 侧车
+  （格式/形状/dtype/行列/样本数）。与 `TextFileWrite` 职责分离：支持唯一命名、
+  tag、压缩、CSV 表头/分隔符/追加和 dry-run；输出 Path/MetaPath/Rows/Cols/
+  Samples/Written/Ok 供下游逻辑使用。
+- **GameRuntime 输入** — `RuntimeInputLayer` 在渲染线程排队键鼠事件，逻辑帧
+  提供不可变 `RuntimeInputFrame` 快照。新增图节点 `OnKeyPressed`、
+  `OnKeyReleased`、`OnMouseClicked`、`IsKeyDown`、`IsMouseButtonDown`、
+  `GetMousePosition`。ESC 默认仍安全关闭窗口；
+  `RuntimeInputLayer.set_escape_exit(False)` 后由节点接管 ESC。`Engine` 现在
+  尊重 `WindowCloseEvent.consumed`。`OnMouseClicked` 采用点击语义：按下后
+  原地释放（位移 <=6px）才触发，左右键拖拽都不会误触发。
+- **节点图手势语义** — 画布右键菜单改为右键**释放**时、且按下后位移不超过
+  6px 才打开；右键拖拽继续平移画布且不弹菜单，左键拖拽仍为框选。
+  `ui.drag`/`ui.click` 使用同一套按键语义，并由 live
+  `node_graph_gestures` 回归覆盖。
+- **扩展自带 Example** — 扩展启用时自动登记 `<extension_dir>/Examples/`，
+  停用/卸载即移除；`File ▸ Open Example` 无需复制到用户目录即可发现。额外只读
+  根目录声明 `capabilities:["examples"]` 后用 `ctx.examples.register/unregister`；
+  签名取 manifest `provider` 或 `.myproj.provider`。
 - **扩展文档** — UI、节点与 Example 开发指南迁移到
   `FlyVibing-User-And-Developer-Utils` 仓库作为唯一源。
+
+兼容性：Windows 10/11 x64；Python 3.14 free-threaded 运行时；
+`engine-editor-mcp` 0.6.x / `flyvibing-node-editor` 0.1.x /
+`flyvibing-extension-kit` 0.1.x。
 
 ## 1.0.1 — 2026-10-24
 

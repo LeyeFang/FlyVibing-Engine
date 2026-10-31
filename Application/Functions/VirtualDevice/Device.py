@@ -14,7 +14,8 @@ VirtualDevice.Device — EEG 设备集成核心（后端无关，不依赖具体
     尚未填充的区域为 0（有效样本数 valid 单独给出）
   - 会话以 name 注册到模块级注册表；Start/Stop/Kill/Get 节点按 name 绑定
   - 采集两段式: monitoring（仅观察 — 环形缓冲 + 实时显示, 不累积全量录制）→
-    recording（累积全量数据, Stop 落盘）；节点侧 start_record 默认 record=True 保持旧语义
+    recording（累积全量数据, Stop 落盘；也可 `save()` 在录制中途保存，不停止采集）；
+    节点侧 start_record 默认 record=True 保持旧语义
   - 阻抗测量 (measure_impedance) 属设备空闲操作: 流式采集期间拒绝请求; 通道 1 恒为 NaN（硬件特例）
   - 引擎以自由线程模式运行 (-Xgil=0)，跨线程访问一律加锁
   - 空跑后端绝不触硬件、绝不落盘：保存只计算目标路径并标记 written=False
@@ -38,8 +39,9 @@ import numpy as np
 # 常量
 # ═══════════════════════════════════════════════════════════════
 
-# 模板选项 → 通道数（144 通道版本: 2×64 + 16）
+# 模板选项 → 通道数（144 通道版本: 2×64 + 16；32ch = 前 32 个通道子集）
 TEMPLATE_CHOICES: dict[str, int] = {
+    "32ch": 32,
     "64ch": 64,
     "128ch": 128,
     "144ch": 144,
@@ -573,7 +575,7 @@ class RecordingSession:
                 result.samples = n
                 result.duration_s = n / max(1, self.cfg.sampling_rate)
             return result
-        return self.save(save_scope)
+        return self.save(save_scope, pump=False)
 
     def kill(self) -> None:
         """强制停止 + 释放设备（不保存）。"""
@@ -646,9 +648,16 @@ class RecordingSession:
 
     # ── 保存 ────────────────────────────────────────────────
 
-    def save(self, scope: str = "session") -> SaveResult:
-        """按 scope 保存（session = 本次开始以来的全部数据; buffer = 当前窗口）。"""
+    def save(self, scope: str = "session", elapsed_s: float = 0.0,
+             pump: bool = True, tag: str = "") -> SaveResult:
+        """按 scope 保存（session = 本次开始以来的全部数据; buffer = 当前窗口）。
+
+        录制中可直接调用（不必 Stop）: pump=True 时先按 elapsed_s 补齐后端数据，
+        保证落盘样本与同刻 GetData / sample_count 对齐。
+        """
         scope = scope if scope in ("session", "buffer") else "session"
+        if pump and self.state in ("recording", "monitoring"):
+            self.backend.pump(elapsed_s, self._on_block)
         if scope == "buffer":
             data = self.ring.snapshot().T  # → (samples, channels)
         else:
@@ -661,7 +670,7 @@ class RecordingSession:
 
         n_samples = int(data.shape[0])
         duration = n_samples / max(1, self.cfg.sampling_rate)
-        base = _plan_base_path(self.cfg.save_dir, self.name)
+        base = _plan_base_path(self.cfg.save_dir, self.name, tag=tag)
 
         result = SaveResult(samples=n_samples, duration_s=duration)
         if self.backend.is_stub:
@@ -669,13 +678,13 @@ class RecordingSession:
             result.paths = [f"{base}.{self.cfg.export_format}", f"{base}.json"]
             return result
 
-        paths = _write_recording(self, data, base, scope)
+        paths = _write_recording(self, data, base, scope, tag=tag)
         result.paths = paths
-        result.written = True
+        result.written = bool(paths)
         return result
 
     def meta(self, save_scope: str, n_samples: int, duration_s: float, paths: list[str],
-             n_columns: int = None) -> dict:
+             n_columns: int = None, tag: str = "") -> dict:
         """导出元数据（通用 JSON 风格; n_columns = 实际落盘列数）。"""
         f = self.cfg.effective_filters()
         info = self.backend.info()
@@ -704,6 +713,8 @@ class RecordingSession:
             "buffer_seconds": self.cfg.buffer_seconds,
             "buffer_capacity_samples": self.ring.capacity,
             "save_scope": save_scope,
+            "tag": str(tag or ""),
+            "saved_iso": _iso_now(),
             "samples_saved": n_samples,
             "duration_s": duration_s,
             "started_iso": self.started_iso,
@@ -945,15 +956,27 @@ def _iso_now() -> str:
     return datetime.now().isoformat(timespec="milliseconds")
 
 
-def _plan_base_path(save_dir: str, device_name: str) -> str:
-    """生成 <dir>/<safe_name>_<stamp> 基础路径（不含扩展名）。"""
+def _plan_base_path(save_dir: str, device_name: str, tag: str = "") -> str:
+    """生成 <dir>/<safe_name>_<stamp>[_<safe_tag>] 基础路径（不含扩展名）。
+
+    时间戳含微秒并在文件已存在时追加序号，保证同一秒内多次保存不会互相覆盖。
+    """
     d = (save_dir or ".").strip() or "."
     safe = _NAME_SAFE.sub("_", device_name) or "eeg"
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(d, f"{safe}_{stamp}")
+    safe_tag = _NAME_SAFE.sub("_", str(tag or "")).strip("_")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    stem = f"{safe}_{stamp}" + (f"_{safe_tag}" if safe_tag else "")
+    candidate = os.path.join(d, stem)
+    index = 2
+    while any(os.path.exists(f"{candidate}.{ext}")
+              for ext in (*EXPORT_FORMATS, "json")):
+        candidate = os.path.join(d, f"{stem}_{index}")
+        index += 1
+    return candidate
 
 
-def _write_recording(session: RecordingSession, data: np.ndarray, base: str, scope: str) -> list[str]:
+def _write_recording(session: RecordingSession, data: np.ndarray, base: str, scope: str,
+                     tag: str = "") -> list[str]:
     """写出数据文件 + JSON 元数据。返回实际写入的文件路径列表。"""
     paths: list[str] = []
     try:
@@ -983,7 +1006,7 @@ def _write_recording(session: RecordingSession, data: np.ndarray, base: str, sco
 
         meta = session.meta(scope, int(data.shape[0]),
                             data.shape[0] / max(1, session.cfg.sampling_rate), [data_path],
-                            n_columns=int(data.shape[1]))
+                            n_columns=int(data.shape[1]), tag=tag)
         json_path = f"{base}.json"
         with open(json_path, "w", encoding="utf-8") as fh:
             json.dump(meta, fh, indent=2, ensure_ascii=False)

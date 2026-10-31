@@ -73,6 +73,8 @@ Record -> facade start_record(record=True)（监视中 = 从此刻升级; 累积
 刷新(~25 Hz) -> session.get_data(elapsed)（环形缓冲时间序拷贝）
     -> SignalView: 显示滤波（因果 IIR）+ min/max 抽取 + 统计
     -> virtual_scope 绘制（点列按版本缓存）
+Save (mid-record) -> save_record(...) / SaveDeviceData -> session.save(pump=True);
+                    不停止录制（npz/csv + 同名 json；微秒/序号唯一路径）
 Stop -> session.stop(save=auto) -> 录制 = 引擎侧落盘（npz/csv + 同名 json）; 观察 = 无落盘
 ```
 

@@ -2,18 +2,23 @@ from Application.Core.Events.Event import Event
 
 
 class WindowCloseEvent(Event):
-    """窗口关闭信号 — 无数据负载。"""
+    """窗口关闭信号 — 无数据负载。
 
-    def __init__(self) -> None:
+    source: "window"（标题栏关闭/系统退出）或 "escape"（ESC 释放触发的安全关闭）。
+    RuntimeInputLayer 可据此只拦截 ESC，而不影响用户点关闭按钮。
+    """
+
+    def __init__(self, source: str = "window") -> None:
         super().__init__()
+        self.source: str = str(source or "window")
 
     @property
     def log_info(self) -> str:
-        return "Window Close !!"
+        return f"Window Close !! (source={self.source})"
 
     @classmethod
-    def Pack(cls, **kwargs) -> None:
-        super().Pack(**kwargs)
+    def Pack(cls, source: str = "window", **kwargs) -> None:
+        super().Pack(source=source, **kwargs)
 
 
 class WindowResizeEvent(Event):

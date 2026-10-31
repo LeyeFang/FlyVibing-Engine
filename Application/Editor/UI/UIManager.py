@@ -305,38 +305,60 @@ class UIManager:
         repo = os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.abspath(__file__)))))
         user_root = AppIdentity.env_get("EXAMPLES_DIR") or AppIdentity.data_dir("examples")
-        return [
+        roots = [
             os.path.join(repo, "Examples"),
             os.path.join(repo, "Test", "TestProject", "Examples"),
             user_root,
         ]
+        # 扩展贡献的示例根目录（enable 时 register，disable/unload 时移除）
+        try:
+            from Application.Editor.Extensions.ExtensionExamples import ExtensionExamplesRegistry
+            roots.extend(item["root"] for item in ExtensionExamplesRegistry.roots())
+        except Exception:  # noqa: BLE001 — 无扩展环境/导入失败时保持三处扫描
+            pass
+        seen: set[str] = set()
+        unique: list[str] = []
+        for root in roots:
+            key = os.path.normcase(os.path.abspath(root))
+            if key not in seen:
+                seen.add(key)
+                unique.append(root)
+        return unique
 
     @classmethod
     def _example_projects(cls) -> list[tuple[str, str]]:
         """返回 [(显示名, .myproj 绝对路径)]，支持每个示例一个子目录。"""
-        raw: list[tuple[str, str, str]] = []  # (label, folder, path)
+        raw: list[tuple[str, str, str, str]] = []  # (label, folder, path, provider)
         for root in cls._example_dirs():
             if not os.path.isdir(root):
                 continue
             for name in sorted(os.listdir(root)):
                 path = os.path.join(root, name)
                 if os.path.isfile(path) and name.lower().endswith(".myproj"):
-                    raw.append((os.path.splitext(name)[0], "", path))
+                    if not cls._is_extension_injected(path):
+                        raw.append((os.path.splitext(name)[0], "", path,
+                                    cls._example_provider(path)))
                     continue
                 if not os.path.isdir(path):
                     continue
                 for sub in sorted(os.listdir(path)):
                     proj = os.path.join(path, sub)
                     if os.path.isfile(proj) and sub.lower().endswith(".myproj"):
-                        raw.append((os.path.splitext(sub)[0], name, proj))
-        counts: dict[str, int] = {}
-        for label, _folder, _path in raw:
-            counts[label.lower()] = counts.get(label.lower(), 0) + 1
-        return sorted(
-            (((f"{folder}/{label}" if counts.get(label.lower(), 0) > 1 else label), path)
-             for label, folder, path in raw),
-            key=lambda item: item[0].lower(),
-        )
+                        if not cls._is_extension_injected(proj):
+                            raw.append((os.path.splitext(sub)[0], name, proj,
+                                        cls._example_provider(proj)))
+        # 同名但不同 provider 的示例靠灰色签名区分，不需要前缀；同名同 provider
+        # （真实冲突）才加目录前缀。
+        counts: dict[tuple[str, str], int] = {}
+        for label, _folder, _path, provider in raw:
+            key = (label.lower(), provider.lower())
+            counts[key] = counts.get(key, 0) + 1
+        rows = []
+        for label, folder, path, provider in raw:
+            key = (label.lower(), provider.lower())
+            shown = f"{folder}/{label}" if counts.get(key, 0) > 1 and folder else label
+            rows.append((shown, path))
+        return sorted(rows, key=lambda item: item[0].lower())
 
     @staticmethod
     def _example_provider(path: str) -> str:
@@ -352,6 +374,11 @@ class UIManager:
             default = "@Test"
         else:
             default = COMMUNITY_PROVIDER
+            try:
+                from Application.Editor.Extensions.ExtensionExamples import ExtensionExamplesRegistry
+                default = ExtensionExamplesRegistry.provider_for_path(abs_path) or default
+            except Exception:  # noqa: BLE001 — 无扩展环境时按用户示例处理
+                pass
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
@@ -363,6 +390,32 @@ class UIManager:
             data.get("provider") or data.get("signature") or data.get("author"),
             default=default,
         )
+
+    @staticmethod
+    def _is_extension_injected(proj_path: str) -> bool:
+        """跳过已被扩展根目录覆盖的旧式注入副本。
+
+        兼容 v0.9.x 扩展把 `<ext>/Examples/<Name>/` 复制到用户示例目录并写
+        `.injected.json` 的做法：只要 `source` 仍位于已登记的扩展根目录内，就
+        以扩展目录为准，避免菜单出现两份同名同签名的示例。扩展停用后根目录
+        注销，用户目录中的副本（若未被扩展清理）仍可按普通用户示例显示。
+        """
+        marker = os.path.join(os.path.dirname(os.path.abspath(proj_path)), ".injected.json")
+        try:
+            with open(marker, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            return False
+        if not isinstance(data, dict):
+            return False
+        source = str(data.get("source") or "")
+        if not source or not os.path.exists(source):
+            return False
+        try:
+            from Application.Editor.Extensions.ExtensionExamples import ExtensionExamplesRegistry
+            return ExtensionExamplesRegistry.contains_path(source)
+        except Exception:  # noqa: BLE001
+            return False
 
     @staticmethod
     def _draw_example_menu_item(label: str, provider: str, path: str) -> bool:

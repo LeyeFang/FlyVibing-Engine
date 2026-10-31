@@ -11,8 +11,7 @@
 | **监视面板（本扩展）** | `Application/Functions/VirtualDevice/{extension, virtual_display, virtual_scope}.py` | 实时波形 / 显示滤波 / watch·record / 落盘（2026-10-16 交付） |
 | 虚拟设备后端 + 服务 | `Application/Functions/VirtualDevice/`（SigGen.py / service.py）— 本目录 | 进程内后端 + VIRTUAL 服务（引擎自动拉起; pump 模式） |
 | 设备门面 | `Application/Functions/VirtualDevice/`（Device.py / ServiceClient.py）— 本目录 | 会话注册表 / 环形缓冲 / 落盘 / 服务协议 |
-| 节点族 | 核心 `SigGen` 节点（Init/Start/Stop/Kill/Get + 设备池） | 面板与其共用同一条数据通路（facade） |
-| 设计参考 | `Test/_gtec_archive_20261016/`（本地留档, 非分发内容） | 社区设备监视面板设计语言（干净重写为目标） |
+| 节点族 | 核心 `SigGen` 节点（Init/Start/Stop/Kill/Get + 设备池） | 面板与其共用同一条数据通路（facade） || 数据保存 | `SaveDeviceData`（`evaluator_data.py`）+ 门面 `save_record` + `device.save` | 录制中途保存，不停止采集；pump 后落盘 || 设计参考 | `Test/_gtec_archive_20261016/`（本地留档, 非分发内容） | 社区设备监视面板设计语言（干净重写为目标） |
 
 ## 1. TODO
 
@@ -46,3 +45,4 @@
 - [x] 显示滤波 DSP 数值: highpass 30Hz 压制 10Hz 正弦 / lowpass 15Hz 保留（同一测试）
 - [x] 设置持久化（ctx.data_dir/settings.json 沙箱往返）; 窗口关闭事件停流; 无头绘制烟测（含全裁剪帧）
 - [x] 审查器零 FAIL（C1-C11 / M1-M6 / F2）
+- [x] 录制中途保存：`test_device_save.py`（路径唯一 / pump / 干跑 / 节点 / op）

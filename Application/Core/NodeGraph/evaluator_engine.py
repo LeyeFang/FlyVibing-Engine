@@ -22,7 +22,7 @@ class ExecutionContext:
 
     dry_run 模式:
       当 dry_run=True 时，所有副作用求值器 (SerialSend, ParallelSend,
-      TextFileWrite, Entity*, ExitGame 等) 应跳过真实操作，
+      TextFileWrite, SaveData, Entity*, ExitGame 等) 应跳过真实操作，
       改为调用 self.log() 输出"本应执行"的日志。
 
       log 回调签名: fn(node_id: int, node_type: str, action: str, detail: str) -> None
@@ -44,6 +44,9 @@ class ExecutionContext:
         self.template_scene = None                # EntitySpawn 模板场景 (宿主注入)
         self.on_stop_request: callable | None = None  # ExitGame 停止请求 → 宿主处理
         self._stop_requested: bool = False
+        # ── 输入快照 (RuntimeNodeLayer 每逻辑帧注入) ──
+        self.input = None              # RuntimeInputFrame | None
+        self.input_event = None        # 当前正在派发的 InputEventRecord | None
 
     # ── 停止请求 (ExitGame 等节点使用) ───────────────────────
 
@@ -147,6 +150,7 @@ class GraphEvaluator:
         self._eval_guard: set[int] = set()      # 数据节点懒求值环检测
         self._trigger_lock = threading.Lock()   # ★ 线程锁: OnGameStart/OnFrameUpdate 并发保护
         self._exec_visited: set[int] = set()
+        self._error_counts: dict[tuple[int, str], int] = {}   # 节点级错误限流计数
 
     # ── 入口 ───────────────────────────────────────────────
 
@@ -163,6 +167,20 @@ class GraphEvaluator:
                     self._walk_exec(nid, ctx)
 
     # ── exec 链遍历 ────────────────────────────────────────
+
+    def _report_node_error(self, node_id: int, node_type: str,
+                           exc: BaseException) -> None:
+        """节点级求值错误 — 限流打印（首次 + 每 100 次），绝不向上招。
+
+        设计约定: 单个节点的数据/求值错误属于**节点级**问题，
+        只跳过该分支下游，不影响同一触发里的其它分支与整帧循环。
+        """
+        key = (int(node_id), type(exc).__name__)
+        count = self._error_counts.get(key, 0) + 1
+        self._error_counts[key] = count
+        if count == 1 or count % 100 == 0:
+            print(f"[GraphEvaluator] ERROR in node #{node_id} ({node_type}) "
+                  f"x{count}: {exc}")
 
     def _walk_exec(self, node_id: int, ctx: ExecutionContext) -> None:
         """从给定节点出发，执行它，然后跟随 exec output pin 走向下游。"""
@@ -181,7 +199,11 @@ class GraphEvaluator:
         # ── 求值当前节点 ──
         fn = _EVALUATORS.get(inst.node_type)
         if fn:
-            fn(node_id, ctx, self)
+            try:
+                fn(node_id, ctx, self)
+            except Exception as e:  # noqa: BLE001 — 节点级隔离: 不拖垮整条链/整帧
+                self._report_node_error(node_id, inst.node_type, e)
+                return
 
         # ── 检查 blocked 状态（如 Delay 未到期） ──
         if self.get_state(node_id, "_blocked", False):
@@ -251,11 +273,8 @@ class GraphEvaluator:
         if fn:
             try:
                 fn(owner_nid, ctx, self)
-            except Exception as e:
-                print(
-                    f"[GraphEvaluator] ERROR in data node "
-                    f"#{owner_nid} ({inst.node_type}): {e}"
-                )
+            except Exception as e:  # noqa: BLE001
+                self._report_node_error(owner_nid, inst.node_type, e)
 
         self._eval_guard.discard(owner_nid)
 

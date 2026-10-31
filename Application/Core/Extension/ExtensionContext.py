@@ -2,7 +2,7 @@
 
 能力注入模型（见 Doc/ExtDev/extension_dev_protocol.md §5）:
   - 由 ExtensionManager 构造并注入可用能力;
-  - 实装: ops / ui.register_window / graph / nodes（M1） / log / 目录信息;
+  - 实装: ops / ui.register_window / graph / nodes（M1）/ examples（M1）/ log / 目录信息;
   - 设计未实装: threads / jobs / settings（M2/M1, 按 capabilities 发放）;
   - 未注入的能力属性为 None（扩展应做能力检测, 不得假设存在）。
 
@@ -44,6 +44,10 @@ class ExtensionContext:
         self.nodes = None    # M1: NodePack 注册（manifest capabilities 含 nodes 时注入）
         self.graph = None    # M1: 受限图访问（capabilities 含 "graph" 才注入 —
                              #     见 Application/Editor/Extensions/ExtensionGraph.py）
+        self.examples = None # M1: 扩展示例根目录（capabilities 含 "examples" 才注入 —
+                             #     register(root) / unregister(root)；扩展自带
+                             #     <extension_dir>/Examples 由宿主自动登记，见
+                             #     Application/Editor/Extensions/ExtensionExamples.py）
 
     # ════════════════════════════════════════════════════════════
     # 基础能力（M0）

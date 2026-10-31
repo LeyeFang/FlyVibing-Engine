@@ -13,23 +13,14 @@ from __future__ import annotations
 
 from ..evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
 from .entity.helpers import resolve_entity_id
+from .inputs import read_str
 
 
 def _read_string_input(node_id: int, pin_name: str,
                        ctx: ExecutionContext, g: GraphEvaluator,
                        default: str = "") -> str:
-    """原始读取 string 输入 — 绕过 _read_data_input 的 float() 强转
-    (与 entity.helpers.resolve_entity_id 同模式)。"""
-    inst = g._canvas.nodes[node_id]
-    nd = g._types[inst.node_type]
-    for p in nd.pins:
-        if p.name == pin_name and p.direction == "input":
-            inst_pin_id = inst.pin_ids.get(p.name)
-            if inst_pin_id is None:
-                return default
-            val = g._read_input(inst_pin_id, ctx)
-            return default if val is None else str(val)
-    return default
+    """读取 string 输入 — 走统一的类型感知读取层（`evaluators.inputs`）。"""
+    return read_str(node_id, pin_name, ctx, g, default)
 
 
 def _eval_set_text(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:

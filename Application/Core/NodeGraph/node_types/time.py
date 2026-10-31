@@ -1,5 +1,10 @@
 """
-时间节点 — TimeGetElapsed, TimeGetDelta, TimeDelay, TimeTrigger, TimeGetDate。
+时间节点 — TimeGetElapsed, TimeGetDelta, TimeTrigger, TimeGetDate。
+
+2026-10-31: `TimeDelay` 已移除 — 它只在 exec 链被逐帧重入时才推进
+（`_exec_visited` 去重 + `_blocked` 截断），从 `OnGameStart` 单次链串入会永久挂起，
+且 `props.duration` 不生效（时长只读引脚）。时间推进请用 `TimeTrigger`
+（`mode=manual, time=N`）挂在 `OnFrameUpdate` 上。
 """
 
 from . import _reg, _gen_id, TIME_COLOR
@@ -24,16 +29,6 @@ _reg(NodeTypeDef(
         PinDef(_gen_id(), "Delta", "data", "output", "float"),
     ],
     "Frame time",
-))
-
-_reg(NodeTypeDef(
-    "TimeDelay", "Delay", "Time", TIME_COLOR,
-    [
-        PinDef(_gen_id(), "exec_in", "exec", "input"),
-        PinDef(_gen_id(), "Seconds", "data", "input", "float"),
-        PinDef(_gen_id(), "exec_out", "exec", "output"),
-    ],
-    "Wait N seconds",
 ))
 
 _reg(NodeTypeDef(

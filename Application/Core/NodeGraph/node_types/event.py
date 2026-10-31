@@ -29,3 +29,38 @@ _reg(NodeTypeDef(
     ],
     "Every frame",
 ))
+
+_reg(NodeTypeDef(
+    "OnKeyPressed", "On Key Pressed", "Event",
+    _COLOR_EVENT,
+    [
+        PinDef(_gen_id(), "exec", "exec", "output"),
+        PinDef(_gen_id(), "Key", "data", "output", "int"),
+        PinDef(_gen_id(), "Mods", "data", "output", "int"),
+    ],
+    "Keyboard key pressed (props: key, mods, repeat)",
+))
+
+_reg(NodeTypeDef(
+    "OnKeyReleased", "On Key Released", "Event",
+    _COLOR_EVENT,
+    [
+        PinDef(_gen_id(), "exec", "exec", "output"),
+        PinDef(_gen_id(), "Key", "data", "output", "int"),
+        PinDef(_gen_id(), "Mods", "data", "output", "int"),
+    ],
+    "Keyboard key released (props: key, mods)",
+))
+
+_reg(NodeTypeDef(
+    "OnMouseClicked", "On Mouse Clicked", "Event",
+    _COLOR_EVENT,
+    [
+        PinDef(_gen_id(), "exec", "exec", "output"),
+        PinDef(_gen_id(), "Button", "data", "output", "int"),
+        PinDef(_gen_id(), "Mods", "data", "output", "int"),
+        PinDef(_gen_id(), "X", "data", "output", "int"),
+        PinDef(_gen_id(), "Y", "data", "output", "int"),
+    ],
+    "Mouse button clicked (release within 6px; props: button, mods)",
+))

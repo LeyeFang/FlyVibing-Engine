@@ -284,8 +284,61 @@ def _draw_export_page() -> None:
     imgui.end_disabled()
 
 
+# ═══════════════════════════════════════════════
+# 内置页: Debug —— Terminal 事件上报（类型勾选）
+# ═══════════════════════════════════════════════
+
+def _draw_debug_page() -> None:
+    """Debug 页 — Terminal 子类：上报开关 + 事件类型勾选。
+
+    数据源：`Application/Core/Diagnostics/DebugEvents.EVENT_CATALOG`（唯一权威）。
+    勾选写入 `EditorSettings['debug.terminal.events']`（持久化），
+    经 apply 钩子同步到 `DebugReportConfig`（RuntimeDebugLayer 每事件查一次）。
+    """
+    from Application.Core.Diagnostics.DebugEvents import EVENT_CATALOG
+
+    imgui.text_disabled(t("settings.debug.terminal"))
+    imgui.separator()
+
+    enabled = bool(EditorSettings.get("debug.terminal.enabled"))
+    changed, new_enabled = imgui.checkbox(
+        f"{t('settings.debug.enabled')}##debug_enabled", enabled)
+    if changed:
+        EditorSettings.set("debug.terminal.enabled", bool(new_enabled))
+        enabled = bool(new_enabled)
+    imgui.text_disabled(t("settings.debug.note"))
+
+    imgui.begin_disabled(not enabled)
+    if imgui.small_button(f"{t('settings.debug.all')}##debug_all"):
+        EditorSettings.set("debug.terminal.events", [s.key for s in EVENT_CATALOG])
+    imgui.same_line()
+    if imgui.small_button(f"{t('settings.debug.none')}##debug_none"):
+        EditorSettings.set("debug.terminal.events", [])
+
+    current = list(EditorSettings.get("debug.terminal.events") or [])
+    selected = set(current)
+    last_group = ""
+    for spec in EVENT_CATALOG:
+        if spec.group != last_group:
+            imgui.spacing()
+            imgui.text_disabled(spec.group)
+            last_group = spec.group
+        changed, checked = imgui.checkbox(
+            f"{t(spec.label_key)}##debug_ev_{spec.key}", spec.key in selected)
+        if changed:
+            keys = [k for k in current if k != spec.key]
+            if checked:
+                keys.append(spec.key)
+            EditorSettings.set("debug.terminal.events", keys)
+            current = keys
+            selected = set(keys)
+    imgui.end_disabled()
+
+
 # ── 内置页注册（import 即注册 — 与面板类同批加载; id 稳定不可改名） ──
 SettingsPanel.register_page(SettingsPage(
     id="common", title_key="settings.page.common", draw_fn=_draw_common_page, order=0))
 SettingsPanel.register_page(SettingsPage(
     id="export", title_key="settings.page.export", draw_fn=_draw_export_page, order=10))
+SettingsPanel.register_page(SettingsPage(
+    id="debug", title_key="settings.page.debug", draw_fn=_draw_debug_page, order=20))

@@ -28,10 +28,15 @@ import threading
 import traceback
 from typing import Callable, Optional
 
+from Application.Core.Diagnostics.DebugEvents import DEFAULT_KEYS as _DEBUG_EVENT_DEFAULTS
+
 DEFAULTS: dict = {
     "ui.font_scale": 1.0,
     "ui.language": "en",
     "server.port": 8977,
+    # Debug ▸ Terminal — 事件上报开关 + 事件类型白名单（RuntimeDebugLayer 消费）
+    "debug.terminal.enabled": True,
+    "debug.terminal.events": list(_DEBUG_EVENT_DEFAULTS),
 }
 
 # 数值 clamp: key → (min, max)；枚举: key → 允许值集合（单一权威 — 与 Settings 面板选择集一致）
@@ -163,6 +168,13 @@ class EditorSettings:
     @classmethod
     def _coerce(cls, key: str, value):
         """类型 + 范围/枚举校验（钳制而非报错 — 与 FIELD_CLAMPS 同风格）。"""
+        if key == "debug.terminal.enabled":
+            if isinstance(value, bool):
+                return value
+            return str(value).strip().lower() in ("1", "true", "yes", "on")
+        if key == "debug.terminal.events":
+            from Application.Core.Diagnostics.DebugEvents import normalize_keys
+            return normalize_keys(value)
         if key in INT_CLAMPS:
             lo, hi = INT_CLAMPS[key]
             try:
@@ -235,6 +247,18 @@ class EditorSettings:
             try:
                 from Application.Editor.I18n import set_language
                 set_language(str(value))
+            except Exception:  # noqa: BLE001
+                pass
+        elif key == "debug.terminal.enabled":
+            try:
+                from Application.Core.Diagnostics.DebugEvents import DebugReportConfig
+                DebugReportConfig.set_enabled(value)
+            except Exception:  # noqa: BLE001
+                pass
+        elif key == "debug.terminal.events":
+            try:
+                from Application.Core.Diagnostics.DebugEvents import DebugReportConfig
+                DebugReportConfig.set_keys(value)
             except Exception:  # noqa: BLE001
                 pass
 

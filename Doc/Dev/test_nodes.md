@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**89**
-- `core`：84
+- 节点数：**90**
+- `core`：85
 - `heavy`：1
 - `live`：2
 - `manual`：2
@@ -30,6 +30,7 @@
 | `core.test_map` | `core` | `contract` | `core` | `Test/Application/Core/test_test_map.py` | - |
 | `core.thread_boundary` | `core` | `contract` | `core` | `Test/Application/Core/test_thread_boundary.py` | - |
 | `editor.action_contract` | `core` | `contract` | `editor` | `Test/Application/Editor/test_action_contract.py` | Application.Core.Scene.Scene<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.Gizmos.TransformGizmo<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Editor.UI.controllers.SelectionController |
+| `editor.debug_report` | `core` | `unit` | `editor` | `Test/Application/Editor/test_debug_report.py` | Application.Core.Diagnostics.DebugEvents<br>Application.Runtime.RuntimeDebugLayer<br>Application.Editor.UI.panels.SettingsPanel |
 | `editor.e2e_node_group_live` | `live` | `e2e` | `editor` | `Test/Application/Editor/test_e2e_node_group_live.py` | Application.Core.NodeGraph.group_geometry<br>Application.Core.NodeGraph.group_layout<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.panels.node_editor.panel |
 | `editor.editor_mcp_package` | `core` | `contract` | `editor` | `Test/Application/Editor/test_editor_mcp_package.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.node_packs |
 | `editor.editor_settings` | `core` | `integration` | `editor` | `Test/Application/Editor/test_editor_settings.py` | Application.Core.NodeGraph<br>Application.Editor.EditorSettings<br>Application.Editor.Extensions.ExtensionUI<br>Application.Editor.I18n<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.StartupOptions<br>Application.Editor.UI.UIManager<br>Application.Editor.UI.panels.SettingsPanel<br>Application.Editor.UI.panels.node_editor.panel |

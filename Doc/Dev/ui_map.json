@@ -264,8 +264,8 @@
       "owner": "SettingsPanel",
       "source": "Application/Editor/UI/panels/SettingsPanel.py",
       "visible_when": ["panel.settings.visible"],
-      "actions": ["settings.get", "settings.set"],
-      "opens": ["editor.settings.common", "editor.settings.export"],
+      "actions": ["settings.get", "settings.set", "debug.events"],
+      "opens": ["editor.settings.common", "editor.settings.export", "editor.settings.debug"],
       "tests": ["editor.editor_settings", "editor.i18n_coverage"],
       "scenarios": ["panels_smoke"]
     },
@@ -293,6 +293,19 @@
       "actions": ["settings.get", "settings.set"],
       "opens": [],
       "tests": ["editor.editor_settings", "editor.pie_settings"],
+      "scenarios": ["panels_smoke"]
+    },
+    {
+      "id": "editor.settings.debug",
+      "label": "Settings / Debug",
+      "kind": "page",
+      "parent": "editor.panel.settings",
+      "owner": "SettingsPanel",
+      "source": "Application/Editor/UI/panels/SettingsPanel.py",
+      "visible_when": ["panel.settings.visible"],
+      "actions": ["debug.events", "settings.get", "settings.set"],
+      "opens": [],
+      "tests": ["editor.debug_report", "editor.i18n_coverage"],
       "scenarios": ["panels_smoke"]
     },
     {

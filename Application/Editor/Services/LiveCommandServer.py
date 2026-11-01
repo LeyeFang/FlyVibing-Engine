@@ -298,6 +298,8 @@ class LiveCommandServer:
             "graph.validate.cancel": cls._op_graph_validate_cancel,
             # ── 诊断：控制台日志（stdout/stderr tee 环形缓冲） ──
             "console.tail": cls._op_console_tail,
+            # ── 诊断：Debug ▸ Terminal 事件上报配置 ──
+            "debug.events": cls._op_debug_events,
             "project.open": cls._op_project_open,
             "project.save": cls._op_project_save,
             "project.export": cls._op_project_export,
@@ -458,7 +460,11 @@ class LiveCommandServer:
 
     @staticmethod
     def _op_sim_play(args: dict) -> dict:
-        """Run 按钮语义 — 请求 PIE 启动（主线程帧末由 SimulationController 消费）。"""
+        """Run 按钮语义 — 请求 PIE 启动（主线程帧末由 SimulationController 消费）。
+
+        启动前跑硬预检（`SimulationController.preflight_problems`）：有未注册节点类型
+        等"必然不生效"的问题时**拒绝启动**并返回 error（`force=true` 可强制）。
+        """
         from Application.Editor.UI.controllers.SimulationController import (
             SimulationController,
             SimulationState,
@@ -470,11 +476,27 @@ class LiveCommandServer:
                 "state": SimulationController.get_state_label(),
                 "note": "already running/paused",
             }
+        force = bool(args.get("force"))
+        problems = [] if force else SimulationController.preflight_problems()
+        if problems:
+            for p in problems:
+                print(f"[Live] ERROR: {p.get('message')}")
+            return {
+                "requested": False,
+                "error": "preflight_failed",
+                "problems": problems,
+                "note": "run aborted before PIE start; pass force=true to override",
+            }
         warning = LiveCommandServer._pie_runnability_warning()
         if warning:
             print(f"[Live] WARNING: {warning}")
-        SimulationController.play()
-        result: dict = {"requested": True, "state": "pending_start"}
+        started = bool(SimulationController.play())
+        result: dict = {"requested": started}
+        if started:
+            result["state"] = "pending_start"
+        else:
+            result["state"] = SimulationController.get_state_label()
+            result["error"] = SimulationController.last_error or "play refused"
         if warning:
             result["warning"] = warning
         return result
@@ -1364,6 +1386,34 @@ class LiveCommandServer:
                            level=str(level) if level else None)
 
     @staticmethod
+    def _op_debug_events(args: dict) -> dict:
+        """读写 Debug ▸ Terminal 事件上报配置（持久化到编辑器设置）。
+
+        args（全部可选，省略即只读）:
+          enabled: bool —— 总开关
+          events:  [key, ...] 或 "a,b" —— 事件类型白名单（未知 key 丢弃）
+
+        返回: {"enabled", "events", "catalog": [{key,group,label_key,default,hot,types}]}
+        """
+        from Application.Core.Diagnostics.DebugEvents import DebugReportConfig, catalog
+        from Application.Editor.EditorSettings import EditorSettings
+
+        changed: list[str] = []
+        if "enabled" in args and args.get("enabled") is not None:
+            value = EditorSettings.set("debug.terminal.enabled", args.get("enabled"))
+            DebugReportConfig.set_enabled(value)
+            changed.append("debug.terminal.enabled")
+        if "events" in args and args.get("events") is not None:
+            value = EditorSettings.set("debug.terminal.events", args.get("events"))
+            DebugReportConfig.set_keys(value)
+            changed.append("debug.terminal.events")
+        result = dict(DebugReportConfig.state())
+        result["catalog"] = catalog()
+        if changed:
+            result["changed"] = changed
+        return result
+
+    @staticmethod
     def _op_project_open(args: dict) -> dict:
         """打开 .myproj 工程（等同 File ▸ Open Project — 资源 + 场景全加载, 启动场景激活）。
 
@@ -1625,7 +1675,11 @@ class LiveCommandServer:
 
     @staticmethod
     def _op_entity_list(args: dict) -> dict:
-        """实体列表（roots_only=true 时仅根实体）。"""
+        """实体列表（roots_only=true 时仅根实体；with_transform=true 附带 transform）。
+
+        with_transform 避免 agent 逐个 `entity.get`（编辑单位是编辑器坐标, 旋转角度制）：
+        每项多一个 `transform: {position, rotation_deg, scale}`。
+        """
         from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
 
         _require_editor_scene()
@@ -1633,6 +1687,16 @@ class LiveCommandServer:
         if bool(args.get("roots_only")):
             roots = set(SceneBrowserController.get_root_entities())
             infos = [i for i in infos if i["entity_id"] in roots]
+        if bool(args.get("with_transform")):
+            for info in infos:
+                summary = SceneBrowserController.get_summary(int(info["entity_id"]))
+                if summary is None:
+                    continue
+                info["transform"] = {
+                    "position": [float(v) for v in summary.position],
+                    "rotation_deg": [float(v) for v in summary.rotation],
+                    "scale": [float(v) for v in summary.scale],
+                }
         return {"entities": infos, "count": len(infos)}
 
     @staticmethod
@@ -2058,14 +2122,40 @@ class LiveCommandServer:
 
     @staticmethod
     def _op_scene_switch(args: dict) -> dict:
-        """切换场景（等同 Scene 下拉选择 — 保存当前/加载/视口/节点图同步全流程）。"""
+        """切换场景（等同 Scene 下拉选择 — **内存态**切换: 保存内存状态/加载内存态/视口同步）。
+
+        ⚠️ 不写盘。`switch_scene` 只是把 ECS + 画布切到内存里的另一份场景；
+        手改过 .scene 文件后要生效，传 `reload=true`（从磁盘重新读取）或改用 `scene.load`。
+        """
+        from Application.Editor.EditorHost import EditorHost
         from Application.Editor.UI.controllers.SceneBrowserController import SceneBrowserController
 
         name = str(args.get("name") or "")
         if not name:
             raise ValueError("name is required")
+        if bool(args.get("reload")):
+            scene = EditorHost._scenes.get(name)
+            path = str(getattr(scene, "_file_path", "") or "") if scene is not None else ""
+            if not path:
+                return {
+                    "switched": False,
+                    "reloaded": False,
+                    "error": f"scene {name!r} has no file path — pass scene.load path=…",
+                    "active": SceneBrowserController.get_active_scene_name(),
+                }
+            ok = bool(EditorHost.load_scene_from_file(path))
+            return {
+                "switched": ok,
+                "reloaded": ok,
+                "path": path,
+                "active": SceneBrowserController.get_active_scene_name(),
+            }
         ok = bool(SceneBrowserController.switch_scene(name))
-        return {"switched": ok, "active": SceneBrowserController.get_active_scene_name()}
+        return {
+            "switched": ok,
+            "reloaded": False,
+            "active": SceneBrowserController.get_active_scene_name(),
+        }
 
     @staticmethod
     def _op_scene_create(args: dict) -> dict:

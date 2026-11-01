@@ -243,21 +243,78 @@ class SimulationController:
 
     # ── 状态变更 ────────────────────────────────────────────
 
+    @staticmethod
+    def _active_canvas():
+        """当前生效的节点图画布（Node Editor 面板优先，回退场景内图）。"""
+        try:
+            from Application.Editor.UI.UIManager import UIManager
+            panel = UIManager.find("Node Editor")
+            canvas = getattr(panel, "_canvas", None) if panel is not None else None
+            if canvas is not None:
+                return canvas
+        except Exception:  # noqa: BLE001 — 无头环境没有面板
+            pass
+        scene = EditorHost.get_active_scene()
+        return getattr(scene, "node_graph", None) if scene is not None else None
+
     @classmethod
-    def play(cls) -> None:
+    def preflight_problems(cls) -> list[dict]:
+        """PIE 启动前硬校验 — 返回阻断项列表（空 = 可启动）。
+
+        只拦"跑起来必然不生效"的状态，不猜渲染效果:
+
+          - `unknown_node_types`: 场景里有未注册的节点类型（扩展未启用 / 类型已移除）。
+            这些节点**不会被求值**，链路会静默断掉 —— 视觉上像"图在跑但没反应"，
+            所以必须在启动前说出来，而不是只在加载时打一行 WARNING。
+        """
+        problems: list[dict] = []
+        canvas = cls._active_canvas()
+        unknown = getattr(canvas, "unknown_node_types", None) or {}
+        if unknown:
+            problems.append({
+                "code": "unknown_node_types",
+                "message": ("node graph has unregistered node types — they are NOT "
+                            "evaluated, so the chain breaks silently"),
+                "types": sorted(unknown),
+                "nodes": {name: list(ids) for name, ids in sorted(unknown.items())},
+                "hint": ("enable the owning extension (extension.enable) or delete "
+                         "those nodes; to run anyway pass force=true"),
+            })
+        return problems
+
+    @classmethod
+    def play(cls, force: bool = False) -> bool:
         """▶ 请求启动模拟（由渲染线程 ImGui 回调触发）。
+
+        先跑 `preflight_problems()` 硬校验（force=true 跳过）；有阻断项时不启动，
+        把原因写进 `last_error` 并打印（sim.state 可查）。
 
         不直接创建 Runtime 窗口，改为设置 _pending_start 标记。
         主线程在 EditorLayer.OnUpdate() 中消费此标记，
         确保 RuntimeWindow 由主线程创建（GLFW 线程亲和性要求）。
         """
         if cls._state != SimulationState.STOPPED:
-            return
+            return False
+        problems = [] if force else cls.preflight_problems()
+        if problems:
+            cls.last_error = "; ".join(str(p.get("message", "")) for p in problems)
+            print(f"[Simulation] PIE blocked (preflight): {cls.last_error}")
+            for p in problems:
+                if p.get("types"):
+                    print(f"  {p.get('code')}: {', '.join(p['types'])}")
+                if p.get("hint"):
+                    print(f"  hint: {p['hint']}")
+            EngineLifecycleEvent.Pack(
+                stage="simulation", message=f"Play blocked: {cls.last_error}",
+                engine=EditorHost,
+            )
+            return False
         cls._pending_start = True
         cls.last_error = ""
         EngineLifecycleEvent.Pack(
             stage="simulation", message="Play requested (pending)", engine=EditorHost
         )
+        return True
 
     @classmethod
     def _try_consume_start(cls) -> None:

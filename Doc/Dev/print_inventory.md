@@ -8,12 +8,12 @@
 | 区域 | print 条数 |
 |---|---:|
 | Functions | 219 |
-| Editor | 169 |
-| Core | 103 |
+| Editor | 173 |
+| Core | 104 |
 | Runtime | 46 |
 | Resource | 4 |
 | other | 2 |
-| **合计** | **543** |
+| **合计** | **548** |
 
 热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **49** 条。
 
@@ -49,10 +49,10 @@
 | `Application/Runtime/PlayerBootstrap.py` | 34 |
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
 | `Application/Editor/UI/panels/node_editor/panel.py` | 19 |
-| `Application/Editor/Services/LiveCommandServer.py` | 11 |
+| `Application/Editor/Services/LiveCommandServer.py` | 12 |
+| `Application/Editor/UI/controllers/SimulationController.py` | 11 |
 | `Application/Editor/UI/controllers/SceneBrowserController.py` | 10 |
 | `Application/Core/Window/glfwWindow.py` | 8 |
-| `Application/Editor/UI/controllers/SimulationController.py` | 8 |
 | `Application/Core/Project/RuntimeProjectLoader.py` | 7 |
 | `Application/Core/Renderer/ZenGL/ZenGLOverlays.py` | 7 |
 | `Application/Editor/Extensions/ExtensionManager.py` | 7 |
@@ -65,10 +65,10 @@
 | `Application/Core/Scene/PrefabManager.py` | 5 |
 | `Application/Editor/EditorHost.py` | 5 |
 | `Application/Core/Media/MediaSystem.py` | 4 |
+| `Application/Core/NodeGraph/canvas.py` | 4 |
 | `Application/Core/NodeGraph/evaluators/io.py` | 4 |
 | `Application/Runtime/GameRuntime.py` | 4 |
 | `Application/Core/Engine.py` | 3 |
-| `Application/Core/NodeGraph/canvas.py` | 3 |
 | `Application/Core/NodeGraph/evaluator_engine.py` | 3 |
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |
 | `Application/Core/Renderer/ZenGL/ZenGLCore.py` | 3 |

@@ -6,7 +6,7 @@
   1. EditorSettings: 默认值 / 落盘往返 / clamp / 枚举回退 / 未知键 KeyError / 损坏 JSON 容错
   2. pending 应用模型: set 只入队 -> apply_pending (渲染线程帧首) 出队并调 hook, 只应用一次
   3. I18n: 命中 / 缺键回退键名 / set_language 非法 -> en
-  4. SettingsPanel 页面注册表: 内置两页同级 / 重名 ValueError / owner 清理 / 排序
+  4. SettingsPanel 页面注册表: 内置三页同级 / 重名 ValueError / owner 清理 / 排序
   5. settings.get / settings.set op 与面板同一业务单点 (Action 契约: 动作单点)
 
 运行: python Utils/Dev/test_runner.py --only editor_settings
@@ -178,14 +178,16 @@ def main() -> int:
     # ═══════════════════════════════════════════════════════════
     print("-- 6. settings page registry --")
     ids = [p.id for p in SettingsPanel.pages()]
-    check("内置两页 (common / export 同级)", ids == ["common", "export"], str(ids))
+    check("内置三页 (common / export / debug 同级)", ids == ["common", "export", "debug"], str(ids))
     check("Export 页来自迁移 (order=10)",
           [p.order for p in SettingsPanel.pages() if p.id == "export"] == [10])
+    check("Debug 页 (order=20)",
+          [p.order for p in SettingsPanel.pages() if p.id == "debug"] == [20])
     pid = SettingsPanel.register_page(
         SettingsPage(id="demo", title_key="demo", draw_fn=lambda: None, order=5))
     check("register_page 返回 id", pid == "demo")
     check("排序按 (order, id)",
-          [p.id for p in SettingsPanel.pages()] == ["common", "demo", "export"],
+          [p.id for p in SettingsPanel.pages()] == ["common", "demo", "export", "debug"],
           str([p.id for p in SettingsPanel.pages()]))
     try:
         SettingsPanel.register_page(SettingsPage(id="demo", title_key="demo", draw_fn=lambda: None))
@@ -205,7 +207,7 @@ def main() -> int:
     check("清理无残留 (再次调用=0)", SettingsPanel.unregister_pages_by_owner("demo_ext") == 0)
     check("unregister_page 命中 true", SettingsPanel.unregister_page("demo") is True)
     check("unregister_page 未命中 false", SettingsPanel.unregister_page("demo") is False)
-    check("测试不留垃圾页", [p.id for p in SettingsPanel.pages()] == ["common", "export"])
+    check("测试不留垃圾页", [p.id for p in SettingsPanel.pages()] == ["common", "export", "debug"])
 
     # ═══════════════════════════════════════════════════════════
     # 7. settings.* ops (动作单点: 与面板共用 EditorSettings)

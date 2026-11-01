@@ -44,6 +44,8 @@
 | `test_protocol.md` | `Test/**` + `Utils/Dev/test_runner.py` + `Test/Application/Editor/ui_scenario.py` + `_ui_boot.py` | 新增/修改测试、UI 场景回放、排查测试互相干扰时必读：档位 / 沙箱 / 输出契约 / 重置清单 |
 | `test_map_todo.md` + `test_nodes.md` + `ui_map.md` | `Doc/Dev/{test_nodes,ui_map}.json` + `Utils/Dev/test_map.py` | 测试节点地图 / UI 展开图 / 跨会话任务上下文：一个测试文件=一个节点、`ui tree`、affected 查询、map check；修改测试、控件或定位回归范围前先查 |
 | `product_todo.md` | 扩展剥离 / 节点编辑器 UX / 1.0 Release / macOS | 产品级待办与暂缓决策（CI、社区扩展仓库治理、组编辑后续、Release 清单） |
+| `scene_format.md` | `Application/Core/Scene/**` + `.scene` JSON + `Application/Core/Math/CoordinateSystem.py` | 直接读写 `.scene`（实体组件字段、`node_graph` 的 pin id/引脚名两套表示、编辑器坐标 vs GL 坐标、手改与批量改的安全流程）前必读 |
+| `tooling_friction_triage.md` | `FlyVibing-User-And-Developer-Utils/packages/editor-mcp/**` + `Application/Editor/Services/LiveCommandServer.py` | 社区扩展作者的 20+ 条摩擦分诊（设计缺陷 / 文档缺口 / 用户用法），以及每条落点与待办；改 CLI/op 语义或补文档前先查 |
 | `remote_display_white_screen.md` | 远程/无物理显示器下 OpenGL 窗口呈现 | 用户报告“白屏”、远程开发、PIE/成品窗口看似全白时先读；区分渲染缺陷与呈现层问题 |
 | `runtime_scene_ui_input_plan.md` | `RuntimeSceneService` / `UISystem` / 运行时输入 | 规划运行时场景切换、无 imgui 游戏内 GUI、键鼠/ESC 输入与 UI 事件消费顺序时读 |
 | `threading_protocol.md` | `Application/Core/ThreadRegistry.py` + 全体线程启动点 + `Utils/Dev/thread_probe.py` | **新开线程/跨线程通信/服务进程集成前必读**：三通道纪律、心跳注册四步、实时探针、检查单 |

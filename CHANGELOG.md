@@ -23,6 +23,20 @@
   dry-run records a structured `not_found` entry). Added `Utils/Dev/print_audit.py` +
   `Doc/Dev/print_inventory.md` (543 bare `print()` calls, 49 on hot paths) with a freshness
   guard so new prints show up as a reviewable diff.
+- **Settings ▸ Debug ▸ Terminal** — runtime debug events now have a taxonomy
+  (`Application/Core/Diagnostics/DebugEvents.py`, 17 event types with per-type keys);
+  `RuntimeDebugLayer` reports only the checked types and consumes only those (window
+  close still consumes). Defaults equal the previous hard-coded silence list; new
+  `debug.events` op + CLI read/write the same state.
+- **Pre-flight before PIE** — `NodeCanvas` records unregistered node types
+  (`unknown_node_types`); `SimulationController.play()` refuses to start while any exist
+  (those nodes are never evaluated, so the chain breaks silently) and `sim.play` returns
+  `preflight_failed` with the type/node list. `force=true` overrides; the reason lands in
+  `sim.state.last_error`. `graph.validate` already reported them as `unknown_type` errors.
+- **`entity.list with_transform=true`** — returns `position / rotation_deg / scale` per
+  entity instead of one `entity.get` call each.
+- **`scene.switch reload=true`** — the op never writes to disk; `reload` re-reads the
+  scene from its `.scene` file (use it, or `scene.load`, after editing JSON by hand).
 
 ### 简体中文
 
@@ -42,6 +56,18 @@
 - **控制台噪声** —— `EntityGet` 不再每次求值都 print（成功静默；干跑只记一条结构化
   `not_found`）。新增 `Utils/Dev/print_audit.py` + `Doc/Dev/print_inventory.md`
   （543 条裸 `print()`，热路径 49 条），并用新鲜度测试保证新增 print 形成可评审的 diff。
+- **Settings ▸ Debug ▸ Terminal** —— 运行期 debug 事件首次有了分类表
+  （`Application/Core/Diagnostics/DebugEvents.py`，17 类事件、每类一个勾选键）；
+  `RuntimeDebugLayer` 只汇报且只 consume 被勾选的类型（窗口关闭仍强制 consume）。
+  默认值与旧硬编码静默表等价；新增 `debug.events` op 与 CLI 读写同一份状态。
+- **PIE 启动前硬预检** —— `NodeCanvas` 记录未注册节点类型（`unknown_node_types`）；
+  只要存在这类节点，`SimulationController.play()` 就**拒绝启动**（这些节点不会被求值，
+  链路会静默断掉），`sim.play` 返回 `preflight_failed` + 类型/节点清单；`force=true` 可强跑，
+  原因写入 `sim.state.last_error`。`graph.validate` 本来就会报 `unknown_type` error。
+- **`entity.list with_transform=true`** —— 一次拿到每个实体的 `position / rotation_deg / scale`，
+  不必逐个 `entity.get`。
+- **`scene.switch reload=true`** —— 该 op 从不写盘；`reload` 从 `.scene` 文件重新读取
+  （手改 JSON 后用它或 `scene.load`）。
 
 ## 1.0.3 — 2026-11-01
 

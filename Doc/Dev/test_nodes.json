@@ -1017,6 +1017,21 @@
       "visualizes": []
     },
     {
+      "id": "editor.debug_report",
+      "path": "Test/Application/Editor/test_debug_report.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.Diagnostics.DebugEvents",
+        "Application.Runtime.RuntimeDebugLayer",
+        "Application.Editor.UI.panels.SettingsPanel"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "nodegraph.entity_group_visible",
       "path": "Test/Application/NodeGraph/test_entity_group_visible.py",
       "tier": "core",

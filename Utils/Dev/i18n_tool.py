@@ -37,7 +37,7 @@ SCAN_ROOT = os.path.join(REPO, "Application", "Editor")
 _KEY_RE = re.compile(KEY_PATTERN)
 # 注册表"携带键"属性名: `t(x.title_key)` 属合法动态键, 键值在构造处以 `title_key="..."` 出现
 # （协议 §3: 可提取性 —— 键必须能在源码里被静态找到, 这两处同时成立即可）
-_KEY_CARRIER_ATTRS = ("title_key",)
+_KEY_CARRIER_ATTRS = ("title_key", "label_key")
 # `t()` 的常见别名（`from ... import t as _t` / 局部 `tr`）
 _T_ALIASES = ("t", "_t", "tr")
 
@@ -110,7 +110,7 @@ def scan_code_keys() -> tuple[dict, list]:
                     used.setdefault(a.value, []).append(f"{rel}:{node.lineno}")
                 elif isinstance(a, ast.Attribute) and a.attr in _KEY_CARRIER_ATTRS:
                     pass          # 见上: 键在构造处提取
-                elif isinstance(a, -sigast.JoinedStr):
+                elif isinstance(a, ast.JoinedStr):
                     problems.append(f"{rel}:{node.lineno}: f-string key (not extractable)")
                 else:
                     problems.append(f"{rel}:{node.lineno}: dynamic key (not extractable)")

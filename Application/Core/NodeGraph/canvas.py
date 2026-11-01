@@ -26,6 +26,10 @@ class NodeCanvas(DataContract):
         # 节点组元数据（tools 层宏的记账; 引擎只做不透明保留 — 不参与求值）。
         # 结构见 flyvibing_node_editor.node_groups; 空 dict = 无组。
         self.node_groups: dict = {}
+        # 未注册的节点类型 {type_name: [node_id, ...]} — from_dict 时采集。
+        # 引擎不丢节点（保留原样，方便再启用扩展），但这些节点**不会被求值**；
+        # PIE 预检读它做硬拦截（见 SimulationController.preflight_problems）。
+        self.unknown_node_types: dict[str, list[int]] = {}
 
     # ── 属性 ──────────────────────────────────────────────
 
@@ -280,6 +284,9 @@ class NodeCanvas(DataContract):
                       "(mode=manual, time=N) on an OnFrameUpdate chain.")
             else:
                 print("  Check that the owning extension / node pack is enabled.")
+            print("  These nodes are NOT evaluated — PIE will refuse to start "
+                  "until they are removed or their owner is enabled.")
+        canvas.unknown_node_types = unknown
 
         # ── 恢复连线 ──
         for lid_str, ld in data.get("links", {}).items():

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "description": "Editor UI state/control map. source paths are relative to repo root; actions reference ui_protocol action ids.",
-  "agent_only": ["renderer.snapshot", "threads.snapshot", "device.save", "frame.request", "frame.fetch", "ui.mouse", "ui.mouse_button", "ui.click", "ui.drag", "ui.wheel", "ui.key", "graph.group.delete"],
+  "agent_only": ["renderer.snapshot", "threads.snapshot", "device.save", "console.tail", "frame.request", "frame.fetch", "ui.mouse", "ui.mouse_button", "ui.click", "ui.drag", "ui.wheel", "ui.key", "graph.group.delete"],
   "states": [
     {"id": "editor.boot", "label": "Editor boot", "requires": []},
     {"id": "editor.workspace", "label": "Workspace visible", "requires": ["editor.boot"]},
@@ -147,7 +147,7 @@
       "owner": "NodeEditorPanel",
       "source": "Application/Editor/UI/panels/node_editor/panel.py",
       "visible_when": ["panel.node_editor.visible"],
-      "actions": ["graph.list", "graph.types", "graph.add", "graph.link", "graph.set_props", "graph.set_description", "graph.group.merge", "graph.group.ungroup", "graph.group.destroy", "graph.fit", "graph.export", "graph.import", "graph.validate.start", "graph.validate.state", "graph.validate.report", "graph.validate.cancel"],
+      "actions": ["graph.list", "graph.types", "graph.add", "graph.link", "graph.unlink", "graph.remove_node", "graph.set_props", "graph.set_description", "graph.group.merge", "graph.group.ungroup", "graph.group.destroy", "graph.fit", "graph.export", "graph.import", "graph.validate.start", "graph.validate.state", "graph.validate.report", "graph.validate.cancel"],
       "opens": ["editor.node_editor.add_menu", "editor.node_editor.node_card", "editor.node_editor.validate_dialog", "editor.node_editor.find_window", "editor.node_editor.groups_window", "editor.node_editor.group_context_menu"],
       "tests": ["nodegraph.node_editor_mcp", "editor.examples_catalog"],
       "scenarios": ["node_editor_smoke", "node_editor_clip_smoke", "node_editor_find", "node_groups_smoke", "node_group_actions"]

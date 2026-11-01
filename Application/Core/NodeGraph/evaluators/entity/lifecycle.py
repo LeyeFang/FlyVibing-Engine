@@ -230,8 +230,9 @@ def _eval_entity_get(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> 
                 ctx.set_pin(inst_pin_id, EntityRef(eid=eid))
 
     if eid >= 0:
-        print(f"[EntityGet] '{name}' → eid={eid}")
-    else:
-        print(f"[EntityGet] '{name}' not found")
+        return
+    # 运行时不再每帧 print（高频噪声）；干跑只记录一条结构化日志供校验汇总。
+    if ctx.dry_run:
+        ctx.emit_log(node_id, "EntityGet", "not_found", f"name={name!r}")
 
 register_evaluator("EntityGet", _eval_entity_get)

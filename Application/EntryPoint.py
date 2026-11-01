@@ -4,6 +4,12 @@ import os
 # 确保工作区根目录在 sys.path 中（因为入口脚本在 Application/ 子目录下）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# ★ 控制台 tee —— 尽早安装，让后续所有 print（含 import 期）都进环形缓冲，
+#   供 agent op `console.tail` 读取（无终端的 CLI/MCP 场景诊断用）。
+from Application.Core.Diagnostics.LogBus import LogBus  # noqa: E402
+
+LogBus.install()
+
 from Application.Editor.EditorHost import EditorHost
 from Application.Editor.EditorModule import EditorModule
 from Application.Editor.StartupOptions import apply_startup_options

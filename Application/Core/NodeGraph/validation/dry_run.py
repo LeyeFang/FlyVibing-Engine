@@ -59,6 +59,113 @@ def _seed_rng(seed: int) -> None:
         pass
 
 
+def _extract_entities(graph_data: Any) -> dict:
+    """从裸 graph / 场景 JSON / 工程 JSON 中取出 entities 表。"""
+    data = graph_data if isinstance(graph_data, dict) else {}
+    scene = data.get("scene") if isinstance(data.get("scene"), dict) else data
+    entities = scene.get("entities") if isinstance(scene, dict) else None
+    return entities if isinstance(entities, dict) else {}
+
+
+class _DryScene:
+    """干跑用只读假场景 —— 从场景 JSON 的 entities 建名称/层级索引。
+
+    真实运行时 `ctx.scene` 是 SceneManager；干跑原来不注入 scene，导致
+    `EntityGet` / `EntityGetTree` 等"按名/按层级"节点永远拿不到实体
+    （日志每帧刷 `not found`，校验也失去意义）。这里只实现只读查询，
+    可见性写入记录在 `visible`，其余写操作一律 no-op。
+    """
+
+    def __init__(self, entities: dict | None) -> None:
+        self._by_name: dict[str, int] = {}
+        self._children: dict[int, list[int]] = {}
+        self._known: set[int] = set()
+        self.visible: dict[int, bool] = {}
+        self.scene_camera_id = None
+        for eid_raw, entry in (entities or {}).items():
+            try:
+                eid = int(eid_raw)
+            except (TypeError, ValueError):
+                continue
+            entry = entry if isinstance(entry, dict) else {}
+            name = str(entry.get("name") or "")
+            if name:
+                self._by_name.setdefault(name, eid)
+            self._known.add(eid)
+            self.visible[eid] = True
+            pid = entry.get("parent_id")
+            if pid is not None:
+                try:
+                    self._children.setdefault(int(pid), []).append(eid)
+                except (TypeError, ValueError):
+                    pass
+
+    # ── 只读查询（与 SceneManager 同名同义）──
+    def EntityExists(self, eid) -> bool:
+        try:
+            return int(eid) in self._known
+        except (TypeError, ValueError):
+            return False
+
+    def GetEntityByName(self, name: str) -> int:
+        return int(self._by_name.get(str(name), -1))
+
+    def GetEntityChildren(self, eid) -> list[int]:
+        try:
+            return list(self._children.get(int(eid), []))
+        except (TypeError, ValueError):
+            return []
+
+    def GetComponent(self, eid, type_name):
+        return None
+
+    def HasComponent(self, eid, type_name) -> bool:
+        return False
+
+    def GetRegisteredComponents(self) -> list:
+        return []
+
+    # ── 写操作（干跑不落副作用）──
+    def SetEntityRenderVisible(self, eid, visible) -> None:
+        try:
+            key = int(eid)
+        except (TypeError, ValueError):
+            return
+        if key in self._known:
+            self.visible[key] = bool(visible)
+
+    def SetEntitiesRenderVisible(self, eids, visible) -> None:
+        for eid in eids or []:
+            self.SetEntityRenderVisible(eid, visible)
+
+    def SetEntityTransform(self, eid, **kwargs) -> None:
+        return None
+
+    def SetEntityTransformEditor(self, eid, **kwargs) -> None:
+        return None
+
+    def SetEntityParent(self, eid, parent) -> None:
+        return None
+
+    def AddComponentToEntity(self, eid, type_name, **kwargs) -> None:
+        return None
+
+    def AddComponentToEntityByName(self, name, type_name, **kwargs) -> None:
+        return None
+
+    def RemoveComponent(self, eid, type_name) -> None:
+        return None
+
+    def SetCameraProperties(self, eid, **kwargs) -> None:
+        return None
+
+    def AddEntity(self, *args, **kwargs) -> int:
+        raise RuntimeError("dry-run scene is read-only (AddEntity)")
+
+    def DeleteEntity(self, eid) -> None:
+        return None
+
+
 def _cleanup_dry_sessions() -> list[str]:
     """清理干跑命名空间下的残留设备会话与设备池（真实会话/池不受影响）。"""
     removed: list[str] = []
@@ -143,6 +250,9 @@ def run_dry_run(
     evaluator = GraphEvaluator(canvas, _TYPES)
     ctx = ExecutionContext()
     ctx.dry_run = True
+    # ★ 注入只读假场景：EntityGet / EntityGetTree 等按名/按层级的节点在干跑里
+    #   也能解析到真实场景里的实体（否则每帧 not found，校验失去意义）。
+    ctx.scene = _DryScene(_extract_entities(graph_data))
     collector = _LogCollector()
     ctx.log = collector
 

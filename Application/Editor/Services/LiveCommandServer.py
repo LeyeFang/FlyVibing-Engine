@@ -281,6 +281,8 @@ class LiveCommandServer:
             "graph.types": cls._op_graph_types,
             "graph.add": cls._op_graph_add,
             "graph.link": cls._op_graph_link,
+            "graph.unlink": cls._op_graph_unlink,
+            "graph.remove_node": cls._op_graph_remove_node,
             "graph.set_props": cls._op_graph_set_props,
             "graph.set_description": cls._op_graph_set_description,
             "graph.group.merge": cls._op_graph_group_merge,
@@ -294,6 +296,8 @@ class LiveCommandServer:
             "graph.validate.state": cls._op_graph_validate_state,
             "graph.validate.report": cls._op_graph_validate_report,
             "graph.validate.cancel": cls._op_graph_validate_cancel,
+            # ── 诊断：控制台日志（stdout/stderr tee 环形缓冲） ──
+            "console.tail": cls._op_console_tail,
             "project.open": cls._op_project_open,
             "project.save": cls._op_project_save,
             "project.export": cls._op_project_export,
@@ -1159,28 +1163,73 @@ class LiveCommandServer:
     def _op_graph_link(args: dict) -> dict:
         """连接两个引脚（等同画布拖线）。args: from={node,pin}, to={node,pin}。"""
         canvas = _node_canvas()
+        lid = int(canvas.add_link(
+            _resolve_pin_spec(args.get("from"), "from", canvas),
+            _resolve_pin_spec(args.get("to"), "to", canvas),
+        ))
+        if lid < 0:
+            return {"link_id": -1, "created": False, "reason": "already linked"}
+        return {"link_id": lid, "created": True}
 
-        def _resolve(spec: object, side: str) -> int:
-            if not isinstance(spec, dict) or "node" not in spec or "pin" not in spec:
-                raise ValueError(f"{side} must be {{'node': int, 'pin': str}}")
-            nid = int(spec["node"])
+    @staticmethod
+    def _op_graph_unlink(args: dict) -> dict:
+        """删除连线（等同画布选中连线 Delete）。
+
+        args:
+          link: 连线 ID（可从 graph.list 的 links[].id 取）; 或
+          from / to: 两端 `{node, pin}`（无方向要求）
+        """
+        canvas = _node_canvas()
+        lid = args.get("link")
+        if lid is not None:
+            lid = int(lid)
+            link = canvas.links.get(lid)
+            if link is None:
+                raise ValueError(f"link {lid} not found — use graph.list to list links")
+        else:
+            from_pin = _resolve_pin_spec(args.get("from"), "from", canvas)
+            to_pin = _resolve_pin_spec(args.get("to"), "to", canvas)
+            link = None
+            for k, lk in canvas.links.items():
+                if {int(lk.from_pin), int(lk.to_pin)} == {from_pin, to_pin}:
+                    lid, link = k, lk
+                    break
+            if link is None:
+                raise ValueError(f"no link between pins {from_pin} and {to_pin}")
+        canvas.remove_link(int(lid))
+        return {"link_id": int(lid), "from_pin": int(link.from_pin),
+                "to_pin": int(link.to_pin), "removed": True}
+
+    @staticmethod
+    def _op_graph_remove_node(args: dict) -> dict:
+        """删除节点及其所有连线（等同画布选中节点 Delete）。
+
+        args: node=<id> 或 nodes=[id, ...]。不存在的 id 进 `missing`，不报错中断。
+        """
+        canvas = _node_canvas()
+        raw = args.get("nodes")
+        if isinstance(raw, (list, tuple)):
+            targets = [int(n) for n in raw]
+        else:
+            targets = [int(args.get("node", -1))]
+        removed: list[dict] = []
+        missing: list[int] = []
+        for nid in targets:
             inst = canvas.nodes.get(nid)
             if inst is None:
-                raise ValueError(f"node {nid} not found")
-            pin_name = str(spec["pin"])
-            pid = inst.pin_ids.get(pin_name)
-            if pid is None:
-                raise ValueError(
-                    f"pin {pin_name!r} not found on node {nid} "
-                    f"(available: {', '.join(inst.pin_ids)})"
-                )
-            return int(pid)
-
-        lid = int(canvas.add_link(
-            _resolve(args.get("from"), "from"),
-            _resolve(args.get("to"), "to"),
-        ))
-        return {"link_id": lid}
+                missing.append(nid)
+                continue
+            type_name = inst.node_type
+            before = set(canvas.links)
+            canvas.remove_node(nid)   # 内部级联删连线 + mark_changed
+            removed.append({
+                "node_id": nid,
+                "type": type_name,
+                "removed_links": sorted(before - set(canvas.links)),
+            })
+        if not removed:
+            raise ValueError(f"node(s) not found: {missing} — use graph.list")
+        return {"removed": removed, "removed_count": len(removed), "missing": missing}
 
     # ── v4: 图校验（引擎内服务） / 图导入导出 / 工程 ──
 
@@ -1288,6 +1337,31 @@ class LiveCommandServer:
         result = apply_to_canvas(canvas, data)
         print(f"[Live] graph imported: {result['nodes']} nodes, {result['links']} links")
         return result
+
+    @staticmethod
+    def _op_console_tail(args: dict) -> dict:
+        """读取引擎控制台最近日志（stdout/stderr tee 的环形缓冲）。
+
+        args:
+          since: 只返回 seq > since 的行（轮询用, 默认 0 = 从头可取）
+          lines: 最多返回多少行（默认 200, 上限 4000）
+          level: 可选过滤 —— info / warn / error（启发式分类）
+
+        返回: {"lines": [{"seq","level","text"}], "next_since", "dropped", "buffered"}
+        """
+        from Application.Core.Diagnostics.LogBus import LogBus
+
+        try:
+            since = int(args.get("since", 0) or 0)
+        except (TypeError, ValueError):
+            since = 0
+        try:
+            lines = int(args.get("lines", 200) or 200)
+        except (TypeError, ValueError):
+            lines = 200
+        level = args.get("level")
+        return LogBus.tail(since=since, lines=lines,
+                           level=str(level) if level else None)
 
     @staticmethod
     def _op_project_open(args: dict) -> dict:
@@ -2144,6 +2218,24 @@ def _node_canvas():
     if canvas is None:
         raise ValueError("node editor canvas not available (panel not created yet)")
     return canvas
+
+
+def _resolve_pin_spec(spec, side: str, canvas) -> int:
+    """`{node, pin}` → 实例级 pin id（供 graph.link / graph.unlink 共用）。"""
+    if not isinstance(spec, dict) or "node" not in spec or "pin" not in spec:
+        raise ValueError(f"{side} must be {{'node': int, 'pin': str}}")
+    nid = int(spec["node"])
+    inst = canvas.nodes.get(nid)
+    if inst is None:
+        raise ValueError(f"node {nid} not found")
+    pin_name = str(spec["pin"])
+    pid = inst.pin_ids.get(pin_name)
+    if pid is None:
+        raise ValueError(
+            f"pin {pin_name!r} not found on node {nid} "
+            f"(available: {', '.join(inst.pin_ids)})"
+        )
+    return int(pid)
 
 
 def _editor_host():

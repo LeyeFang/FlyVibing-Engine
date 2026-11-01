@@ -43,6 +43,7 @@ _SKIP_DIRS = {"_gtec_archive_20261016", "_archive", "_runs", "__pycache__", ".gi
 # 品牌探针路径豁免: 本地兼容夹具（Gtec 插件本体 — git-ignored, 专业豁免）+
 # 运行产物（编辑器状态 Application/Editor/Config — git-ignored, 同 _runs 类）
 _SKIP_PATHS = (os.path.join(_REPO, "Application", "Functions", "Gtec"),
+               os.path.join(_REPO, "Application", "Functions", "missssep"),
                os.path.join(_REPO, "Application", "Editor", "Config"))
 # 文件级豁免: 本地夹具关联测试/场景（git-ignored 本地资产）+ 引用夹具路径的守卫 + 本测试自身
 _TEST_DIR = os.path.join(_REPO, "Test", "Application")

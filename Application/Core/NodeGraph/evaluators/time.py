@@ -81,25 +81,28 @@ def _eval_time_trigger(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -
     else:
         current = ctx.elapsed_time
 
-    last_fired_at = g.get_state(node_id, "_last_fired_threshold", -1.0)
-
-    # ★ 回绕检测: timer 值下降 (比上次触发时小) → timer 被 reset，清除记忆
-    if timer_name and current < last_fired_at and last_fired_at >= 0:
-        g.set_state(node_id, "_last_fired_threshold", -1.0)
-        last_fired_at = -1.0
-
-    # ── 触发条件 ──
-    threshold_changed = (threshold > last_fired_at + 0.0001)
-    fired = (current >= threshold >= 0) and threshold_changed
+    # ── 触发条件: 上升沿（跨过阈值的那一帧只触发一次）──
+    #   旧实现是"电平 + 阈值比上次触发时大"：pin 模式下阈值每帧增长 → 每帧触发，
+    #   下游带副作用的节点（HTTP / 写文件 / 训练）会被连续调用。
+    #   现在记录上一帧的 "current >= threshold" 结果，只在 False → True 时触发。
+    last_ok = g.get_state(node_id, "_last_ok", None)
+    last_threshold = g.get_state(node_id, "_last_threshold", None)
+    now_ok = bool(current >= threshold >= 0)
+    # manual 模式下手改阈值 = 重新武装：当前已越过则立即触发一次
+    manual_retarget = (
+        mode == "manual" and last_threshold is not None
+        and abs(float(threshold) - float(last_threshold)) > 1e-6
+        and now_ok
+    )
+    fired = now_ok and (last_ok is not True or manual_retarget)
 
     if fired:
-        print(f"[TimeTrigger] t={current:.4f} thr={threshold:.4f}" + (f" timer={timer_name}" if timer_name else ""))
+        print(f"[TimeTrigger] #{node_id} t={current:.4f} thr={threshold:.4f}"
+              + (f" timer={timer_name}" if timer_name else ""))
 
-    if fired:
-        g.set_state(node_id, "_last_fired_threshold", threshold)
-        g.set_state(node_id, "_blocked", False)
-    else:
-        g.set_state(node_id, "_blocked", True)
+    g.set_state(node_id, "_last_ok", now_ok)
+    g.set_state(node_id, "_last_threshold", float(threshold))
+    g.set_state(node_id, "_blocked", not fired)
 
     # ── 写入 Elapsed output pin ──
     for p in nd.pins:

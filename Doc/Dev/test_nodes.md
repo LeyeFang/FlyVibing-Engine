@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**84**
-- `core`：79
+- 节点数：**89**
+- `core`：84
 - `heavy`：1
 - `live`：2
 - `manual`：2
@@ -18,9 +18,11 @@
 | `core.component_clamps` | `core` | `integration` | `core` | `Test/Application/Core/test_component_clamps.py` | Application.Core.Scene.BasicComponents<br>Application.Core.Scene.ComponentRegistry<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.controllers.SceneBrowserController |
 | `core.filesystem.vfs` | `core` | `integration` | `core.filesystem` | `Test/Application/Core/FileSystem/test_vfs.py` | Application.Core.FileSystem.PathUtils<br>Application.Core.FileSystem.VFS |
 | `core.input.input_pipeline` | `core` | `integration` | `core.input` | `Test/Application/Core/Input/test_input_pipeline.py` | Application.Core.Events.Enum.InputEnum<br>Application.Core.Input.InputBackend<br>Application.Core.Input.InputPipeline |
+| `core.log_bus` | `core` | `unit` | `core` | `Test/Application/Core/test_log_bus.py` | Application.Core.Diagnostics.LogBus |
 | `core.material_isolation` | `core` | `integration` | `core` | `Test/Application/Core/test_material_isolation.py` | Application.Core.Events.Event<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.SceneManager<br>Application.Resource.ResourceManager |
 | `core.math.math` | `core` | `unit` | `core.math` | `Test/Application/Core/Math/test_math.py` | Application.Core.Math.Camera<br>Application.Core.Math.Transform |
 | `core.node_graph_boundary` | `core` | `contract` | `core` | `Test/Application/Core/test_node_graph_boundary.py` | - |
+| `core.print_inventory` | `core` | `unit` | `core` | `Test/Application/Core/test_print_inventory.py` | Utils.Dev.print_audit<br>Doc.Dev.print_inventory |
 | `core.runtime_project_loader` | `core` | `integration` | `core` | `Test/Application/Core/test_runtime_project_loader.py` | Application.Core.Engine<br>Application.Core.NodeGraph<br>Application.Core.NodeGraph.canvas<br>Application.Core.NodeGraph.evaluator_engine<br>Application.Core.Project<br>Application.Resource.ResourceManager |
 | `core.scene.entity_manager` | `core` | `integration` | `core.scene` | `Test/Application/Core/Scene/test_entity_manager.py` | Application.Core.Events.Event<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.SceneManager |
 | `core.scene.prefab_manager` | `core` | `integration` | `core.scene` | `Test/Application/Core/Scene/test_prefab_manager.py` | Application.Core.Events.Event<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.PrefabManager<br>Application.Core.Scene.SceneManager<br>Application.Resource.ResourceManager |
@@ -34,6 +36,7 @@
 | `editor.examples_catalog` | `core` | `integration` | `editor` | `Test/Application/Editor/test_examples_catalog.py` | Application.Editor.UI.UIManager |
 | `editor.export_extension_scope` | `core` | `integration` | `editor` | `Test/Application/Editor/test_export_extension_scope.py` | Application.Editor.ProjectManager |
 | `editor.export_game_bundle` | `core` | `integration` | `editor` | `Test/Application/Editor/test_export_game_bundle.py` | Application.Core.Engine<br>Application.Core.NodeGraph.canvas<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.ProjectManager<br>Application.Resource.ResourceManager |
+| `editor.graph_remove_ops` | `core` | `unit` | `editor` | `Test/Application/Editor/test_graph_remove_ops.py` | Application.Core.NodeGraph<br>Application.Editor.Services.LiveCommandServer |
 | `editor.i18n_coverage` | `core` | `contract` | `editor` | `Test/Application/Editor/test_i18n_coverage.py` | Application.Core.NodeGraph.node_types<br>Application.Editor.DisplayLabels<br>Application.Editor.EditorSettings<br>Application.Editor.I18n<br>Application.Editor.UI.panels.SettingsPanel<br>Application.Editor.UI.panels.node_editor.styling |
 | `editor.imgui_hygiene` | `core` | `contract` | `editor` | `Test/Application/Editor/test_imgui_hygiene.py` | - |
 | `editor.imgui_input_flags` | `core` | `contract` | `editor` | `Test/Application/Editor/test_imgui_input_flags.py` | Application.Editor.UI.panels.ScenePanel<br>Application.Editor.UI.panels.node_editor.widgets.flow_io<br>Application.Functions.SerialParallelDevice.extension |
@@ -87,6 +90,8 @@
 | `nodegraph.pin_value_coercion` | `core` | `unit` | `nodegraph` | `Test/Application/NodeGraph/test_pin_value_coercion.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.evaluators.inputs |
 | `nodegraph.save_data` | `core` | `integration` | `nodegraph` | `Test/Application/NodeGraph/test_save_data.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.evaluators.io |
 | `nodegraph.scalar_math_ops` | `core` | `unit` | `nodegraph` | `Test/Application/NodeGraph/test_scalar_math_ops.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.evaluator_engine<br>Application.Core.NodeGraph.evaluators.math |
+| `nodegraph.time_trigger_semantics` | `core` | `unit` | `nodegraph` | `Test/Application/NodeGraph/test_time_trigger_semantics.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.evaluators.time |
+| `nodegraph.validation_dry_scene` | `core` | `unit` | `nodegraph` | `Test/Application/NodeGraph/test_validation_dry_scene.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.validation.dry_run |
 | `renderer.gl_lighting` | `core` | `integration` | `renderer` | `Test/Application/Renderer/test_gl_lighting.py` | Application.Core.Scene.BasicComponents<br>Application.Resource.ResourceManager |
 | `renderer.gl_pixels` | `core` | `integration` | `renderer` | `Test/Application/Renderer/test_gl_pixels.py` | Application.Core.Renderer.PostProcess<br>Application.Core.Renderer.RenderCommand<br>Application.Core.Scene.BasicComponents<br>Application.Resource.ResourceManager |
 | `renderer.gl_render_targets` | `core` | `integration` | `renderer` | `Test/Application/Renderer/test_gl_render_targets.py` | Application.Core.Renderer.RenderCommand<br>Application.Core.Scene.BasicComponents<br>Application.Resource.ResourceManager |

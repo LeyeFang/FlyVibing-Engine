@@ -125,7 +125,9 @@ SetTimer behavior: if `create_if_missing` is true (default), a missing timer nam
 before reset/set_time; `NewTimer` is no longer mandatory. TimeTrigger's `_set_count` guard then
 sees the SetTimer initialization.
 
-TimeTrigger behavior: fires when ctx.elapsed_time >= threshold. Re-armable: increasing the threshold via variable/pin allows repeated triggering. Tracks _last_fired_threshold in state.
+TimeTrigger behavior: fires on the **rising edge** of `current >= threshold` (one fire per crossing).
+Re-arm by raising the threshold above current via variable/pin (the pulse pattern below) or by
+resetting the timer; a frozen threshold never refires. State: `_last_ok` / `_last_threshold`.
 
 #### Basic Nodes (fundamental value types)
 | type_name   | input pins | output pins    | props              |

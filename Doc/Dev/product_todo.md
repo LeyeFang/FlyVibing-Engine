@@ -192,3 +192,17 @@
 3. MVP 控件：`button/label/panel/popup`；文本输入、滚动视图、复杂布局后置。
 4. ESC：保留“ESC 关闭窗口”安全网 + 工程开关；有 modal 时先关弹窗。
 5. UI 坐标：先以 1920×1080 参考分辨率 + 像素偏移，后续再加自适应锚点。
+
+## 9. Debug / 日志治理（2026-11-01 立项）
+
+现状清单：`Doc/Dev/print_inventory.md`（由 `Utils/Dev/print_audit.py` 生成，
+`test_print_inventory` 守新鲜度；当前 543 条裸 print，其中热路径 **49** 条）。
+
+| 事项 | 状态 | 说明 |
+|---|---|---|
+| `EntityGet` 每帧 print | **已完成** | 成功路径静默（输出仍写 `Entity` 引脚）；仅干跑记一条结构化 `not_found` 日志 |
+| 裸 print 盘点 | **已完成** | `Utils/Dev/print_audit.py` → `Doc/Dev/print_inventory.md`；新增/删除 print 必须带清单 diff |
+| 热路径 print 收敛 | 待办 | `Core/NodeGraph/evaluators/**` + `Runtime` 循环层 → `ctx.emit_log`（干跑收集器）或节点级限流日志 |
+| Settings ▸ Debug | 待办 | Debug layer **事件类型隔离**（已有先例：键盘/鼠标事件已隔离，窗口 resize 未隔离）；后续接输出通道分级 |
+| 日志级别 | 待办 | `LogBus` 目前按文本启发式分级；后续 print 迁移时改为显式 `level` |
+

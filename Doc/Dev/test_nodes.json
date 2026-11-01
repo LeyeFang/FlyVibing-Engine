@@ -948,6 +948,75 @@
       "visualizes": []
     },
     {
+      "id": "nodegraph.time_trigger_semantics",
+      "path": "Test/Application/NodeGraph/test_time_trigger_semantics.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.evaluators.time"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.validation_dry_scene",
+      "path": "Test/Application/NodeGraph/test_validation_dry_scene.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.validation.dry_run"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.graph_remove_ops",
+      "path": "Test/Application/Editor/test_graph_remove_ops.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Editor.Services.LiveCommandServer"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.log_bus",
+      "path": "Test/Application/Core/test_log_bus.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Diagnostics.LogBus"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.print_inventory",
+      "path": "Test/Application/Core/test_print_inventory.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Utils.Dev.print_audit",
+        "Doc.Dev.print_inventory"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "nodegraph.entity_group_visible",
       "path": "Test/Application/NodeGraph/test_entity_group_visible.py",
       "tier": "core",

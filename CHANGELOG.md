@@ -4,6 +4,49 @@
 
 ### English
 
+- **`TimeTrigger` is edge-triggered** — it now fires once per `current >= threshold`
+  crossing instead of “threshold grew since the last fire”. With `mode=pin` and a
+  per-frame growing threshold the old code fired on every frame (measured ~4.7
+  downstream calls/s). Re-arm by raising the threshold above the current value or by
+  resetting the timer; editing a manual threshold fires once when already crossed.
+- **New graph ops** — `graph.remove_node` (cascade-removes links; batch via `nodes=[...]`)
+  and `graph.unlink` (by `link` id or `from`/`to` pins). Iterative graph editing no longer
+  requires `graph.export` → edit JSON → `graph.import`.
+- **`console.tail` op** — `EntryPoint` tees stdout/stderr into a bounded ring buffer
+  (`Application/Core/Diagnostics/LogBus.py`), so CLI/MCP agents can read engine console
+  output (including device-node failures) without a terminal.
+- **Validation dry-run scene** — `validation/dry_run.py` now injects a read-only
+  `_DryScene` built from the scene JSON entities: `EntityGet` / `EntityGetTree` /
+  render-visibility nodes resolve real names instead of logging `not found` every frame
+  (the run loop is unchanged; writes are recorded/no-op).
+- **Console noise** — `EntityGet` no longer prints on every evaluation (success is silent;
+  dry-run records a structured `not_found` entry). Added `Utils/Dev/print_audit.py` +
+  `Doc/Dev/print_inventory.md` (543 bare `print()` calls, 49 on hot paths) with a freshness
+  guard so new prints show up as a reviewable diff.
+
+### 简体中文
+
+- **`TimeTrigger` 改为上升沿触发** —— 只在 `current >= threshold` 由不满足变为满足的那一帧
+  触发一次，不再用“阈值比上次触发时大”的电平判断。`mode=pin` 且阈值每帧增长时旧实现会
+  每帧触发（实测下游 4.7 次/秒）。重臂方式：把阈值抬到当前值以上，或重置计时器；
+  manual 改阈值时若已越过则立即触发一次。
+- **新增图操作** —— `graph.remove_node`（级联删连线；`nodes=[...]` 批量）与
+  `graph.unlink`（按 `link` id 或 `from`/`to` 引脚）。迭代改图不再需要
+  `graph.export` → 手改 JSON → `graph.import`。
+- **`console.tail` op** —— `EntryPoint` 把 stdout/stderr tee 进环形缓冲
+  （`Application/Core/Diagnostics/LogBus.py`），CLI/MCP 无终端也能读引擎控制台
+  （含设备节点失败原因）。
+- **校验干跑假场景** —— `validation/dry_run.py` 从场景 JSON 的 entities 建只读
+  `_DryScene` 并注入 `ctx.scene`：`EntityGet` / `EntityGetTree` / 可见性节点能解析到
+  真实实体名，不再每帧 `not found`（运行循环不变；写操作只记录/no-op）。
+- **控制台噪声** —— `EntityGet` 不再每次求值都 print（成功静默；干跑只记一条结构化
+  `not_found`）。新增 `Utils/Dev/print_audit.py` + `Doc/Dev/print_inventory.md`
+  （543 条裸 `print()`，热路径 49 条），并用新鲜度测试保证新增 print 形成可评审的 diff。
+
+## 1.0.3 — 2026-11-01
+
+### English
+
 - **Pin-type-aware input reading** — new `evaluators.inputs.read_pin()` is the single
   reader for data inputs: it converts by the pin's declared `data_type` (`string` → str,
   `bool`, `int`, `float`, everything else passed through) and falls back to the default

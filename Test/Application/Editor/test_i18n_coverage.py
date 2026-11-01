@@ -50,6 +50,25 @@ import re                                                                       
 _RESULTS = {"pass": 0, "fail": 0}
 
 
+def _official_node_types() -> list[str]:
+    """需要核心 Locale 提供显示名键的节点类型。
+
+    core 节点 + `official_extensions.json` 允许的官方扩展（随安装包分发，显示名由
+    核心 Locale 统一提供）。本地/第三方夹具自带目录且不进安装包，不拖累核心守卫。
+    """
+    from Application.Core.NodeGraph.node_packs import NodePackRegistry
+
+    official = {"core"}
+    try:
+        with open(os.path.join(_ROOT, "Application", "Functions",
+                               "official_extensions.json"), encoding="utf-8") as fh:
+            official |= {str(e.get("id") or "") for e in json.load(fh).get("extensions", [])}
+    except (OSError, ValueError):
+        pass
+    official.discard("")
+    return [t for t in _TYPES if NodePackRegistry.owner_of(t) in official]
+
+
 def check(label: str, cond: bool, detail: str = "") -> None:
     tag = "PASS" if cond else "FAIL"
     _RESULTS["pass" if cond else "fail"] += 1
@@ -108,7 +127,7 @@ def main() -> int:
     mismatch = [k for k in en_keys & zh_keys
                 if tool.placeholders(en["strings"][k]) != tool.placeholders(zh["strings"][k])]
     check("占位符集合跨语言一致", not mismatch, str(mismatch[:3]))
-    node_missing = [node_key(t) for t in _TYPES
+    node_missing = [node_key(t) for t in _official_node_types()
                     if node_key(t) not in en_keys or node_key(t) not in zh_keys]
     comp_missing = [component_key(c) for c in
                     ("Transform", "MeshRenderer", "Camera", "MediaPlayer", "Light", "TextDisplay")

@@ -8,14 +8,14 @@
 | 区域 | print 条数 |
 |---|---:|
 | Functions | 219 |
-| Editor | 173 |
-| Core | 104 |
-| Runtime | 46 |
-| Resource | 4 |
+| Editor | 183 |
+| Core | 106 |
+| Runtime | 49 |
+| Resource | 5 |
 | other | 2 |
-| **合计** | **548** |
+| **合计** | **564** |
 
-热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **49** 条。
+热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **50** 条。
 
 保留项（不是调试遗留）: `Application/Core/NodeGraph/evaluators/debug.py`
 （`Print` / `PrintString` 节点的输出语义本身）。
@@ -27,8 +27,8 @@
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
 | `Application/Core/NodeGraph/evaluators/io.py` | 4 |
 | `Application/Runtime/GameRuntime.py` | 4 |
+| `Application/Runtime/RuntimeNodeLayer.py` | 4 |
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |
-| `Application/Runtime/RuntimeNodeLayer.py` | 3 |
 | `Application/Core/NodeGraph/evaluators/entity/camera.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/destroy.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/mesh.py` | 2 |
@@ -45,17 +45,17 @@
 
 | 文件 | 条数 |
 |---|---:|
-| `Application/Editor/ProjectManager.py` | 47 |
+| `Application/Editor/ProjectManager.py` | 51 |
 | `Application/Runtime/PlayerBootstrap.py` | 34 |
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
 | `Application/Editor/UI/panels/node_editor/panel.py` | 19 |
-| `Application/Editor/Services/LiveCommandServer.py` | 12 |
-| `Application/Editor/UI/controllers/SimulationController.py` | 11 |
+| `Application/Editor/Services/LiveCommandServer.py` | 14 |
+| `Application/Editor/UI/controllers/SimulationController.py` | 12 |
 | `Application/Editor/UI/controllers/SceneBrowserController.py` | 10 |
+| `Application/Editor/Extensions/ExtensionManager.py` | 9 |
 | `Application/Core/Window/glfwWindow.py` | 8 |
 | `Application/Core/Project/RuntimeProjectLoader.py` | 7 |
 | `Application/Core/Renderer/ZenGL/ZenGLOverlays.py` | 7 |
-| `Application/Editor/Extensions/ExtensionManager.py` | 7 |
 | `Application/Editor/UI/panels/ScenePanel.py` | 7 |
 | `Application/Core/Renderer/ZenGL/ZenGLResourceManager.py` | 6 |
 | `Application/Editor/EditorImguiLayer.py` | 6 |
@@ -67,7 +67,9 @@
 | `Application/Core/Media/MediaSystem.py` | 4 |
 | `Application/Core/NodeGraph/canvas.py` | 4 |
 | `Application/Core/NodeGraph/evaluators/io.py` | 4 |
+| `Application/Resource/ResourceManager.py` | 4 |
 | `Application/Runtime/GameRuntime.py` | 4 |
+| `Application/Runtime/RuntimeNodeLayer.py` | 4 |
 | `Application/Core/Engine.py` | 3 |
 | `Application/Core/NodeGraph/evaluator_engine.py` | 3 |
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |
@@ -75,14 +77,13 @@
 | `Application/Editor/EditorLayer.py` | 3 |
 | `Application/Editor/UI/UIManager.py` | 3 |
 | `Application/Editor/UI/panels/node_editor/group_context.py` | 3 |
-| `Application/Resource/ResourceManager.py` | 3 |
-| `Application/Runtime/RuntimeNodeLayer.py` | 3 |
 | `Application/Core/AppIdentity.py` | 2 |
 | `Application/Core/DeviceRegistry.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/debug.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/camera.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/destroy.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/mesh.py` | 2 |
+| `Application/Core/Renderer/OpenGL/OpenGLEntities.py` | 2 |
 | `Application/Core/Renderer/ZenGL/ZenGLRenderer.py` | 2 |
 | `Application/Editor/EditorGizmoLayer.py` | 2 |
 | `Application/Editor/EditorModule.py` | 2 |
@@ -92,6 +93,7 @@
 | `Application/Editor/UI/controllers/ResourceBrowserController.py` | 2 |
 | `Application/Editor/UI/panels/node_editor/io.py` | 2 |
 | `Application/Editor/UI/panels/node_editor/selection.py` | 2 |
+| `Application/Runtime/RuntimeUILayer.py` | 2 |
 | `Application/Runtime/StubWindow.py` | 2 |
 | `Application/Core/Extension/ExtensionContext.py` | 1 |
 | `Application/Core/NodeGraph/evaluators/action.py` | 1 |
@@ -104,6 +106,7 @@
 | `Application/Core/Scene/SceneSync.py` | 1 |
 | `Application/Editor/EditorDebugLayer.py` | 1 |
 | `Application/Editor/Gizmos/TransformGizmo.py` | 1 |
+| `Application/Editor/HotkeyDispatch.py` | 1 |
 | `Application/Editor/I18n.py` | 1 |
 | `Application/Editor/StartupOptions.py` | 1 |
 | `Application/Editor/UI/controllers/SelectionController.py` | 1 |

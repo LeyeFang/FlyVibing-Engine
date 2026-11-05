@@ -131,6 +131,49 @@ def main() -> int:
         check("3D + windowed → override (900,600)",
               RuntimeWindow._default_size_override == (900, 600))
 
+        # ── 7. Overlay 覆盖层固定无边框全屏 (窗口化不再泄漏标题栏) ──
+        SC.set_pie_settings(mode="windowed", width=900, height=600)
+        SC._apply_pie_window_prefs(GameType.OVERLAY)
+        check("Overlay + windowed → 强制 BORDERLESS + 无尺寸覆盖",
+              RuntimeWindow._window_mode == WindowMode.BORDERLESS
+              and RuntimeWindow._default_size_override is None,
+              f"mode={RuntimeWindow._window_mode} ov={RuntimeWindow._default_size_override}")
+
+        SC.set_pie_settings(mode="borderless", width=1280, height=720)
+        SC._apply_pie_window_prefs(GameType.GAME_2D)
+        check("2D + borderless → BORDERLESS (与 overlay 同枚举但允许切换)",
+              RuntimeWindow._window_mode == WindowMode.BORDERLESS)
+
+        RuntimeWindow.apply_start_preferences("overlay", 900, 600)
+        check("apply_start_preferences('overlay') → BORDERLESS + override None",
+              RuntimeWindow._window_mode == WindowMode.BORDERLESS
+              and RuntimeWindow._default_size_override is None)
+
+        # ── 8. get_window_profile — Settings ▸ Export 差异化控件数据源 ──
+        overlay_prof = SC.get_window_profile("overlay")
+        check("profile(overlay): fixed + 只允许 borderless",
+              overlay_prof["fixed"] is True
+              and overlay_prof["mode"] == "borderless"
+              and overlay_prof["allowed"] == ("borderless",), str(overlay_prof))
+        three_d = SC.get_window_profile(GameType.GAME_3D)
+        check("profile(3d): 非 fixed + 三种模式可选",
+              three_d["fixed"] is False and three_d["allowed"] == SC._PIE_MODES
+              and three_d["mode"] == "borderless", str(three_d))
+
+        # ── 9. 导出成品: game.json window 配置 → 窗口模式/尺寸 ──
+        from Application.Runtime.PlayerBootstrap import PlayerSession, resolve_window_mode
+        _sess = PlayerSession(source="x", source_kind="game")
+        check("PlayerSession 默认 windowed 尺寸 1280×720",
+              (_sess.window_width, _sess.window_height) == (1280, 720))
+        _ov = PlayerSession(source="x", source_kind="game")
+        _ov.scene = type("S", (), {"game_type": GameType.OVERLAY})()
+        check("resolve_window_mode: overlay 场景 → 'overlay'", resolve_window_mode(_ov) == "overlay")
+        _plain = PlayerSession(source="x", source_kind="game")
+        _plain.scene = type("S", (), {"game_type": GameType.GAME_3D})()
+        check("resolve_window_mode: 3D 场景 → 'windowed'", resolve_window_mode(_plain) == "windowed")
+        _explicit = PlayerSession(source="x", source_kind="game", window_mode="fullscreen")
+        check("resolve_window_mode: 显式配置优先", resolve_window_mode(_explicit) == "fullscreen")
+
     finally:
         SC._PIE_SETTINGS_PATH = orig_path
         SC._pie_mode, SC._pie_width, SC._pie_height = orig_vals

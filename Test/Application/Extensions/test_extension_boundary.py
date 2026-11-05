@@ -68,13 +68,27 @@ def check(label: str, cond: bool, detail: str = "") -> None:
     print(f"  [{tag}] {label}{suffix}")
 
 
+def _is_skipped_path(path: str) -> bool:
+    """是否在豁免路径（本地挂载/本地夹具/运行产物）之下。"""
+    norm = os.path.normcase(path)
+    return any(norm == os.path.normcase(p) or norm.startswith(os.path.normcase(p) + os.sep)
+               for p in _SKIP_PATHS)
+
+
 def _builtin_ids() -> dict:
-    """扫描内置扩展根（Application/Functions/**/extension.json）→ {目录名: id}（递归）。"""
+    """扫描内置扩展根（Application/Functions/**/extension.json）→ {目录名: id}（递归）。
+
+    本地开发挂载（junction 到工作区外的扩展仓）在 `_SKIP_PATHS` 里 —— 它们是
+    git-ignored 的本地件，不属于“内置扩展清单”，不能把它们当作 whitelist 违规。
+    """
     found: dict[str, str] = {}
     root = os.path.join(_REPO, "Application", "Functions")
     if not os.path.isdir(root):
         return found
-    for cur, _dirs, files in os.walk(root):
+    for cur, dirs, files in os.walk(root):
+        if _is_skipped_path(cur):
+            dirs[:] = []
+            continue
         if "extension.json" not in files:
             continue
         name = os.path.basename(cur)
@@ -98,9 +112,7 @@ def _brand_hits() -> list:
         if not os.path.isdir(base):
             continue
         for cur, dirs, files in os.walk(base):
-            if any(os.path.normcase(cur) == os.path.normcase(p)
-                   or os.path.normcase(cur).startswith(os.path.normcase(p) + os.sep)
-                   for p in _SKIP_PATHS):
+            if _is_skipped_path(cur):
                 dirs[:] = []
                 continue
             dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]

@@ -11,6 +11,11 @@ generation 语义:
   - 每次 request 递增 generation; 只保留"最新未抓取"请求（旧请求被覆盖 → superseded）;
   - fetch(generation) 校验代数: 匹配 → ready; 已有更新代 → superseded; 尚未抓到 → pending。
 
+blank 语义（2026-11-01）:
+  - 渲染线程读回后看一眼是否**整帧全 0（RGBA 全透明）**; 是则置 blank=True。
+  - 全透明帧没有信息量（上下文刚建/窗口还没画/被遮挡）——上层（probe / capture）
+    靠它重试或显式告警，而不是把 0 当成"颜色就是黑"报给调用方。
+
 数据格式约定: 裸 RGBA8, bottom-up（GL 原生行序）; 翻转与 PNG 编码由 MCP 进程处理。
 """
 
@@ -64,6 +69,7 @@ class FrameCaptureSlot:
             "generation": latest_gen,
             "width": latest["width"],
             "height": latest["height"],
+            "blank": bool(latest.get("blank")),
             "payload": latest["payload"],
         }
 
@@ -76,14 +82,16 @@ class FrameCaptureSlot:
             self._pending_gen = None
             return gen
 
-    def publish(self, generation: int, width: int, height: int, payload: bytes) -> None:
-        """发布抓帧结果（裸 RGBA8, bottom-up）。"""
+    def publish(self, generation: int, width: int, height: int, payload: bytes,
+                blank: bool = False) -> None:
+        """发布抓帧结果（裸 RGBA8, bottom-up; blank=整帧全 0）。"""
         with self._lock:
             self._latest = {
                 "generation": generation,
                 "width": int(width),
                 "height": int(height),
                 "payload": payload,
+                "blank": bool(blank),
                 "error": None,
             }
 

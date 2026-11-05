@@ -110,6 +110,22 @@ def _win32_restore_chrome(hwnd: int) -> None:
     _user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, _SWP_FLAGS)
 
 
+def _win32_fill_rect(hwnd: int, x: int, y: int, width: int, height: int) -> None:
+    """把窗口精确铺到目标矩形（屏幕坐标）。
+
+    ★ 必须在 _win32_strip_chrome **之后** 调用: 剥掉 chrome 后非客户区为 0，
+    此时 SetWindowPos 的矩形就是客户区矩形，客户区才能真正铺满屏幕。
+    反过来做（先定位尺寸再剥 chrome）会让客户区保留 chrome 偏移：
+    左/上溢出屏外、右/下留缝（实测 -8,-31 1936x1100 @1920x1080）。
+    """
+    _SWP_NOZORDER = 0x0004
+    _SWP_NOACTIVATE = 0x0010
+    _SWP_FRAMECHANGED = 0x0020
+    _user32.SetWindowPos(
+        hwnd, 0, int(x), int(y), int(width), int(height),
+        _SWP_NOZORDER | _SWP_NOACTIVATE | _SWP_FRAMECHANGED)
+
+
 # ═══════════════════════════════════════════════════════════════
 # glfwWindow
 # ═══════════════════════════════════════════════════════════════
@@ -262,7 +278,7 @@ class glfwWindow(Window):
             glfw.terminate()
             return
 
-        # ── 无边框窗口定位到 (0,0) + 剥离 chrome ──
+        # ── 无边框窗口定位到 (0,0) + 剥 chrome + 精确铺满屏幕 ──
         if cls._window_mode == WindowMode.BORDERLESS:
             glfw.set_window_pos(glfw_window, 0, 0)
 
@@ -275,10 +291,14 @@ class glfwWindow(Window):
             x, y = glfw.get_window_pos(glfw_window)
             cls._saved_window_rect = (x, y, width, height)
 
-        # ── BORDERLESS: Win32 剥离标题栏/边框 (保持 WS_OVERLAPPED 兼容 DWM) ──
+        # ── BORDERLESS: Win32 剥标题栏/边框 (保持 WS_OVERLAPPED 兼容 DWM) ──
+        #    ★ 顺序: 先剥 chrome → 再按屏幕尺寸重设矩形
+        #      剥离会改变非客户区；反过来会让客户区带 chrome 偏移 (左/上溢出、右/下留缝)
         if cls._window_mode == WindowMode.BORDERLESS:
             hwnd = glfw.get_win32_window(glfw_window)
             _win32_strip_chrome(hwnd)
+            _win32_fill_rect(hwnd, 0, 0, sys_w, sys_h)
+            width, height = sys_w, sys_h
 
         print(f"[glfwWindow] Created: {width}x{height} mode={cls._window_mode.value}")
 
@@ -372,13 +392,12 @@ class glfwWindow(Window):
                 glfw.set_window_pos(cls.glfw_window, r[0], r[1])
 
         elif mode == WindowMode.BORDERLESS:
-            # ── 进入无边框窗口化 → Win32 剥离 chrome ──
+            # ── 进入无边框窗口化 → 先剥 chrome, 再精确铺满屏幕 ──
             if prev != WindowMode.BORDERLESS:
                 cls._saved_window_rect = cls._get_current_rect()
             hwnd = glfw.get_win32_window(cls.glfw_window)
-            glfw.set_window_size(cls.glfw_window, sys_w, sys_h)
-            glfw.set_window_pos(cls.glfw_window, 0, 0)
             _win32_strip_chrome(hwnd)
+            _win32_fill_rect(hwnd, 0, 0, sys_w, sys_h)
 
         cls._window_mode = mode
         print(f"[glfwWindow] Mode: {prev.value} → {mode.value}")
@@ -493,25 +512,52 @@ class glfwWindow(Window):
         光标在客户区内 → 调用 _is_click_through_target 判定:
           - True  → 关闭穿透 (捕获鼠标事件)
           - False → 开启穿透 (事件传到后方窗口)
+
+        ★ 坐标一律用窗口坐标 (get_window_size) 判定; 只在送 pick 时按
+          framebuffer/window 比例换算成像素 — 高 DPI 下两者不等。
+        ★ 先把真实光标位置推进 pick 采样点: 穿透窗口在透明处收不到
+          WM_MOUSEMOVE, 仅靠事件路径会让命中判定停在旧位置 (永远穿透)。
         """
         hwnd = glfw.get_win32_window(cls.glfw_window)
+        win_w, win_h = glfw.get_window_size(cls.glfw_window)
         fbw, fbh = glfw.get_framebuffer_size(cls.glfw_window)
         cx, cy = glfw.get_cursor_pos(cls.glfw_window)
+        if win_w <= 0 or win_h <= 0:
+            return
 
         # 透明窗口下 GLFW 将标题栏坐标报告为负值 — cy < 0 即非客户区
-        in_client = (0.0 <= cx < fbw) and (0.0 <= cy < fbh)
+        in_client = (0.0 <= cx < win_w) and (0.0 <= cy < win_h)
 
         if not in_client:
             # 非客户区 — 强制关闭穿透，保证标题栏/边框可操作
             _win32_remove_style(hwnd, _WS_EX_TRANSPARENT)
         else:
-            # 客户区内 — 根据子类覆写的命中测试判定
-            ndc_x = (cx / fbw) * 2.0 - 1.0
-            ndc_y = 1.0 - (cy / fbh) * 2.0
+            # 客户区内 — 用真实光标位置推进 pick (像素坐标), 再做命中测试
+            scale_x = fbw / win_w
+            scale_y = fbh / win_h
+            cls._sync_pick_cursor(cx * scale_x, cy * scale_y)
+            ndc_x = (cx / win_w) * 2.0 - 1.0
+            ndc_y = 1.0 - (cy / win_h) * 2.0
             if cls._is_click_through_target(ndc_x, ndc_y):
                 _win32_remove_style(hwnd, _WS_EX_TRANSPARENT)
             else:
                 _win32_add_style(hwnd, _WS_EX_TRANSPARENT)
+
+    @classmethod
+    def _sync_pick_cursor(cls, x: float, y: float) -> None:
+        """把真实光标位置 (framebuffer 像素) 同步给渲染器 pick 采样点。
+
+        Overlay 穿透窗口在透明区域根本不收 WM_MOUSEMOVE, 事件路径
+        (MouseMoveEvent → update_pick_mouse) 会停在最后位置。
+        """
+        engine = cls._engine
+        renderer = getattr(engine, "renderer", None) if engine is not None else None
+        if renderer is None:
+            return
+        try:
+            renderer.update_pick_mouse(float(x), float(y))
+        except Exception:  # noqa: BLE001 — 无 pick 实现的后端直接跳过
+            pass
 
     @classmethod
     def _is_click_through_target(cls, ndc_x: float, ndc_y: float) -> bool:

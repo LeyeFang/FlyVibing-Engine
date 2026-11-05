@@ -189,6 +189,14 @@ MENU_SECTIONS: list[tuple[str, list]] = [
         ("Show Media", "ShowMedia"),
     ]),
 
+    # ── 运行期 UI（场景驱动 UI 组件 — 协议 runtime_ui_protocol.md）──
+    ("UI", [
+        ("Set UI Visible", "SetUIVisible"),
+        ("Set UI Text", "SetUIText"),
+        ("On UI Click", "OnUIClick"),
+        ("Get UI Value", "GetUIValue"),
+    ]),
+
     # ── 设备 / 文件输出 ─────────────────────────────────────
     ("IO", [
         ("File", [

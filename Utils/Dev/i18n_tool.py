@@ -117,8 +117,8 @@ def scan_code_keys() -> tuple[dict, list]:
     return used, problems
 
 
-# 动态显示名命名空间（节点/组件注册表在运行期拼键；由覆盖测试保证完整）
-_DYNAMIC_KEY_PREFIXES = ("node.", "comp.", "menu.node_group.")
+# 动态显示名命名空间（节点/组件/热键注册表在运行期拼键；由覆盖测试保证完整）
+_DYNAMIC_KEY_PREFIXES = ("node.", "comp.", "menu.node_group.", "hotkey.")
 
 
 BASELINE_PATH = os.path.join(REPO, "Doc", "Dev", "i18n_baseline.json")

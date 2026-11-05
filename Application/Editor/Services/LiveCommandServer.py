@@ -341,8 +341,23 @@ class LiveCommandServer:
             "resource.list": cls._op_resource_list,
             "resource.find": cls._op_resource_find,
             "resource.material.get": cls._op_resource_material_get,
+            "hotkeys.list": cls._op_hotkeys_list,
             "editor.quit": cls._op_editor_quit,
         }
+
+    @staticmethod
+    def _op_hotkeys_list(args: dict) -> dict:
+        """热键总表（Help ▸ Hot Keys 面板同源）。`scope` 可选：过滤作用域。"""
+        from Application.Core.Input.Hotkeys import SCOPE_ORDER, snapshot
+        from Application.Editor.HotkeyActions import register_editor_hotkeys
+        from Application.Editor.I18n import t_optional
+
+        register_editor_hotkeys()      # 面板/CLI 先于装配期调用时的保险（幂等）
+        scope = str(args.get("scope") or "").strip().lower() or None
+        if scope is not None and scope not in SCOPE_ORDER:
+            raise ValueError(f"unknown scope {scope!r} (expected one of {', '.join(SCOPE_ORDER)})")
+        rows = snapshot(t_optional, scope=scope)
+        return {"count": len(rows), "scopes": list(SCOPE_ORDER), "hotkeys": rows}
 
     @staticmethod
     def _op_threads_snapshot(args: dict) -> dict:
@@ -477,16 +492,42 @@ class LiveCommandServer:
                 "note": "already running/paused",
             }
         force = bool(args.get("force"))
+        auto_fix = bool(args.get("auto_fix"))
         problems = [] if force else SimulationController.preflight_problems()
+        fixed: list[str] = []
+        if problems and auto_fix:
+            # 一键修复: 启用缺失扩展 → 画布就地补位 → 重跑预检
+            from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+            for p in problems:
+                for ext_id in p.get("owners", []) or []:
+                    try:
+                        ExtensionManager.enable(str(ext_id))
+                        fixed.append(str(ext_id))
+                    except Exception as exc:  # noqa: BLE001 — 单个扩展失败不拖垮尝试
+                        print(f"[Live] auto_fix: enable {ext_id} failed: {exc}")
+            if fixed:
+                problems = SimulationController.preflight_problems()
         if problems:
             for p in problems:
                 print(f"[Live] ERROR: {p.get('message')}")
-            return {
+            payload = {
                 "requested": False,
                 "error": "preflight_failed",
                 "problems": problems,
-                "note": "run aborted before PIE start; pass force=true to override",
+                "note": "run aborted before PIE start; pass force=true to override, "
+                        "auto_fix=true to enable the missing extensions first",
             }
+            if fixed:
+                payload["auto_fix_applied"] = fixed
+            return payload
+        if force:
+            unknown = getattr(SimulationController._active_canvas(), "unknown_node_types", None) or {}
+            SimulationController.forced_unknown_types = dict(unknown)
+            if unknown:
+                print(f"[Live] WARNING: force=true — running with unregistered node types: "
+                      f"{', '.join(sorted(unknown))}")
+        else:
+            SimulationController.forced_unknown_types = {}
         warning = LiveCommandServer._pie_runnability_warning()
         if warning:
             print(f"[Live] WARNING: {warning}")
@@ -497,6 +538,8 @@ class LiveCommandServer:
         else:
             result["state"] = SimulationController.get_state_label()
             result["error"] = SimulationController.last_error or "play refused"
+        if fixed:
+            result["auto_fix_applied"] = fixed
         if warning:
             result["warning"] = warning
         return result
@@ -906,7 +949,9 @@ class LiveCommandServer:
         except Exception:  # noqa: BLE001
             running = False
         return {"state": SimulationController.get_state_label(), "runtime_alive": running,
-                "last_error": getattr(SimulationController, "last_error", "")}
+                "last_error": getattr(SimulationController, "last_error", ""),
+                "forced_unknown_types": dict(getattr(
+                    SimulationController, "forced_unknown_types", {}) or {})}
 
     @staticmethod
     def _op_camera_get(args: dict) -> dict:
@@ -1442,9 +1487,61 @@ class LiveCommandServer:
             "scenes": SceneBrowserController.get_scene_names(),
             "active": SceneBrowserController.get_active_scene_name(),
         }
+        # 引用审计（材质/网格 id 不在活表 → 点名，避免“静默变白”）
+        audit = dict(getattr(ProjectManager, "last_reference_audit", {}) or {})
+        if audit:
+            result["reference_audit"] = audit
+            if audit.get("missing_materials") or audit.get("missing_meshes"):
+                result["warning"] = (
+                    f"{len(audit.get('missing_materials', []))} material / "
+                    f"{len(audit.get('missing_meshes', []))} mesh references are not "
+                    "registered in this session — entities render with the default material")
+        # 缺失扩展（图里有 ext.<id>.* 节点但扩展未启用 → 提前告知）
+        missing_exts = LiveCommandServer._missing_extensions_for_graph()
+        if missing_exts:
+            result["missing_extensions"] = missing_exts
+            result.setdefault("hint", "enable them: extension.enable id=<ext>")
         if previous_name and not previous_saved:
             result["warning"] = f"previous project '{previous_name}' had unsaved changes"
         return result
+
+    @staticmethod
+    def _missing_extensions_for_graph() -> list[str]:
+        """当前画布用到的 `ext.<id>.*` 节点里，对应扩展**未启用**的 id 清单。
+
+        用途: 打开工程时就告诉用户"这张图需要哪些扩展"（ISSUE 2026-11-03 §4.2），
+        不用等到 `sim.play` 预检才暴露。派生自节点类型前缀，不需要改 `.myproj` schema。
+        """
+        canvas = None
+        try:
+            from Application.Editor.UI.UIManager import UIManager
+            panel = UIManager.find("Node Editor")
+            canvas = getattr(panel, "_canvas", None) if panel is not None else None
+        except Exception:  # noqa: BLE001 — 无头环境没有面板
+            canvas = None
+        if canvas is None:
+            try:
+                from Application.Editor.EditorHost import EditorHost
+                scene = EditorHost.get_active_scene()
+                canvas = getattr(scene, "node_graph", None) if scene is not None else None
+            except Exception:  # noqa: BLE001
+                canvas = None
+        nodes = getattr(canvas, "nodes", None) or {}
+        owners: set[str] = set()
+        for inst in nodes.values():
+            ntype = str(getattr(inst, "node_type", "") or "")
+            if ntype.startswith("ext.") and ntype.count(".") >= 2:
+                owners.add(ntype.split(".", 2)[1])
+        if not owners:
+            return []
+        try:
+            from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+            ExtensionManager.ensure_init()
+            enabled = {str(info.get("id", "")) for info in ExtensionManager.list_infos()
+                       if info.get("enabled")}
+        except Exception:  # noqa: BLE001 — 扩展体系不可用 → 不误报
+            return []
+        return sorted(owners - enabled)
 
     @staticmethod
     def _op_project_save(args: dict) -> dict:
@@ -1564,7 +1661,14 @@ class LiveCommandServer:
         from Application.Editor.Extensions.ExtensionManager import ExtensionManager
 
         info = ExtensionManager.enable(ext_id)
-        return {"extension": info, "extension_ops": LiveCommandServer.extension_ops_snapshot()}
+        result = {"extension": info, "extension_ops": LiveCommandServer.extension_ops_snapshot()}
+        recovered = list(getattr(ExtensionManager, "last_rehydrated_nodes", []) or [])
+        if recovered:
+            result["rehydrated_nodes"] = recovered
+            result["note"] = ("previously-unknown nodes were re-resolved in the open canvas; "
+                              "no scene reload needed")
+            ExtensionManager.last_rehydrated_nodes = []
+        return result
 
     @staticmethod
     def _op_extension_disable(args: dict) -> dict:
@@ -1575,7 +1679,15 @@ class LiveCommandServer:
         from Application.Editor.Extensions.ExtensionManager import ExtensionManager
 
         info = ExtensionManager.disable(ext_id)
-        return {"extension": info, "extension_ops": LiveCommandServer.extension_ops_snapshot()}
+        result = {"extension": info, "extension_ops": LiveCommandServer.extension_ops_snapshot()}
+        unresolved = int(getattr(ExtensionManager, "last_disable_unresolved", 0) or 0)
+        if unresolved:
+            result["unresolved_nodes"] = unresolved
+            result["warning"] = (
+                f"{unresolved} node(s) in the open graph use this extension and are no "
+                f"longer evaluated — sim.play will refuse until you re-enable it "
+                f"(or pass auto_fix=true)")
+        return result
 
     # ── settings.* ops（UI 同路径: Settings 面板 ▸ Common / Edit ▸ Preferences） ──
 
@@ -1644,6 +1756,7 @@ class LiveCommandServer:
             "height": int(info["height"]),
             "format": "rgba8",
             "origin": "bottom-left",
+            "blank": bool(info.get("blank")),
             "binary_bytes": len(payload),
             "_payload": payload,  # socket 线程: 行后追加裸负载; 不入 JSON
         })

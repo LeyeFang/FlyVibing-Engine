@@ -480,6 +480,34 @@
       "visualizes": []
     },
     {
+      "id": "core.window_click_through",
+      "path": "Test/Application/Core/test_window_click_through.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Window.glfwWindow"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.hotkeys",
+      "path": "Test/Application/Core/test_hotkeys.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "core.input",
+      "covers": [
+        "Application.Core.Input.Hotkeys",
+        "Application.Editor.HotkeyActions",
+        "Application.Editor.UI.panels.HotkeysPanel"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "editor.project_asset_commit",
       "path": "Test/Application/Editor/test_project_asset_commit.py",
       "tier": "core",
@@ -1003,6 +1031,60 @@
       "visualizes": []
     },
     {
+      "id": "core.frame_capture_slot",
+      "path": "Test/Application/Core/test_frame_capture_slot.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Renderer.FrameCaptureSlot"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.builtin_mesh_normals",
+      "path": "Test/Application/Core/test_builtin_mesh_normals.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Application.Resource.ResourceManager",
+        "Resource.Meshes.Builtin"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.canvas_unknown_types",
+      "path": "Test/Application/Core/test_canvas_unknown_types.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Application.Core.NodeGraph.canvas"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.scene_material_refs",
+      "path": "Test/Application/Core/test_scene_material_refs.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Scene.Scene",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "core.print_inventory",
       "path": "Test/Application/Core/test_print_inventory.py",
       "tier": "core",
@@ -1415,6 +1497,71 @@
         "Application.Core.Scene.SceneManager",
         "Application.Editor.UI.controllers.SimulationController",
         "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.runtime_ui",
+      "path": "Test/Application/Core/test_runtime_ui.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "core",
+      "covers": [
+        "Application.Core.UI.layout",
+        "Application.Core.UI.theme",
+        "Application.Runtime.RuntimeUILayer"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.ui_tree",
+      "path": "Test/Application/Core/test_ui_tree.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "core",
+      "covers": [
+        "Application.Core.UI.tree",
+        "Application.Core.UI.scene",
+        "Application.Core.UI.theme"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.ui_showcase",
+      "path": "Test/Application/Core/test_ui_showcase.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Scene.UIComponents",
+        "Application.Core.UI.tree",
+        "Application.Core.UI.scene",
+        "Examples.UIShowcase"
+      ],
+      "requires": [],
+      "exercises": [
+        "Examples/UIShowcase/scenes/UIShowcase.scene"
+      ],
+      "visualizes": []
+    },
+    {
+      "id": "core.ui_controls",
+      "path": "Test/Application/Core/test_ui_controls.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "core",
+      "covers": [
+        "Application.Core.UI.controls",
+        "Application.Core.UI.tree",
+        "Application.Runtime.RuntimeUILayer",
+        "Application.Core.NodeGraph.node_types.ui",
+        "Application.Core.NodeGraph.evaluators.ui"
       ],
       "requires": [],
       "exercises": [],

@@ -151,6 +151,10 @@ class ExtensionManager:
     _instances: dict[str, ExtensionBase] = {}
     _node_facades: dict[str, _ExtensionNodeRegistrar] = {}
     _example_facades: dict[str, object] = {}
+    # 最近一次 enable 就地恢复的节点（op 回执用）
+    last_rehydrated_nodes: list = []
+    # 最近一次 disable 后画布上变成“未注册类型”的节点数（面板 X=停用 的边界提示）
+    last_disable_unresolved: int = 0
     _scanned: bool = False
 
     # 挂起停用请求（窗口 X 关闭等可从渲染线程发起 — 实际执行在主线程 pump）
@@ -311,7 +315,32 @@ class ExtensionManager:
         except Exception:  # noqa: BLE001 — 无 UI 环境跳过
             pass
         cls._sync_ops(info)
+        # 已打开的画布就地补全此前“未知”的节点（ISSUE 2026-11-03）:
+        # 只 enable 不重载场景的话，画布仍缓存着 unknown，预检会继续拦截 —— 用户会以为
+        # hint 是错的。这里在加载成功后立刻补 pin 并重算 unknown 集合。
+        if info.loaded:
+            try:
+                cls._rehydrate_canvas()
+            except Exception:  # noqa: BLE001 — 无编辑器/无面板环境跳过
+                traceback.print_exc()
         return info.to_dict()
+
+    @classmethod
+    def _rehydrate_canvas(cls) -> list:
+        """让当前画布重新解析此前未注册的节点类型（返回恢复的节点 id）。"""
+        from Application.Editor.UI.UIManager import UIManager
+        panel = UIManager.find("Node Editor")
+        canvas = getattr(panel, "_canvas", None) if panel is not None else None
+        if canvas is None or not hasattr(canvas, "rehydrate_unknown"):
+            return []
+        recovered = canvas.rehydrate_unknown()
+        if recovered:
+            cls.last_rehydrated_nodes = list(recovered)
+            print(f"[Extensions] rehydrated {len(recovered)} previously-unknown "
+                  f"node(s): {recovered[:8]}")
+        else:
+            cls.last_rehydrated_nodes = []
+        return recovered
 
     @classmethod
     def disable(cls, ext_id: str) -> dict:
@@ -323,8 +352,31 @@ class ExtensionManager:
         info.enabled = False
         if info.loaded:
             cls._unload(info)
+        # ★ 边界提示（ISSUE 2026-11-03 §4.3）: 关面板→停用扩展（close_policy="disable"）
+        #   或手动 disable 时，画布上该扩展的节点会变成未注册类型（PIE 会被预检拦住）。
+        #   宿主不拦截这个选择，但必须说出来，而不是让人下次 Play 才发现。
+        cls.last_disable_unresolved = cls._count_canvas_nodes_owned(ext_id)
+        if cls.last_disable_unresolved:
+            print(f"[Extensions] WARNING: disabled '{ext_id}' while "
+                  f"{cls.last_disable_unresolved} node(s) in the open graph use it — "
+                  f"those nodes are no longer evaluated (sim.play will refuse; "
+                  f"auto_fix=true re-enables)")
         cls._sync_ops(info)
         return info.to_dict()
+
+    @classmethod
+    def _count_canvas_nodes_owned(cls, ext_id: str) -> int:
+        """当前画布上引用 `ext.<id>.*` 的节点数（无画布/无面板 → 0）。"""
+        try:
+            from Application.Editor.UI.UIManager import UIManager
+            panel = UIManager.find("Node Editor")
+            canvas = getattr(panel, "_canvas", None) if panel is not None else None
+            nodes = getattr(canvas, "nodes", None) or {}
+            prefix = f"ext.{ext_id}."
+            return sum(1 for inst in nodes.values()
+                       if str(getattr(inst, "node_type", "") or "").startswith(prefix))
+        except Exception:  # noqa: BLE001 — 无头环境
+            return 0
 
     @classmethod
     def toggle(cls, ext_id: str, on: bool) -> dict:

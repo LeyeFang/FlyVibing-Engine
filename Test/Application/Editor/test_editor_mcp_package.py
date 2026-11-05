@@ -38,6 +38,7 @@ for _p in (ROOT, SRC):
         sys.path.insert(0, _p)
 
 from engine_editor_mcp import __version__, docgen, ops  # noqa: E402
+from engine_editor_mcp import client as mcp_client  # noqa: E402
 from engine_editor_mcp import server  # noqa: E402
 
 _failures: list[str] = []
@@ -73,7 +74,7 @@ def test_registry() -> None:
     src = os.path.join(ROOT, "Application", "Editor", "Services", "LiveCommandServer.py")
     with open(src, encoding="utf-8") as fh:
         engine_ops = set(re.findall(r'"([a-z_]+\.[a-z_.]+)":\s*cls\._op_', fh.read()))
-    check("engine ops found (75)", len(engine_ops) == 75, str(sorted(engine_ops)))
+    check("engine ops found (76)", len(engine_ops) == 76, str(sorted(engine_ops)))
     check("registry covers engine ops", engine_ops <= set(ops.OPS), str(engine_ops - set(ops.OPS)))
     check("no extra registry ops", set(ops.OPS) <= engine_ops, str(set(ops.OPS) - engine_ops))
     check("aliases resolve", ops.resolve("editor_run_pie") == ("sim.play", {}), str(ops.resolve("editor_run_pie")))
@@ -198,6 +199,9 @@ def test_cli() -> None:
     code, out, err = _run_cli(["ops"])
     check("ops exit 0", code == 0, err)
     check("ops lists sim.play", "sim.play" in out)
+    # C2 (2026-11-01): 非 op 子命令必须能从 ops 目录发现（probe 曾经只能靠猜）
+    check("ops lists non-op channels", "非 op 通道" in out and "probe" in out, out[-400:])
+    check("ops lists help topics", "exitcodes" in out, out[-300:])
 
     code, out, err = _run_cli(["help", "entity.add"])
     check("help entity.add exit 0", code == 0, err)
@@ -205,6 +209,13 @@ def test_cli() -> None:
 
     code, out, err = _run_cli(["help", "editor_run_pie"])
     check("help alias -> sim.play", code == 0 and "sim.play" in out, out)
+
+    code, out, err = _run_cli(["help", "probe"])
+    check("help probe exit 0", code == 0 and "顶左" in out, out[:200])
+    check("help probe explains blank frames", "blank" in out or "全透明" in out, out[:300])
+
+    code, out, err = _run_cli(["help", "exitcodes"])
+    check("help exitcodes documents exit codes", code == 0 and "2 =" in out, out[:200])
 
     code, out, err = _run_cli(["call", "sim.state"], env_extra=offline_env)
     check("call offline exit 1", code == 1, str(code))
@@ -385,6 +396,59 @@ def test_wheel() -> None:
         check("wheel cli console script", "engine-editor-cli" in ep)
 
 
+def test_probe_blank() -> None:
+    """C3 (2026-11-01): 全透明帧不能静静当“颜色就是黑”报出去。
+
+    锁定: fetch_raw_frame 透出引擎的 blank 标志；CLI probe 遇 blank 自动重抓。
+    """
+    print("-- 9. probe blank 透传 / 重试 --")
+    import contextlib
+    import io
+    import types
+
+    from engine_editor_mcp import cli as cli_mod
+
+    calls = {"request": 0, "fetch": 0}
+
+    def fake_send(op, args=None, timeout=15.0, **kwargs):
+        if op == "frame.request":
+            calls["request"] += 1
+            return {"generation": calls["request"]}, None
+        if op == "frame.fetch":
+            calls["fetch"] += 1
+            return ({"ready": True, "width": 2, "height": 1, "blank": True,
+                     "generation": (args or {}).get("generation")},
+                    bytes(2 * 1 * 4))
+        return {"error": f"unexpected op {op}"}, None
+
+    original = mcp_client.send_raw
+    mcp_client.send_raw = fake_send
+    try:
+        frame = mcp_client.fetch_raw_frame("editor", 1.0)
+        check("fetch_raw_frame exposes blank", frame.get("blank") is True, str(frame.get("blank")))
+
+        calls["request"] = calls["fetch"] = 0
+        ns = types.SimpleNamespace(target="editor", points="0:0", timeout=1.0, no_retry=False)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(io.StringIO()):
+            code = cli_mod.cmd_probe(ns)
+        payload = json.loads(buf.getvalue().strip() or "{}")
+        check("probe exit 0 on blank frame", code == 0, str(code))
+        check("probe retries blank frames", calls["request"] > 1, str(calls))
+        check("probe reports blank", payload.get("frame", {}).get("blank") is True,
+              json.dumps(payload)[:200])
+        check("probe reports attempts", payload.get("frame", {}).get("attempts") == calls["request"],
+              json.dumps(payload)[:200])
+
+        calls["request"] = calls["fetch"] = 0
+        ns_norety = types.SimpleNamespace(target="editor", points="0:0", timeout=1.0, no_retry=True)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            cli_mod.cmd_probe(ns_norety)
+        check("--no-retry disables retries", calls["request"] == 1, str(calls))
+    finally:
+        mcp_client.send_raw = original
+
+
 def main() -> int:
     print("== EditorMcp 独立包离线测试 ==")
     test_registry()
@@ -394,6 +458,7 @@ def main() -> int:
     test_setup()
     test_docgen()
     test_doc()
+    test_probe_blank()
     test_wheel()
     print()
     if _failures:

@@ -692,7 +692,10 @@ class Engine:
             gl.glReadBuffer(gl.GL_BACK)
             pixels = np.empty((height, width, 4), dtype=np.uint8)
             gl.glReadPixels(0, 0, width, height, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, pixels)
-            slot.publish(gen, width, height, pixels.tobytes())
+            # 全 0（含 alpha）说明这一帧什么都没画上：上下文刚建/窗口未呈现/被遮挡。
+            # 标出来让 probe 重试、capture 告警 —— 不要让它伪装成"画面是黑的"。
+            blank = not pixels.any()
+            slot.publish(gen, width, height, pixels.tobytes(), blank=bool(blank))
         except Exception as e:  # noqa: BLE001
             slot.publish_error(gen, f"{type(e).__name__}: {e}")
 

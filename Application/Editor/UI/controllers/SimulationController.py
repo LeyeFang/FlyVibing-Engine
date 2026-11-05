@@ -19,11 +19,19 @@ class SimulationController:
     _pending_start: bool = False
     # 上次 PIE 启动失败原因 (章 T M2: 显式错误态; sim.state 可查) — 成功启动时清空
     last_error: str = ""
+    # force=true 越过预检时保留的未注册类型（运行期持续可见 — 不是只警告一次）
+    forced_unknown_types: dict = {}
     _pending_stop: bool = False
 
     # ── PIE 初始窗口偏好 (Play 下方 Settings 按钮; 持久化 Application/Editor/Config/PIE.json) ──
+    #    2D / 3D: 三种模式可选 + 窗口化尺寸 (见 _PIE_MODES)
+    #    Overlay: 覆盖层固定无边框全屏 (见 _OVERLAY_MODE) — 不读取配置文件里的模式/尺寸
     _PIE_SETTINGS_PATH: str = "Application/Editor/Config/PIE.json"
     _PIE_MODES: tuple = ("windowed", "borderless", "fullscreen")
+    # Overlay 覆盖层唯一允许的窗口模式 (无标题栏 + 铺满显示器):
+    #   - fullscreen (独占全屏) 不支持透明帧缓冲 → 透明/输入穿透失效 (glfwWindow 已警示)
+    #   - windowed 会露出标题栏且不铺满屏幕 → 不是覆盖层
+    _OVERLAY_MODE: str = "borderless"
     _pie_mode: str = "windowed"
     _pie_width: int = 1280
     _pie_height: int = 720
@@ -76,16 +84,45 @@ class SimulationController:
         return cls.get_pie_settings()
 
     @classmethod
+    def get_window_profile(cls, game_type) -> dict:
+        """按场景类型返回 PIE 窗口偏好画像 (供 Settings ▸ Export 渲染差异化控件)。
+
+        Args:
+            game_type: GameType 枚举 或 '3d' / '2d' / 'overlay' 字符串
+
+        Returns:
+            {game_type, mode, width, height, fixed, allowed}
+            fixed=True → Overlay 覆盖层: 模式不可选 (allowed 只有 borderless),
+                         width/height 只是占位, 实际由显示器决定
+        """
+        s = cls.get_pie_settings()
+        gv = game_type.value if hasattr(game_type, 'value') else str(game_type or "")
+        gv = gv.strip().lower()
+        if gv == "overlay":
+            return {"game_type": "overlay", "mode": cls._OVERLAY_MODE,
+                    "width": s["width"], "height": s["height"],
+                    "fixed": True, "allowed": (cls._OVERLAY_MODE,)}
+        return {"game_type": gv or "3d", "mode": s["mode"],
+                "width": s["width"], "height": s["height"],
+                "fixed": False, "allowed": cls._PIE_MODES}
+
+    @classmethod
     def _apply_pie_window_prefs(cls, game_type) -> None:
-        """PIE 启动前: 应用窗口偏好到 RuntimeWindow (下次 Run 生效)。"""
+        """PIE 启动前: 按场景类型应用窗口偏好到 RuntimeWindow (下次 Run 生效)。
+
+        Overlay 是覆盖层 — 一律无边框全屏 (标题栏隐藏 + 铺满显示器), 忽略配置里的模式;
+        2D / 3D 才使用 Settings 里选的模式与窗口化尺寸。
+        """
         from Application.Runtime.RuntimeWindow import RuntimeWindow
         from Application.Core.Scene.Scene import GameType
         s = cls.get_pie_settings()
-        mode = s["mode"]
-        if game_type == GameType.OVERLAY and mode == "fullscreen":
-            mode = "borderless"   # 独占全屏与透明 Overlay 不兼容 (glfwWindow 已警示)
-            print("[Simulation] Overlay 模式不支持独占全屏 — 回退 borderless")
-        RuntimeWindow.apply_start_preferences(mode, s["width"], s["height"])
+        if game_type == GameType.OVERLAY:
+            RuntimeWindow.apply_start_preferences(
+                cls._OVERLAY_MODE, s["width"], s["height"], overlay=True)
+            print(f"[Simulation] Overlay window locked to {cls._OVERLAY_MODE} "
+                  f"(title bar hidden, full screen) — mode setting ignored")
+            return
+        RuntimeWindow.apply_start_preferences(s["mode"], s["width"], s["height"])
 
     # ── 状态查询 ────────────────────────────────────────────
 
@@ -121,10 +158,12 @@ class SimulationController:
         """将 ECS 世界中的实体同步到 Scene.entities 注册表（PIE 模板来源）。
 
         白名单组件随模板进入运行时（EntitySpawn 实例化携带）:
-        Transform / Camera / MeshRenderer / MediaPlayer / Light / TextDisplay。
+        Transform / Camera / MeshRenderer / MediaPlayer / Light / TextDisplay /
+        UICanvas / UIRect / UIPanel / UILabel / UIButton。
         """
         import copy
         from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer, MediaPlayer, Light, TextDisplay
+        from Application.Core.Scene.UIComponents import UICanvas, UIRect, UIPanel, UILabel, UIButton
         from Application.Core.Scene.Scene import EntityData
 
         if scene_mgr is None:
@@ -175,6 +214,14 @@ class SimulationController:
                 comps["TextDisplay"] = copy.deepcopy(td)
             except Exception:
                 pass
+            # ── 运行期 UI 组件（场景驱动 UI，见 Core/Scene/UIComponents.py）──
+            for _ui_name, _ui_cls in (("UICanvas", UICanvas), ("UIRect", UIRect),
+                                      ("UIPanel", UIPanel), ("UILabel", UILabel),
+                                      ("UIButton", UIButton)):
+                try:
+                    comps[_ui_name] = copy.deepcopy(scene_mgr.GetComponent(eid, _ui_cls))
+                except Exception:
+                    pass
             scene.entities[eid] = EntityData(name=name, components=comps, parent_id=parent_id)
 
     # ── 宿主桥接实现 (供 GameRuntime 回呼; 运行时侧无 Editor 依赖) ──
@@ -228,10 +275,29 @@ class SimulationController:
                 rt.entities[str(eid)] = 1
                 rt._entity_names[eid] = name
                 mesh_count += 1
+        # ★ 同步 UI 实体到 Runtime（运行期 UI 层按该实例的实体表枚举 UI 组件）
+        #    UI 实体没有 MeshRenderer（不进实体 pass），且不做模板实例化 —— 直接登记。
+        #    ★ UI 的层级就是布局语义（子相对父矩形 + 父可见性传递）→ 必须一并复制父链。
+        ui_count = 0
+        try:
+            from Application.Core.Scene.UIComponents import UIRect
+            for eid, _ in esper.get_component(UIRect):
+                with rt._entities_lock:
+                    if str(eid) in rt.entities:
+                        continue
+                    rt.entities[str(eid)] = 1
+                    rt._entity_names[eid] = editor_scene._entity_names.get(eid, f"UI_{eid}")
+                    parent = editor_scene._entity_parent.get(eid)
+                    if parent:
+                        rt._entity_parent[eid] = int(parent)
+                    ui_count += 1
+        except Exception as e:  # noqa: BLE001 — 旧工程没有 UI 组件时跳过
+            print(f"[Simulation] UI entity sync skipped: {e!r}")
         # ★ 根据 game_type 选择活跃摄像机
         rt.cam_mgr._apply(rt)
         print(f"[Simulation] Synced from editor: game_type={editor_scene.game_type.value}, "
               f"camera_id={rt.scene_camera_id}, mesh_entities={mesh_count}"
+              f", ui_entities={ui_count}"
               f"{f' (skipped {skipped_templates} templates)' if skipped_templates else ''}")
 
     @staticmethod
@@ -270,15 +336,28 @@ class SimulationController:
         problems: list[dict] = []
         canvas = cls._active_canvas()
         unknown = getattr(canvas, "unknown_node_types", None) or {}
+        if canvas is not None and hasattr(canvas, "refresh_unknown_types"):
+            # ★ 按**当前**注册表重判（扩展可能在加载场景之后才启用）——
+            #   否则会误报“节点不执行”，用户照 hint 做完仍然起不来。
+            unknown = canvas.refresh_unknown_types()
         if unknown:
+            owners = sorted({name.split(".", 2)[1] for name in unknown
+                             if name.startswith("ext.") and name.count(".") >= 2})
+            fix: list[str] = []
+            if owners:
+                fix.extend(f"extension.enable id={ext}" for ext in owners)
+                fix.append("sim.play")
             problems.append({
                 "code": "unknown_node_types",
                 "message": ("node graph has unregistered node types — they are NOT "
                             "evaluated, so the chain breaks silently"),
                 "types": sorted(unknown),
                 "nodes": {name: list(ids) for name, ids in sorted(unknown.items())},
+                "owners": owners,
                 "hint": ("enable the owning extension (extension.enable) or delete "
                          "those nodes; to run anyway pass force=true"),
+                "fix": fix,
+                "auto_fix": ";".join(f"extension.enable:{ext}" for ext in owners),
             })
         return problems
 
@@ -379,6 +458,15 @@ class SimulationController:
         # ★ 输入层最后 push（栈顶）→ 事件派发时先于 Debug/Overlay 收到键鼠；
         #   OnUpdate 不依赖层顺序（RuntimeNodeLayer 主动 drain）。
         GameRuntime.push_layer(RuntimeInputLayer)
+
+        # ── 运行时 UI（ESC → 退出确认；模态时吞掉键鼠，节点图收不到）──
+        #   文案由编辑器侧 i18n 注入（Runtime 不依赖 Editor）
+        from Application.Runtime.RuntimeUILayer import RuntimeUILayer
+        from Application.Editor.I18n import t
+        RuntimeUILayer.configure(
+            title=t("pie.exit.title"), yes=t("pie.exit.yes"),
+            no=t("pie.exit.no"), hint=t("pie.exit.hint"))
+        GameRuntime.push_layer(RuntimeUILayer)
 
         # ── 应用 PIE 窗口偏好 (Play 下方 Settings: 全屏 / 窗口化尺寸) ──
         cls._apply_pie_window_prefs(gt)

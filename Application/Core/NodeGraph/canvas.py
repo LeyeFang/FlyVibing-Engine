@@ -309,6 +309,47 @@ class NodeCanvas(DataContract):
         self._nodes.clear()
         self._links.clear()
         self.node_groups.clear()
+        self.unknown_node_types = {}
+
+    # ── 未注册类型：重判定 / 就地补全（2026-11-03 ISSUE） ────────
+    def refresh_unknown_types(self) -> dict[str, list[int]]:
+        """按**当前**节点类型注册表重算未注册节点集合，返回该集合。
+
+        为什么需要: 场景加载时扩展可能未启用 → 节点被记为 unknown；之后
+        `extension.enable` 已经注册了类型，但画布缓存是旧的 —— 预检会误报
+        “节点不执行”（实测必须重载场景才恢复）。
+        """
+        unknown: dict[str, list[int]] = {}
+        for nid, inst in self._nodes.items():
+            if inst.node_type not in _TYPES:
+                unknown.setdefault(inst.node_type, []).append(nid)
+        self.unknown_node_types = unknown
+        return unknown
+
+    def rehydrate_unknown(self) -> list[int]:
+        """把现在能解析的“未知节点”就地补全，返回**从 unknown 恢复成正常**的节点 id。
+
+        扩展启用后调用：节点 id / 连线 / 位置不变。`.scene` 里本来就存了
+        `pin_ids`，所以常见情况下不需要新建引脚；真正修好的标志是
+        `unknown_node_types` 变空（预检不再拦 PIE）。
+        这样用户按 preflight 提示 `extension.enable` 后**不需要重载场景**。
+        """
+        before = {nid for ids in (self.unknown_node_types or {}).values() for nid in ids}
+        added_pins = 0
+        for nid, inst in self._nodes.items():
+            tdef = _TYPES.get(inst.node_type)
+            if tdef is None:
+                continue
+            for p in tdef.pins:
+                if p.name not in inst.pin_ids:
+                    inst.pin_ids[p.name] = _gen_id()
+                    added_pins += 1
+        unresolved = self.refresh_unknown_types()
+        after = {nid for ids in unresolved.values() for nid in ids}
+        resolved = sorted(before - after)
+        if resolved or added_pins:
+            self.mark_changed()
+        return resolved
 
     def replace_from(self, other: 'NodeCanvas') -> None:
         """用另一画布内容整体替换（导入路径统一入口 — GUI 面板与 agent ops 共用）。

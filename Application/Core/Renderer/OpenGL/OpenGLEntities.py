@@ -12,6 +12,7 @@ OpenGLEntities — PyOpenGL 实体渲染器 (组合到 OpenGLRenderer)。
 """
 
 from __future__ import annotations
+import os
 import numpy as np
 from OpenGL import GL as gl
 
@@ -21,11 +22,17 @@ from Application.Core.Scene.SceneManager import SceneManager
 
 
 # ★ 逐实体上传时跳过的 uniform — model/view/projection 由渲染器管理,
-#   uLight*/uAmbient/uCameraPos 由光照帧状态注入 (协议: Doc/Dev/shader_protocol.md)
+#   光照帧状态（面光源 / 点光源 / 环境光 / 相机）由 _inject_lighting 每帧注入
+#   (协议: Doc/Dev/shader_protocol.md §7)。
 _MATERIAL_SKIP_UNIFORMS = frozenset({
     'model', 'view', 'projection',
-    'uAmbient', 'uCameraPos', 'uLightCount', 'uLightDir', 'uLightColor',
+    'uAmbient', 'uCameraPos',
+    'uLightCount', 'uLightPos', 'uLightDir', 'uLightColor',
+    'uPointCount', 'uPointPos', 'uPointColor', 'uPointRange',
 })
+
+# 光照帧诊断输出（`MGE_LIGHT_DEBUG=1` 时前 3 帧打印收集结果 — 调灯排查用）
+_LIGHT_DEBUG = bool(os.environ.get("MGE_LIGHT_DEBUG"))
 
 
 class OpenGLEntities:
@@ -190,6 +197,7 @@ class OpenGLEntities:
         except Exception:  # noqa: BLE001
             cam_pos = np.zeros(3, dtype=np.float32)
         dirs = np.zeros((4, 3), dtype=np.float32)
+        light_pos = np.zeros((4, 3), dtype=np.float32)
         colors = np.zeros((4, 3), dtype=np.float32)
         point_pos = np.zeros((4, 3), dtype=np.float32)
         point_color = np.zeros((4, 3), dtype=np.float32)
@@ -227,6 +235,9 @@ class OpenGLEntities:
                         norm = float(np.linalg.norm(d))
                         d = np.array([0.0, -1.0, 0.0]) if norm < 1e-8 else d / norm
                         dirs[count] = d.astype(np.float32)
+                        # ★ 面光源位置参与计算（发光面半空间判定）——
+                        #   旧版只传方向，光源摆哪里都像无穷远，背面的物体也会被照亮。
+                        light_pos[count] = model[3, :3].astype(np.float32)
                         colors[count] = lc
                         count += 1
             except Exception:  # noqa: BLE001 — 组件未注册时保持无光
@@ -235,10 +246,18 @@ class OpenGLEntities:
         #   shader_protocol §7.3 — 避免"未配置光照=默认变黑")
         if count == 0 and pcount == 0 and bool(getattr(st, 'lighting_fallback', True)):
             ambient = np.ones(3, dtype=np.float32)
+        if _LIGHT_DEBUG:
+            self._light_debug_dumps = getattr(self, "_light_debug_dumps", 0) + 1
+            if self._light_debug_dumps <= 3:
+                print(f"[LightDebug] area={count} point={pcount} ambient={np.round(ambient,3)}")
+                for i in range(count):
+                    print(f"  L{i} pos={np.round(light_pos[i],3)} dir={np.round(dirs[i],3)} "
+                          f"color={np.round(colors[i],3)}")
         return {
             'ambient': ambient,
             'camera_pos': cam_pos,
             'dirs': dirs,
+            'light_pos': light_pos,
             'colors': colors,
             'count': count,
             'point_pos': point_pos,
@@ -253,6 +272,7 @@ class OpenGLEntities:
         OpenGLUtils.set_uniform_vec3(sh, shader_id, 'uAmbient', frame['ambient'])
         OpenGLUtils.set_uniform_vec3(sh, shader_id, 'uCameraPos', frame['camera_pos'])
         OpenGLUtils.set_uniform_int(sh, shader_id, 'uLightCount', frame['count'])
+        OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uLightPos', frame['light_pos'], 4)
         OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uLightDir', frame['dirs'], 4)
         OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uLightColor', frame['colors'], 4)
         OpenGLUtils.set_uniform_int(sh, shader_id, 'uPointCount', frame['point_count'])

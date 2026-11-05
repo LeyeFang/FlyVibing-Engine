@@ -555,6 +555,11 @@ class UIManager:
 
             # ── Help 菜单 ──
             if imgui.begin_menu(t("menu.help.title"), True):
+                # Hot Keys — 只读热键总表（数据源 = Core/Input/Hotkeys 注册表，与 CLI 同源）
+                if imgui.menu_item(t("menu.help.hotkeys"), "", False, True)[0]:
+                    from Application.Editor.UI.panels.HotkeysPanel import open_hotkeys_panel
+                    open_hotkeys_panel()
+                imgui.separator()
                 if imgui.menu_item(t("menu.help.about"), "", False, True)[0]:
                     pass
                 imgui.end_menu()

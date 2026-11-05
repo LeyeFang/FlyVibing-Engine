@@ -67,6 +67,10 @@ class ResourceManager:
     texture_count: int = 0
     material_count: int = 0
     prefab_count: int = 0
+    # Init 幂等守卫（2026-11-03）: 内置资源只能注册一次。
+    # 重复 Init 会把 Default/DefaultLit 再注册一遍（id 3/4…），让整个会话的
+    # material id 空间静默位移 —— 场景里的数字引用随之指向错误材质。
+    _initialized: bool = False
 
     @classmethod
     def Init(
@@ -74,11 +78,15 @@ class ResourceManager:
         app
     ) -> int:
         cls.app = app
+        if cls._initialized:
+            return 0
+        cls._initialized = True
         cls.__load_default_mesh()
         cls.__load_default_shader()
         cls.__load_default_texture()
         cls.__load_default_material()
         cls.__load_default_prefab()
+        return 0
 
 
     # ==============================================================
@@ -294,6 +302,8 @@ class ResourceManager:
             indices = np.array(f, dtype=np.uint32) if f is not None else np.array([], dtype=np.uint32)
 
         # ── 注册 ──
+        vertices, normals, indices = cls._auto_orient_solid(
+            vertices, normals, indices, name)
         mesh = Mesh(vertices, normals, uvs, indices)
         cls.mesh_count += 1
         current_id = cls.mesh_count
@@ -303,6 +313,51 @@ class ResourceManager:
             'path': file_path,
         }
         return current_id
+
+    @classmethod
+    def _auto_orient_solid(
+        cls,
+        vertices: "np.ndarray",
+        normals: "np.ndarray",
+        indices: "np.ndarray",
+        name: str,
+    ):
+        """实体网格朝向自检：整体内向的网格自动翻转（带告警）。
+
+        为什么需要（2026-11-04 缺陷）: trimesh 会按**绕序**重算法线，忽略 OBJ 里的
+        `vn`。内置 `Cube.obj` 的顶面绕序反了 → 顶面法线朝下 → 点光源在立方体上方
+        时顶面全黑、把光源塞进立方体里反而亮（面法线朝着内部）。这种数据问题
+        在光照下才暴露，且很难肉眼归因，所以在加载阶段兜一层。
+
+        判据: 面法线（由绕序算出）与外向参考方向 `face_center - AABB center`
+        全部相反 ⇔ 整体内向 → 翻转索引绕序 + 取反法线。
+        """
+        try:
+            import numpy as _np
+
+            idx = _np.asarray(indices)
+            vtx = _np.asarray(vertices, dtype=_np.float64)
+            if idx.ndim != 2 or idx.shape[0] < 4 or idx.shape[1] != 3 or len(vtx) < 4:
+                return vertices, normals, indices
+            tri = vtx[idx]                                   # (F, 3, 3)
+            face_n = _np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+            lens = _np.linalg.norm(face_n, axis=1)
+            ok = lens > 1e-12
+            if not bool(ok.any()):
+                return vertices, normals, indices
+            face_n = face_n[ok] / lens[ok][:, None]
+            centers = tri[ok].mean(axis=1)
+            aabb_center = (vtx.min(axis=0) + vtx.max(axis=0)) * 0.5
+            outward = _np.einsum("ij,ij->i", face_n, centers - aabb_center) > 0.0
+            ratio_out = float(outward.mean())
+            if ratio_out <= 0.02:                            # 几乎全部朝内 → 翻
+                print(f"[Resource] WARNING: mesh '{name}' winding is inside-out "
+                      f"(outward={ratio_out:.0%}) — flipped automatically")
+                flipped = _np.ascontiguousarray(_np.asarray(indices)[:, ::-1])
+                return vertices, (-_np.asarray(normals)).astype(normals.dtype), flipped
+        except Exception:  # noqa: BLE001 — 朝向自检失败不影响加载
+            pass
+        return vertices, normals, indices
 
     # ==============================================================
     # 纹理加载 (内部)
@@ -736,6 +791,66 @@ class ResourceManager:
             if getattr(mat, 'name', '') == name:
                 return int(mid)
         return cls.GetDefaultMaterial()
+
+    # ── 材质稳定引用（id 滞移自愈, 2026-11-03） ──────────────────
+
+    @classmethod
+    def MaterialRef(cls, material_id: int) -> str:
+        """material id → 稳定引用（`builtin://名称` 或绝对路径）；未知返回 ""。
+
+        写入 `.scene` 的 `MeshRenderer.material_path`（保存时），加载时用
+        `ResolveMaterialRef` 还原成本会话的 live id —— 材质 id 是会话级自增的，
+        不能当持久化身份用（详见 `Doc/Dev/scene_format.md` §2）。
+        """
+        try:
+            mid = int(material_id)
+        except (TypeError, ValueError):
+            return ""
+        mat = cls.loaded_material.get(str(mid))
+        if mat is None:
+            return ""
+        path = str(getattr(mat, "_file_path", "") or "")
+        if path:
+            return os.path.normpath(os.path.abspath(path)).replace("\\", "/")
+        name = str(getattr(mat, "builtin_name", "") or getattr(mat, "name", "") or "")
+        return f"builtin://{name}" if name else ""
+
+    @classmethod
+    def ResolveMaterialRef(cls, ref: str) -> int:
+        """稳定引用 → 本会话 live id（找不到返回 0，由调用方决定告警）。
+
+        解析顺序: `builtin://名称` 精确匹配 → 路径精确匹配 → 文件名唯一匹配
+        （跨机器/相对路径差异时的兼容回退；多命中视为歧义，返回 0）。
+        """
+        ref = str(ref or "").strip()
+        if not ref:
+            return 0
+        if ref.startswith("builtin://"):
+            name = ref[len("builtin://"):]
+            for mid, mat in cls.loaded_material.items():
+                if str(getattr(mat, "builtin_name", "") or "") == name:
+                    return int(mid)
+            return 0
+        want = os.path.normcase(os.path.normpath(ref))
+        for mid, mat in cls.loaded_material.items():
+            path = str(getattr(mat, "_file_path", "") or "")
+            if path and os.path.normcase(os.path.normpath(path)) == want:
+                return int(mid)
+        base = os.path.basename(ref).lower()
+        if not base:
+            return 0
+        hits = [int(mid) for mid, mat in cls.loaded_material.items()
+                if os.path.basename(str(getattr(mat, "_file_path", "") or "")).lower() == base]
+        return hits[0] if len(hits) == 1 else 0
+
+    @classmethod
+    def MaterialName(cls, material_id: int) -> str:
+        """material id → 显示名（诊断/告警用，未知返回 ""）。"""
+        try:
+            mat = cls.loaded_material.get(str(int(material_id)))
+        except (TypeError, ValueError):
+            return ""
+        return str(getattr(mat, "name", "") or "") if mat is not None else ""
 
     @classmethod
     def __load_default_prefab(cls) -> None:

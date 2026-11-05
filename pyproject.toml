@@ -1,6 +1,6 @@
 [project]
 name = "FlyVibingEngine"
-version = "1.0.3"
+version = "1.1.0"
 requires-python = ">=3.14"
 dependencies = [
     "cffi==2.0.0",

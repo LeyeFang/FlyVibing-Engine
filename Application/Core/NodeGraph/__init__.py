@@ -44,6 +44,7 @@ from .evaluators import (  # noqa: F401
     io,
     media,
     text,
+    ui,
 )
 
 # 内置扩展节点包（Application/Functions/**/node_pack.py）自动发现 — 必须在

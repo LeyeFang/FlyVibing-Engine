@@ -38,6 +38,7 @@ from Application.Core.Renderer.OpenGL.OpenGLOverlays import OpenGLOverlays
 from Application.Core.Renderer.OpenGL.OpenGLEntities import OpenGLEntities
 from Application.Core.Renderer.OpenGL.OpenGLPostProcess import OpenGLPostProcess
 from Application.Core.Renderer.OpenGL.OpenGLRenderTargets import OpenGLRenderTargets
+from Application.Core.Renderer.OpenGL.OpenGLUI import OpenGLUI
 
 
 class OpenGLRenderer(Renderer, RenderResourceManger):
@@ -84,6 +85,7 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
         self._overlay = OpenGLOverlays(self)
         self._post = OpenGLPostProcess(self)
         self._targets = OpenGLRenderTargets(self)
+        self._ui = OpenGLUI()
         # ── 本层状态 ──
         self._pre_overlay_callbacks: list[Callable] = []
         self._scene_fbo_override: int = 0
@@ -200,6 +202,8 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
             self._post._render_post_process(view, proj)
             # ── 6. 统一 overlay 入口 ──
             self._render_all_overlays(view, proj)
+            # ── 7. 运行时 UI（屏幕空间，永远最上）──
+            self._ui.render(getattr(self, "_ui_quads", ()), vp_w, vp_h)
         finally:
             # ── 7. 恢复屏幕帧缓冲 + 视口 ──
             if rt is not None:
@@ -224,6 +228,11 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
         self._resources._unregister_all_entities()
         self._resources._unregister_all_overlays()
         self._post.unregister_highlight_effect()
+        # ── UI 叠加层: 自己的 shader/VAO/纹理缓存 ──
+        try:
+            self._ui.destroy()
+        except Exception:  # noqa: BLE001 — 无 GL 环境（无头）不阻塞关闭
+            pass
         # ── 渲染目标: 销毁所有 RT (GL 对象 + 注册表条目) ──
         for _rt_id in list(self._targets.targets.keys()):
             self._targets.destroy(_rt_id)

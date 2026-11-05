@@ -181,6 +181,25 @@ SetText: sets TextDisplay.text on the target entity and re-rasterizes immediatel
   Target must have a TextDisplay component; style (font/size/bold/italic/color/bg) lives
   on the component and is editable in the inspector or via MCP component.set.
 
+#### UI Nodes (runtime scene-driven UI — protocol runtime_ui_protocol.md)
+| type_name     | input pins                              | output pins                                   | props                          |
+|---------------|-----------------------------------------|-----------------------------------------------|--------------------------------|
+| SetUIVisible  | exec_in, Entity(entity_ref, optional), Visible(bool, optional) | exec_out | target (UI entity name), visible |
+| SetUIText     | exec_in, Entity(entity_ref, optional), Text(string, optional) | exec_out | target (UI entity name), text |
+| OnUIClick     | — (graph entry)                         | exec, Action(string), Name(string), Value(float), Index(int) | action filter, name filter |
+| GetUIValue    | Entity(entity_ref, optional)            | Value(float), Index(int)                      | target (UI entity name)        |
+
+SetUIVisible: writes a RUNTIME visibility override (the .scene is never modified). Target the
+  panel/control entity; the whole subtree follows (children inherit parent visibility).
+  `Entity` wins when wired, otherwise props.target is resolved by entity name.
+SetUIText: writes a RUNTIME text override on a UILabel entity (the .scene is never modified).
+  `Text` pin wins when wired, otherwise props.text. Empty text clears the override and the
+  label falls back to its serialized UILabel.text value.
+OnUIClick: fires after a button/toggle/slider/select is used; outputs the control's action
+  string, entity name, current value (toggle 0/1, slider value, select index) and index.
+  Empty filter = any. Fires once per interaction (release), not per frame.
+GetUIValue: reads the control's current value (runtime state, not the serialized default).
+
 #### Game Nodes
 | type_name    | input pins                  | output pins | notes                    |
 |--------------|-----------------------------|-------------|--------------------------|

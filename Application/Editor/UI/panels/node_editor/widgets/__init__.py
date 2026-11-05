@@ -11,6 +11,7 @@ panel.py 调用 draw_node_widgets(nid, inst, canvas) 自动分发。
   algorithm     BCI Algorithm（FBCSP/CCA）节点
   media         动态媒体节点（ShowMedia — PIE 播放驱动）
   text          文字节点（SetText）
+  ui            运行期 UI 节点（SetUIVisible / OnUIClick / GetUIValue）
 """
 
 from __future__ import annotations
@@ -32,3 +33,4 @@ from . import epoch  # noqa: F401,E402
 from . import algorithm  # noqa: F401,E402
 from . import media  # noqa: F401,E402
 from . import text  # noqa: F401,E402
+from . import ui  # noqa: F401,E402

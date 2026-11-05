@@ -14,7 +14,7 @@ editor.shell [screen] owner=UIManager  actions=editor.quit
     - editor.scene.entity_tree [tree] owner=SceneBrowserController  when=scene.loaded,panel.scene.visible actions=entity.list,entity.get,entity.visible,selection.set,selection.clear,entity.reparent,entity.rename,entity.delete
       - editor.scene.context_menu [popup] owner=ScenePanel  when=scene.context_menu.open actions=entity.add,entity.rename,entity.delete,entity.reparent
     - editor.scene.inspector [inspector] owner=SceneBrowserController  when=scene.loaded,panel.scene.visible actions=camera.get,camera.set,component.types,component.list,component.get,component.add,component.remove,component.set,entity.get,entity.visible,entity.transform,selection.get
-  - editor.panel.node_editor [panel] owner=NodeEditorPanel  when=panel.node_editor.visible actions=graph.list,graph.types,graph.add,graph.link,graph.set_props,graph.set_description,graph.group.merge,graph.group.ungroup,graph.group.destroy,graph.fit,graph.export,graph.import,graph.validate.start,graph.validate.state,graph.validate.report,graph.validate.cancel
+  - editor.panel.node_editor [panel] owner=NodeEditorPanel  when=panel.node_editor.visible actions=graph.list,graph.types,graph.add,graph.link,graph.unlink,graph.remove_node,graph.set_props,graph.set_description,graph.group.merge,graph.group.ungroup,graph.group.destroy,graph.fit,graph.export,graph.import,graph.validate.start,graph.validate.state,graph.validate.report,graph.validate.cancel
     - editor.node_editor.find_window [dialog] owner=NodeEditorPanel  when=find.open
     - editor.node_editor.groups_window [dialog] owner=NodeEditorPanel  when=groups.open actions=graph.group.ungroup,graph.group.destroy
     - editor.node_editor.group_context_menu [context_menu] owner=NodeEditorPanel  when=group.context_menu.open actions=graph.group.merge,graph.group.ungroup,graph.group.destroy
@@ -23,11 +23,14 @@ editor.shell [screen] owner=UIManager  actions=editor.quit
     - editor.node_editor.validate_dialog [dialog] owner=GraphValidationService  when=validate.open actions=graph.validate.start,graph.validate.state,graph.validate.report,graph.validate.cancel
   - editor.panel.resources [panel] owner=ResourcePanel  when=panel.resources.visible actions=resource.list,resource.find
     - editor.resources.asset_list [list] owner=ResourceBrowserController  when=panel.resources.visible actions=resource.material.get
-  - editor.panel.settings [panel] owner=SettingsPanel  when=panel.settings.visible actions=settings.get,settings.set
+  - editor.panel.settings [panel] owner=SettingsPanel  when=panel.settings.visible actions=settings.get,settings.set,debug.events
     - editor.settings.common [page] owner=SettingsPanel  when=panel.settings.visible actions=settings.get,settings.set
     - editor.settings.export [page] owner=SettingsPanel  when=panel.settings.visible actions=settings.get,settings.set
+    - editor.settings.debug [page] owner=SettingsPanel  when=panel.settings.visible actions=debug.events,settings.get,settings.set
   - dialog.file [dialog] owner=FileDialog  when=dialog.file.open
   - extension.window [window] owner=ExtensionUI  when=extension.window.visible
+  - editor.menu.help [menu] owner=UIManager  when=editor.workspace
+  - editor.panel.hotkeys [panel] owner=HotkeysPanel  when=panel.hotkeys.visible actions=hotkeys.list
 ```
 
 ## 控件
@@ -43,7 +46,7 @@ editor.shell [screen] owner=UIManager  actions=editor.quit
 | `editor.scene.entity_tree` | `tree` | `SceneBrowserController` | scene.loaded, panel.scene.visible | entity.list, entity.get, entity.visible, selection.set, selection.clear, entity.reparent, entity.rename, entity.delete | editor.scene_panel_interactions, editor.action_contract | panels_smoke | `Application/Editor/UI/controllers/SceneBrowserController.py` |
 | `editor.scene.inspector` | `inspector` | `SceneBrowserController` | scene.loaded, panel.scene.visible | camera.get, camera.set, component.types, component.list, component.get, component.add, component.remove, component.set, entity.get, entity.visible, entity.transform, selection.get | editor.scene_panel_interactions, core.component_clamps | panels_smoke | `Application/Editor/UI/controllers/SceneBrowserController.py` |
 | `editor.scene.context_menu` | `popup` | `ScenePanel` | scene.context_menu.open | entity.add, entity.rename, entity.delete, entity.reparent | editor.scene_panel_interactions | panels_smoke | `Application/Editor/UI/panels/ScenePanel.py` |
-| `editor.panel.node_editor` | `panel` | `NodeEditorPanel` | panel.node_editor.visible | graph.list, graph.types, graph.add, graph.link, graph.set_props, graph.set_description, graph.group.merge, graph.group.ungroup, graph.group.destroy, graph.fit, graph.export, graph.import, graph.validate.start, graph.validate.state, graph.validate.report, graph.validate.cancel | nodegraph.node_editor_mcp, editor.examples_catalog | node_editor_smoke, node_editor_clip_smoke, node_editor_find, node_groups_smoke, node_group_actions | `Application/Editor/UI/panels/node_editor/panel.py` |
+| `editor.panel.node_editor` | `panel` | `NodeEditorPanel` | panel.node_editor.visible | graph.list, graph.types, graph.add, graph.link, graph.unlink, graph.remove_node, graph.set_props, graph.set_description, graph.group.merge, graph.group.ungroup, graph.group.destroy, graph.fit, graph.export, graph.import, graph.validate.start, graph.validate.state, graph.validate.report, graph.validate.cancel | nodegraph.node_editor_mcp, editor.examples_catalog | node_editor_smoke, node_editor_clip_smoke, node_editor_find, node_groups_smoke, node_group_actions | `Application/Editor/UI/panels/node_editor/panel.py` |
 | `editor.node_editor.find_window` | `dialog` | `NodeEditorPanel` | find.open | - | - | node_editor_find | `Application/Editor/UI/panels/node_editor/panel.py` |
 | `editor.node_editor.groups_window` | `dialog` | `NodeEditorPanel` | groups.open | graph.group.ungroup, graph.group.destroy | - | node_groups_smoke, node_group_actions | `Application/Editor/UI/panels/node_editor/panel.py` |
 | `editor.node_editor.group_context_menu` | `context_menu` | `NodeEditorPanel` | group.context_menu.open | graph.group.merge, graph.group.ungroup, graph.group.destroy | editor.live_command_server | node_group_actions | `Application/Editor/UI/panels/node_editor/panel.py` |
@@ -52,8 +55,11 @@ editor.shell [screen] owner=UIManager  actions=editor.quit
 | `editor.node_editor.validate_dialog` | `dialog` | `GraphValidationService` | validate.open | graph.validate.start, graph.validate.state, graph.validate.report, graph.validate.cancel | nodegraph.graph_validation | node_editor_smoke | `Application/Core/NodeGraph/validation/service.py` |
 | `editor.panel.resources` | `panel` | `ResourcePanel` | panel.resources.visible | resource.list, resource.find | editor.live_command_server | panels_smoke | `Application/Editor/UI/panels/ResourcePanel.py` |
 | `editor.resources.asset_list` | `list` | `ResourceBrowserController` | panel.resources.visible | resource.material.get | editor.live_command_server | panels_smoke | `Application/Editor/UI/controllers/ResourceBrowserController.py` |
-| `editor.panel.settings` | `panel` | `SettingsPanel` | panel.settings.visible | settings.get, settings.set | editor.editor_settings, editor.i18n_coverage | panels_smoke | `Application/Editor/UI/panels/SettingsPanel.py` |
+| `editor.panel.settings` | `panel` | `SettingsPanel` | panel.settings.visible | settings.get, settings.set, debug.events | editor.editor_settings, editor.i18n_coverage | panels_smoke | `Application/Editor/UI/panels/SettingsPanel.py` |
 | `editor.settings.common` | `page` | `SettingsPanel` | panel.settings.visible | settings.get, settings.set | editor.editor_settings, editor.i18n_coverage | panels_smoke | `Application/Editor/UI/panels/SettingsPanel.py` |
 | `editor.settings.export` | `page` | `SettingsPanel` | panel.settings.visible | settings.get, settings.set | editor.editor_settings, editor.pie_settings | panels_smoke | `Application/Editor/UI/panels/SettingsPanel.py` |
+| `editor.settings.debug` | `page` | `SettingsPanel` | panel.settings.visible | debug.events, settings.get, settings.set | editor.debug_report, editor.i18n_coverage | panels_smoke | `Application/Editor/UI/panels/SettingsPanel.py` |
 | `dialog.file` | `dialog` | `FileDialog` | dialog.file.open | - | editor.utils_layout | menu_smoke | `Application/Editor/UI/FileDialog.py` |
 | `extension.window` | `window` | `ExtensionUI` | extension.window.visible | - | extensions.extension_ui, extensions.virtual_panel | - | `Application/Editor/Extensions/ExtensionUI.py` |
+| `editor.menu.help` | `menu` | `UIManager` | editor.workspace | - | core.hotkeys | - | `Application/Editor/UI/UIManager.py` |
+| `editor.panel.hotkeys` | `panel` | `HotkeysPanel` | panel.hotkeys.visible | hotkeys.list | core.hotkeys | - | `Application/Editor/UI/panels/HotkeysPanel.py` |

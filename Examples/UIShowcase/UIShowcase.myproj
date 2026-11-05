@@ -1,0 +1,37 @@
+{
+  "version": "0.1.0",
+  "name": "UIShowcase",
+  "provider": "@Official",
+  "startup_scene": "scenes\\UIShowcase.scene",
+  "scenes": [
+    "scenes\\UIShowcase.scene"
+  ],
+  "background_color": [
+    0.07,
+    0.08,
+    0.1
+  ],
+  "resources": {
+    "materials": [],
+    "shaders": [],
+    "textures": [],
+    "meshes": [],
+    "prefabs": [
+      {
+        "path": "builtin://DefaultCamera3D"
+      },
+      {
+        "path": "builtin://DefaultCamera2D"
+      },
+      {
+        "path": "builtin://DefaultCameraOverlay"
+      },
+      {
+        "path": "builtin://DefaultCube"
+      },
+      {
+        "path": "builtin://DefaultLight"
+      }
+    ]
+  }
+}

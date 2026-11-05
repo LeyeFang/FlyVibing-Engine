@@ -46,6 +46,8 @@ class ProjectManager:
     _window_title_base: str = "FlyVibingEngine"
     _engine_root: str = ""            # ★ 引擎根目录 (懒加载)
     _last_missing_assets: list = []   # ★ 最近一次扫描到的缺失资产 (外改断链识别)
+    # ★ 最近一次打开/加载后的资源引用审计（材质/网格 id 不在活表 → 点名告警）
+    last_reference_audit: dict = {}
 
     # ════════════════════════════════════════════════════════════
     # 引擎根目录 & 内置资源判断
@@ -224,6 +226,9 @@ class ProjectManager:
                 cls._activate_scene(startup)
             # ★ 缺失资产识别 (记录在案但磁盘缺失 → 集中报告, 不静默断链)
             cls._report_missing_assets("open")
+            # ★ 引用审计 (2026-11-03): 材质/网格 id 是会话级自增的, 跨会话可能错位;
+            #   这里在打开后立即点名告警，而不是等到“画出来是白的”反推
+            cls.last_reference_audit = cls._audit_scene_references()
             return True
         except Exception as e:
             print(f"[Project] Failed to open: {e}")
@@ -528,7 +533,9 @@ class ProjectManager:
                 "project": proj_file,
                 "startup_scene": startup_rel,
                 "background_color": list(data.get("background_color", [0.2, 0.2, 0.2])),
-                "window": {"mode": "auto"},
+                # mode=auto → 由场景 game_type 决定 (overlay → 无边框全屏, 其余 → 窗口化);
+                # width/height 仅窗口化生效 (PlayerBootstrap.apply_start_preferences)
+                "window": {"mode": "auto", "width": 1280, "height": 720},
                 "output_dir": "output",
                 "engine": {
                     "version": data.get("version", ""),
@@ -1368,6 +1375,65 @@ class ProjectManager:
             if len(missing) > 10:
                 print(f"  ... ({len(missing) - 10} more)")
         return missing
+
+    @classmethod
+    def _audit_scene_references(cls) -> dict:
+        """打开工程后审计场景里的资源引用（材质/网格 id → 活资源表）。
+
+        为什么需要（ISSUE 2026-11-03）: 材质 id 是**会话级自增**的。只要有任何一条
+        路径让 id 空间漂移（旧 `.myproj` 没记 `material_id`、手改场景、内置重复注册…），
+        实体就会拿到"存在但不对"的材质 —— 渲染成默认白，且一句提示都没有。
+        这里把"错位"变成明确告警：实体名 + 引用 id + 实际指向。
+
+        同时统计 `MeshRenderer.material_path` 稳定引用的自愈结果：
+          - `resolved_by_ref`: 靠 `material_path` 还原正确 id 的数量
+          - `unresolved_refs`: 有引用但解析失败（资产缺失/路径变了）
+        """
+        from Application.Resource.ResourceManager import ResourceManager
+        from Application.Editor.EditorHost import EditorHost
+
+        live_mats = {int(k) for k in ResourceManager.loaded_material.keys()}
+        live_meshes = {int(k) for k in ResourceManager.loaded_mesh.keys()}
+        audit: dict = {
+            "scenes": 0,
+            "entities_with_mesh": 0,
+            "missing_materials": [],
+            "missing_meshes": [],
+            "unresolved_refs": [],
+        }
+        warnings: list[str] = []
+        for sname, scene in list(EditorHost._scenes.items()):
+            audit["scenes"] += 1
+            warnings.extend(str(w) for w in getattr(scene, "reference_warnings", []) or [])
+            for eid, ed in (getattr(scene, "entities", {}) or {}).items():
+                mr = (ed.components or {}).get("MeshRenderer")
+                if mr is None:
+                    continue
+                audit["entities_with_mesh"] += 1
+                mid = mr.get("material_id") if isinstance(mr, dict) else getattr(mr, "material_id", None)
+                mesh_id = mr.get("mesh_id") if isinstance(mr, dict) else getattr(mr, "mesh_id", None)
+                if mid is not None and int(mid) not in live_mats:
+                    audit["missing_materials"].append(
+                        {"scene": sname, "entity": ed.name, "entity_id": int(eid),
+                         "material_id": int(mid)})
+                if mesh_id is not None and int(mesh_id) not in live_meshes:
+                    audit["missing_meshes"].append(
+                        {"scene": sname, "entity": ed.name, "entity_id": int(eid),
+                         "mesh_id": int(mesh_id)})
+
+        if warnings or audit["missing_materials"] or audit["missing_meshes"]:
+            print(f"[Project] REFERENCE audit: "
+                  f"{len(audit['missing_materials'])} material refs / "
+                  f"{len(audit['missing_meshes'])} mesh refs not in the live table")
+            for w in warnings[:10]:
+                print(f"  - {w}")
+            for item in audit["missing_materials"][:10]:
+                print(f"  - [{item['scene']}] {item['entity']} (#{item['entity_id']})"
+                      f" material_id={item['material_id']} not registered")
+            for item in audit["missing_meshes"][:10]:
+                print(f"  - [{item['scene']}] {item['entity']} (#{item['entity_id']})"
+                      f" mesh_id={item['mesh_id']} not registered")
+        return audit
 
     @classmethod
     def _save_scene_if_needed(cls) -> None:

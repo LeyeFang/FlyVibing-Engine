@@ -26,6 +26,54 @@ from Application.Core.Scene.DataContract import format_value, parse_value
 
 
 # ═══════════════════════════════════════════════════════════════
+# 资源稳定引用（材质 id 滏移自愈 — ISSUE 2026-11-03）
+# ═══════════════════════════════════════════════════════════════
+
+def _material_ref(material_id) -> str:
+    """材质 id → 稳定引用（`builtin://名称` 或绝对路径）；无 ResourceManager 时返回 ""。"""
+    try:
+        from Application.Resource.ResourceManager import ResourceManager
+        return ResourceManager.MaterialRef(material_id)
+    except Exception:  # noqa: BLE001 — 无资源环境（纯数据测试）允许缺省
+        return ""
+
+
+def _resolve_material_ref(comps: dict, scene, eid: int, entity_name: str) -> None:
+    """按 `MeshRenderer.material_path` 把场景里的材质引用还原成本会话 live id。
+
+    材质/网格 id 是**会话级自增**的，不能当持久化身份用（换会话就错位，且静默
+    变白）。保存时写 `material_path`，加载时在这里解析：
+      - 能解析 → 覆盖 `material_id`（旧 `.myproj` 缺 id_map 时也能自愈）
+      - 解析不到 → 记一条引用告警（上升为 project.open 的报告，不静默）
+    """
+    mr = comps.get("MeshRenderer")
+    if mr is None:
+        return
+    if isinstance(mr, dict):
+        ref = str(mr.get("material_path", "") or "")
+    else:
+        ref = str(getattr(mr, "material_path", "") or "")
+    if not ref:
+        return
+    try:
+        from Application.Resource.ResourceManager import ResourceManager
+        live = ResourceManager.ResolveMaterialRef(ref)
+    except Exception:  # noqa: BLE001
+        return
+    if live:
+        if isinstance(mr, dict):
+            mr["material_id"] = int(live)
+        else:
+            mr.material_id = int(live)
+        return
+    try:
+        scene.reference_warnings.append(
+            f"entity '{entity_name}' (#{eid}): material ref not resolvable: {ref}")
+    except Exception:  # noqa: BLE001 — 旧 Scene 实例无该字段
+        pass
+
+
+# ═══════════════════════════════════════════════════════════════
 # GameType — 场景游戏类型
 # ═══════════════════════════════════════════════════════════════
 
@@ -116,6 +164,10 @@ class Scene:
 
     # 内部: scene-local 实体 ID 自增计数器 (每次 add_entity +1, 跨保存/加载稳定)
     _next_sid: int = field(default=1, repr=False)
+
+    # 加载期的引用告警（材质稳定引用解析不到等）— `project.open` / `scene.load`
+    # 汇总后报告给用户，避免“静默变白”（ISSUE 2026-11-03）。不参与序列化。
+    reference_warnings: list = field(default_factory=list, repr=False)
 
     # ════════════════════════════════════════════════════════════
     # 实体 CRUD (纯数据操作, 不涉及 esper)
@@ -349,6 +401,11 @@ class Scene:
             comps: dict[str, dict] = {}
             for type_name, comp in ed.components.items():
                 comps[type_name] = format_value(comp)
+                if type_name == "MeshRenderer" and isinstance(comps[type_name], dict):
+                    # ★ 写入材质的稳定引用（id 滏移自愈）—— 会话级 id 不可当身份用
+                    ref = _material_ref(comps[type_name].get("material_id"))
+                    if ref:
+                        comps[type_name]["material_path"] = ref
             entry: dict = {
                 "name": ed.name,
                 "components": comps,
@@ -419,6 +476,8 @@ class Scene:
                     comps[type_name] = obj
                 else:
                     comps[type_name] = comp_dict  # 未注册类型 → 保留 dict
+
+            _resolve_material_ref(comps, scene, eid, ed_data.get("name", "Entity"))
 
             scene.entities[eid] = EntityData(
                 name=ed_data.get("name", "Entity"),

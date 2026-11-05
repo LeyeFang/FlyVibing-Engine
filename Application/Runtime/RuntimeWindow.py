@@ -45,10 +45,13 @@ class RuntimeWindow(glfwWindow):
         return cls
 
     @classmethod
-    def apply_start_preferences(cls, mode: str, width: int, height: int) -> None:
+    def apply_start_preferences(cls, mode: str, width: int, height: int,
+                                *, overlay: bool = False) -> None:
         """PIE 启动前应用窗口偏好 (Settings 按钮; 由 SimulationController 调用)。
 
         - mode: "windowed" / "borderless" / "fullscreen" (非法值回退 windowed)
+        - overlay=True 或 mode="overlay": 强制 BORDERLESS — 覆盖层必须隐藏标题栏并铺满
+          显示器; 独占全屏不支持透明帧缓冲 (透明 + 输入穿透失效), 窗口化会露出标题栏
         - 仅 windowed 使用自定义尺寸; 其余模式由显示器/系统决定
         """
         from Application.Core.Window.glfwWindow import WindowMode
@@ -57,13 +60,16 @@ class RuntimeWindow(glfwWindow):
             "borderless": WindowMode.BORDERLESS,
             "fullscreen": WindowMode.FULLSCREEN,
         }
-        cls._window_mode = _MAP.get(str(mode).strip().lower(), WindowMode.WINDOWED)
+        requested = str(mode).strip().lower()
+        forced = bool(overlay) or requested == "overlay"
+        cls._window_mode = WindowMode.BORDERLESS if forced else _MAP.get(requested, WindowMode.WINDOWED)
         if cls._window_mode == WindowMode.WINDOWED:
             cls._default_size_override = (int(width), int(height))
         else:
             cls._default_size_override = None
         _sz = f" size={cls._default_size_override}" if cls._default_size_override else ""
-        print(f"[RuntimeWindow] Start prefs: mode={cls._window_mode.value}{_sz}")
+        _forced = " (overlay → borderless)" if forced else ""
+        print(f"[RuntimeWindow] Start prefs: mode={cls._window_mode.value}{_sz}{_forced}")
 
     # ════════════════════════════════════════════════════════════
     # GL 特化窗口操作
@@ -93,12 +99,34 @@ class RuntimeWindow(glfwWindow):
 
     @classmethod
     def _is_click_through_target(cls, ndc_x: float, ndc_y: float) -> bool:
-        """Overlay 模式: 光标下有渲染内容 → 捕获, 透明背景 → 穿透。"""
+        """Overlay 模式: 光标下有渲染内容 / UI 元素 / 模态 UI → 捕获, 透明背景 → 穿透。"""
+        # ── UI（按钮 / 模态面板）→ 捕获 ──
+        #    UI 不参与 GPU pick（矩形命中在 UI 层），所以必须在这里单独拦住，
+        #    否则 overlay 下点按钮/对话框会穿到桌面。
+        try:
+            from Application.Runtime.RuntimeUILayer import RuntimeUILayer
+            if RuntimeUILayer.is_open():
+                return True
+            if cls._cursor_over_ui(ndc_x, ndc_y):
+                return True
+        except Exception:  # noqa: BLE001 — 无 UI 层（旧宿主/测试）
+            pass
         try:
             from Application.Runtime.OverlayInputLayer import OverlayInputLayer
             return OverlayInputLayer.is_cursor_hit()
         except Exception:
             return True  # 保守: 全捕获
+
+    @classmethod
+    def _cursor_over_ui(cls, ndc_x: float, ndc_y: float) -> bool:
+        """NDC → framebuffer 像素 → UI 命中（UI quad 用的是 framebuffer 像素坐标）。"""
+        from Application.Runtime.RuntimeUILayer import RuntimeUILayer
+        fbw, fbh = glfw.get_framebuffer_size(cls.glfw_window)
+        if not fbw or not fbh:
+            return False
+        px = (float(ndc_x) + 1.0) * 0.5 * float(fbw)
+        py = (1.0 - float(ndc_y)) * 0.5 * float(fbh)
+        return bool(RuntimeUILayer.captures_at(px, py))
 
     # ════════════════════════════════════════════════════════════
     # 清理 — 仅销毁自身窗口，不调用 glfw.terminate()

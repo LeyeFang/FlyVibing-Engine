@@ -99,40 +99,87 @@ def main() -> int:
               ('uShininess' in ud) and not reserved_leak,
               f"shininess={'uShininess' in ud} leak={reserved_leak}")
 
-        # ── 2. 平面光垂直向下 (Rx=+90°): 顶面 N·L=1, 镜面重合 → 饱和全亮 ──
-        print("── directional light straight down ──")
+        # ── 2. 面光源垂直向下 (Rx=+90°): 顶面 N·L=1, 镜面重合 → 饱和全亮 ──
+        #    面光源**位置参与**: 放在表面上方 (沿传播方向相反侧), 否则背面判定会跳过
+        print("-- area light straight down --")
         dl = Light(color_r=1.0, color_g=1.0, color_b=1.0, intensity=1.0)
         e_light = probe.st.AddEntity("sun", Transform(), dl)
-        probe.st.SetEntityTransform(e_light, rotation_xyz=(1.5707963267948966, 0.0, 0.0))
+        probe.st.SetEntityTransform(e_light, position_xyz=(0.0, 3.0, 0.0),
+                                    rotation_xyz=(1.5707963267948966, 0.0, 0.0))
         probe.render()
         px = probe.read_pixel(160, 120)
         check("垂直向下 → 全亮饱和 (ndl=1 + 镜面 0.25)", all(v >= 250 for v in px[:3]), str(px))
 
-        # ── 3. 斜射 60° (Rx=π/3): ndl=0.866, H=(0,0.966,0.259) spec≈0.083 ──
-        #    accum ≈ (0.2,0.1,0.05)+0.949 → 0.8× ⇒ (234,214,204)
-        print("── light tilted 60° ──")
-        probe.st.SetEntityTransform(e_light, rotation_xyz=(1.0471975511965976, 0.0, 0.0))
+        # ── 3. 斜射 60° (Rx=π/3): ndl=0.866; 经典冯氏 spec = pow(R·V,32)×0.25 ≈ 0.0025 ──
+        #    R=(0,0.866,0.5), R·V=0.866 → pow(0.866,32)≈0.0100; accum≈(1.0685,0.9685,0.9185)
+        #    输出 = 0.8×accum ⇒ (218,198,187)
+        print("-- light tilted 60° (classic Phong) --")
+        probe.st.SetEntityTransform(e_light, position_xyz=(0.0, 3.0, 0.0),
+                                    rotation_xyz=(1.0471975511965976, 0.0, 0.0))
         probe.render()
         px = probe.read_pixel(160, 120)
-        check("斜射 60° ⇒ (234,214,204) [含 Blinn-Phong 高光]",
+        check("斜射 60° ⇒ (218,198,187) [经典冯氏高光]",
+              probe.color_near(px, (218, 198, 187), 10), str(px))
+
+        # ── 3.1 材质参数起作用 (2026-11-04): uSpecularModel / uShininess / uDiffuseStrength ──
+        print("-- material params (Phong) --")
+        mat_test = ResourceManager.GetMaterial(
+            esper.component_for_entity(e_sq, MeshRenderer).material_id)
+        # 0 = 默认 (经典冯氏)。切 Blinn → 回到旧观感 (234,214,204)
+        mat_test.uniforms_data['uSpecularModel'] = 1
+        probe.render()
+        px = probe.read_pixel(160, 120)
+        check("uSpecularModel=1 ⇒ Blinn 高光 (234,214,204)",
               probe.color_near(px, (234, 214, 204), 10), str(px))
+        mat_test.uniforms_data['uSpecularModel'] = 0
+        # 高光指数 1 ⇒ pow(R·V,1)=0.866 → spec 0.2165, accum≈1.28 → 饱和/偏亮 (255,241,231)
+        mat_test.uniforms_data['uShininess'] = 1
+        probe.render()
+        px = probe.read_pixel(160, 120)
+        check("uShininess=1 ⇒ 高光铺开 (255,241,231)",
+              probe.color_near(px, (255, 241, 231), 10), str(px))
+        mat_test.uniforms_data['uShininess'] = 0
+        # 漫反射 0.5 ⇒ ndl 减半: 0.8×(0.2+0.433+0.0025) ≈ (130,110,100)
+        mat_test.uniforms_data['uDiffuseStrength'] = 0.5
+        probe.render()
+        px = probe.read_pixel(160, 120)
+        check("uDiffuseStrength=0.5 ⇒ 漫反射减半 (130,110,100)",
+              probe.color_near(px, (130, 110, 100), 10), str(px))
+        mat_test.uniforms_data['uDiffuseStrength'] = 0
 
         # ── 4. 侧向 (Rx=0 → 光沿 -Z) 与背向 (Rx=-90° → 光向上): N·L=0 ⇒ 仅环境光 ──
         print("── side / back facing ──")
-        probe.st.SetEntityTransform(e_light, rotation_xyz=(0.0, 0.0, 0.0))
+        probe.st.SetEntityTransform(e_light, position_xyz=(0.0, 0.0, -3.0),
+                                    rotation_xyz=(0.0, 0.0, 0.0))
         probe.render()
         px = probe.read_pixel(160, 120)
         check("侧向 (光沿 -Z) ⇒ 仅环境光 (高光被 step 拍死)",
               probe.color_near(px, AMBIENT_ONLY, 5), str(px))
-        probe.st.SetEntityTransform(e_light, rotation_xyz=(-1.5707963267948966, 0.0, 0.0))
+        probe.st.SetEntityTransform(e_light, position_xyz=(0.0, 3.0, 0.0),
+                                    rotation_xyz=(-1.5707963267948966, 0.0, 0.0))
         probe.render()
         px = probe.read_pixel(160, 120)
         check("背向 (光向上, N·L<0) ⇒ 仅环境光",
               probe.color_near(px, AMBIENT_ONLY, 5), str(px))
 
+        # ── 4.1 面光源位置参与: 同方向、光源在正面 vs 背面 ──
+        print("-- area light half-space (2026-11-04) --")
+        probe.st.SetEntityTransform(e_light, position_xyz=(0.0, 3.0, 0.0),
+                                    rotation_xyz=(1.5707963267948966, 0.0, 0.0))
+        probe.render()
+        px = probe.read_pixel(160, 120)
+        check("光源在发光面正面 ⇒ 全亮", all(v >= 250 for v in px[:3]), str(px))
+        probe.st.SetEntityTransform(e_light, position_xyz=(0.0, -3.0, 0.0),
+                                    rotation_xyz=(1.5707963267948966, 0.0, 0.0))
+        probe.render()
+        px = probe.read_pixel(160, 120)
+        check("同方向但光源在背面 (表面在射线负方向) ⇒ 无直射光",
+              probe.color_near(px, AMBIENT_ONLY, 5), str(px))
+
         # ── 5. 颜色×强度: 白 ×0.5 向下 ⇒ 0.8×((0.2,0.1,0.05)+0.625) = (168,148,138) ──
         print("── intensity ──")
-        probe.st.SetEntityTransform(e_light, rotation_xyz=(1.5707963267948966, 0.0, 0.0))
+        probe.st.SetEntityTransform(e_light, position_xyz=(0.0, 3.0, 0.0),
+                                    rotation_xyz=(1.5707963267948966, 0.0, 0.0))
         dl.intensity = 0.5
         probe.render()
         px = probe.read_pixel(160, 120)
@@ -143,7 +190,8 @@ def main() -> int:
         print("── two lights ──")
         dl2 = Light(color_r=1.0, color_g=0.0, color_b=0.0, intensity=0.5)
         e_light2 = probe.st.AddEntity("red_sun", Transform(), dl2)
-        probe.st.SetEntityTransform(e_light2, rotation_xyz=(1.5707963267948966, 0.0, 0.0))
+        probe.st.SetEntityTransform(e_light2, position_xyz=(0.0, 3.0, 0.0),
+                                    rotation_xyz=(1.5707963267948966, 0.0, 0.0))
         probe.render()
         px = probe.read_pixel(160, 120)
         check("红×0.5 叠加 ⇒ (255,148,138) [逐通道]", probe.color_near(px, (255, 148, 138), 8), str(px))

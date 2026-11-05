@@ -15,6 +15,14 @@ from typing import TYPE_CHECKING
 import esper
 
 from Application.Core.Scene.BasicComponents import Transform, MeshRenderer, Camera, MediaPlayer, Light, TextDisplay
+from Application.Core.Scene.UIComponents import (
+    UI_COMPONENTS,
+    ALIGNS as _UI_ALIGNS,
+    ANCHORS as _UI_ANCHORS,
+    BUTTON_VARIANTS as _UI_BUTTON_VARIANTS,
+    SCALE_MODES as _UI_SCALE_MODES,
+    SELECT_SKINS as _UI_SELECT_SKINS,
+)
 from Application.Core.Renderer.RenderCommand import (
     EntityRegistrationCommand, EntityRenderVisibleCommand, EntityVisibilityCommand,
 )
@@ -64,6 +72,26 @@ FIELD_CLAMPS: dict = {
     ("TextDisplay", "world_height"): (0.01, 100.0),
     ("TextDisplay", "color"): (0.0, 1.0),      # tuple: 逐元素
     ("TextDisplay", "bg_color"): (0.0, 1.0),   # tuple: 逐元素
+    # ── UI (运行期 UI：参考分辨率像素) ──
+    ("UICanvas", "reference_w"): (16, 16384),
+    ("UICanvas", "reference_h"): (16, 16384),
+    ("UICanvas", "sort_order"): (-1000, 1000),
+    ("UIRect", "pos_x"): (-100000.0, 100000.0),
+    ("UIRect", "pos_y"): (-100000.0, 100000.0),
+    ("UIRect", "width"): (0.0, 100000.0),      # 0 = 撑满父级
+    ("UIRect", "height"): (0.0, 100000.0),
+    ("UIRect", "order"): (-1000, 1000),
+    ("UIPanel", "border_width"): (0.0, 64.0),
+    ("UILabel", "size"): (0.0, 512.0),         # 0 = 主题默认
+    ("UIButton", "size"): (0.0, 512.0),
+    ("UIToggle", "size"): (0.0, 512.0),
+    ("UISlider", "min_value"): (-1000000.0, 1000000.0),
+    ("UISlider", "max_value"): (-1000000.0, 1000000.0),
+    ("UISlider", "step"): (0.0, 1000000.0),
+    ("UISlider", "value"): (-1000000.0, 1000000.0),
+    ("UISlider", "size"): (0.0, 512.0),
+    ("UISelect", "index"): (-1000, 1000),
+    ("UISelect", "size"): (0.0, 512.0),
 }
 
 
@@ -111,12 +139,21 @@ def clamp_component_field(component_name: str, field_name: str, value):
 # 不得登记未实现的未来选项 (假自由度; GUI 自由度规范见 Doc/Dev/ui_protocol.md §11)。
 FIELD_CHOICES: dict = {
     # ── Light ──
-    ("Light", "light_type"): [("directional", "Directional"),
-                              ("point", "Point")],
+    #   area = 面光源（发光平面：位置参与、背面无直射光）；directional 为旧值，仍兼容
+    ("Light", "light_type"): [("area", "Area"),
+                              ("point", "Point"),
+                              ("directional", "Directional (legacy)")],
     # ── TextDisplay ──
     ("TextDisplay", "align"): [("left", "Left"),
                                 ("center", "Center"),
                                 ("right", "Right")],
+    # ── UI (受控枚举：只能选已实现的值) ──
+    ("UICanvas", "scale_mode"): [(m, m.replace("_", " ").title()) for m in _UI_SCALE_MODES],
+    ("UIRect", "anchor"): [(a, a.replace("_", " ").title()) for a in _UI_ANCHORS],
+    ("UIRect", "pivot"): [(a, a.replace("_", " ").title()) for a in _UI_ANCHORS],
+    ("UILabel", "align"): [(a, a.title()) for a in _UI_ALIGNS],
+    ("UIButton", "variant"): [(v, v.title()) for v in _UI_BUTTON_VARIANTS],
+    ("UISelect", "skin"): [(s, s.title()) for s in _UI_SELECT_SKINS],
 }
 
 
@@ -176,3 +213,7 @@ class ComponentRegistry:
             reg["Light"] = Light
         if "TextDisplay" not in reg:
             reg["TextDisplay"] = TextDisplay
+        # ── 运行期 UI（场景驱动；见 Core/Scene/UIComponents.py）──
+        for name, cls in UI_COMPONENTS.items():
+            if name not in reg:
+                reg[name] = cls

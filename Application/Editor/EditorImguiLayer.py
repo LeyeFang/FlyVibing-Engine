@@ -23,7 +23,8 @@ from Application.Core.Layers.Layer import Layer
 from Application.Core.Events.Event import Event
 from Application.Editor.EditorHost import EditorHost
 from Application.Editor.UI.UIManager import UIManager
-from Application.Editor.UI.panels import ScenePanel, SettingsPanel, NodeEditorPanel, ResourcePanel
+from Application.Editor.UI.panels import (ScenePanel, SettingsPanel, NodeEditorPanel,
+                                          ResourcePanel, HotkeysPanel)
 
 
 class EditorImguiLayer(Layer):
@@ -118,6 +119,9 @@ class EditorImguiLayer(Layer):
         except Exception:  # noqa: BLE001 — 无 live server/无头测试跳过
             pass
         imgui.new_frame()
+        # ── 热键派发（注册表 = 唯一事实源；文本框聚焦时自动让路）──
+        from Application.Editor.HotkeyDispatch import poll as _poll_hotkeys
+        _poll_hotkeys()
         UIManager.draw_all()
         imgui.render()
         imgui.backends.opengl3_render_draw_data(imgui.get_draw_data())
@@ -211,4 +215,8 @@ class EditorImguiLayer(Layer):
         UIManager.register(ResourcePanel())
         UIManager.register(NodeEditorPanel())
         UIManager.register(SettingsPanel())
+        UIManager.register(HotkeysPanel())      # Help ▸ Hot Keys…（默认隐藏）
+        # 热键表在装配期一次登记（面板 / CLI / poll 读同一份）
+        from Application.Editor.HotkeyActions import register_editor_hotkeys
+        register_editor_hotkeys()
         cls._panels_registered = True

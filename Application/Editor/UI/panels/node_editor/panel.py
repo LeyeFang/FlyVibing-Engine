@@ -1718,7 +1718,10 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
         return count
 
     def _handle_deletion(self, canvas: NodeCanvas, ne) -> None:
-        if not imgui.is_key_pressed(imgui.Key.delete, False):
+        # 键位来自热键注册表（Help ▸ Hot Keys / CLI `hotkeys.list` 同源）。
+        # 注册表只在画布这一帧的语境里被询问 —— 其它面板的输入框不会误删。
+        from Application.Editor.HotkeyDispatch import fired as hotkey_fired
+        if not hotkey_fired("node_editor.delete"):
             return
         sel_links = ne.get_selected_links()
         node_count = self._delete_selected_nodes(canvas, ne)

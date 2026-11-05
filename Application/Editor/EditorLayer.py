@@ -45,6 +45,9 @@ class EditorLayer(Layer):
 
     renderer = None
 
+    # ── 编辑期 UI 预览（场景 UI 组件 → 视口所见即所得；逻辑线程快照 + 渲染线程编译）──
+    _ui_elements: tuple = ()
+
     # ════════════════════════════════════════════════════════════
     # 生命周期
     # ════════════════════════════════════════════════════════════
@@ -114,7 +117,8 @@ class EditorLayer(Layer):
         from Application.Editor.EditorHost import EditorHost
         from Application.Core.Text import TextSystem
         TextSystem.tick(EditorHost)
-
+        # ── 运行期 UI 预览: 场景 UI 组件 → 视口（逻辑线程取快照，渲染线程编译）──
+        cls._ui_elements = cls._collect_ui_elements(EditorHost.scene)
         # ── 检测 RuntimeWindow 关闭 (用户点 X) ──
         if SimulationController.is_running():
             from Application.Runtime.GameRuntime import GameRuntime
@@ -122,12 +126,54 @@ class EditorLayer(Layer):
             if (GameRuntime.window is not None
                     and GameRuntime.window.glfw_window is not None
                     and _glfw.window_should_close(GameRuntime.window.glfw_window)):
-                SimulationController.stop()
+                # 关窗请示: 与 ESC 同一条确认链（Yes 才真的停）；未启用 UI 时保持旧行为
+                from Application.Runtime.RuntimeUILayer import RuntimeUILayer
+                if RuntimeUILayer.is_enabled():
+                    _glfw.set_window_should_close(GameRuntime.window.glfw_window, False)
+                    RuntimeUILayer.open()
+                else:
+                    SimulationController.stop()
 
     @classmethod
     def OnRender(cls):
         """非 ImGui 渲染 — 轮廓请求同步 (ImGui 渲染见 EditorImguiLayer)。"""
         OutlinerID._sync()
+        cls._render_ui_preview()
+
+    # ════════════════════════════════════════════════════════════
+    # 运行期 UI 预览（UiComponents → UI pass；协议 product_todo.md §10）
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def _collect_ui_elements(cls, scene_mgr) -> tuple:
+        """逻辑线程: 场景 UI → 不可变快照（没有 UI 组件时返回空元组）。"""
+        if scene_mgr is None:
+            return ()
+        try:
+            from Application.Core.UI.scene import collect_elements
+            return collect_elements(scene_mgr)
+        except Exception:  # noqa: BLE001 — 预览失败不影响编辑器主循环
+            return ()
+
+    @classmethod
+    def _render_ui_preview(cls) -> None:
+        """渲染线程: 快照 → quad（只读，不碰 ECS）。"""
+        renderer = cls.renderer
+        if renderer is None:
+            return
+        elements = cls._ui_elements
+        vw = int(getattr(renderer, "viewport_width", 0) or 0)
+        vh = int(getattr(renderer, "viewport_height", 0) or 0)
+        if vw <= 0 or vh <= 0:
+            return
+        try:
+            if not elements:
+                renderer.set_ui_quads(())
+                return
+            from Application.Core.UI.tree import build_ui
+            renderer.set_ui_quads(tuple(build_ui(elements, vw, vh).quads))
+        except Exception:  # noqa: BLE001
+            pass
 
     @classmethod
     def OnEvent(cls, event: Event) -> None:

@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**90**
-- `core`：85
+- 节点数：**100**
+- `core`：95
 - `heavy`：1
 - `live`：2
 - `manual`：2
@@ -15,8 +15,12 @@
 
 | id | tier | kind | owner | test | covers |
 |---|---|---|---|---|---|
+| `core.builtin_mesh_normals` | `core` | `unit` | `core` | `Test/Application/Core/test_builtin_mesh_normals.py` | Application.Resource.ResourceManager<br>Resource.Meshes.Builtin |
+| `core.canvas_unknown_types` | `core` | `unit` | `core` | `Test/Application/Core/test_canvas_unknown_types.py` | Application.Core.NodeGraph.canvas |
 | `core.component_clamps` | `core` | `integration` | `core` | `Test/Application/Core/test_component_clamps.py` | Application.Core.Scene.BasicComponents<br>Application.Core.Scene.ComponentRegistry<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.controllers.SceneBrowserController |
 | `core.filesystem.vfs` | `core` | `integration` | `core.filesystem` | `Test/Application/Core/FileSystem/test_vfs.py` | Application.Core.FileSystem.PathUtils<br>Application.Core.FileSystem.VFS |
+| `core.frame_capture_slot` | `core` | `unit` | `core` | `Test/Application/Core/test_frame_capture_slot.py` | Application.Core.Renderer.FrameCaptureSlot |
+| `core.hotkeys` | `core` | `contract` | `core.input` | `Test/Application/Core/test_hotkeys.py` | Application.Core.Input.Hotkeys<br>Application.Editor.HotkeyActions<br>Application.Editor.UI.panels.HotkeysPanel |
 | `core.input.input_pipeline` | `core` | `integration` | `core.input` | `Test/Application/Core/Input/test_input_pipeline.py` | Application.Core.Events.Enum.InputEnum<br>Application.Core.Input.InputBackend<br>Application.Core.Input.InputPipeline |
 | `core.log_bus` | `core` | `unit` | `core` | `Test/Application/Core/test_log_bus.py` | Application.Core.Diagnostics.LogBus |
 | `core.material_isolation` | `core` | `integration` | `core` | `Test/Application/Core/test_material_isolation.py` | Application.Core.Events.Event<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.SceneManager<br>Application.Resource.ResourceManager |
@@ -24,11 +28,17 @@
 | `core.node_graph_boundary` | `core` | `contract` | `core` | `Test/Application/Core/test_node_graph_boundary.py` | - |
 | `core.print_inventory` | `core` | `unit` | `core` | `Test/Application/Core/test_print_inventory.py` | Utils.Dev.print_audit<br>Doc.Dev.print_inventory |
 | `core.runtime_project_loader` | `core` | `integration` | `core` | `Test/Application/Core/test_runtime_project_loader.py` | Application.Core.Engine<br>Application.Core.NodeGraph<br>Application.Core.NodeGraph.canvas<br>Application.Core.NodeGraph.evaluator_engine<br>Application.Core.Project<br>Application.Resource.ResourceManager |
+| `core.runtime_ui` | `core` | `contract` | `core` | `Test/Application/Core/test_runtime_ui.py` | Application.Core.UI.layout<br>Application.Core.UI.theme<br>Application.Runtime.RuntimeUILayer |
 | `core.scene.entity_manager` | `core` | `integration` | `core.scene` | `Test/Application/Core/Scene/test_entity_manager.py` | Application.Core.Events.Event<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.SceneManager |
 | `core.scene.prefab_manager` | `core` | `integration` | `core.scene` | `Test/Application/Core/Scene/test_prefab_manager.py` | Application.Core.Events.Event<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.PrefabManager<br>Application.Core.Scene.SceneManager<br>Application.Resource.ResourceManager |
 | `core.scene.scene_manager` | `core` | `integration` | `core.scene` | `Test/Application/Core/Scene/test_scene_manager.py` | Application.Core.Events.Event<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.Scene<br>Application.Core.Scene.SceneManager<br>Application.Resource.ResourceManager |
+| `core.scene_material_refs` | `core` | `unit` | `core` | `Test/Application/Core/test_scene_material_refs.py` | Application.Core.Scene.Scene<br>Application.Resource.ResourceManager |
 | `core.test_map` | `core` | `contract` | `core` | `Test/Application/Core/test_test_map.py` | - |
 | `core.thread_boundary` | `core` | `contract` | `core` | `Test/Application/Core/test_thread_boundary.py` | - |
+| `core.ui_controls` | `core` | `contract` | `core` | `Test/Application/Core/test_ui_controls.py` | Application.Core.UI.controls<br>Application.Core.UI.tree<br>Application.Runtime.RuntimeUILayer<br>Application.Core.NodeGraph.node_types.ui<br>Application.Core.NodeGraph.evaluators.ui |
+| `core.ui_showcase` | `core` | `contract` | `core` | `Test/Application/Core/test_ui_showcase.py` | Application.Core.Scene.UIComponents<br>Application.Core.UI.tree<br>Application.Core.UI.scene<br>Examples.UIShowcase |
+| `core.ui_tree` | `core` | `contract` | `core` | `Test/Application/Core/test_ui_tree.py` | Application.Core.UI.tree<br>Application.Core.UI.scene<br>Application.Core.UI.theme |
+| `core.window_click_through` | `core` | `unit` | `core` | `Test/Application/Core/test_window_click_through.py` | Application.Core.Window.glfwWindow |
 | `editor.action_contract` | `core` | `contract` | `editor` | `Test/Application/Editor/test_action_contract.py` | Application.Core.Scene.Scene<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.Gizmos.TransformGizmo<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Editor.UI.controllers.SelectionController |
 | `editor.debug_report` | `core` | `unit` | `editor` | `Test/Application/Editor/test_debug_report.py` | Application.Core.Diagnostics.DebugEvents<br>Application.Runtime.RuntimeDebugLayer<br>Application.Editor.UI.panels.SettingsPanel |
 | `editor.e2e_node_group_live` | `live` | `e2e` | `editor` | `Test/Application/Editor/test_e2e_node_group_live.py` | Application.Core.NodeGraph.group_geometry<br>Application.Core.NodeGraph.group_layout<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.panels.node_editor.panel |

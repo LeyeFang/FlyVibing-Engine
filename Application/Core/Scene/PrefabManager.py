@@ -170,6 +170,7 @@ class PrefabManager:
             新创建的实体 ID 列表 (root 在最前)
         """
         from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer, Light, TextDisplay
+        from Application.Core.Scene.UIComponents import UICanvas, UIRect, UIPanel, UILabel, UIButton
         import esper
 
         # 组件类型映射 (名称 → esper component class)
@@ -180,6 +181,12 @@ class PrefabManager:
             "Light": Light,
             "DirectionalLight": Light,   # 旧 prefab 名 → 迁移
             "TextDisplay": TextDisplay,
+            # 运行期 UI（场景驱动）— prefab 也可以是对话框/HUD 模板
+            "UICanvas": UICanvas,
+            "UIRect": UIRect,
+            "UIPanel": UIPanel,
+            "UILabel": UILabel,
+            "UIButton": UIButton,
         }
 
         # 旧 ID → 新 ID 映射

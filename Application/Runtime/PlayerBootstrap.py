@@ -33,7 +33,9 @@ class PlayerSession:
     scene: object | None = None      # Scene（已加载, 可能未重映射）
     scene_path: str = ""             # 启动场景绝对路径
     title: str = "Game"
-    window_mode: str = "auto"        # auto | windowed | fullscreen | overlay
+    window_mode: str = "auto"        # auto | windowed | borderless | fullscreen | overlay
+    window_width: int = 1280         # 仅 windowed 生效 (overlay 固定无边框全屏)
+    window_height: int = 720
     output_dir: str = ""             # 数据输出目录（默认 <包根>/output）
     root: str = ""                   # bundle 根（= game.json 所在目录; 无则 CWD）
     background_color: 'tuple[float, float, float, float] | None' = None
@@ -68,12 +70,24 @@ def _prepare_from_game_json(path: str) -> PlayerSession:
     if not isinstance(cfg, dict):
         raise ValueError(f"game.json 格式错误: {path}")
 
+    _win = cfg.get("window") or {}
+    if not isinstance(_win, dict):
+        _win = {}
+
+    def _dim(key: str, default: int) -> int:
+        try:
+            return max(320, min(7680, int(_win.get(key, default))))
+        except (TypeError, ValueError):
+            return default
+
     s = PlayerSession(
         source=path,
         source_kind="game",
         root=root,
         title=cfg.get("title") or os.path.splitext(os.path.basename(root))[0],
-        window_mode=(cfg.get("window") or {}).get("mode", "auto"),
+        window_mode=_win.get("mode", "auto"),
+        window_width=_dim("width", 1280),
+        window_height=_dim("height", 720),
         output_dir=cfg.get("output_dir") or "output",
     )
 
@@ -333,6 +347,10 @@ def run(source: str, max_frames: int = 0) -> int:
     RuntimeWindow._topmost = overlay
     RuntimeWindow._click_through = overlay
 
+    # ── 窗口模式（与 PIE 同语义: overlay → 固定无边框全屏, 标题栏隐藏）──
+    RuntimeWindow.apply_start_preferences(
+        mode, session.window_width, session.window_height, overlay=overlay)
+
     # ── 引擎初始化（创建窗口 + 渲染线程; 之后各自属性才可用）──
     from Application.Runtime.GameRuntime import GameRuntime
 
@@ -379,6 +397,12 @@ def run(source: str, max_frames: int = 0) -> int:
     from Application.Runtime.RuntimeInputLayer import RuntimeInputLayer
 
     layers.append(RuntimeInputLayer)
+
+    # ── 运行时 UI（ESC → 退出确认；成品默认英文，game.json 后续可覆盖）──
+    from Application.Runtime.RuntimeUILayer import RuntimeUILayer
+
+    RuntimeUILayer.configure()
+    layers.append(RuntimeUILayer)
 
     for layer in layers:
         GameRuntime.push_layer(layer)

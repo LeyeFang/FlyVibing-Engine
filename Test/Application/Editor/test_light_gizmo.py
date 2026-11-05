@@ -98,8 +98,8 @@ def main() -> int:
         check("is_selected 命中 selected_ids", d1.is_selected and not d2.is_selected)
         check("is_editor_visible 来自眼图标", d1.is_editor_visible and not d2.is_editor_visible)
         check("数据类为 LightGizmoData", isinstance(d1, LightGizmoData))
-        check("light_type/range 透传 (默认平面光/range=10)",
-              d1.light_type == "directional" and abs(d1.range - 10.0) < 1e-6,
+        check("light_type/range 透传 (默认面光源/range=10)",
+              d1.light_type == "area" and abs(d1.range - 10.0) < 1e-6,
               f"{d1.light_type}/{d1.range}")
 
         # ── 2. overlay: key / 纹理 / 语义标志 ──

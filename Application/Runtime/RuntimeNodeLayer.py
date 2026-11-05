@@ -75,6 +75,19 @@ class RuntimeNodeLayer(Layer):
         cls._on_stop_request = on_stop_request
 
     @classmethod
+    def request_stop(cls) -> None:
+        """请求停止当前运行（与 `ExitGame` 节点同一条链）。
+
+        PIE → 宿主注册的 `on_stop_request`（`SimulationController.stop`）；
+        成品/无宿主 → `GameRuntime.run_state = False` 兜底。
+        """
+        if cls._context is not None:
+            cls._context.request_stop()
+            return
+        from Application.Runtime.GameRuntime import GameRuntime
+        GameRuntime.run_state = False
+
+    @classmethod
     def _consume_stop_request(cls) -> None:
         """ExitGame 停止请求兜底: 宿主未注册回调时用运行时中立方式结束 GameRuntime。"""
         if cls._context is None:
@@ -82,6 +95,27 @@ class RuntimeNodeLayer(Layer):
         if cls._context.stop_requested and cls._context.on_stop_request is None:
             from Application.Runtime.GameRuntime import GameRuntime
             GameRuntime.run_state = False
+
+    @classmethod
+    def _warn_forced_unknown(cls) -> None:
+        """`sim.play force=true` 越过预检时，运行期持续提醒（约每 5 秒一次）。
+
+        这些节点不会被执行 —— 只警告一次的话，用户很容易忘了自己在跑一个
+        残缺的图（ISSUE 2026-11-03 §4.5）。
+        """
+        try:
+            from Application.Editor.UI.controllers.SimulationController import SimulationController
+            forced = SimulationController.forced_unknown_types or {}
+        except Exception:  # noqa: BLE001 — 运行时无编辑器（成品）时不存在该状态
+            return
+        if not forced:
+            return
+        cls._forced_warn_tick = getattr(cls, "_forced_warn_tick", 0) + 1
+        if cls._forced_warn_tick % 300 != 1:
+            return
+        names = ", ".join(sorted(forced))
+        print(f"[Runtime] WARNING: running with unregistered node types (forced): {names} "
+              f"— these nodes are NOT evaluated")
 
     @classmethod
     def _dispatch_input_events(cls) -> None:
@@ -110,8 +144,21 @@ class RuntimeNodeLayer(Layer):
             for record in frame.mouse_clicks:
                 cls._context.input_event = record
                 cls._evaluator.trigger("OnMouseClicked", cls._context)
+            # ★ UI 事件（按钮/开关/滑条/选择）→ OnUIClick
+            for record in cls._drain_ui_events():
+                cls._context.input_event = record
+                cls._evaluator.trigger("OnUIClick", cls._context)
         finally:
             cls._context.input_event = None
+
+    @classmethod
+    def _drain_ui_events(cls) -> list:
+        """取走 UI 层积压事件（无 UI 层 / 无事件 → 空列表）。"""
+        try:
+            from Application.Runtime.RuntimeUILayer import RuntimeUILayer
+            return RuntimeUILayer.drain_events()
+        except Exception:  # noqa: BLE001 — 无 UI 层（纯逻辑测试/裁剪发行版）
+            return []
 
     # ════════════════════════════════════════════════════════════
     # Layer 生命周期
@@ -197,6 +244,7 @@ class RuntimeNodeLayer(Layer):
             cls._frame += 1
             # 仅当 frame 为奇数时执行（跳过重复实例的第二次调用）
             if cls._frame % 2 == 1:
+                cls._warn_forced_unknown()
                 if cls._engine is not None:
                     cls._context.delta_time = cls._engine.get_delta_time()
                     cls._context.elapsed_time = cls._engine.get_elapsed_time()

@@ -8,6 +8,7 @@
 | `RestingState/RestingState.myproj` | 静息态（睁眼/闭眼） | `scenes/RestingState.scene` |
 | `SerialPulse/SerialPulse.myproj` | **每 1 s 串口发码，1..10 循环**（最小可运行链路） | `scenes/SerialPulse.scene` |
 | `ParallelPulse/ParallelPulse.myproj` | **每 1 s 并口发码，1..10 循环**（最小可运行链路） | `scenes/ParallelPulse.scene` |
+| `UIShowcase/UIShowcase.myproj` | **运行期 UI 组件全清单**（Canvas/Panel/Label/Button 变体 + 退出确认对话柜） | `scenes/UIShowcase.scene` |
 
 ## 工具：把流水线写进任意场景（可覆写）
 

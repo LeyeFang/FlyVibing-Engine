@@ -218,17 +218,34 @@ _PIE_MODES = [("settings.export.windowed", "windowed"),
 
 
 def _draw_export_page() -> None:
-    """Export 页 — PIE 初始窗口行为（持久化 PIE.json; 下次 Run 生效）。"""
+    """Export 页 — PIE 初始窗口行为（持久化 PIE.json; 下次 Run 生效）。
+
+    ★ 按场景类型差异化（与 ScenePanel 的 3D / 2D / Overlay 按钮同源）:
+      - Overlay: 覆盖层 → 固定无边框全屏（标题栏隐藏 + 铺满显示器），不提供可选项
+      - 2D / 3D: 窗口化（可设分辨率）/ 无边框全屏 / 独占全屏
+    """
     ctrl = get_ctrl(NAME_SIMULATION)
     if ctrl is None:  # 无头/未注册环境兜底
         imgui.text_disabled(t("settings.sim.unavailable"))
         return
+
+    # ── 当前场景类型 → 窗口偏好画像（真身判定在 SimulationController）──
+    try:
+        from Application.Editor.UI.controllers.SceneBrowserController import (
+            SceneBrowserController as _SBC,
+        )
+        _game_type = _SBC.get_game_type()
+    except Exception:  # noqa: BLE001 — 无场景上下文 → 按 3D 处理
+        _game_type = "3d"
+    prof = ctrl.get_window_profile(_game_type)
     s = ctrl.get_pie_settings()
 
     imgui.text_disabled(f"{t('settings.export.pie')} — {t('settings.export.note')}")
+    _gt_label = {"3d": "3D", "2d": "2D", "overlay": "Overlay"}.get(
+        prof["game_type"], prof["game_type"])
+    imgui.text_disabled(t("settings.export.scope", type=_gt_label))
     imgui.separator()
 
-    # ── 模式 [自由度: L1 受控枚举] ──
     # 工程背景色（测试性配置；存 .myproj，完整成品常用 skybox/内容填底）
     from Application.Editor.ProjectManager import ProjectManager as _PM
     if _PM.is_open():
@@ -252,10 +269,17 @@ def _draw_export_page() -> None:
         imgui.text_disabled(t("settings.bg.open_project"))
     imgui.separator()
 
+    # ── Overlay: 覆盖层固定无边框全屏 [自由度: L0 固定动作 — 无可选项] ──
+    if prof["fixed"]:
+        imgui.text(f"{t('settings.export.mode')}: {t('settings.export.overlay_fixed')}")
+        imgui.text_disabled(t("settings.export.overlay_note"))
+        return
+
+    # ── 模式 [自由度: L1 受控枚举] ──
     labels = [t("settings.export.windowed"), t("settings.export.borderless"),
               t("settings.export.fullscreen")]
     keys = [m[1] for m in _PIE_MODES]
-    cur = keys.index(s["mode"]) if s["mode"] in keys else 0
+    cur = keys.index(prof["mode"]) if prof["mode"] in keys else 0
     changed, idx = imgui.combo(f"{t('settings.export.mode')}##pie_mode", cur, labels)
     if changed:
         ctrl.set_pie_settings(mode=keys[idx])

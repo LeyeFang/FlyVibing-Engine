@@ -58,6 +58,7 @@ BASIC_COLOR      = (0.580, 0.580, 0.620)
 MEDIA_COLOR      = (0.870, 0.350, 0.400)
 TEXT_COLOR       = (0.420, 0.780, 0.560)
 INPUT_COLOR      = (0.920, 0.550, 0.420)
+UI_COLOR         = (0.520, 0.600, 0.940)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -80,3 +81,4 @@ from . import io         # noqa: E402, F401
 from . import media      # noqa: E402, F401
 from . import text       # noqa: E402, F401
 from . import input      # noqa: E402, F401
+from . import ui         # noqa: E402, F401

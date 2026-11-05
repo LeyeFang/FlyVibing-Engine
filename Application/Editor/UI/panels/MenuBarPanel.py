@@ -1,5 +1,6 @@
 from imgui_bundle import imgui
 
+from Application.Editor.I18n import t
 from Application.Editor.UI.BasePanel import BasePanel
 from Application.Editor.UI.UIManager import UIManager
 
@@ -79,8 +80,13 @@ class MenuBarPanel(BasePanel):
             draw_extensions_menu()
 
             # ── Help ────────────────────────────────────────
-            if imgui.begin_menu("Help", True):
-                if imgui.menu_item("About", "", False, True)[0]:
+            if imgui.begin_menu(t("menu.help.title"), True):
+                # ── Hot Keys — 只读热键总表（数据源 = Input.Hotkeys 注册表）──
+                if imgui.menu_item(t("menu.help.hotkeys"), "", False, True)[0]:
+                    from Application.Editor.UI.panels.HotkeysPanel import open_hotkeys_panel
+                    open_hotkeys_panel()
+                imgui.separator()
+                if imgui.menu_item(t("menu.help.about"), "", False, True)[0]:
                     pass
                 imgui.end_menu()
 

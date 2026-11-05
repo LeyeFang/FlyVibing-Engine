@@ -57,6 +57,8 @@ class Renderer(ABC):
         self._cam_is_orthographic: bool = False
         self._cam_ortho_size: float = 10.0
         self._overlay_callbacks: list = []
+        # 运行时 UI 叠加层（纯数据 quad 元组；渲染线程直接读取）
+        self._ui_quads: tuple = ()
         # 后端信息（GL vendor/version 等; 渲染线程采集, 只读消费 — renderer.snapshot op）
         self.gl_info: dict = {}
 
@@ -72,6 +74,13 @@ class Renderer(ABC):
         """
         if self._command_queue is not None:
             self._command_queue.enqueue(cmd)
+
+    def set_ui_quads(self, quads) -> None:
+        """替换运行时 UI 叠加层（`Core/UI/layout.UIQuad` 序列）。
+
+        每帧整体替换（不原地修改），因此渲染线程读到的总是完整快照。
+        """
+        self._ui_quads = tuple(quads or ())
 
     def enqueue_many(self, cmds) -> None:
         """提交一组渲染命令 — 同批成员保证被同一帧消费 (原子批语义)。"""

@@ -51,6 +51,11 @@ class MeshRenderer(DataclassContract):
     mesh_id: int = 1
     material_id: int = 0
     visible: bool = True
+    # 材质的**稳定引用**（2026-11-03 修 id 滞移）: 保存场景时由
+    # ResourceManager.MaterialRef() 写入（`builtin://名称` 或绝对路径）；
+    # 加载时优先用它把引用还原成本会话的 live `material_id`。
+    # 旧场景没这个字段 → 默认 "" → 行为不变（仍靠 .myproj 的 id_map）。
+    material_path: str = ""
 
     def __post_init__(self) -> None:
         """dataclass 生成 __init__ 后自动调用 — 绑定默认 Material。"""
@@ -81,24 +86,32 @@ class MediaPlayer(DataclassContract):
 
 @component
 class Light(DataclassContract):
-    """光源 — 平面光 / 点光 双类型 (协议: Doc/Dev/shader_protocol.md §7)。
+    """光源 — 面光源 / 点光源 两类 (协议: Doc/Dev/shader_protocol.md §7)。
 
     light_type:
-      - "directional" (平面光/方向光): 照射方向 = Transform 局部 -Z 前向的世界方向,
-        与实体位置无关 (位置仅决定图标位置); 经 uLightDir[]/uLightColor[] 注入。
-      - "point" (点光): 光源位于实体世界坐标; 按 range 衰减
+      - "area" (面光源; 旧名 "directional" 仍兼容): 一块**会发光的平面**。
+        平面位置 = 实体世界坐标, 发光方向 = Transform 局部 -Z 的世界方向 (传播方向 d)。
+        ★ 只有位于发光面**正面** (dot(P - lightPos, d) > 0) 的表面才会被照亮；
+          面背后（射线负方向）完全没有直射光 —— 位置是参与计算的。
+        经 uLightPos[]/uLightDir[]/uLightColor[] 注入。
+      - "point" (点光源): 光源位于实体世界坐标; 按 range 衰减
         att = (1 - d/range)² (d ≥ range → 0); 经 uPointPos[]/uPointColor[]/uPointRange[] 注入。
+
+    两类都走经典冯氏反射 (ambient + diffuse + specular)；材质参数:
+      uShininess / uSpecularStrength / uDiffuseStrength / uAmbientStrength /
+      uSpecularModel (0 = 经典冯氏 R·V, 1 = Blinn)。
+    0 值 = 用默认值（shader_protocol.md 的哨兵约定）。
 
     - 每类至多 4 盏 (按世界查询顺序; 超出忽略); 颜色 × 强度由渲染器每帧合并注入;
     - 仅在使用 Lighting 约定 shader 的材质上可见 — Basic/SSVEP 不受影响;
-    - 无阴影 (roadmap P2); 默认场景含一盏平面光 "Sun" (DefaultLight.prefab)。
+    - 无阴影 (roadmap P2); 默认场景含一盏面光源 "Sun" (DefaultLight.prefab)。
     """
-    light_type: str = "directional"        # "directional" (平面光) | "point" (点光)
+    light_type: str = "area"               # "area"(旧 "directional") | "point"
     color_r: float = 1.0
     color_g: float = 1.0
     color_b: float = 1.0
     intensity: float = 1.0
-    range: float = 10.0                    # 点光衰减半径 (平面光忽略)
+    range: float = 10.0                    # 点光衰减半径 (面光源忽略)
 
 
 # 向后兼容别名 (旧 import 路径; 新代码统一用 Light; 旧场景文件 "DirectionalLight" 由加载器迁移)

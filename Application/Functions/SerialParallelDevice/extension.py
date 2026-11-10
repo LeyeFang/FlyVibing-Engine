@@ -170,7 +170,7 @@ class DeviceExtension(UIExtensionBase):
 
     id = "device"
     name = "Device (Serial/Parallel)"
-    version = "0.5.0"
+    version = "0.6.0"
 
     _WINDOW_NAME = "Serial/Parallel Monitor"
     _MANAGER_NAME = "Device Manager"
@@ -202,9 +202,27 @@ class DeviceExtension(UIExtensionBase):
 
     def on_load(self, ctx) -> None:
         self._ctx = ctx
+        # 解释器协议（extdev protocol §「依赖与解释器」）: manifest 声明
+        # {"python": {"mode": "engine", "probe": ["serial"]}}；缺 pyserial 时给出可复制命令，
+        # 不再像过去那样在 monitor.py 里静默返回空端口表。
+        self._python = getattr(ctx, "python", None)
         self._load_settings()
         self._install(ctx)
+        self._report_python()
         ctx.log(f"panels ready ('{self._WINDOW_NAME}', '{self._MANAGER_NAME}')")
+
+    def _report_python(self) -> None:
+        """启动自检: 依赖缺失 → 一条可操作的日志（不阻断扩展加载）。"""
+        facade = getattr(self, "_python", None)
+        if facade is None or self._ctx is None:
+            return
+        ok, detail = facade.probe("serial")
+        if not ok:
+            self._ctx.log(
+                f"pyserial missing ({detail}) — serial features disabled. "
+                f"install: {facade.install_hint()}")
+        else:
+            self._ctx.log(f"python: {facade.executable} (source={facade.source})")
 
     def on_enable(self) -> None:
         if self._ctx is not None:
@@ -241,6 +259,34 @@ class DeviceExtension(UIExtensionBase):
 
     def on_unload(self) -> None:
         self._release_editor_lease()
+
+    # ════════════════════════════════════════════════════════════
+    # 引擎生命周期钩子（P0 解耦 — 主线耦合审计 §8.1-1）
+    # ════════════════════════════════════════════════════════════
+    # 契约（扩展侧提案，待主线实现调度）:
+    #   宿主在 PIE / 成品运行开始、结束时**只对已加载（已启用）的扩展**
+    #   调用本方法；未启用 → 不调用 → spd-io 不会被裸 import 拉起。
+    #   这替代 `Runtime/GameRuntime.py` / `PlayerBootstrap.py` 里的直接
+    #   `from Application.Functions.SerialParallelDevice import start`。
+    # 现有直接调用保留为过渡期兼容；本钩子幂等（租约模型），两者并存不会重复开线程。
+
+    def on_engine_start(self, mode: str = "pie") -> None:
+        """引擎运行开始（PIE / 导出）→ 获取 runtime 租约。
+
+        失败**不吞**：与 `GameRuntime` 现有直接调用一致，让启动路径显式失败
+        （设备 I/O 起不来时继续跑实验 = 静默丢刺激）。
+        """
+        from Application.Functions.SerialParallelDevice import start
+        start("runtime")
+        if self._ctx is not None:
+            self._ctx.log(f"runtime io lease acquired (mode={mode})")
+
+    def on_engine_stop(self) -> None:
+        """引擎运行结束 → 释放 runtime 租约（编辑器租约仍持有时线程继续）。"""
+        from Application.Functions.SerialParallelDevice import io_owner, stop
+        stop("runtime")
+        if self._ctx is not None:
+            self._ctx.log(f"runtime io lease released (owner now: {io_owner()})")
 
     def _release_editor_lease(self) -> None:
         """停止监视 + 释放编辑器租约（幂等 — 可重复调用）。"""
@@ -300,12 +346,16 @@ class DeviceExtension(UIExtensionBase):
     # ════════════════════════════════════════════════════════════
 
     def _op_status(self, args) -> dict:
-        import Application.Core.DeviceRegistry as reg
+        from Application.Functions.SerialParallelDevice import device_registry as reg
         from Application.Functions.SerialParallelDevice import (
             io_owner, is_running, parallel_status, reset_delay_ms, watch_state)
+        facade = getattr(self, "_python", None)
+        python_info = facade.explain(probe=True) if facade is not None else {}
         return {"io_running": is_running(), "io_owner": io_owner(),
                 "reset_ms": reset_delay_ms(), "watch": watch_state(),
                 "parallel": parallel_status(), "settings": dict(self._settings),
+                "registry_backend": reg.backend(),
+                "python": python_info,
                 "devices": [{"alias": "@" + name, "describe": reg.describe(name), **entry}
                             for name, entry in sorted(reg.all().items())]}
 
@@ -374,9 +424,9 @@ class DeviceExtension(UIExtensionBase):
     # ════════════════════════════════════════════════════════════
 
     def _op_bind_alias(self, args) -> dict:
-        """绑定/解绑逻辑设备名 → 物理端口（机器侧注册表; 面板按钮走同一实现）。"""
+        """绑定/解绑逻辑设备名 → 物理端口（机器侧台账; 面板按钮走同一实现）。"""
         args = args or {}
-        import Application.Core.DeviceRegistry as reg
+        from Application.Functions.SerialParallelDevice import device_registry as reg
         name = str(args.get("name") or "").strip()
         if not name:
             raise ValueError("name is required (e.g. name=mibox)")
@@ -413,7 +463,7 @@ class DeviceExtension(UIExtensionBase):
     def _op_autobind(self, args) -> dict:
         """按 USB 指纹自动改绑逻辑设备名（唯一候选才改；歧义/无匹配显式报告）。"""
         args = args or {}
-        import Application.Core.DeviceRegistry as reg
+        from Application.Functions.SerialParallelDevice import device_registry as reg
         from Application.Functions.SerialParallelDevice import identity
 
         dry = bool(args.get("dry_run"))
@@ -482,7 +532,7 @@ class DeviceExtension(UIExtensionBase):
         当前绑定的物理端口（即"把裸 COMx 的节点迁到 @name"）。
         """
         args = args or {}
-        import Application.Core.DeviceRegistry as reg
+        from Application.Functions.SerialParallelDevice import device_registry as reg
         name = str(args.get("name") or "").strip()
         if not name:
             raise ValueError("name is required")
@@ -562,7 +612,7 @@ class DeviceExtension(UIExtensionBase):
 
     def _alias_summary(self) -> str:
         """监视面板一行摘要（详情在 Device Manager）。"""
-        import Application.Core.DeviceRegistry as reg
+        from Application.Functions.SerialParallelDevice import device_registry as reg
         devices = reg.all()
         if not devices:
             return "no @alias bound — open Device Manager"
@@ -613,7 +663,7 @@ class DeviceExtension(UIExtensionBase):
 
         解绑/改绑会改变场景节点的设备指向 → 一律先弹确认框（列出受影响节点）。
         """
-        import Application.Core.DeviceRegistry as reg
+        from Application.Functions.SerialParallelDevice import device_registry as reg
         now = time.perf_counter()
         if now - self._ports_ts > _PORT_CACHE_TTL:
             self._list_ports_now()

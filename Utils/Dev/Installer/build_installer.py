@@ -192,6 +192,41 @@ def _install_engine_deps() -> None:
     subprocess.run(cmd, check=True)
 
 
+def _check_toolchain_lock(tools_root: str) -> None:
+    """校验"引擎版本 ↔ 工具链版本"锁定（`toolchain.lock.json`）。
+
+    不阻塞构建 —— 本地用更新的工具链做验证是正常流程；只在**不一致**时告警，
+    保证发布前一定会看到这条提示。锁文件缺失时静默跳过（单仓 checkout）。
+    """
+    lock_path = os.path.join(HERE, "toolchain.lock.json")
+    if not os.path.isfile(lock_path):
+        return
+    try:
+        with open(lock_path, "r", encoding="utf-8") as fh:
+            lock = json.load(fh)
+    except (OSError, ValueError) as exc:
+        print(f"[installer] WARNING: toolchain.lock.json unreadable: {exc}")
+        return
+    engine_ver = _version()
+    want = str(lock.get("engine_version") or "")
+    if want and want != engine_ver:
+        print(f"[installer] WARNING: toolchain.lock.json targets engine {want}, "
+              f"building {engine_ver} — update the lock file before release")
+    tools_version_file = os.path.join(tools_root, "VERSION")
+    if os.path.isfile(tools_version_file):
+        try:
+            with open(tools_version_file, "r", encoding="utf-8") as fh:
+                tools_ver = fh.read().strip()
+        except OSError:
+            tools_ver = ""
+        locked_tools = str(lock.get("toolchain_version") or "")
+        if tools_ver and locked_tools and tools_ver != locked_tools:
+            print(f"[installer] WARNING: toolchain locked at {locked_tools}, "
+                  f"but toolchain repo is at {tools_ver}")
+        elif tools_ver:
+            print(f"[installer] toolchain lock OK: engine {engine_ver} ↔ tools {tools_ver}")
+
+
 def _install_editor_mcp() -> None:
     """工具链 wheel → staged runtime site-packages + PATH 启动器。
 
@@ -199,8 +234,10 @@ def _install_editor_mcp() -> None:
     source，保证单仓 checkout 也能做布局验证。
     """
     site_packages = os.path.join(STAGE, "Resource", "runtime", "Lib", "site-packages")
-    tools_dist = os.path.join(os.path.dirname(ROOT),
-                              "FlyVibing-User-And-Developer-Utils", "dist")
+    tools_root = os.path.join(os.path.dirname(ROOT),
+                              "FlyVibing-User-And-Developer-Utils")
+    tools_dist = os.path.join(tools_root, "dist")
+    _check_toolchain_lock(tools_root)
     installed: list[str] = []
     if os.path.isdir(tools_dist):
         for pattern in ("engine_editor_mcp-*.whl", "flyvibing_node_editor-*.whl"):

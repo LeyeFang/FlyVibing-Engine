@@ -14,7 +14,10 @@
     "ui.drag",
     "ui.wheel",
     "ui.key",
-    "graph.group.delete"
+    "graph.group.delete",
+    "instance.info",
+    "instance.describe",
+    "extension.python"
   ],
   "states": [
     {

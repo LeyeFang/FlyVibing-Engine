@@ -118,7 +118,8 @@ def scan_code_keys() -> tuple[dict, list]:
 
 
 # 动态显示名命名空间（节点/组件/热键注册表在运行期拼键；由覆盖测试保证完整）
-_DYNAMIC_KEY_PREFIXES = ("node.", "comp.", "menu.node_group.", "hotkey.")
+#   mat.            ← shader `//!` 注解声明的参数名/分组名/枚举标签（UniformSpec）
+_DYNAMIC_KEY_PREFIXES = ("node.", "comp.", "menu.node_group.", "hotkey.", "mat.")
 
 
 BASELINE_PATH = os.path.join(REPO, "Doc", "Dev", "i18n_baseline.json")

@@ -1,11 +1,19 @@
 """统一测试运行器 — 子进程隔离 + 日志落盘 + 紧凑摘要（agent 友好）。
 
 用法:
-    python Utils/Dev/test_runner.py                    # core 档（默认; 无 GUI）
-    python Utils/Dev/test_runner.py --list             # 列出发现与档位
-    python Utils/Dev/test_runner.py --tier gui         # GL 窗口档
-    python Utils/Dev/test_runner.py --tier all --only editor
-    python Utils/Dev/test_runner.py --json             # 单行机器可读摘要
+    # 内层循环（改哪跑哪 — 默认入口，按 test_nodes.covers + ui_map.scenarios 选）
+    python Utils/Dev/test_runner.py --changed           # git 工作区改动 → 相关测试
+    python Utils/Dev/test_runner.py --affected Application/Core/Scene/SceneManager.py
+    python Utils/Dev/test_runner.py --affected Test/Application/Editor/test_foo.py  # 改测试就跑它自己
+
+    # 提交前门禁（全量档位，不是每次改动后的默认动作）
+    python Utils/Dev/test_runner.py --tier core         # core 档（默认; 无 GUI）
+    python Utils/Dev/test_runner.py --tier gui          # GL 窗口档
+    python Utils/Dev/test_runner.py --list              # 列出发现与档位
+    python Utils/Dev/test_runner.py --json              # 单行机器可读摘要
+
+档位纪律: 不带参数 = core 全量（门禁）; --affected/--changed **永不自动选** manual/live
+（交互式 / 需要运行中的编辑器），要跑它们显式 `--tier live` 或 `--tier all`。
 
 契约（见 Doc/Dev/test_protocol.md）:
   - 每个测试 = 独立子进程; 全量输出写日志文件, stdout 只回摘要
@@ -102,6 +110,18 @@ def _affected_names(paths: list[str]) -> tuple[set[str], dict[str, str]]:
                 names.add(Path(path).stem)
                 reasons[Path(path).stem] = f"covers:{','.join(sorted(covers & modules))}"
 
+    # 测试 / 场景文件本身被改动 → 直接跑它自己（covers 只描述「源码 → 测试」的边）
+    for rel in sorted(rels):
+        if not rel.startswith("Test/Application/") or not rel.endswith(".py"):
+            continue
+        stem = Path(rel).stem
+        if stem.startswith("test_"):
+            names.add(stem)
+            reasons.setdefault(stem, "self:test")
+        elif "/scenarios/" in rel:
+            names.add(stem)
+            reasons.setdefault(stem, "self:scenario")
+
     ui_path = Path(ROOT) / UI_MAP_PATH
     if ui_path.is_file():
         try:
@@ -118,6 +138,26 @@ def _affected_names(paths: list[str]) -> tuple[set[str], dict[str, str]]:
                 reasons.setdefault(name, f"ui:{ctrl.get('id')}")
 
     return names, reasons
+
+
+_SOURCE_ROOTS = ("Application/", "Test/", "Utils/", "Example")
+
+
+def _expand_untracked_dir(rel: str) -> list[str]:
+    """`git status` 的 `?? dir/` → 该目录下的文件列表（仅源码根，避免展开产物目录）。"""
+    if not rel.endswith("/"):
+        return [rel]
+    if not rel.startswith(_SOURCE_ROOTS):
+        return []
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard", "--", rel],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [r for r in (_repo_rel(line) for line in proc.stdout.splitlines()) if r]
 
 
 def _changed_paths() -> list[str]:
@@ -143,8 +183,22 @@ def _changed_paths() -> list[str]:
             path = path.split(" -> ", 1)[1]
         rel = _repo_rel(path)
         if rel:
-            out.append(rel)
+            out.extend(_expand_untracked_dir(rel))
     return out
+
+AUTO_EXCLUDED_TIERS = ("manual", "live")   # 交互式 / 需要运行中的编辑器 — 只能显式选
+
+
+def _apply_tier_policy(tests: list[tuple[str, Path, str]], affected: bool,
+                       tier: str | None) -> tuple[list[tuple[str, Path, str]],
+                                                  list[tuple[str, Path, str]]]:
+    """--affected/--changed 的默认档位策略: 去掉 manual/live（显式 --tier 时尊重用户）。"""
+    if not affected or tier is not None:
+        return tests, []
+    kept = [t for t in tests if t[2] not in AUTO_EXCLUDED_TIERS]
+    skipped = [t for t in tests if t[2] in AUTO_EXCLUDED_TIERS]
+    return kept, skipped
+
 
 def _classify(path: Path, rel: str) -> str:
     try:
@@ -307,14 +361,19 @@ def run_one(rel: str, path: Path, runs_dir: Path, timeout: float,
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="test_runner", description="统一测试运行器（子进程隔离 + 紧凑摘要）")
+    parser = argparse.ArgumentParser(
+        prog="test_runner",
+        description="统一测试运行器（子进程隔离 + 紧凑摘要）",
+        epilog="内层循环: --changed / --affected <path>（按 test_nodes.covers + ui_map.scenarios 选）; "
+               "提交前门禁: --tier core。--affected/--changed 默认跳过 manual/live。",
+    )
     parser.add_argument("--tier", choices=("core", "gui", "heavy", "live", "all"),
                         default=None,
-                        help="默认 core；--affected/--changed 时默认 all（只跑命中的测试）")
+                        help="默认 core；--affected/--changed 时默认 all（跳过 manual/live）")
     parser.add_argument("--only", default="", help="路径子串过滤（如 editor / functions / graph）")
     parser.add_argument("--exclude", default="", help="路径子串排除")
     parser.add_argument("--affected", nargs="+", default=[],
-                        help="按改动源码路径选择相关测试（test_nodes 覆盖 + ui_map 场景）")
+                        help="按改动路径选择相关测试（源码→covers；测试/场景文件→它自己）")
     parser.add_argument("--changed", action="store_true",
                         help="用 git status 的改动文件调用 --affected")
     parser.add_argument("--timeout", type=float, default=600.0)
@@ -342,13 +401,25 @@ def main(argv: list[str] | None = None) -> int:
             print("no related tests for affected paths:")
             for p in affected_paths:
                 print(f"  - {p}")
-            return 2
+            # 显式 --affected 传错路径 = 用法错误（否则「0 tests, exit 0」是假绿）;
+            # 只有 --changed 命中文档/配置改动时属于正常情况（不算失败）。
+            return 2 if ns.affected else 0
 
     tests = discover(ns.only or None)
     if ns.exclude:
         tests = [t for t in tests if ns.exclude.lower() not in t[0].lower()]
+    discovered_total = len(tests)
     if affected_names:
         tests = [t for t in tests if Path(t[0]).stem in affected_names]
+        if discovered_total and len(tests) > discovered_total * 0.5:
+            print(f"[affected] {len(tests)}/{discovered_total} tests selected — "
+                  "工作区积压的未提交改动会累加；只想测本次改动就传 --affected <这几个文件>")
+
+    tests, auto_skipped = _apply_tier_policy(tests, bool(affected_paths), ns.tier)
+    if auto_skipped:
+        names = ", ".join(Path(t[0]).stem for t in auto_skipped)
+        print(f"[affected] skipping {len(auto_skipped)} manual/live test(s) — "
+              f"run with --tier live|all to include: {names}")
 
     if ns.list:
         for rel, _p, tier in tests:

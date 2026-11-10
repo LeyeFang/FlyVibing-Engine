@@ -611,10 +611,19 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
 
         使用 st.entities 字典（与 ScenePanel 的 GetRootEntities 同源），
         避免 esper.get_component() 的世界切换时序问题。
+
+        ★ 并发（2026-11-10 P0）: 本方法跑在**渲染线程**（每帧由 draw() 调用），
+          而 `SimulationController._sync_ecs_to_scene()` 与
+          `copy.deepcopy(editor_scene)` 跑在主线程。旧实现 `clear()` + 逐条
+          `add_entity()` 期间，主线程的 deepcopy 会抛
+          `dictionary changed size during iteration` 并把渲染循环打死。
+          现在改为：**先在旁边建好整张新表，再一次性原子替换** ——
+          读方永远看到完整的旧表或完整的新表，不存在半空表。
         """
         from Application.Editor.EditorHost import EditorHost
         from Application.Core.Scene.SceneManager import SceneManager
         from Application.Core.Scene.BasicComponents import Transform, Camera, MeshRenderer
+        from Application.Core.Scene.Scene import EntityData
         import copy
 
         try:
@@ -635,11 +644,13 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
             st.get_main_camera_2d_id(),
             st.get_main_camera_overlay_id(),
         }
-        scene.entities.clear()
 
         # ★ 改用 st.entities 字典迭代（与 ScenePanel 同源），不再依赖 esper.get_component
-        for eid_str in list(st.entities.keys()):
-            eid = int(eid_str)
+        #   在锁内取 id 快照 —— 不持有锁做 deepcopy（那是 0.5-0.7 ms 的活）
+        new_entities: dict[int, EntityData] = {}
+        next_sid = 1
+        for eid in st.entity_ids_snapshot():
+            eid = int(eid)
             if eid in _sys_ids:
                 continue
             # 只同步有 Transform 的实体
@@ -647,19 +658,28 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
                 xform = st.GetComponent(eid, Transform)
             except Exception:
                 continue
+            if xform is None:
+                continue
             name = st.GetEntityName(eid) or f"Entity_{eid}"
-            comps = {"Transform": copy.deepcopy(xform)}
+            comps: dict = {"Transform": copy.deepcopy(xform)}
             try:
                 cam = st.GetComponent(eid, Camera)
-                comps["Camera"] = copy.deepcopy(cam)
             except Exception:
-                pass
+                cam = None
+            if cam is not None:
+                comps["Camera"] = copy.deepcopy(cam)
             try:
                 mr = st.GetComponent(eid, MeshRenderer)
-                comps["MeshRenderer"] = copy.deepcopy(mr)
             except Exception:
-                pass
-            scene.add_entity(name=name, **comps)
+                mr = None
+            if mr is not None:
+                comps["MeshRenderer"] = copy.deepcopy(mr)
+            new_entities[next_sid] = EntityData(name=name, components=comps)
+            next_sid += 1
+
+        # ★ 整表原子替换（旧 id 顺序稳定：按 st.entity_ids_snapshot 顺序重新编号）
+        scene.replace_entities(new_entities)
+        scene._next_sid = max(scene._next_sid, next_sid)
 
     def _draw_scene_info(self) -> None:
         """绘制 Scene 选择器 combo — 显示当前场景名 + GameType。"""

@@ -111,10 +111,14 @@ Phase 3 结果：`ui check` **23 controls OK**；`ui coverage` public op **63/63
 > 先保持本地 `test_runner --tier core`，等出现 ≥2 常态维护者 / 外部 PR / 固定发布节奏再重启。
 > 产品侧记录见 `Doc/Dev/product_todo.md` §1。
 
-- [ ] `test_map.py check` 接入 CI / 本地统一检查
-- [ ] `test_runner.py --affected <path>` 或 `--node` 快捷选择
-- [ ] `test_protocol.md` / `ui_protocol.md` 增加 map 查询入口与维护规则
-- [ ] 技能/agent 文档加入“先查 map，再改代码”的启动步骤
+- [ ] `test_map.py check` 接入 CI / 本地统一检查（仍未接 CI）
+- [x] `test_runner.py --affected <path>` / `--changed`（2026-11-08：测试/场景文件自选、未跟踪目录展开、
+      默认跳过 manual/live、`--changed` 文档改动退出 0；守卫 `test_test_runner_selection`）
+- [x] `test_protocol.md` / `ui_protocol.md` 增加 map 查询入口与维护规则
+      （引擎侧 stub `Doc/Dev/test_protocol.md` 增加「默认入口」段；CLI §1/§2 同步）
+- [x] agent 入口写清「先查 map，再改代码」：`test_runner.py --help` epilog + 模块文档
+- [ ] 地图数据质量：11 个 core 节点仍无 `covers`（boundary/hygiene 类），编辑其目标区域时 `--affected` 选不到；
+      `Application.Core.NodeGraph` 被 29 个节点当整包覆盖（粗粒度），需要按实际模块收敛
 
 ## 3. 新会话恢复方式
 

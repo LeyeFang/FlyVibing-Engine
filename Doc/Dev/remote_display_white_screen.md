@@ -116,3 +116,91 @@ engine-editor-cli capture pie --out pie-view.png
   2. 或更换远程工具/开启兼容模式；
   3. 或在远程环境使用引擎内部 `capture` / 帧缓冲验证，不依赖系统桌面截图。
 - 若后续在**本地物理显示器**上仍出现白屏，再按真实渲染问题排查。
+
+---
+
+## 8. 补充（2026-11-10）— SSH 启动成品直接崩溃：`glfw.get_video_mode` 访问违例
+
+> 与 §1–§7 的白屏**不是同一个问题**：白屏是"画面没呈现"，这条是"**进程直接被
+> 打死**"。但两者共享同一个环境前提：进程不在正常的交互式桌面显示链路上。
+
+### 8.1 症状
+
+用户通过 **SSH** 远程登录开发机（该机器有物理屏幕，平时用远程软件观察桌面）后
+启动导出成品：
+
+```
+glfw.get_video_mode(monitor) → OSError: access violation reading 0x108
+```
+
+`0x108` 是结构体内字段偏移，典型的"指针本身已失效"特征。
+
+### 8.2 根因
+
+Windows 的 SSH 会话**有自己的 window station**（不是 `WinSta0\Default`）。
+在这样的会话里：
+
+| 步骤 | 结果 |
+|---|---|
+| `glfwInit()` | **成功**（只创建 message-only 窗口） |
+| `glfwGetMonitors()` / `GetPrimaryMonitor()` | 返回**非 NULL 但已失效**的显示器句柄 |
+| `glfwGetVideoMode(monitor)` | 解引用失效结构 → **访问违例，进程退出** |
+
+也就是说：**"机器有屏幕"与"这个进程能安全查询显示器"是两件事**。
+
+### 8.3 修复（引擎侧，2026-11-10 已落地）
+
+原则：**任何显示查询都不允许把进程打死**。
+
+| 改动 | 位置 |
+|---|---|
+| `_safe_primary_monitor()` / `_safe_video_mode()` 包装，失败返回 `None` 并**停用本会话后续查询**（只告警一次） | `Core/Window/glfwWindow.py` |
+| `_get_system_resolution()` 四级回退：`MGE_WINDOW_SIZE` → Win32 `EnumDisplaySettingsW`（不经 GLFW monitor 指针）→ GLFW → 1920×1080 | 同上 |
+| 只有 `FULLSCREEN` 才触碰 monitor；`WINDOWED`/`BORDERLESS` 完全跳过显示器枚举 | `_create_window()` |
+| `FULLSCREEN` 拿不到可用显示器 → **自动降级 BORDERLESS**（用户仍看到满屏窗口） | `_create_window()` / `set_window_mode()` |
+| `MGE_WINDOW=windowed\|borderless\|fullscreen` 覆盖窗口模式 | `_env_window_mode()` |
+| `MGE_WINDOW_SIZE=1280x720` 直接指定尺寸（绕开所有探测） | `_env_size()` |
+| `MGE_MONITOR=off` 完全停用显示器枚举 | `_monitors_disabled()` |
+
+### 8.4 SSH / 远程环境推荐启动方式
+
+```powershell
+# 最稳：完全绕开显示器枚举
+$env:MGE_WINDOW='windowed'; $env:MGE_WINDOW_SIZE='1280x720'; $env:MGE_MONITOR='off'
+# 需要满屏又不想碰独占全屏
+$env:MGE_WINDOW='borderless'; $env:MGE_WINDOW_SIZE='1920x1080'; $env:MGE_MONITOR='off'
+
+# 先诊断会话能拿到什么（不创建窗口，安全）
+.venv-py314t\Scripts\python.exe Utils/Dev/display_diag.py --json display.json
+```
+
+`display_diag.py` 会并排打印四类信息源，用于判断"当前会话到底能拿到什么"：
+
+| 段 | 内容 | 判读 |
+|---|---|---|
+| `[1] 进程 / 会话` | `session_id` / `window_station` / `desktop` / `interactive_desktop` | **`interactive_desktop=False` 即 SSH 会话**，GLFW 显示器枚举不可靠 |
+| `[2] Win32 EnumDisplaySettings` | 该会话桌面的分辨率/刷新率 | 正常工作时引擎就用这个值 |
+| `[3] GetSystemMetrics` | 会话桌面尺寸 + 显示器数量 | 与 `[2]` 交叉验证 |
+| `[4] EnumDisplayDevices` | 适配器/显示器列表（含 `attached`/`primary`）| 可看出是否只有虚拟显示器（如远程软件的 Indirect Display） |
+| `[5] GLFW` | 引擎实际走的路径（**可能崩，但已用子进程隔离**）| 有 `errors` 就说明该会话不能安全查询 |
+
+退出码：`0` = Win32 能取到分辨率（引擎可正常跑）；`3` = 只能拿到回退值。
+
+### 8.5 仍然存在的限制（不是 bug）
+
+- SSH 会话里创建的窗口**属于 SSH 会话的桌面**，不会出现在物理屏幕/远程软件看到的
+  那个桌面上。要在"看得见的屏幕"上跑，必须：
+  1. 在交互式会话里启动（本地登录后的终端 / 计划任务指向交互式会话 / 远程软件自身的命令行）；
+  2. 或 SSH 只用于构建与无头校验（`--dry-run` / `--stats-json` + `perf_graph graph`）。
+- 若远程软件本身是 Indirect Display（`EnumDisplayDevices` 里出现 `CDD`），
+  §1–§7 的"白屏"仍可能发生 —— 那是呈现层问题，与本节的崩溃不同。
+
+### 8.6 验收证据
+
+| 检查 | 结果 |
+|---|---|
+| `Test/Application/Core/test_window_display_fallback.py` | **17/17**（含"模拟 `get_video_mode` 抛 0x108"→ 返回 `None`、只告警一次、后续短路）|
+| `MGE_MONITOR=off MGE_WINDOW=fullscreen MGE_WINDOW_SIZE=1024x600` 实跑成品 | 打印 `FULLSCREEN degraded to BORDERLESS` → `mode=borderless` → `exit 0` |
+| `MGE_MONITOR=off MGE_WINDOW=windowed MGE_WINDOW_SIZE=1280x720` 实跑成品 | `resolution from MGE_WINDOW_SIZE: 1280x720` → `exit 0` |
+| `Utils/Dev/display_diag.py`（本地 200 Hz + CDD 虚拟显示器） | 四源一致，`interactive_desktop=True`，GLFW 正常 |
+

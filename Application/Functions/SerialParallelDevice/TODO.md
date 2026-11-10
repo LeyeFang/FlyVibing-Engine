@@ -1,10 +1,12 @@
 # Device (Serial/Parallel) Extension — TODO（状态档案）
 
-> 状态: **v0.5.0 — 监视面板 + Device Manager（绑定/改绑/解绑 + 节点影响确认）+ 枚举端口下拉 + 逻辑设备名 + NodePack 注入 + 自动重绑
+> 状态: **v0.6.0 — 主线解耦 Batch A（端点台账自持 `device_registry.py` + 节点语义文本 + 生命周期钩子）；
+>   v0.5.0 — 监视面板 + Device Manager（绑定/改绑/解绑 + 节点影响确认）+ 枚举端口下拉 + 逻辑设备名 + NodePack 注入 + 自动重绑
 >   + 并口写入修复（byte 单字节默认 / 载荷预览 / 面板自持 I/O 租约 / 脉冲宽度可调）**
 > **接手入口: `HANDOFF.md`（交接书）+ `HANDOFF_PROMPT.md`（启动提示词）— 新维护者先读这两份**
 > **2026-10-20 节点包迁移**: `Doc/NODE_PACK_MIGRATION_2026-10-20.md`（已迁出核心；Serial 侧收尾清单）
 > 开发规范: `engine-editor-cli doc show extdev/extension_dev_protocol` · 架构: `engine-editor-cli doc show dev/extension_protocol`
+> **扩展开发者升级必读: `CHANGELOG.md`（破坏性更改 / 迁移检查单 / 节点图构建指导）**
 > 设备协议: `engine-editor-cli doc show dev/device_io_protocol`（§10 = 逻辑设备名）
 > 注: `Doc/...` 下同名文件是 CLI 迁移后的入口占位页；正文权威在工具仓库 `docs_content/`
 > manifest: `extension.json`（id=`device`; entry=extension.py; ops 前缀 `ext.device.*`; capabilities `ops/nodes/ui/graph`）
@@ -19,6 +21,7 @@
 | IO 线程 | `Application/Functions/SerialParallelDevice/io_thread.py` | 委托线程（thread boundary 白名单 delegated） |
 | 节点族 | `Application/Functions/SerialParallelDevice/node_pack.py` | Serial/Parallel Send 类型+求值器+fields；`NodePackRegistry` 自动发现 |
 | USB 指纹/自动重绑 | `identity.py` + `extension.py::_op_autobind` | serial > vid:pid；歧义显式拒绝 |
+| 端点台账（`@alias`） | `device_registry.py`（扩展自持；过渡期委托核心） | 路径/格式不变；`status.registry_backend` 显示 core/extension |
 | 协议 | `engine-editor-cli doc show dev/device_io_protocol` | 设备集成/双后端/线程纪律（正文在工具仓库 `docs_content/`） |
 
 ## 1. TODO
@@ -34,7 +37,7 @@
 ### b) 发送节点（复用既有）
 - [x] 迁移 Serial/Parallel Send 节点到扩展 Pack（type 名保持不变 — MI-SSSEP 场景兼容红线）；`node_pack.py` 自动发现注入
 - [x] `ext.device.*` ops: `status / list_ports / watch / send / monitor_snapshot / write_parallel`（agent 监视通道已通）
-- [x] **逻辑设备名（`@alias`）闭环（2026-10-12）**: `bind_alias` / `bind_nodes` + 面板 "Device names (@alias)" 段（Rebind / Unbind / Migrate N node(s)）+ `status` 别名视图；本机注册表 = `Application/Core/DeviceRegistry.py`（`device_io` §10）
+- [x] **逻辑设备名（`@alias`）闭环（2026-10-12）**: `bind_alias` / `bind_nodes` + 面板 "Device names (@alias)" 段（Rebind / Unbind / Migrate N node(s)）+ `status` 别名视图；本机台账 = `device_registry.py`（扩展自持；2026-11-10 起过渡期委托 `Application/Core/DeviceRegistry.py`）（`device_io` §10）
 - [x] **面板 ↔ 场景同步示范（2026-10-12）**: 经 `ctx.graph`（capabilities 含 `graph`）读/写当前图节点 props；面板按钮与 agent 同一实现（动作单点）
 - [x] **自动重绑（P0）**: `identity.py` 指纹（serial > vid:pid，location 只诊断）+ `ext.device.autobind` + 面板 Auto-detect + enable 自动重绑 + 换口时面板端口跟随；单测 27/27；实机已验证“过期口 → 自动恢复”（物理拔插为可选复验）
 

@@ -7,12 +7,20 @@
   --settings '{"ui.font_scale": 1.15}'   一次传入多个设置（JSON 对象）
   --settings-file path.json    JSON 对象文件（与 --settings 合并，--set 最后覆盖）
 
+实例自述（**不是设置**，只进端口台账 — `Application/Editor/Services/PortLedger.py`）:
+  --purpose "PIE UI 验证"       这一实例在做的事（后来者查端口时看到）
+  --owner agent:xxx            归属（agent / 人）
+  --tag ui --tag pie           标签（可重复）
+  --touch Examples/UIShowcase  可能被写入的目录/文件（可重复）
+  --note "别在此实例跑全量测试"
+
 覆盖只作用于本次进程，不写回 `Application/Editor/Config/settings.json`；
 面板里改设置仍走 `EditorSettings.set()` 持久化。未知键 / 非法端口直接启动失败，
 避免"参数拼错但静默用了默认值"。
 
 引擎启动:
   startup.bat --port 8978 --language zh --set ui.font_scale=1.15
+  startup.bat --port 8979 --purpose "SetUIText PIE 验证" --owner agent:codebuddy
 """
 
 from __future__ import annotations
@@ -50,16 +58,45 @@ def _read_settings_json(text: str) -> dict:
     return data
 
 
-def parse_args(argv: list[str] | None = None) -> dict:
-    """解析启动参数 → 待应用的设置 dict（不修改全局状态）。"""
+def parse_instance_meta(argv: list[str] | None = None) -> dict:
+    """解析实例自述参数：目的 / 归属 / 标签 / 涉及路径 / 提醒（不进 Settings）。"""
     args = list(sys.argv[1:] if argv is None else argv)
+    ns, _unknown = _build_parser().parse_known_args(args)
+    meta: dict = {}
+    if ns.purpose:
+        meta["purpose"] = str(ns.purpose)
+    if ns.owner:
+        meta["owner"] = str(ns.owner)
+    if ns.tag:
+        meta["tags"] = [str(t) for t in ns.tag if str(t).strip()]
+    if ns.touch:
+        meta["touches"] = [str(t) for t in ns.touch if str(t).strip()]
+    if ns.note:
+        meta["notes"] = str(ns.note)
+    return meta
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """启动参数解析器（设置键 + 实例自述；两处共用，避免重复定义）。"""
     parser = argparse.ArgumentParser(add_help=False, prog="EntryPoint")
     parser.add_argument("--port", type=int)
     parser.add_argument("--language", "--lang", dest="language")
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--settings", default=None, metavar="JSON")
     parser.add_argument("--settings-file", default=None, metavar="PATH")
-    ns, _unknown = parser.parse_known_args(args)
+    # 实例自述 — 不是设置，只进端口台账（PortLedger），让后来者知道这个端口在做什么
+    parser.add_argument("--purpose", default=None, metavar="TEXT")
+    parser.add_argument("--owner", default=None, metavar="WHO")
+    parser.add_argument("--tag", action="append", default=[], metavar="TAG")
+    parser.add_argument("--touch", action="append", default=[], metavar="PATH")
+    parser.add_argument("--note", default=None, metavar="TEXT")
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> dict:
+    """解析启动参数 → 待应用的设置 dict（不修改全局状态）。"""
+    args = list(sys.argv[1:] if argv is None else argv)
+    ns, _unknown = _build_parser().parse_known_args(args)
 
     overrides: dict = {}
     if ns.settings_file:
@@ -94,6 +131,10 @@ def parse_args(argv: list[str] | None = None) -> dict:
 
 def apply_startup_options(argv: list[str] | None = None) -> dict:
     """解析并应用到 EditorSettings（本次进程不落盘）; 返回实际生效值。"""
+    meta = parse_instance_meta(argv)
+    if meta:
+        from Application.Editor.Services.PortLedger import configure as ledger_configure
+        ledger_configure(**meta)
     overrides = parse_args(argv)
     if not overrides:
         return {}
@@ -103,4 +144,4 @@ def apply_startup_options(argv: list[str] | None = None) -> dict:
     return applied
 
 
-__all__ = ["apply_startup_options", "parse_args"]
+__all__ = ["apply_startup_options", "parse_args", "parse_instance_meta"]

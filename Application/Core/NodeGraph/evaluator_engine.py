@@ -151,6 +151,26 @@ class GraphEvaluator:
         self._trigger_lock = threading.Lock()   # ★ 线程锁: OnGameStart/OnFrameUpdate 并发保护
         self._exec_visited: set[int] = set()
         self._error_counts: dict[tuple[int, str], int] = {}   # 节点级错误限流计数
+        # ★ 索引快路径: NodeCanvas 提供 O(1) 查表 (见 canvas._ensure_index)。
+        #   测试/第三方的**最小桓画布**只实现 nodes/links，此时回退到线性扫描 ——
+        #   构造函数取一次，热路径上只做一次 is-not-None 判定。
+        self._idx_event = getattr(canvas, "event_nodes_of", None)
+        self._idx_downstream = getattr(canvas, "downstream_of", None)
+        self._idx_source = getattr(canvas, "source_pin_of", None)
+        self._idx_owner = getattr(canvas, "pin_owner_of", None)
+
+    # ── 索引访问器（带最小画布回退）─────────────────────────
+
+    def _event_nodes(self, event_type: str) -> list[int]:
+        """事件节点类型 → 节点 id 列表。"""
+        if self._idx_event is not None:
+            return self._idx_event(event_type)
+        found: list[int] = []
+        for nid, inst in self._canvas.nodes.items():
+            nd = self._types.get(inst.node_type)
+            if nd and nd.category == "Event" and inst.node_type == event_type:
+                found.append(nid)
+        return found
 
     # ── 入口 ───────────────────────────────────────────────
 
@@ -161,10 +181,9 @@ class GraphEvaluator:
             ctx._pin_values.clear()
             self._exec_visited.clear()
 
-            for nid, inst in self._canvas.nodes.items():
-                nd = self._types.get(inst.node_type)
-                if nd and nd.category == "Event" and inst.node_type == event_type:
-                    self._walk_exec(nid, ctx)
+            # 事件入口走画布索引（O(1)），不再每帧扫全部节点比 category
+            for nid in self._event_nodes(event_type):
+                self._walk_exec(nid, ctx)
 
     # ── exec 链遍历 ────────────────────────────────────────
 
@@ -221,24 +240,53 @@ class GraphEvaluator:
     # ── 连线查询 ───────────────────────────────────────────
 
     def _downstream_nodes(self, output_pin_id: int) -> list[int]:
-        """返回连接到给定 output pin 的所有节点 ID。"""
-        result = []
+        """返回连接到给定 output pin 的所有节点 ID。
+
+        走向量索引（`NodeCanvas.downstream_of`）—— 旧实现每次调用都要扫全部
+        连线，并且对每条候选连线再做一次 pin→node 线性查找。
+
+        最小桓画布（测试/第三方，只有 nodes/links）走回退分支，语义一致：
+        按连线顺序去重下游节点。
+        """
+        if self._idx_downstream is not None:
+            return self._idx_downstream(output_pin_id)
+        result: list[int] = []
         for link in self._canvas.links.values():
-            if link.from_pin == output_pin_id:
-                nid = self._canvas.find_pin_node(link.to_pin)
-                if nid is not None and nid not in result:
-                    result.append(nid)
+            if link.from_pin != output_pin_id:
+                continue
+            nid = self._pin_owner(link.to_pin)
+            if nid is not None and nid not in result:
+                result.append(nid)
         return result
+
+    def _pin_owner(self, pin_id: int):
+        """引脚 → 所属节点 id（索引优先，否则回退画布的 find_pin_node）。"""
+        if self._idx_owner is not None:
+            return self._idx_owner(pin_id)
+        fn = getattr(self._canvas, "find_pin_node", None)
+        return fn(pin_id) if fn is not None else None
 
     def _read_input(self, input_pin_id: int, ctx: ExecutionContext) -> Any:
         """读取某个 input pin 的值 — 沿 data 连线向上游查找 output pin 的值。
 
         若上游 output pin 的值尚未被设置（纯数据节点未被求值），
-        则自动触发该数据节点的懒求值（递归）。"""
+        则自动触发该数据节点的懒求值（递归）。
+
+        上游引脚同样走索引（`NodeCanvas.source_pin_of`）；多条连线接到同一
+        输入引脚时取第一条，与旧实现一致。
+        """
+        src_pin = (self._idx_source(input_pin_id) if self._idx_source is not None
+                   else self._legacy_source_pin(input_pin_id))
+        if src_pin is None:
+            return None
+        self._ensure_pin_evaluated(src_pin, ctx)
+        return ctx.get_pin(src_pin)
+
+    def _legacy_source_pin(self, input_pin_id: int):
+        """最小桓画布回退：按连线顺序取第一条接到该输入引脚的连线。"""
         for link in self._canvas.links.values():
             if link.to_pin == input_pin_id:
-                self._ensure_pin_evaluated(link.from_pin, ctx)
-                return ctx.get_pin(link.from_pin)
+                return link.from_pin
         return None
 
     # ── 数据节点懒求值 ─────────────────────────────────────
@@ -252,7 +300,7 @@ class GraphEvaluator:
         if ctx.get_pin(output_pin_id) is not None:
             return  # 已有值，跳过
 
-        owner_nid = self._canvas.find_pin_node(output_pin_id)
+        owner_nid = self._pin_owner(output_pin_id)
         if owner_nid is None:
             return
 

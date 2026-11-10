@@ -82,6 +82,8 @@ class RuntimeWindow(glfwWindow):
     @classmethod
     def MakeContextCurrent(cls) -> None:
         glfw.make_context_current(cls.glfw_window)
+        # swap interval 只能在上下文 current 之后设置（vsync / MGE_VSYNC=0 不限帧）
+        cls.ApplySwapInterval()
 
     # ════════════════════════════════════════════════════════════
     # OpenGL 上下文提示

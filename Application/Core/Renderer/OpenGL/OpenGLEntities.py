@@ -56,6 +56,7 @@ class OpenGLEntities:
         has_outline = bool(r._outline_selected_ids)
         last_program: int = 0  # ★ 缓存最后使用的 shader program，避免冗余切换
         lit_programs: set = set()  # ★ 已注入光照帧状态的 program (每帧/每 program 一次)
+        runtime_programs: set = set()  # ★ 已注入运行期 uniform (time) 的 program (每帧一次)
 
         # ── 收集可渲染实体 + 材质 (不透明 / 透明分流) ──
         opaque_items: list[tuple] = []   # (entity_id, entity, material)
@@ -97,6 +98,9 @@ class OpenGLEntities:
         # ── 光照帧状态 (面向所有带 Lighting 约定的 shader; 未声明者 no-op) ──
         light_frame = self._collect_light_frame(view)
 
+        # ── 运行期时间 (owner=runtime uniform 的注入值 — 每帧一个值) ──
+        elapsed = self._elapsed_seconds()
+
         draw_seq = ([('opaque', it) for it in opaque_items]
                     + [('alpha', it[1:]) for it in alpha_items])
 
@@ -132,6 +136,10 @@ class OpenGLEntities:
                 if program not in lit_programs:
                     lit_programs.add(program)
                     self._inject_lighting(entity.shader_id, light_frame)
+                # ★ 运行期 uniform (owner=runtime, 如 SSVEP 的 time) — 每帧更新
+                if program not in runtime_programs:
+                    runtime_programs.add(program)
+                    self._inject_runtime(entity.shader_id, elapsed)
 
             model = self._renderer.engine.scene.GetEntityModelMatrix(entity_id)
             OpenGLUtils.set_uniform_mat4(
@@ -144,8 +152,12 @@ class OpenGLEntities:
                     OpenGLUtils.set_uniform_int(
                         r.registered_shaders, entity.shader_id, 'uTexture', 0)
             if material is not None:
+                runtime_names = getattr(
+                    r.registered_shaders.get(entity.shader_id), 'runtime_uniforms', None) or ()
                 for u_name, u_value in material.uniforms_data.items():
-                    if u_name in _MATERIAL_SKIP_UNIFORMS:
+                    if u_name in _MATERIAL_SKIP_UNIFORMS or u_name in runtime_names:
+                        # runtime 名（如 time）由 _inject_runtime 每帧写 — 材质里
+                        # 就算有历史遗留键也绝不能覆盖（双保险，协议 §5 规则 3）
                         continue
                     OpenGLUtils.set_uniform_value(
                         r.registered_shaders, entity.shader_id, u_name, u_value)
@@ -279,3 +291,35 @@ class OpenGLEntities:
         OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uPointPos', frame['point_pos'], 4)
         OpenGLUtils.set_uniform_vec3_array(sh, shader_id, 'uPointColor', frame['point_color'], 4)
         OpenGLUtils.set_uniform_float_array(sh, shader_id, 'uPointRange', frame['point_range'], 4)
+
+    # ════════════════════════════════════════════════════════════
+    # 运行期 uniform (shader 声明 `//! owner=runtime` — 协议 §6.1)
+    # ════════════════════════════════════════════════════════════
+
+    def _elapsed_seconds(self) -> float:
+        """引擎运行秒数（渲染线程只读；取不到则 0.0）。
+
+        SSVEP 相位 = 2π·freq·time + phase —— time 必须单调递增且全帧一致，
+        所以每帧取一次、只往 `owner=runtime` 的 uniform 写（材质不持有该键）。
+        """
+        engine = getattr(self._renderer, 'engine', None)
+        fn = getattr(engine, 'get_elapsed_time', None)
+        try:
+            return float(fn()) if callable(fn) else 0.0
+        except Exception:  # noqa: BLE001 — 测试替身无时间系统
+            return 0.0
+
+    def _inject_runtime(self, shader_id: int, elapsed: float) -> None:
+        """把运行期值写入声明为 `owner=runtime` 的 uniform（未声明者 no-op）。
+
+        当前唯一来源 = 引擎 elapsed 秒（`time` / `uTime` / `u_time` 均兼容）。
+        这类 uniform **不进材质**（`Resource/_resource_utils.parse_shader_files`
+        已将其从 `uniforms_name_type` 剔除），因此不存在"材质把时间覆盖成 0"的旧 bug。
+        """
+        shaders = self._renderer.registered_shaders
+        data = shaders.get(shader_id)
+        runtime = getattr(data, 'runtime_uniforms', None) if data is not None else None
+        if not runtime:
+            return
+        for name in runtime:
+            OpenGLUtils.set_uniform_float(shaders, shader_id, name, elapsed)

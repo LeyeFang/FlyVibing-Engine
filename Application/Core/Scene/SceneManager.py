@@ -465,7 +465,9 @@ class SceneManager:
         SceneManager._ensure_unique_material(st, entity_id, mr)
         material = ResourceManager.GetMaterial(mr.material_id)
         uniforms_name_type = ResourceManager.GetShader(shader_id).uniforms_name_type
-        material.set_new_shader(shader_id, uniforms_name_type)
+        material.set_new_shader(shader_id, uniforms_name_type,
+                                ResourceManager.GetShaderSpecs(shader_id),
+                                ResourceManager.ShaderRef(shader_id))
         material.mark_modified()
         _renderer = getattr(st.app, 'renderer', None)
         if _renderer is not None:

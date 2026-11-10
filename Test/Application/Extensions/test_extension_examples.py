@@ -94,12 +94,16 @@ def main() -> int:
     data = os.path.join(tmp, "data")
     saved_env = {k: os.environ.get(k) for k in
                  ("MGE_EXTENSIONS_DIR", "MGE_EXTENSIONS_STATE", "MGE_EXTENSIONS_DATA",
-                  "FVE_EXAMPLES_DIR", "MGE_EXAMPLES_DIR")}
+                  "FVE_EXAMPLES_DIR", "MGE_EXAMPLES_DIR", "FVE_EXTENSIONS_BUNDLED")}
     os.environ["MGE_EXTENSIONS_DIR"] = exts
     os.environ["MGE_EXTENSIONS_STATE"] = state
     os.environ["MGE_EXTENSIONS_DATA"] = data
     os.environ["FVE_EXAMPLES_DIR"] = user_examples
     os.environ.pop("MGE_EXAMPLES_DIR", None)
+    # ★ 本用例断言"只在用户目录 + 显式注册"的根目录集合 — 关掉内置恒激活，
+    #   否则 Functions 下白名单内的扩展自带 Examples 根目录会一起出现
+    #   （见 test_extension_activation）。
+    os.environ["FVE_EXTENSIONS_BUNDLED"] = "off"
 
     ext_a = os.path.join(exts, "uext_examples")
     ext_b = os.path.join(exts, "uext_other")

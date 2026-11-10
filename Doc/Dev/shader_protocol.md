@@ -16,6 +16,10 @@ engine-editor-cli doc show dev/shader_protocol#<节号|标题片段>      # 单�
 engine-editor-cli doc search <关键词>                    # 跨主题检索
 ```
 
-章节：1 定位与三层职责 · 2 文件布局与加载 · 3 顶点属性契约（STD_LAYOUT） · 4 矩阵与坐标约定（实测锁定） · 5 uniform 契约总表 · 6 材质默认值系统与「切 shader 重置」语义 · 7 光照约定（Lighting shader） · 8 shader alpha 与混合（`Material.blend`） · 9 已知限制（有意保留） · 10 内置 shader 现状表 · 11 新增/修改 shader 检查单（DoD） · 12 交叉引用
+章节：1 定位与三层职责 · 2 文件布局与加载 · 3 顶点属性契约（STD_LAYOUT） · 4 矩阵与坐标约定（实测锁定） · 5 uniform 契约总表（含运行期注入 `time`） · 6 材质默认值系统与「切 shader 重置」语义 · 7 光照约定（Lighting shader） · 8 shader alpha 与混合（`Material.blend`） · 9 已知限制（有意保留） · 10 内置 shader 现状表 · 11 新增/修改 shader 检查单（DoD） · 12 交叉引用
+
+> **加参数前看这里**：`//!` 注解语法在 **§6.1**（`doc show dev/shader_protocol#6`）——
+> 控件形态 / 范围 / 单位 / 默认值 / 归属都写在 GLSL 声明旁，面板与工具链自动跟随。
+> `doc search "//!"` 或 `doc search owner=runtime` 可直接命中。
 
 内容权威（唯一）：工具仓 `packages/editor-mcp/src/engine_editor_mcp/docs_content/dev/shader_protocol.md`。

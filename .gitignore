@@ -7,11 +7,23 @@ dist/
 *.egg-info
 Application/Editor/Config
 .editor_cache.json
-.txt
+
+# 临时/备份文件（任何层级）—— 合并残留 / 手改备份 / 重命名遗留都不入库
+*.bak
+*.orig
+*.rej
+
+# 根目录临时产物（shell 重定向、崩溃日志、录制目录）—— 只锁根目录，不误伤资源
+/*.txt
+/*.log
+/*.tmp
+/*_recordings/
 
 # Virtual environments
 .venv
 .venv-*
+
+# 工具链安装产物（engine-editor-cli setup 写入；可随时重生成）
 .vscode
 .github
 

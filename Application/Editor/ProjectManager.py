@@ -1697,7 +1697,6 @@ class ProjectManager:
             {old_material_id: new_material_id} 映射，供场景加载时重映射 entity 引用。
         """
         from Application.Resource.ResourceManager import ResourceManager
-        from Application.Resource.Material import Material
 
         id_map: dict[int, int] = {}
         loaded_count = 0
@@ -1715,10 +1714,9 @@ class ProjectManager:
                     continue
                 try:
                     if category == "materials":
-                        mat = Material.load_from_file(abs_path)
-                        ResourceManager.material_count += 1
-                        new_id = ResourceManager.material_count
-                        ResourceManager.loaded_material[str(new_id)] = mat
+                        # ★ 统一走 ResourceManager（shader_ref 解析 + 默认值来自 shader 注解）
+                        new_id = ResourceManager.LoadMaterialFromFile(abs_path)
+                        mat = ResourceManager.GetMaterial(new_id)
                         loaded_count += 1
                         if old_id is not None:
                             id_map[old_id] = new_id

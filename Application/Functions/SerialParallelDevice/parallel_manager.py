@@ -46,7 +46,11 @@ def _write_zero(addr: int, count: int) -> None:
 
 
 def handle_parallel(task: ParallelTask) -> None:
-    """处理并口写入任务，非零数据自动调度 5ms 复位。"""
+    """处理并口写入任务；非零数据按 `state._reset_delay` 调度自动复位。
+
+    复位条目是**追加**的，不复用/不取消先前条目 —— 高密度写入时最先到期的复位
+    会把后写的高电平提前拉回 0（实际脉宽可能短于设定值）。
+    """
     if state._pp is None:
         print(f"{state._TAG} Drop parallel: InpOut driver not available")
         return

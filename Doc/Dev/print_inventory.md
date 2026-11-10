@@ -7,13 +7,13 @@
 
 | 区域 | print 条数 |
 |---|---:|
-| Functions | 219 |
-| Editor | 183 |
-| Core | 106 |
-| Runtime | 49 |
+| Functions | 241 |
+| Editor | 192 |
+| Core | 117 |
+| Runtime | 58 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **564** |
+| **合计** | **615** |
 
 热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **50** 条。
 
@@ -41,19 +41,20 @@
 
 ## 3. 全部文件（按条数降序；`Functions/**` 扩展自有，不计入明细）
 
-`Application/Functions/**` 共 **219** 条，由各扩展自行治理，不列入本表。
+`Application/Functions/**` 共 **241** 条，由各扩展自行治理，不列入本表。
 
 | 文件 | 条数 |
 |---|---:|
 | `Application/Editor/ProjectManager.py` | 51 |
-| `Application/Runtime/PlayerBootstrap.py` | 34 |
+| `Application/Runtime/PlayerBootstrap.py` | 35 |
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
+| `Application/Core/Window/glfwWindow.py` | 19 |
 | `Application/Editor/UI/panels/node_editor/panel.py` | 19 |
-| `Application/Editor/Services/LiveCommandServer.py` | 14 |
+| `Application/Editor/Services/LiveCommandServer.py` | 15 |
+| `Application/Editor/Extensions/ExtensionManager.py` | 12 |
 | `Application/Editor/UI/controllers/SimulationController.py` | 12 |
 | `Application/Editor/UI/controllers/SceneBrowserController.py` | 10 |
-| `Application/Editor/Extensions/ExtensionManager.py` | 9 |
-| `Application/Core/Window/glfwWindow.py` | 8 |
+| `Application/Runtime/PerfStatsLayer.py` | 8 |
 | `Application/Core/Project/RuntimeProjectLoader.py` | 7 |
 | `Application/Core/Renderer/ZenGL/ZenGLOverlays.py` | 7 |
 | `Application/Editor/UI/panels/ScenePanel.py` | 7 |
@@ -67,6 +68,8 @@
 | `Application/Core/Media/MediaSystem.py` | 4 |
 | `Application/Core/NodeGraph/canvas.py` | 4 |
 | `Application/Core/NodeGraph/evaluators/io.py` | 4 |
+| `Application/Editor/Extensions/ExtensionMenu.py` | 4 |
+| `Application/Editor/UI/UIManager.py` | 4 |
 | `Application/Resource/ResourceManager.py` | 4 |
 | `Application/Runtime/GameRuntime.py` | 4 |
 | `Application/Runtime/RuntimeNodeLayer.py` | 4 |
@@ -75,7 +78,6 @@
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |
 | `Application/Core/Renderer/ZenGL/ZenGLCore.py` | 3 |
 | `Application/Editor/EditorLayer.py` | 3 |
-| `Application/Editor/UI/UIManager.py` | 3 |
 | `Application/Editor/UI/panels/node_editor/group_context.py` | 3 |
 | `Application/Core/AppIdentity.py` | 2 |
 | `Application/Core/DeviceRegistry.py` | 2 |
@@ -88,9 +90,9 @@
 | `Application/Editor/EditorGizmoLayer.py` | 2 |
 | `Application/Editor/EditorModule.py` | 2 |
 | `Application/Editor/EditorSettings.py` | 2 |
-| `Application/Editor/Extensions/ExtensionMenu.py` | 2 |
 | `Application/Editor/Extensions/ExtensionUI.py` | 2 |
 | `Application/Editor/UI/controllers/ResourceBrowserController.py` | 2 |
+| `Application/Editor/UI/panels/SettingsPanel.py` | 2 |
 | `Application/Editor/UI/panels/node_editor/io.py` | 2 |
 | `Application/Editor/UI/panels/node_editor/selection.py` | 2 |
 | `Application/Runtime/RuntimeUILayer.py` | 2 |

@@ -74,7 +74,7 @@ def test_registry() -> None:
     src = os.path.join(ROOT, "Application", "Editor", "Services", "LiveCommandServer.py")
     with open(src, encoding="utf-8") as fh:
         engine_ops = set(re.findall(r'"([a-z_]+\.[a-z_.]+)":\s*cls\._op_', fh.read()))
-    check("engine ops found (76)", len(engine_ops) == 76, str(sorted(engine_ops)))
+    check("engine ops found (79)", len(engine_ops) == 79, str(sorted(engine_ops)))
     check("registry covers engine ops", engine_ops <= set(ops.OPS), str(engine_ops - set(ops.OPS)))
     check("no extra registry ops", set(ops.OPS) <= engine_ops, str(set(ops.OPS) - engine_ops))
     check("aliases resolve", ops.resolve("editor_run_pie") == ("sim.play", {}), str(ops.resolve("editor_run_pie")))
@@ -341,8 +341,22 @@ def test_doc() -> None:
     check("outline has previews", "—" in ol and "面向:" in ol, ol[:300])
     section = doclib.show("dev/project_export_protocol", "3")
     check("doc show #3 returns section", "Save As" in section, section[:120])
+    # ── 三层寻址（2026-11-10）: 长协议文档的 ### 小节必须能单独拉取 ──
+    ol_sec = doclib.outline("dev/shader_protocol")
+    check("outline lists ### subsections with numbers",
+          "2.1." in ol_sec and "2.3." in ol_sec, ol_sec[:400])
+    sub = doclib.show("dev/shader_protocol", "2.3")
+    check("doc show #2.3 returns the subsection only",
+          "uniform 类型" in sub and "注册与解析链" not in sub, sub[:160])
+    parent = doclib.show("dev/shader_protocol", "2")
+    check("doc show #2 (H2) still spans its subsections",
+          "注册与解析链" in parent and "uniform 类型" in parent, parent[:160])
+    check("doc show #6.1 reaches the annotation section",
+          "//!" in doclib.show("dev/shader_protocol", "6.1"))
     hits = doclib.search("提交点")
     check("doc search finds hits", "dev/project_export_protocol" in hits, hits[:160])
+    check("doc search labels name the subsection when the hit is inside one",
+          "dev/shader_protocol#6." in doclib.search("哨兵约定"), doclib.search("哨兵约定")[:160])
 
     tools = doclib.list_tools()
     check("tool index lists core dev tools",

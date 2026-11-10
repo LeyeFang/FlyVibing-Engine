@@ -198,7 +198,7 @@ class ResourceManager:
         frag_path = vert_path.replace('.vert', '.frag')
         spv_v = vert_path + '.spv'
         spv_f = frag_path + '.spv'
-        vs_src, fs_src, vs_spv, fs_spv, uniforms = parse_shader_files(
+        vs_src, fs_src, vs_spv, fs_spv, uniforms, specs = parse_shader_files(
             vert_path, frag_path, spv_v, spv_f
         )
         cls.shader_count += 1
@@ -206,7 +206,7 @@ class ResourceManager:
             'name': name,
             'data': Shader(vs_src=vs_src, fs_src=fs_src,
                            vs_spv=vs_spv, fs_spv=fs_spv,
-                           uniforms_name_type=uniforms),
+                           uniforms_name_type=uniforms, uniform_specs=specs),
             'path': vert_path,
         }
         return cls.shader_count
@@ -469,6 +469,75 @@ class ResourceManager:
         return cls.loaded_shader[f"{shader_id}"]['data']
 
     @classmethod
+    def GetShaderSpecs(
+        cls,
+        shader_id: int
+    ) -> dict:
+        """shader 的 `UniformSpec` 表（名字 → spec）；未知 shader 返回空表。"""
+        entry = cls.loaded_shader.get(f"{shader_id}")
+        if not entry:
+            return {}
+        return getattr(entry['data'], 'uniform_specs', {}) or {}
+
+    @classmethod
+    def GetShaderSpec(
+        cls,
+        shader_id: int,
+        uniform_name: str,
+    ):
+        """单个 uniform 的 spec（不存在返回 None）。"""
+        return cls.GetShaderSpecs(shader_id).get(str(uniform_name))
+
+    @classmethod
+    def ShaderRef(
+        cls,
+        shader_id: int
+    ) -> str:
+        """shader id → 稳定引用（`builtin://名称` 或绝对路径）；未知返回 ""。
+
+        与 `MaterialRef` 同一条纪律：资源 id 是**会话级自增**，不能当持久化身份。
+        """
+        entry = cls.loaded_shader.get(f"{shader_id}")
+        if not entry:
+            return ""
+        name = str(entry.get('builtin_name', '') or entry.get('name', '') or '')
+        path = str(entry.get('path', '') or '')
+        if path and not entry.get('builtin_name'):
+            return os.path.normpath(os.path.abspath(path)).replace("\\", "/")
+        return f"builtin://{name}" if name else ""
+
+    @classmethod
+    def ResolveShaderRef(
+        cls,
+        ref: str
+    ) -> int:
+        """稳定引用 → 本会话 live shader id（找不到返回 0）。
+
+        解析顺序: `builtin://名称` 精确匹配 → 路径精确匹配 → 文件名唯一匹配
+        （多命中视为歧义，返回 0 —— 与 `ResolveMaterialRef` 一致）。
+        """
+        ref = str(ref or "").strip()
+        if not ref:
+            return 0
+        if ref.startswith("builtin://"):
+            name = ref[len("builtin://"):]
+            for sid, entry in cls.loaded_shader.items():
+                if str(entry.get('builtin_name', '') or entry.get('name', '')) == name:
+                    return int(sid)
+            return 0
+        want = os.path.normcase(os.path.normpath(ref))
+        for sid, entry in cls.loaded_shader.items():
+            path = str(entry.get('path', '') or '')
+            if path and os.path.normcase(os.path.normpath(path)) == want:
+                return int(sid)
+        base = os.path.basename(ref).lower()
+        if not base:
+            return 0
+        hits = [int(sid) for sid, entry in cls.loaded_shader.items()
+                if os.path.basename(str(entry.get('path', '') or '')).lower() == base]
+        return hits[0] if len(hits) == 1 else 0
+
+    @classmethod
     def GetTexture(
         cls,
         texture_id: int
@@ -498,8 +567,8 @@ class ResourceManager:
         cls.material_count += 1
         current_material_id = cls.material_count
         shader: Shader = cls.loaded_shader[f'{1}']['data']
-        uniforms_name_type = shader.uniforms_name_type
-        material = Material(1, uniforms_name_type)
+        material = Material(1, shader.uniforms_name_type, shader.uniform_specs,
+                            cls.ShaderRef(1))
         # ★ 新建 material 自动绑定默认白色纹理，保证渲染始终有纹理可用
         material.texture_id_list = [cls.GetDefaultTexture('Default')]
         cls.loaded_material[f"{current_material_id}"] = material
@@ -707,13 +776,14 @@ class ResourceManager:
             vert_spv_path = join(default_shader_dir, vert_file + '.spv')
             frag_spv_path = join(default_shader_dir, frag_file + '.spv')
 
-            vs_src, fs_src, vs_spv, fs_spv, uniforms_info = parse_shader_files(
+            vs_src, fs_src, vs_spv, fs_spv, uniforms_info, uniform_specs = parse_shader_files(
                 vert_path, frag_path, vert_spv_path, frag_spv_path
             )
             save_shader = Shader(
                 vs_src=vs_src, fs_src=fs_src,
                 vs_spv=vs_spv, fs_spv=fs_spv,
-                uniforms_name_type=uniforms_info
+                uniforms_name_type=uniforms_info,
+                uniform_specs=uniform_specs,
             )
             cls.shader_count += 1
             current_shader_id = cls.shader_count
@@ -749,7 +819,7 @@ class ResourceManager:
         cls.material_count += 1
         current_id = cls.material_count
         shader: Shader = cls.loaded_shader[f'{1}']['data']
-        material = Material(1, shader.uniforms_name_type)
+        material = Material(1, shader.uniforms_name_type, shader.uniform_specs, cls.ShaderRef(1))
         material.name = "Default"
         material.texture_id_list = [cls.GetDefaultTexture('Default')]
         material._is_saved = True
@@ -767,12 +837,12 @@ class ResourceManager:
         cls.material_count += 1
         current_id = cls.material_count
         lit_shader: Shader = cls.loaded_shader[f'{lighting_sid}']['data']
-        lit_material = Material(lighting_sid, lit_shader.uniforms_name_type)
+        lit_material = Material(lighting_sid, lit_shader.uniforms_name_type,
+                                lit_shader.uniform_specs, cls.ShaderRef(lighting_sid))
         lit_material.name = "DefaultLit"
         lit_material.texture_id_list = [cls.GetDefaultTexture('Default')]
         lit_material._is_saved = True
-        if 'uShininess' in lit_material.uniforms_data:
-            lit_material.uniforms_data['uShininess'] = 32.0
+        # ★ uShininess 的 32 不再硬编码 —— 它写在 `Lighting.frag` 的 `//! ... default=32`
         cls.loaded_material[f"{current_id}"] = lit_material
         lit_material.builtin_name = 'DefaultLit'
 
@@ -851,6 +921,140 @@ class ResourceManager:
         except (TypeError, ValueError):
             return ""
         return str(getattr(mat, "name", "") or "") if mat is not None else ""
+
+    # ── 纹理稳定引用（写入 .mat 的 texture_refs） ────────────────
+
+    @classmethod
+    def TextureRef(cls, texture_id: int) -> str:
+        """texture id → 稳定引用（`builtin://名称` 或绝对路径）；无落点返回 ""。
+
+        与 `ShaderRef`/`MaterialRef` 同一条纪律：资源 id 是会话级自增，不能跨会话当身份。
+        程序化/媒体帧纹理没有文件落点（也没有 builtin_name）→ 返回 ""，调用方回退保存 id
+        （这类纹理本来就不可跨会话复用）。
+        """
+        try:
+            entry = cls.loaded_texture.get(str(int(texture_id)))
+        except (TypeError, ValueError):
+            return ""
+        if not entry:
+            return ""
+        path = str(entry.get("path", "") or "")
+        if path:
+            return os.path.normpath(os.path.abspath(path)).replace("\\", "/")
+        name = str(entry.get("builtin_name", "") or "")
+        return f"builtin://{name}" if name else ""
+
+    @classmethod
+    def ResolveTextureRef(cls, ref: str) -> int:
+        """稳定引用 → 本会话 live texture id（找不到返回 0）。
+
+        解析顺序: `builtin://名称` 精确 → 路径精确 → 文件名唯一（多命中视为歧义，返回 0）。
+        """
+        ref = str(ref or "").strip()
+        if not ref:
+            return 0
+        if ref.startswith("builtin://"):
+            name = ref[len("builtin://"):]
+            for tid, entry in cls.loaded_texture.items():
+                if str(entry.get("builtin_name", "") or "") == name:
+                    return int(tid)
+            return 0
+        want = os.path.normcase(os.path.normpath(ref))
+        for tid, entry in cls.loaded_texture.items():
+            path = str(entry.get("path", "") or "")
+            if path and os.path.normcase(os.path.normpath(path)) == want:
+                return int(tid)
+        base = os.path.basename(ref).lower()
+        if not base:
+            return 0
+        hits = [int(tid) for tid, entry in cls.loaded_texture.items()
+                if os.path.basename(str(entry.get("path", "") or "")).lower() == base]
+        return hits[0] if len(hits) == 1 else 0
+
+    @classmethod
+    def TextureName(cls, texture_id: int) -> str:
+        """texture id → 显示名（诊断/告警用，未知返回 ""）。"""
+        try:
+            entry = cls.loaded_texture.get(str(int(texture_id)))
+        except (TypeError, ValueError):
+            return ""
+        return str(entry.get("name", "") or "") if entry else ""
+
+    # ── 材质参数复位（默认值来自 shader 注解） ──────────────────
+
+    @classmethod
+    def ResetMaterialUniform(cls, material_id: int, name: str) -> bool:
+        """把单个 uniform 复位成 shader 注解声明的默认值；无 spec/无默认返回 False。
+
+        注意：调用方负责"材质唯一性"（编辑共享材质前需 clone — 见
+        `SceneManager._ensure_unique_material`）。
+        """
+        mat = cls.loaded_material.get(str(material_id))
+        if mat is None:
+            return False
+        spec = cls.GetShaderSpec(getattr(mat, "shader_id", 0), name)
+        value = spec.default_value() if spec is not None else None
+        if value is None:
+            return False
+        mat.uniforms_data[name] = value
+        mat.mark_modified()
+        return True
+
+    @classmethod
+    def ResetMaterialUniforms(cls, material_id: int) -> int:
+        """复位全部可编辑 uniform，返回改动数量。"""
+        mat = cls.loaded_material.get(str(material_id))
+        if mat is None:
+            return 0
+        count = 0
+        for spec in cls.GetShaderSpecs(getattr(mat, "shader_id", 0)).values():
+            if not spec.writable or not spec.in_material:
+                continue
+            value = spec.default_value()
+            if value is None:
+                continue
+            mat.uniforms_data[spec.name] = value
+            count += 1
+        if count:
+            mat.mark_modified()
+        return count
+
+    # ── 材质文件加载（shader 引用按名/路径解析，不信任会话 id） ──
+
+    @classmethod
+    def LoadMaterialFromFile(cls, file_path: str) -> int:
+        """加载 `.mat` 并注册为新材质，返回 live id（失败抛异常）。
+
+        修复的隐患：`.mat` 里的 `shader_id` 是**保存时那个会话**的自增 id。
+        现在优先按 `shader_ref`（`builtin://名称` / 绝对路径）解析，解析不到才回退
+        `shader_id`，最后回退默认 shader —— 避免跨会话把 SSVEP 材质绑到 Lighting。
+        """
+        mat = Material.load_from_file(file_path)
+        sid = cls.ResolveShaderRef(getattr(mat, "shader_ref", ""))
+        if not sid and str(getattr(mat, "shader_id", "")) in cls.loaded_shader:
+            sid = int(mat.shader_id)
+        if sid and str(sid) in cls.loaded_shader:
+            shader = cls.GetShader(sid)
+            saved = dict(mat.uniforms_data)
+            mat.set_new_shader(sid, shader.uniforms_name_type, shader.uniform_specs,
+                               cls.ShaderRef(sid))
+            for key, value in saved.items():
+                if key in mat.uniforms_data:      # 只保留新 shader 认识的名字
+                    mat.uniforms_data[key] = value
+            mat._is_saved = True
+            mat._file_path = file_path
+        # ★ 纹理按稳定引用还原（旧文件没有 texture_refs → 保持 texture_ids 原样）
+        refs = list(getattr(mat, "texture_refs", []) or [])
+        if refs and len(refs) == len(mat.texture_id_list):
+            resolved: list[int] = []
+            for ref, saved_tid in zip(refs, mat.texture_id_list):
+                tid = cls.ResolveTextureRef(ref) if ref else 0
+                resolved.append(tid or int(saved_tid))
+            mat.texture_id_list = resolved
+        cls.material_count += 1
+        new_id = cls.material_count
+        cls.loaded_material[str(new_id)] = mat
+        return new_id
 
     @classmethod
     def __load_default_prefab(cls) -> None:

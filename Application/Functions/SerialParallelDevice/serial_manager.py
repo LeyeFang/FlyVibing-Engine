@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from . import state
+from . import device_registry, state
 
 
 def port_key(port: str, baud: int) -> str:
@@ -15,21 +15,19 @@ def resolve_port(port: str) -> str:
 
     协议: `Doc/Dev/device_io_protocol.md` §10（两级设备身份）。
       - `"COM5"`        → 原样返回（兼容旧场景的物理直写）;
-      - `"@mibox"`      → 查机器侧注册表（`Application.Core.DeviceRegistry`）;
+      - `"@mibox"`      → 查机器侧台账（本扩展 `device_registry.py`；过渡期委托核心实现）;
       - 未绑定/缺 port  → 抛 `DeviceUnresolved`（**绝不静默回退** —— 静默发错端口比报错更糟）;
       - `""`            → 抛 `ValueError`（未配置端口）。
     """
     text = str(port or "").strip()
     if not text:
         raise ValueError("serial port is empty — configure the node/panel port or a @device name")
-    from Application.Core.DeviceRegistry import is_ref, resolve
-    if not is_ref(text):
+    if not device_registry.is_ref(text):
         return text
-    entry = resolve(text)                      # 未绑定 → DeviceUnresolved（可操作提示）
+    entry = device_registry.resolve(text)      # 未绑定 → DeviceUnresolved（可操作提示）
     physical = str(entry.get("port") or "").strip()
     if not physical:
-        from Application.Core.DeviceRegistry import DeviceUnresolved
-        raise DeviceUnresolved(
+        raise device_registry.DeviceUnresolved(
             f"device '{text}' is bound but has no 'port' field — rebind it "
             f"(ext.device.bind_alias name={text[1:]} port=COMx)")
     return physical

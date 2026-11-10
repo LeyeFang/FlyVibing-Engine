@@ -25,11 +25,24 @@ def _read_input_raw(node_id: int, pin_name: str, ctx, g, default: Any = None) ->
     return default
 
 
+def _payload_preview(payload: bytes, fmt: str) -> str:
+    """日志用载荷预览: 文本行给 repr('40,14\\n'), 二进制给 hex。"""
+    if fmt == "string":
+        try:
+            return repr(payload.decode("utf-8"))
+        except UnicodeDecodeError:
+            pass
+    return payload.hex(" ")
+
+
 def _eval_serial_send(node_id: int, ctx, g) -> None:
     inst = g._canvas.nodes[node_id]
     port = str(inst.props.get("port", "")).strip()
     baud = int(inst.props.get("baud_rate", 9600))
-    fmt = inst.props.get("format", "bytes")
+    fmt = str(inst.props.get("format", "bytes") or "bytes")
+    # 行协议头/尾 — 例: 刺激器要 `40,14`（重复率 40 Hz + 条件码 14）→ prefix="40,"
+    prefix = str(inst.props.get("prefix", "") or "")
+    suffix = str(inst.props.get("suffix", "") or "")
     value = _read_input_raw(node_id, "Value", ctx, g, 0)
     if value is None:
         value = 0.0
@@ -39,22 +52,36 @@ def _eval_serial_send(node_id: int, ctx, g) -> None:
         if not ctx.dry_run:
             print("[SerialSend] skipped: no port configured (COM1 default removed)")
         return
-    if ctx.dry_run:
-        ctx.emit_log(node_id, "SerialSend", "send",
-                     f"port={port}, baud={baud}, fmt={fmt}, val={value}")
-        return
-    from Application.Functions.SerialParallelDevice import send as spd_send
     from Application.Functions.SerialParallelDevice.protocol import encode
 
+    # 载荷只在这里构造一次 — 干跑日志与实发字节必定一致
     try:
-        payload = encode(value, fmt)
-        spd_send(port, baud, payload)
+        payload = encode(value, fmt, prefix=prefix, suffix=suffix)
+    except Exception as e:  # noqa: BLE001 — 载荷不合法显式告警（禁止静默）
+        ctx.emit_log(node_id, "SerialSend", "error", f"payload: {e}")
+        print(f"[SerialSend] payload FAILED: {e}")
+        return
+    line = _payload_preview(payload, fmt)
+    if ctx.dry_run:
+        # 注: `val=` 必须在尾（L2 用例按 "val=" 截取）— 新字段插在它之前
+        ctx.emit_log(node_id, "SerialSend", "send",
+                     f"port={port}, baud={baud}, fmt={fmt}, "
+                     f"line={line}, val={value}")
+        return
+    from Application.Functions.SerialParallelDevice import send as spd_send
+
+    try:
+        ok = spd_send(port, baud, payload)
     except Exception as e:  # noqa: BLE001 — 显式告警, 禁止静默吞错
         ctx.emit_log(node_id, "SerialSend", "error", f"{port}@{baud}: {e}")
         print(f"[SerialSend] {port}@{baud} FAILED: {e}")
         return
-    _hex = payload[:4].hex(" ") if len(payload) >= 4 else payload.hex()
-    print(f"[SerialSend] {port}@{baud} fmt={fmt} val={value} → {len(payload)}B [{_hex}]")
+    if not ok:
+        # I/O 线程未运行（扩展被停用 / 运行期入口未启动）→ 节点日志显式告警
+        ctx.emit_log(node_id, "SerialSend", "error",
+                     f"{port}@{baud}: I/O thread not running — {len(payload)}B dropped")
+        return
+    print(f"[SerialSend] {port}@{baud} fmt={fmt} line={line} → {len(payload)}B")
 
 
 def _eval_parallel_send(node_id: int, ctx, g) -> None:
@@ -85,7 +112,13 @@ def _eval_parallel_send(node_id: int, ctx, g) -> None:
         return
     from Application.Functions.SerialParallelDevice import write_parallel
 
-    write_parallel(address, ival, "byte")
+    ok = write_parallel(address, ival, "byte")
+    if not ok:
+        # 线程未运行 / 驱动不可用 → 节点日志显式告警（不打断图执行）
+        ctx.emit_log(node_id, "ParallelSend", "error",
+                     f"addr=0x{address:04X}, val=0x{ival:02X}: "
+                     f"I/O thread or driver unavailable — dropped")
+        return
     print(f"[ParallelSend] 0x{address:04X} ← 0x{ival:02X} ({ival})")
 
 
@@ -101,7 +134,13 @@ def register() -> dict:
                 "label": "Serial Send",
                 "category": "IO",
                 "color": (0.878, 0.620, 0.314),
-                "props_text": "Send signal via serial port.",
+                "props_text": "Send one value over serial on exec. props: port (COMx or "
+                              "@alias; empty = explicit error + skip, never guessed); "
+                              "baud_rate (default 9600); format ('bytes' = float32 LE 4 bytes, "
+                              "'string' = UTF-8 text line); prefix/suffix (string only - frame "
+                              "the value, e.g. prefix '40,' + value 14 -> '40,14' + LF; CR/LF "
+                              "in prefix/suffix rejected). An unbound @alias raises an explicit "
+                              "error (no silent fallback to a default port).",
                 "evaluator": _eval_serial_send,
                 "pins": [
                     {"name": "exec_in", "kind": "exec", "direction": "input"},
@@ -114,6 +153,9 @@ def register() -> dict:
                     {"key": "format", "label": "Format", "kind": "enum",
                      "choices": [["Bytes (float32 LE)", "bytes"], ["String (UTF-8)", "string"]],
                      "default": "bytes"},
+                    # 行协议头/尾（仅 format=string）— 空 = 旧行为（str(value) + "\n"）
+                    {"key": "prefix", "label": "Prefix", "kind": "text", "default": ""},
+                    {"key": "suffix", "label": "Suffix", "kind": "text", "default": ""},
                 ],
             },
             {
@@ -121,7 +163,12 @@ def register() -> dict:
                 "label": "Parallel Send",
                 "category": "IO",
                 "color": (0.878, 0.620, 0.314),
-                "props_text": "Send uint8 via LPT port",
+                "props_text": "Write one uint8 to an LPT data port on exec. props: mode "
+                              "('manual' = use props value; 'pin' = read Address/Value pins); "
+                              "address (0x3FF8 LPT1 / 0x3FF0 LPT2 / 0x3FE8 LPT3); value 1-255 "
+                              "(clamped; 0 is reserved for the auto reset). Every non-zero "
+                              "write is reset to 0 after the configured pulse width (panel "
+                              "Pulse, default 5 ms).",
                 "evaluator": _eval_parallel_send,
                 "pins": [
                     {"name": "exec_in", "kind": "exec", "direction": "input"},

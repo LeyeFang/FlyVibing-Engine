@@ -3,6 +3,8 @@ import copy
 
 from dataclasses import dataclass, field
 
+from Application.Resource.UniformSpec import build_default_uniforms
+
 
 @dataclass
 class Material:
@@ -14,27 +16,25 @@ class Material:
     def __init__(
         self,
         shader_id: int,
-        uniforms_name_type: dict
+        uniforms_name_type: dict,
+        uniform_specs: dict | None = None,
+        shader_ref: str = ""
     ) -> None:
-        self.uniforms_data = {}
         self.shader_id = shader_id
+        # ★ 默认值唯一来源: shader 的 `//!` 注解 (UniformSpec.default) → 回落类型默认
+        #   (旧行为不变; 详见 Application/Resource/UniformSpec.py)
+        self.uniforms_data = build_default_uniforms(uniforms_name_type, uniform_specs)
         # ── 混合模式: "opaque" (不透明, 默认) / "alpha" (透明混合) ──
         self.blend: str = "opaque"
-        for u_name, u_type in uniforms_name_type.items():
-            if u_type == 'mat4':
-                self.uniforms_data[u_name] = np.zeros((4, 4), dtype=np.float32)
-            elif u_type == 'vec4':
-                self.uniforms_data[u_name] = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-            elif u_type == 'vec3':
-                self.uniforms_data[u_name] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-            elif u_type == 'float':
-                self.uniforms_data[u_name] = np.float32(0)
-            elif u_type == 'double':
-                self.uniforms_data[u_name] = np.float64(0)
         # ── 材质元数据 ──
         self.name: str = "Untitled"
         self._is_saved: bool = False        # 是否已保存到文件
         self._file_path: str = ""           # 上次保存/加载的文件路径
+        # ── shader 稳定引用 (builtin://名称 或绝对路径) ──
+        #   shader_id 是**会话级自增**，不能跨会话当身份用（与 material 同一条纪律）
+        self.shader_ref: str = shader_ref
+        # ── 纹理稳定引用（与 texture_id_list 平行; 空串 = 无稳定落点，回退 id）──
+        self.texture_refs: list[str] = []
 
     @property
     def display_name(self) -> str:
@@ -49,11 +49,18 @@ class Material:
     def save_to_file(self, file_path: str) -> None:
         """保存材质到 .mat 文件（JSON）。"""
         import json, os
+        from Application.Resource.ResourceManager import ResourceManager
         data = {
             "name": self.name,
             "shader_id": self.shader_id,
+            # ★ shader 稳定引用（`builtin://名称` / 绝对路径）—— shader_id 是会话级自增,
+            #   不能跨会话当身份用; 加载时优先按它解析（旧文件缺失则回退 shader_id）
+            "shader_ref": getattr(self, "shader_ref", ""),
             "blend": self.blend,
             "texture_ids": self.texture_id_list,
+            # ★ 纹理同样存稳定引用（builtin://名称 / 绝对路径; 无落点/解析不到留 ""）
+            #   texture_ids 只作旧文件兼容 + 运行时纹理（媒体帧等无落点）的回退
+            "texture_refs": [ResourceManager.TextureRef(t) for t in self.texture_id_list],
             "uniforms": {
                 k: v.tolist() if hasattr(v, 'tolist') else v
                 for k, v in self.uniforms_data.items()
@@ -75,7 +82,10 @@ class Material:
         mat = Material(data.get("shader_id", 1), {})
         mat.name = data.get("name", "Untitled")
         mat.blend = data.get("blend", "opaque")
+        mat.shader_ref = str(data.get("shader_ref", "") or "")
         mat.texture_id_list = data.get("texture_ids", [])
+        # ★ 稳定纹理引用（与 texture_ids 平行）; 由 ResourceManager.LoadMaterialFromFile 解析
+        mat.texture_refs = [str(r or "") for r in (data.get("texture_refs") or [])]
         for k, v in data.get("uniforms", {}).items():
             mat.uniforms_data[k] = np.array(v, dtype=np.float32)
         mat._is_saved = True
@@ -85,21 +95,14 @@ class Material:
     def set_new_shader(
             self,
             shader_id: int,
-            uniforms_name_type: dict
+            uniforms_name_type: dict,
+            uniform_specs: dict | None = None,
+            shader_ref: str = ""
         ) -> None: 
-        self.uniforms_data = {}
+        """切换 shader 并按新 shader 的注解默认值重建参数表（旧值不保留 — 见协议 §6）。"""
         self.shader_id = shader_id
-        for u_name, u_type in uniforms_name_type.items():
-            if u_type == 'mat4':
-                self.uniforms_data[u_name] = np.zeros((4, 4), dtype=np.float32)
-            elif u_type == 'vec4':
-                self.uniforms_data[u_name] = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-            elif u_type == 'vec3':
-                self.uniforms_data[u_name] = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-            elif u_type == 'float':
-                self.uniforms_data[u_name] = np.float32(0)
-            elif u_type == 'double':
-                self.uniforms_data[u_name] = np.float64(0)
+        self.uniforms_data = build_default_uniforms(uniforms_name_type, uniform_specs)
+        self.shader_ref = shader_ref
 
 
 @dataclass
@@ -110,6 +113,7 @@ class Shader:
     vs_spv: bytes = b""       # SPIR-V vertex shader 二进制
     fs_spv: bytes = b""       # SPIR-V fragment shader 二进制
     uniforms_name_type: dict = field(default_factory=dict)
+    uniform_specs: dict = field(default_factory=dict)   # 名称 → UniformSpec（GLSL `//!` 注解）
 
 
 @dataclass

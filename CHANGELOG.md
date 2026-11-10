@@ -1,6 +1,346 @@
 # Changelog
 
-## 1.1.0 — 2026-11-05
+## 1.1.0 — 2026-11-10
+
+> **发布口径**: 1.1.0 此前只有 CHANGELOG 草稿（2026-11-05 批次），从未打 tag/出安装包；
+> 本次把 11-06～11-10 的增量并入同一版本，**统一按 1.1.0 发布**（tag `v1.1.0`）。
+> **工具链锁定**: `FlyVibing-User-And-Developer-Utils` **0.8.0**
+> （见 `Utils/Dev/Installer/toolchain.lock.json`）。
+>
+> **本批次重点**：
+> ① **并发竞态修复**（编辑器不再随机退出 —— 这是唯一的崩溃级修复）；
+> ② **成品性能统计通道**（`--stats-json`：帧时间分布 / 卡顿桶 / CPU / 内存）；
+> ③ **图求值索引化**（MI-SSSEP 图求值 ×20）；
+> ④ **远程 / SSH 显示安全**（原先在 SSH 里启动成品会直接访问违例）。
+
+### 简体中文
+
+- **并发竞态修复（P0，崩溃级）** —— `Scene.entities` 原先无锁，且被**两个线程**
+  整表重建：渲染线程的 `NodeEditorPanel._ensure_default_scene()`（每帧）与主线程的
+  `SimulationController._sync_ecs_to_scene()`（点 Play）。同期主线程
+  `copy.deepcopy(editor_scene)` 正在迭代它 → `RuntimeError: dictionary changed size
+  during iteration` 抛在 `Engine._render_loop` → **编辑器直接 exit code 1**（无对话框，
+  16 实体场景点几次必崩一次）。
+  修法三层：① `Scene` 新增 `_entities_lock` 保护所有原地增删；② 批量重建走
+  `replace_entities()` **整表原子替换**（读方永不见半空表）；③ 自定义 `__deepcopy__`
+  锁内快照 + 离线构造（RLock 本身不可深拷贝）。
+  顺带说明：Python 3.14 free-threading 让 `dict.copy()` 变成**锁下原子快照**
+  （实测 20000 次无一次 `k != v`），但**没有任何内置类型**能让"边迭代边被改"变安全 ——
+  `MappingProxyType` 是视图不是快照，`copy.deepcopy` 内部仍是 Python 层迭代（实测首次即抛）。
+  验收：连点 Play/Stop + 反复 open 14 轮零崩溃（修复前 7 个示例中途崩 3 次）；
+  新守卫 `Test/Application/Core/test_scene_concurrency.py`（20 checks，含"旧写法确实会崩"对照）。
+- **成品性能统计 `--stats-json`（新）** —— `PlayerEntry --stats-json P [--seconds T]
+  [--stats-interval S]`：结束时写 `P`（帧时间 mean/p50/p90/p95/p99/max + 卡顿桶
+  >16.7/33.3/50/100 ms + 进程 CPU/RSS/GC/线程清单 + GIL 状态）与 `P.jsonl`（每秒趋势，
+  可定位"第几秒开始变慢"）。新模块 `Application/Runtime/PerfStatsLayer.py`；
+  `FrameProfiler` 新增线程安全的 `snapshot_stats()` 与缺失已久的 `stop()`
+  （`Engine._render_loop` 一直在调它，此前被 `try/except` 静默吞掉）。
+  `--seconds` 为**墙钟**截止（原 `--frames` 在导出模式下内联逻辑循环不受 vsync 限制，
+  120 帧只要 0.2 s，量不到稳态）。守卫 `test_perf_profiler.py`（20 checks，含并发 tick+snapshot）。
+  实测 7 个 MI-SSSEP 成品：**460–693 fps（1.44–2.17 ms/帧）、零卡顿、~190 MB RSS**。
+- **图求值索引化** —— `NodeCanvas` 新增 `pin→node` / `pin→元数据` / 输出 pin→下游 /
+  输入 pin→上游 / `事件类型→入口节点` 五张缓存表，按 `revision` 失效；
+  `find_pin_*` / `_downstream_nodes` / `_read_input` / `trigger` 全部改查表。
+  此前每次引脚读写都要线性扫全图（`canvas.py:116` 占 cProfile 最热）。
+  实测 MI-SSSEP：**3.404 → 0.171 ms/帧（×20）**，事件数与错误数逐一比对完全一致。
+  守卫 `test_canvas_pin_index.py`（16 checks，用暴力扫描当 oracle）。
+  新工具 `Utils/Dev/perf_graph.py`（`graph` / `live` / `cpu` 三档 + `--json` / `--baseline`
+  回归门槛，含预热与 0.05 ms/帧 噪声地板）。
+- **垂直同步 / 帧率上限开关** —— `MGE_VSYNC=0` 解除 vsync；新增
+  `glfwWindow.ApplySwapInterval()`，在**渲染线程取到上下文之后**设置
+  （`glfw.swap_interval` 不能在 `create_window` 之后立即调，会报 GLFW 65538）。
+  此前 200 Hz 显示器上所有场景都恰好报 199.7 fps，渲染成本差异被完全掩盖。
+- **远程 / SSH 会话显示安全（崩溃级）** —— 在非交互式桌面会话（Windows SSH 有自己的
+  window station）里启动成品会 `glfw.get_video_mode(monitor)` →
+  `OSError: access violation reading 0x108` 直接退出。
+  修法：① 所有显示器查询改为"失败返回 None 并停用本会话后续查询"（只告警一次）；
+  ② 分辨率四级回退 `MGE_WINDOW_SIZE` → Win32 `EnumDisplaySettingsW` → GLFW → 1920×1080；
+  ③ 只有 `FULLSCREEN` 才触碰 monitor 句柄；④ FULLSCREEN 无可用显示器 → 自动降级
+  BORDERLESS；⑤ 逃生开关 `MGE_WINDOW=windowed|borderless|fullscreen|overlay`、
+  `MGE_WINDOW_SIZE=WxH`、`MGE_MONITOR=off`。
+  新增诊断工具 `Utils/Dev/display_diag.py`（会话身份 / Win32 三源 / GLFW 实际路径并排输出，
+  `--json` 落盘）与守卫 `test_window_display_fallback.py`（17 checks）。
+  注意：SSH 会话里创建的窗口属于该会话的桌面，**不会**出现在物理屏幕/远程软件看到的桌面上。
+- **工具链版本锁定** —— 新增 `Utils/Dev/Installer/toolchain.lock.json`
+  （引擎 1.1.0 ↔ 工具链 0.8.0），`build_installer` 在不一致时打印 WARNING。
+- **既有条目（11-05 批次）** —— shader 参数注解 `//!`、材质默认值单一来源、
+  运行期 `time` 注入、材质面板注解驱动、资源引用唯一性、`dev/imgui_api` 控件目录、
+  `extdev/ui_recipes` 配方、端口台账与 `instance.info/describe`、测试选测 `--affected/--changed`、
+  `ctx.python` 扩展解释器协议 —— 详见下方「1.1.0 前期批次」。
+
+- **shader 参数注解 `//!`** —— 参数的控件形态 / 范围 / 单位 / 默认值 / 归属写回 GLSL 声明旁
+  （`//! ui: float | label=mat.freq | group=Stimulus | range=1..60 | unit=Hz | default=10`），
+  面板、默认值、校验、文档全部从这一处派生；无注解的 shader 完全降级为旧行为。
+  `Basic`/`Lighting`/`SSVEP` 已全部注解。
+- **默认值单一来源** —— 删掉 `ResourceManager` 里硬编码的 `uShininess = 32.0`，
+  `Material.__init__` / `set_new_shader` 统一走 `UniformSpec.build_default_uniforms()`。
+- **`time` 运行期注入** —— 声明 `//! owner=runtime` 的 uniform 由渲染器每帧写入引擎 elapsed 秒，
+  不进材质、不可编辑。SSVEP 方块此前因 `time` 恒为 0 而**一直是静态的**（默认相位下恒黑），
+  现在真正按 `sin(2π·freq·time + phase)` 闪烁；GL 探针实测 10 Hz 下 t=0 黑 / 0.025s 白 /
+  0.075s 黑 / 0.125s 白。
+- **材质面板改为注解驱动** —— 分组折叠（Surface / Specular / Stimulus）、带单位、已改标记、
+  单参数与整组复位、共享/内置材质提示；`time` 灰显标注「引擎驱动」。
+- **资源引用唯一性（`.mat`）** —— 新增 `shader_ref` 与 `texture_refs`（`builtin://名称` 或绝对路径），
+  加载时优先按 ref 解析、解析不到才回退保存时的会话内 id。修复跨会话把 SSVEP 材质绑到
+  Lighting、或纹理槽指向别人家纹理的隐患。
+- **修复** —— 材质面板的「注解路径」与「旧通用列表」两条渲染路径同时生效，每个参数被画两遍；
+  现在只有拿不到 spec 时才走旧路径。
+- 新增 `Test/Application/Core/test_uniform_schema.py`（50 checks：注解解析、默认值、复位、
+  shader/纹理引用、材质隔离、运行期注入）。
+- **面板控件目录 `dev/imgui_api`（生成物）** —— `Utils/Dev/imgui_docgen.py` 从已安装
+  `imgui_bundle` 的运行时签名生成，按用途分 16 组收 143 个在用接口（文本/按钮/输入/布局/容器/
+  表格/弹窗/交互状态/禁用/拖放/样式/输入/窗口/宿主侧禁止），附录收录其余 230 个函数 + 146 个枚举/类型；flag 速查的值
+  也在生成时读取，升级依赖不会静默过时。`engine-editor-cli doc show dev/imgui_api#表格` 按节取。
+- **扩展面板配方 `extdev/ui_recipes`** —— 9 个可复制片段：参数行、设置持久化、表格、日志
+  （跟随/暂停）、实时波形、确认弹窗、禁用原因、后台线程队列、无头自测。
+- **守卫** `Test/Application/Editor/test_imgui_api_doc.py`：产物新鲜 + 分组名真实 +
+  **引擎里用到的每个 imgui 函数都被归类** + CLI 可寻址（12 checks）。
+- **实测坑入库**：`from imgui_bundle.imgui import ImVec2 / TableFlags_` 会 `ImportError`，
+  统一 `from imgui_bundle import imgui` + `imgui.TableFlags_.xxx`，`ImVec2/ImVec4` 从顶层拿。
+- **端口台账（谁占了端口 / 目的 / 涉及内容）** —— 每个编辑器实例启动时在
+  `<tmp>/engine_editor_mcp/ports/<port>.json` 登记 `purpose / owner / project / touches / notes`，
+  退出时删除；`engine-editor-cli ports` 一眼看到占用者，`launch --purpose ...` 在进程启动前先预占
+  （并发 agent 不会抢同一个空闲端口），引擎就绪后改写为 `ready` 并补上工程/场景。新增
+  `instance.info` / `instance.describe` 两个 op（78 个核心 op）。
+- **启动参数** `--purpose / --owner / --tag / --touch / --note`（实例自述，不进 Settings）。
+- 新增 `Test/Application/Editor/test_port_ledger.py`（33 checks：引擎↔工具仓同格式往返、
+  `starting` 预登记继承、陈旧条目清理、扫描状态机、`choose_port` 避让、两个 op、启动参数解析）。
+- **测试选测（`--affected` / `--changed`）修好并装回入口** —— 改哪跑哪，不再每次全量 `--tier core`。
+  修复: 改测试/场景文件时选中它自己；`?? dir/` 未跟踪目录展开；默认跳过 `manual`/`live`
+  （交互式 / 需要运行中的编辑器）；`--changed` 只命中文档改动 → 0 tests 退出 0，
+  显式 `--affected` 路径错 → 退出 2；选中比例 >50% 时提示工作区改动累积。
+  规则同时写进 `test_runner --help` 与 `Doc/Dev/test_protocol.md`「默认入口」。
+  新守卫 `Test/Application/Core/test_test_runner_selection.py`（13 checks）。
+- **既存缺陷记录** —— heavy 档 `test_material_cycle_stress` 的 `shift` 场景（引擎中途新增内置材质）
+  在干净 HEAD 上同样失败（`bindFail=4`），`--tier core` 不含 heavy 所以长期未暴露；待单独定位。
+- **扩展解释器协议 `ctx.python`** —— manifest 可声明 `{"python": {"mode": "engine|venv|path",
+  "path": "%EXT_DATA%/venv", "requirements": "...", "probe": [...]}}`；宿主统一解析
+  （`FVE_EXT_PYTHON_<ID>` → manifest → 引擎解释器）、子进程 `import` 自检、`spawn` 托管与卸载回收，
+  `explain()` 给出「为什么选了这个解释器」。扩展不再需要把依赖装进引擎 venv 或写死
+  `...\venv\Scripts\python.exe`。官方示例 `SerialParallelDevice` 已声明
+  `{"mode": "engine", "probe": ["serial"]}` 并在 `ext.device.status` 回传解析结果；
+  `extension.list` 每个扩展多一个 `python` 块。
+- **踩坑入库** —— 引擎以 `PYTHON_GIL=0` 启动，原样继承给外部 GIL 构建的解释器会让子进程在初始化阶段
+  Fatal（"Disabling the GIL is not supported by this build"），`import` 自检永远失败；`ctx.python.env()`
+  只在子进程就是引擎解释器时保留该变量。
+- **`extension.python` op** —— 运行期读/写扩展解释器（`path=` 覆盖立即生效、空串清除），
+  覆盖持久化到 `editor_state/extensions.json`（v2）；核心 op 78 → **79**。
+- **审查器 M7 / C12**（工具仓 `extension-kit`）—— manifest `python` 结构校验；
+  写死绝对解释器路径或 `Popen(sys.executable)` 直接 FAIL（引导改用 `ctx.python.spawn`）。
+- 新增 `Test/Application/Core/test_extension_python.py`（29 checks：归一化 / 优先级 / venv 解析 /
+  变量展开 / env / probe / spawn 回收 / 覆盖落盘 / 官方示例声明）。
+- **仓库清理** —— 删除根目录 `output.txt`（0B 重定向残留）与
+  `Application/Core/NodeGraph/evaluators/_entity_v1_legacy.py.bak`（旧文件备份）；
+  `.gitignore` 补 `*.bak` / `*.orig` / `*.rej` 与根目录 `/*.txt` `/*.log` `/*.tmp` `/*_recordings/`。
+- **扩展激活策略与入口分工（行为变更）** —— 内置由 allowlist 定义（**不是**「在 Functions 里」），
+  面板决定菜单：
+  - **内置 = `official_extensions.json` allowlist**（与 `.gitignore` 白名单 `!Application/Functions/<Dir>/`
+    互为镜像）→ `scope=builtin` → **恒激活**（`always_on`，不可停用；`FVE_EXTENSIONS_BUNDLED=off`
+    为安全模式）。
+  - **同在 `Application/Functions` 但不在 allowlist 的本地/社区夹具**（Gtec、mi-sssep）→
+    `scope=local` → 与用户目录一样 **opt-in**，可在设置页启停。修正了上一版把这类夹具
+    误判为内置、锁成不可停用的问题（判定统一到 `ExtensionManager.scope_of()`）。
+  - 用户目录 `%APPDATA%/FlyVibingEngine/extensions` → `scope=user`，opt-in；
+  - **主菜单栏 Extensions 只列有 UI 面板的扩展**（`has_ui`：声明 `capabilities: ["ui"]`
+    或确实注册了面板），点它 = 把面板叫回来；无面板的后台扩展（ops/nodes/examples/device）
+    不再占据菜单；
+  - **管理面收敛到 Settings ▸ Extensions 新页**（`order=20`）：全部扩展（含无面板/broken/planned）、
+    启停、诊断（scope / has_ui / 目录 / capabilities / 解释器 / 示例根目录 / 已注册 op / 错误原因）
+    + Rescan；菜单底部保留「Extension Settings…」直达。
+  - **`File ▸ Open Example` 不再静默空着** —— 已安装但未启用的扩展若带 `Examples/`，
+    菜单底部给灰字 `"<扩展> — N 个示例（扩展未启用）"` 并附一键启用项（这条直接治
+    「我写了示例却没注入成功」的误判）。
+  - `extension.list` 每项 `scope` 取 `builtin` / `local` / `user`，另有 `always_on` / `has_ui`，
+    agent 可据此判断「该去哪儿找它」；`extension.disable` 只对 builtin 报错。
+- 新增 `Test/Application/Extensions/test_extension_activation.py`（内置恒激活 / 安全模式 /
+  非内置 opt-in / 停用拒绝 / `has_ui` 两类判据 / 状态文件不被内置污染）。
+- 新增 `Test/Application/Extensions/test_extension_builtin_scope.py`（allowlist 与 .gitignore
+  白名单必须互为镜像 + 指向真实 manifest / `scope_of` 三态 / Gtec、mi-sssep 必须判为 `local` /
+  `to_dict` 契约）。
+- `Test/Application/Editor/test_editor_settings.py` 更新为内置四页
+  （`common / export / extensions / debug`）。
+- **文档 CLI 支持三层寻址** —— `doclib` 现在同时按 `##` 与 `###` 切节：`doc outline` 输出
+  带编号的小节目录；`doc show <topic>#3.3` / `#11.1` 只拉那一小节（`#3` 仍是整章、正文含小节，
+  旧用法不变）；小节无自带编号时自动补 `<父号>.<序号>`，保证长协议文档每一节都可寻址。
+  `doc search` 的命中标签精确到小节（`dev/shader_protocol#6.1`），可直接拿去 `doc show`。
+  此前只切 `##`，`#11.1 ctx.python` 这类小节取不到 → agent 只能整章加载（约 700 行），
+  与「先索引后内容」的省上下文目标相悖。
+
+### English
+
+- **Concurrency race fixed (P0, crash class)** — `Scene.entities` had no lock and was rebuilt
+  wholesale by **two threads**: the render thread's `NodeEditorPanel._ensure_default_scene()`
+  (every frame) and the main thread's `SimulationController._sync_ecs_to_scene()` (on Play).
+  Meanwhile the main thread's `copy.deepcopy(editor_scene)` was iterating it →
+  `RuntimeError: dictionary changed size during iteration` raised inside `Engine._render_loop` →
+  **the editor exited with code 1** (no dialog; with a 16-entity scene it crashed within a few
+  Play clicks). Fixed in three layers: (1) `Scene` gained `_entities_lock` guarding all in-place
+  mutations; (2) bulk rebuilds go through `replace_entities()`, an **atomic whole-table swap**
+  so readers never see a half-empty table; (3) a custom `__deepcopy__` snapshots under the lock
+  and constructs offline (an `RLock` is not deep-copyable anyway).
+  Note on the stdlib: Python 3.14 free-threading makes `dict.copy()` a **lock-protected atomic
+  snapshot** (20 000 measured copies, never an inconsistent `k != v`), but **no built-in type**
+  makes "iterate while another thread mutates" safe — `MappingProxyType` is a view, not a
+  snapshot, and `copy.deepcopy` still iterates in Python (it raised on the very first attempt).
+  Verified: 14 rounds of Play/Stop + repeated project loads with zero crashes (previously 3
+  crashes across 7 examples); guard `test_scene_concurrency.py` (20 checks, including a control
+  case proving the old pattern still crashes).
+- **Product performance stats (`--stats-json`, new)** — `PlayerEntry --stats-json P
+  [--seconds T] [--stats-interval S]` writes `P` (frame time mean/p50/p90/p95/p99/max, stall
+  buckets >16.7/33.3/50/100 ms, process CPU/RSS/GC/thread inventory/GIL state) plus `P.jsonl`
+  (per-second trend, so you can see *when* it degrades). New `Application/Runtime/PerfStatsLayer.py`;
+  `FrameProfiler` gained a thread-safe `snapshot_stats()` and the long-missing `stop()`
+  (`Engine._render_loop` was already calling it, silently swallowed by `try/except`).
+  `--seconds` is a **wall-clock** deadline (the old `--frames` ran the inline logic loop
+  uncapped by vsync — 120 frames took 0.2 s and measured nothing steady-state).
+  Guard `test_perf_profiler.py` (20 checks, including concurrent tick + snapshot).
+  Measured on all 7 MI-SSSEP products: **460–693 fps (1.44–2.17 ms/frame), zero stalls, ~190 MB RSS**.
+- **Node-graph evaluation indexed** — `NodeCanvas` now caches pin→node, pin→metadata,
+  output-pin→downstream, input-pin→source and event-type→entry-nodes, invalidated by `revision`;
+  `find_pin_*`, `_downstream_nodes`, `_read_input` and `trigger` all look up instead of scanning.
+  Previously *every* pin read/write linearly scanned the whole graph (`canvas.py:116` was the
+  hottest frame in cProfile). Measured: **3.404 → 0.171 ms/frame (×20)** with identical event and
+  error sequences. Guard `test_canvas_pin_index.py` (16 checks against a brute-force oracle).
+  New tool `Utils/Dev/perf_graph.py` (`graph` / `live` / `cpu` tiers plus `--json` /
+  `--baseline` regression gate, with warm-up and a 0.05 ms/frame noise floor).
+- **VSync / frame-rate cap switch** — `MGE_VSYNC=0` uncaps; new
+  `glfwWindow.ApplySwapInterval()` applies it **after the render thread owns the context**
+  (`glfw.swap_interval` cannot be set right after `create_window` — GLFW error 65538).
+  On a 200 Hz display every scenario used to report exactly 199.7 fps, hiding all rendering-cost
+  differences.
+- **Remote / SSH display safety (crash class)** — starting a product inside a non-interactive
+  desktop session (Windows SSH has its own window station) hit
+  `glfw.get_video_mode(monitor)` → `OSError: access violation reading 0x108` and exited.
+  Fixed: (1) every monitor query now returns `None` on failure and disables further queries for
+  the session (warn once); (2) resolution falls back `MGE_WINDOW_SIZE` → Win32
+  `EnumDisplaySettingsW` → GLFW → 1920×1080; (3) only `FULLSCREEN` touches monitor handles;
+  (4) `FULLSCREEN` without a usable monitor degrades to `BORDERLESS`; (5) escape hatches
+  `MGE_WINDOW=windowed|borderless|fullscreen|overlay`, `MGE_WINDOW_SIZE=WxH`, `MGE_MONITOR=off`.
+  New diagnostics `Utils/Dev/display_diag.py` (session identity + three Win32 sources + the GLFW
+  path, `--json`) and guard `test_window_display_fallback.py` (17 checks).
+  Caveat: a window created inside an SSH session belongs to that session's desktop and will
+  **not** appear on the physical / remotely-viewed desktop.
+- **Toolchain version lock** — new `Utils/Dev/Installer/toolchain.lock.json`
+  (engine 1.1.0 ↔ toolchain 0.8.0); `build_installer` warns on mismatch.
+- **Earlier items (2026-11-05 batch)** — shader `//!` annotations, single source of defaults,
+  runtime `time` injection, annotation-driven material panel, resource reference stability,
+  `dev/imgui_api` widget catalogue, `extdev/ui_recipes`, port ledger + `instance.info/describe`,
+  test selection `--affected/--changed`, `ctx.python` extension interpreter protocol — see
+  the “1.1.0 pre-release batch” section below.
+
+- **Shader parameter annotations (`//!`)** — control kind, range, unit, default and ownership now
+  live next to the GLSL declaration; the inspector, defaults, validation and docs all derive from
+  that single place. Shaders without annotations degrade to the previous behaviour exactly.
+  `Basic` / `Lighting` / `SSVEP` are annotated.
+- **Single source of defaults** — removed the hard-coded `uShininess = 32.0` from `ResourceManager`;
+  `Material` builds its parameter table from the specs.
+- **`time` runtime injection** — uniforms marked `//! owner=runtime` are written by the renderer
+  every frame (engine elapsed seconds), never stored in a material and never editable. The SSVEP
+  square used to be **static** (`time` was always 0, hence black at the default phase); it now
+  actually flickers at `sin(2π·freq·time + phase)` — GL probe: black at t=0, white at 0.025 s,
+  black at 0.075 s, white at 0.125 s (10 Hz).
+- **Material inspector driven by annotations** — grouped sections (Surface / Specular / Stimulus),
+  units, "modified" markers, per-parameter and reset-all buttons, shared/builtin material warning;
+  `time` is greyed out as engine-driven.
+- **Resource reference uniqueness (`.mat`)** — `shader_ref` and `texture_refs`
+  (`builtin://Name` or absolute path) are written next to the session ids; loading resolves by
+  reference first and only falls back to the saved id. Fixes cross-session shader/texture mix-ups.
+- **Fix** — the annotation path and the legacy uniform list were both drawing, duplicating every
+  parameter; the legacy path now only runs when a shader yields no specs.
+- Added `Test/Application/Core/test_uniform_schema.py` (50 checks).
+- **Panel control catalog `dev/imgui_api` (generated)** — `Utils/Dev/imgui_docgen.py` reads
+  signatures from the installed `imgui_bundle` at runtime and groups 143 controls the engine
+  actually uses into 16 purpose sections (text / buttons / inputs / layout / containers / tables /
+  popups / interaction state / disabled / drag-drop / style / raw input / windows / host-only),
+  with an A–Z appendix for the remaining 230 functions plus 146 enums/structs. Flag cheat-sheets are generated from live values, so
+  dependency bumps surface as reviewable diffs. Read per section via
+  `engine-editor-cli doc show dev/imgui_api#表格`.
+- **Extension panel recipes `extdev/ui_recipes`** — 9 copy-paste snippets: parameter row, settings
+  persistence, tables, log view, live waveform, confirm modal, disabled-with-reason, worker queue,
+  headless self-test.
+- **Guard** `Test/Application/Editor/test_imgui_api_doc.py`: artifact freshness + real group names +
+  **every imgui function used in the repo is classified** + CLI addressing (12 checks).
+- **Recorded pitfall**: `from imgui_bundle.imgui import ImVec2 / TableFlags_` raises `ImportError`;
+  use `from imgui_bundle import imgui` + `imgui.TableFlags_.xxx` and import `ImVec2/ImVec4` from
+  the top-level package.
+- **Port ledger (who holds the port, why, and what it may touch)** — every editor instance writes
+  `<tmp>/engine_editor_mcp/ports/<port>.json` at start (`purpose / owner / project / touches / notes`)
+  and removes it on exit. `engine-editor-cli ports` shows the holders; `launch --purpose ...` reserves
+  the port before the process starts, so concurrent agents no longer race for the same free port; the
+  engine rewrites the entry as `ready` with project/scene once it is up. New ops `instance.info` /
+  `instance.describe` (78 core ops).
+- **Startup flags** `--purpose / --owner / --tag / --touch / --note` (instance self-description, not
+  Settings).
+- Added `Test/Application/Editor/test_port_ledger.py` (33 checks: engine↔tools format round-trip,
+  `starting` inheritance, stale cleanup, scan state machine, `choose_port` avoidance, both ops, flag
+  parsing).
+- **Test selection (`--affected` / `--changed`) fixed and re-installed at the entry point** — run only
+  what your change touches instead of the full `--tier core` every time. Fixed: editing a test or
+  `scenarios/*.py` selects that test itself; `?? dir/` untracked directories are expanded; `manual`/`live`
+  tiers are skipped by default (interactive / needs a running editor); a `--changed` that only touches
+  docs reports 0 tests with exit 0, while an explicit `--affected` path that matches nothing exits 2;
+  a broad selection prints a hint about accumulated working-tree changes. The rule now lives in
+  `test_runner --help` and the `Doc/Dev/test_protocol.md` entry section.
+  New guard `Test/Application/Core/test_test_runner_selection.py` (13 checks).
+- **Recorded pre-existing defect** — the heavy `test_material_cycle_stress` `shift` scenario (a builtin
+  material added mid-run) also fails on a clean HEAD worktree (`bindFail=4`); `--tier core` never runs
+  heavy tests, so it stayed invisible. To be diagnosed separately.
+- **Extension interpreter protocol `ctx.python`** — manifests may declare
+  `{"python": {"mode": "engine|venv|path", "path": "%EXT_DATA%/venv", "requirements": "...",
+  "probe": [...]}}`; the host resolves it (`FVE_EXT_PYTHON_<ID>` → manifest → engine interpreter),
+  runs subprocess `import` probes, owns spawned children (terminated on unload) and explains the
+  choice via `explain()`. Extensions no longer need to install into the engine venv or hard-code
+  `...\venv\Scripts\python.exe`. The official `SerialParallelDevice` sample now declares
+  `{"mode": "engine", "probe": ["serial"]}` and reports the resolved interpreter from
+  `ext.device.status`; `extension.list` gained a `python` block per extension.
+- **Recorded pitfall** — the engine starts with `PYTHON_GIL=0`; passing that to an external GIL build
+  makes the child die during startup ("Disabling the GIL is not supported by this build") so every
+  probe would fail. `ctx.python.env()` keeps the variable only when the child *is* the engine
+  interpreter.
+- Added `Test/Application/Core/test_extension_python.py` (22 checks).
+- **Repo cleanup** — removed root `output.txt` (0-byte redirect artifact) and
+  `Application/Core/NodeGraph/evaluators/_entity_v1_legacy.py.bak`; `.gitignore` now covers
+  `*.bak` / `*.orig` / `*.rej` and root-level `/*.txt` `/*.log` `/*.tmp` `/*_recordings/`.
+- **Extension activation policy + entry-point split (behaviour change)** — built-in is defined by
+  the allowlist (**not** by living under `Application/Functions`); panels decide the menu:
+  - **built-in = the `official_extensions.json` allowlist** (mirrored by the `.gitignore` whitelist
+    `!Application/Functions/<Dir>/`) → `scope=builtin` → **always on** (`always_on`, cannot be
+    disabled; `FVE_EXTENSIONS_BUNDLED=off` is the safe mode);
+  - **local/community fixtures that also live under `Application/Functions` but are not allowlisted**
+    (Gtec, mi-sssep) → `scope=local` → opt-in like user extensions, toggleable in Settings. This
+    corrects the previous build, which treated those fixtures as built-in and locked them on
+    (classification now lives in one place: `ExtensionManager.scope_of()`);
+  - extensions in `%APPDATA%/FlyVibingEngine/extensions` → `scope=user`, opt-in;
+  - the **main-menu Extensions entry only lists extensions with a UI panel** (`has_ui`: declares
+    `capabilities: ["ui"]` or actually registered a panel). Clicking it brings the panel back.
+    Headless extensions (`ops` / `nodes` / `examples` / `device`) no longer occupy that menu;
+  - **management moved to a new Settings ▸ Extensions page** (`order=20`): every extension
+    (including headless / broken / planned), enable-disable, diagnostics (scope / has_ui / dir /
+    capabilities / interpreter / example roots / registered ops / error) plus Rescan. The menu keeps
+    an "Extension Settings…" shortcut at the bottom;
+  - **`File ▸ Open Example` no longer goes silently empty** — when an installed but disabled
+    extension ships `Examples/`, the menu shows a muted `"<name> - N example(s), extension
+    disabled"` line plus a one-click enable entry (this is what fixes the "my examples were never
+    injected" misdiagnosis);
+  - `extension.list` reports `scope` as `builtin` / `local` / `user`, plus `always_on` / `has_ui`
+    so an agent can tell *where* to look; `disable` only raises for built-in extensions.
+- Added `Test/Application/Extensions/test_extension_activation.py` (built-in always-on / safe mode /
+  non-built-in opt-in / disable refused / both `has_ui` criteria / state file not polluted).
+- Added `Test/Application/Extensions/test_extension_builtin_scope.py` (allowlist and `.gitignore`
+  whitelist must mirror each other and point at real manifests / `scope_of` three states /
+  Gtec & mi-sssep must classify as `local` / `to_dict` contract).
+- `Test/Application/Editor/test_editor_settings.py` updated for the four built-in pages
+  (`common / export / extensions / debug`).
+- **Doc CLI now addresses `###` subsections** — `doclib` splits on both `##` and `###`:
+  `doc outline` prints a numbered sub-outline; `doc show <topic>#3.3` / `#11.1` returns only that
+  subsection (`#3` still returns the whole chapter including its subsections — unchanged), and
+  unnumbered subsections get an auto `<parent>.<k>` address so every section of a long protocol is
+  reachable. `doc search` labels hits with the subsection (`dev/shader_protocol#6.1`) so they can be
+  fed straight back into `doc show`. Previously only `##` was parsed, so sections such as
+  `#11.1 ctx.python` were unreachable and agents had to load the whole ~700-line chapter —
+  defeating the "index first, content second" context budget.
+
+### 1.1.0 前期批次 — 2026-11-05
 
 > **主要特性**：**运行期 UI 体系**（场景驱动的 UI 组件、设置控件、ESC 确认、节点图驱动）——
 > 面向神经工程/神经认知实验的**被试界面**（操作提示、参数设置、流程确认）可以直接在场景里搭，
@@ -8,7 +348,7 @@
 > 此外是渲染与工程稳定性修正（光照模型、材质引用、内置网格法线）、overlay 窗口与工具链一致性：
 > 完整列表见下面条目。
 
-### English
+#### English
 
 > **Headline feature**: the **runtime UI system** (scene-driven UI components, settings controls,
 > Esc confirmation, node-graph driven visibility and clicks). Experiment-facing screens — operator
@@ -154,11 +494,13 @@
   `test_ui_controls.py` covers the control math, the layer interaction, the evaluators and the full
   click → `OnUIClick` → `SetUIVisible` → `SetUIText` chain.
 
-### 简体中文
+#### 简体中文
 
-> **主要特性**：**光照体系完善**（面光源/点光源 + 经典冯氏反射 + 内置网格法线修复）与
-> **运行期 UI 体系**（场景驱动的 UI 组件、交互控件、ESC 模态、节点图驱动）。
-> 另有 overlay 窗口/穿透、热键注册表、材质引用稳定性等修正：完整列表见下面条目。
+> **主要特性**：**运行期 UI 体系**（场景驱动的 UI 组件、交互控件、标签动态文本、ESC 模态、
+> 节点图驱动）—— 面向神经工程/神经认知实验的**被试界面**可以直接在场景里搭，
+> 配合 overlay 覆盖层/穿透与热键注册表，实验范式可以脱离编辑器独立运行。
+> 此外是渲染与工程稳定性修正（光照模型、材质/着色器引用唯一性、内置网格法线）、
+> overlay 窗口与工具链一致性：完整列表见下面条目。
 
 - **`TimeTrigger` 改为上升沿触发** —— 只在 `current >= threshold` 由不满足变为满足的那一帧
   触发一次，不再用“阈值比上次触发时大”的电平判断。`mode=pin` 且阈值每帧增长时旧实现会

@@ -171,8 +171,9 @@ def _spawn_entity_tree(
         ctx:              执行上下文
     """
     # 找到所有 parent_id == template_old_eid 的子 entity 模板
+    # （快照迭代: 模板场景通常只读，但取快照成本可忽略且杜绝并发写风险）
     children: list[tuple[int, object]] = []
-    for old_eid, ed in scene.entities.items():
+    for old_eid, ed in scene.entities_items_snapshot():
         if ed.parent_id == template_old_eid:
             children.append((old_eid, ed))
 

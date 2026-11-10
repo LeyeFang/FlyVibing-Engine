@@ -1,7 +1,10 @@
 """着色器文件解析 — 读取 .vert/.frag 源码 + .spv 二进制，提取 uniform 元信息。"""
 
+import bisect
 import re
 import os
+
+from Application.Resource.UniformSpec import build_spec
 
 
 # ★ 渲染器保留 uniform — 由渲染管线每帧统一注入，不进材质 uniforms_data
@@ -10,6 +13,7 @@ _RESERVED_UNIFORMS = frozenset({
     "uAmbient",      # 场景环境光 (vec3)
     "uCameraPos",    # 相机世界坐标 (vec3) — 高光用
     "uLightCount",   # 平面光数量 (int)
+    "uLightPos",     # 面光源世界位置 数组 (vec3[4]) — 发光面半空间判定
     "uLightDir",     # 平面光方向数组 (vec3[4]) — 光线传播方向
     "uLightColor",   # 平面光颜色×强度 数组 (vec3[4])
     "uPointCount",   # 点光数量 (int)
@@ -17,6 +21,30 @@ _RESERVED_UNIFORMS = frozenset({
     "uPointColor",   # 点光颜色×强度 数组 (vec3[4])
     "uPointRange",   # 点光衰减半径数组 (float[4])
 })
+
+
+def _annotation_body(src: str, match, lines: list, starts: list) -> str:
+    """取 uniform 声明的 `//!` 注解正文（同行 `;` 之后优先，其次上一行）。"""
+    pos = match.start()
+    idx = max(0, bisect.bisect_right(starts, pos) - 1)
+    tail = lines[idx][pos - starts[idx]:] if idx < len(lines) else ""
+    k = tail.find("//!")
+    if k >= 0:
+        return tail[k + 3:]
+    if idx - 1 >= 0:
+        prev = lines[idx - 1].strip()
+        if prev.startswith("//!"):
+            return prev[3:]
+    return ""
+
+
+def _split_lines(src: str) -> tuple:
+    lines = src.split("\n")
+    starts, total = [], 0
+    for line in lines:
+        starts.append(total)
+        total += len(line) + 1
+    return lines, starts
 
 
 def parse_shader_files(
@@ -36,7 +64,9 @@ def parse_shader_files(
         frag_spv_path: 片段着色器 SPIR-V 二进制路径 (可选)
 
     Returns:
-        (vs_src, fs_src, vs_spv, fs_spv, uniforms_dict)
+        (vs_src, fs_src, vs_spv, fs_spv, uniforms_dict, uniform_specs)
+          uniforms_dict : 材质可写的 uniform → GLSL 类型（engine/runtime 归属的不在内）
+          uniform_specs : 全部 uniform → `UniformSpec`（含注解里的 kind/范围/默认值/归属）
     """
     with open(vert_path, 'r', encoding='utf-8') as f:
         vs_src = f.read()
@@ -54,6 +84,8 @@ def parse_shader_files(
 
     # 提取 uniform 元信息 (普通 uniform + sampler + push_constant block)
     uniforms = {}
+    specs = {}
+
     # ① 普通 uniform: layout(...) uniform type name [= init]; 
     uniform_pattern = re.compile(
         r'(?:layout\s*\([^)]*\)\s*)?uniform\s+'
@@ -74,11 +106,22 @@ def parse_shader_files(
     )
 
     for src, tag in [(vs_src, "vertex"), (fs_src, "fragment")]:
+        lines, starts = _split_lines(src)
         # 普通 uniform
         for match in uniform_pattern.finditer(src):
             u_type, u_name = match.group(1), match.group(2)
             if u_name in _RESERVED_UNIFORMS:
-                continue  # 渲染器每帧注入的保留 uniform — 不进材质
+                continue  # 渲染器每帧注入的保留 uniform — 不进材质、不进 GUI
+            if str(u_type).startswith("sampler"):
+                continue  # 纹理槽由材质 texture_id_list 管理，不是"参数"
+            decl = match.group(0)
+            head = decl.split(u_name, 1)[-1] if u_name in decl else ""
+            is_array = "[" in head
+            spec = build_spec(u_name, u_type, _annotation_body(src, match, lines, starts),
+                              is_array=is_array)
+            specs[u_name] = spec
+            if not spec.in_material:
+                continue  # owner=engine/runtime（如 SSVEP 的 time）— 由引擎/渲染器写入
             uniforms[u_name] = u_type
         # push_constant block 成员
         for block_match in push_block_pattern.finditer(src):
@@ -89,7 +132,7 @@ def parse_shader_files(
                     print(f"警告: uniform '{u_name}' 类型不一致 ({uniforms[u_name]} vs {u_type})")
                 uniforms[u_name] = u_type
 
-    return vs_src, fs_src, vs_spv, fs_spv, uniforms
+    return vs_src, fs_src, vs_spv, fs_spv, uniforms, specs
 
 
 def parse_shader_file(

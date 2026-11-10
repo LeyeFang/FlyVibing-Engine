@@ -19,14 +19,21 @@ layout(location = 1) in vec3 NormalWorld;
 layout(location = 2) in vec3 PosWorld;
 
 layout(binding = 0) uniform sampler2D uTexture;
+//! ui: color4 | label=mat.color | group=Surface | default=1,1,1,1
 uniform vec4 uColor = vec4(1.0);
 
 // ── 材质参数 (进材质 uniforms_data, 可经 UI/节点/材质文件编辑) ──
-//   哨兵约定: float 0 = 使用默认值 (与 uShininess 一致 — shader_protocol.md)
+//   ★ `//!` = 机读注解: GUI 控件 / 范围 / 默认值 / 归属（Doc/Dev/shader_protocol.md §6.1）
+//   ★ 兼容旧材质: float 的 0 仍视为"用默认值"(哨兵约定), 范围下限因此 > 0
+//! ui: float | label=mat.shininess | group=Specular | range=1..256 | step=1 | default=32
 uniform float uShininess = 0.0;         // 高光指数      → 默认 32
+//! ui: float | label=mat.specular | group=Specular | range=0.001..1 | step=0.01 | default=0.25
 uniform float uSpecularStrength = 0.0;  // 高光强度 ks   → 默认 0.25 (与旧版观感一致)
+//! ui: float | label=mat.diffuse | group=Surface | range=0.001..4 | step=0.01 | default=1.0
 uniform float uDiffuseStrength = 0.0;   // 漫反射 kd     → 默认 1.0
+//! ui: float | label=mat.ambient | group=Surface | range=0.001..1 | step=0.01 | default=1.0
 uniform float uAmbientStrength = 0.0;   // 环境光 ka     → 默认 1.0
+//! ui: enum | label=mat.specular_model | group=Specular | choices=0:mat.phong,1:mat.blinn | default=0
 uniform int   uSpecularModel = 0;       // 0 = 经典冯氏 (R·V) / 1 = Blinn (H·N)
 
 // ── 渲染器注入 (保留 uniform — 不进材质, 每帧由渲染管线写入) ──

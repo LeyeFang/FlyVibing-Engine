@@ -1,16 +1,18 @@
-"""Extensions 菜单 — 主菜单栏的扩展管理入口（唯一实现, 多面板共用）。
+"""Extensions 菜单 — 主菜单栏的**面板入口**（唯一实现, 多面板共用）。
 
 使用方:
   - Application/Editor/UI/UIManager.py  _draw_menu_bar  (实际渲染路径)
   - Application/Editor/UI/panels/MenuBarPanel.py        (保留文件, 未注册)
 
-职责（对应 Doc/ExtDev/extension_dev_protocol.md §5/§9）:
-  - 列出全部扩展（ExtensionManager.list_infos, 来源 = 内置 Application/Functions/** + 用户目录）
-  - broken           → 红色禁用项 + 错误 tooltip
-  - planned/未实现    → 灰色"计划中" + 目录/描述 tooltip
-  - 可装载           → 复选菜单项, 点击 = ExtensionManager.toggle
-                       （与 extension.enable/disable op 同路径）
-  - Rescan           → ExtensionManager.rescan
+分工（2026-11-10 调整）:
+  - 主菜单 Extensions = **UI 面板入口**。只列 `has_ui` 的扩展（capabilities 含
+    `ui`，或已注册 ExtensionPanel 窗口）；纯后台扩展（ops/nodes/examples/device）
+    不在这里出现 —— 它们的开关/诊断在 设置 ▸ Extensions 页。
+  - **builtin** 扩展（allowlist 内、随引擎分发）恒激活，菜单项不再带勾选框，
+    点击 = 把它的面板叫回来（与 View 菜单同语义）; `local`（Functions 下的非白名单夹具）
+    与 `user` 扩展保持 勾选 = 启停。
+  - broken / planned 不在这里列（管理面在设置页），避免菜单被不可用项塞满;
+    菜单底部常驻 "Extension Settings…" 直达管理页 + Rescan。
 
 约束: 须在 imgui.begin_main_menu_bar() 块内调用; 任何扩展体系异常
       不得使菜单栏崩溃（内部全部捕获）。
@@ -27,38 +29,49 @@ def draw_extensions_menu() -> None:
         return
     try:
         from Application.Editor.Extensions.ExtensionManager import ExtensionManager
-        infos = ExtensionManager.list_infos()
+        infos = [i for i in ExtensionManager.list_infos() if i.get("has_ui")]
     except Exception as e:  # noqa: BLE001 — 菜单不得因扩展体系异常而崩
         infos = []
         imgui.text_disabled(t("extension.system_error", error=repr(e)))
-    if not infos:
-        imgui.menu_item(t("extension.none"), "", False, False)
+
+    shown = 0
     for info in infos:
+        if not info.get("loadable"):
+            continue          # planned / 无 entry：管理面在设置页
         label = f"{info.get('name') or info.get('id')}"
-        status = info.get("status", "planned")
-        if status == "broken":
-            imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(0.85, 0.35, 0.30, 1.0))
-            imgui.menu_item(t("extension.broken", name=label), "", False, False)
-            imgui.pop_style_color(1)
-            if imgui.is_item_hovered():
-                imgui.set_tooltip(str(info.get("error", "")))
-        elif not info.get("loadable"):
-            imgui.menu_item(t("extension.planned", name=label,
-                              maturity=info.get("maturity", "planned")), "", False, False)
-            if imgui.is_item_hovered():
-                imgui.set_tooltip(f"{info.get('dir', '')}\n{info.get('description', '')}")
-        else:
-            changed, val = imgui.menu_item(label, "", bool(info.get("enabled")), True)
-            if imgui.is_item_hovered():
-                imgui.set_tooltip(t(
-                    "extension.tooltip", id=info.get("id"), version=info.get("version"),
-                    maturity=info.get("maturity"), dir=info.get("dir", "")))
-            if changed:
+        tooltip = t("extension.tooltip", id=info.get("id"), version=info.get("version"),
+                    maturity=info.get("maturity"), dir=info.get("dir", ""))
+        if info.get("always_on"):
+            # 内置恒激活 → 菜单项 = 面板开关（不是启停）
+            if imgui.menu_item(label, "", False, True)[0]:
                 try:
-                    ExtensionManager.toggle(info["id"], val)
+                    ExtensionManager.show_panels(info["id"])
                 except Exception as e:  # noqa: BLE001
-                    print(f"[Extensions] toggle failed: {e!r}")
+                    print(f"[Extensions] show panel failed: {e!r}")
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(t("extension.bundled_tip") + "\n" + tooltip)
+            shown += 1
+            continue
+        changed, val = imgui.menu_item(label, "", bool(info.get("enabled")), True)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(tooltip)
+        if changed:
+            try:
+                ExtensionManager.toggle(info["id"], val)
+            except Exception as e:  # noqa: BLE001
+                print(f"[Extensions] toggle failed: {e!r}")
+        shown += 1
+
+    if not shown:
+        imgui.menu_item(t("extension.none_ui"), "", False, False)
+
     imgui.separator()
+    if imgui.menu_item(t("extension.open_settings"), "", False, True)[0]:
+        try:
+            from Application.Editor.UI.panels.SettingsPanel import SettingsPanel
+            SettingsPanel.open("extensions")
+        except Exception as e:  # noqa: BLE001
+            print(f"[Extensions] open settings failed: {e!r}")
     if imgui.menu_item(t("extension.rescan"), "", False, True)[0]:
         try:
             ExtensionManager.rescan()

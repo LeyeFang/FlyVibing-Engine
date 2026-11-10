@@ -431,6 +431,74 @@ P3 主题 token（颜色/间距/字号不写死在组件里）→ P4 `SetPaused`
 | 编辑期预览（不 PIE 也能看到 UI） | `Application/Editor/EditorLayer.py`（`_collect_ui_elements` / `_render_ui_preview`） |
 | overlay 穿透联动（按钮上 = 捕获） | `RuntimeWindow._cursor_over_ui` + `RuntimeUILayer.captures_at` |
 | 新增缩放模式 `contain`（窄视口不裁切） | `Core/UI/layout.content_box` |
+---
+
+## 11. P0 稳定性待办（2026-11-10 性能战役产出）
+
+> 来源：2026-11-10 成品/编辑器性能测量与竞态复现。详细证据见
+> `Test/_runs/perf_2026-11-10/`（本地，不入库）与本文档各条内联数据。
+> **这批不是"更快"，而是"不坏结果 / 不崩"。优先于任何优化。**
+
+### 11.1 P0-A 场景字典无锁竞态 → 编辑器直接退出
+
+| 项 | 内容 |
+|---|---|
+| 现象 | `RuntimeError: dictionary changed size during iteration` 抛在 `_render_loop` 里 → 编辑器 `exit code 1`，无对话框 |
+| 触发点 1 | `SimulationController._try_consume_start` → `copy.deepcopy(editor_scene)`（`SimulationController.py:431`）|
+| 触发点 2 | `graph.import` / `replace_from` 替换画布，渲染线程正在 `_draw_nodes` 遍历 |
+| 写者 A（渲染线程，**每帧**）| `NodeEditorPanel.draw()` → `_ensure_default_scene()`（`panel.py:608`）→ `scene.entities.clear()` + 逐条 `add_entity` |
+| 写者 B（主线程）| `SimulationController._sync_ecs_to_scene()`（`:157`）→ 同样 `clear()` + `add_entity` |
+| 复现率排序 | ① 场景实体多 + 点 Play（16 实体时几乎必崩）② `graph.import` ③ 批量 `entity.add/delete` ④ `extension.enable`（rehydrate）⑤ 1–5 实体时几乎不撞 |
+| 修复方向 | **A 脏标记**（`_ensure_default_scene` 只在 ECS 实体版本号变化时跑）+ **D 原子替换**（先建新 dict，再整体换引用，永不半空）。B（给 `Scene.entities` 加锁）太重，C（挪到主线程）可选 |
+| 验收 | ① 连点 Play/Stop 30 次不崩 ② `graph.import` 50 次不崩 ③ 新守卫测试覆盖"渲染线程迭代 + 主线程替换" |
+
+### 11.2 P0-B 脉冲调度下沉到 I/O 线程（实验数据质量）
+
+| 项 | 内容 |
+|---|---|
+| 实测 | 20 Hz：间隔 p50 **50.0000 ms**、\|偏差\| p99 1.0 ms（已达标）；40 Hz：mean 24.97 ms 但**单次间隔 16–35 ms**，\|偏差\| p50 5 ms |
+| 根因 | 脉冲由 `TimeTrigger` 在**图求值帧**触发，而图只在逻辑 tick 的奇数帧跑（≈8.3 ms 一格）→ 25 ms 无法整除，只能落 16.7/25/33.3 |
+| 关键结论 | **与帧率无关**：掉到 34 fps 时 40 Hz 平均值仍是 24.94 ms，只是抖动扩大到 ±10 ms。所以"优化渲染"不能修这条 |
+| 修复方向 | `spd-io` 线程里做**绝对时刻调度**（`deadline += period` 累加，不随帧漂移），图只负责"登记/撤销脉冲序列" |
+| 验收 | 40 Hz 连发 60 s，间隔 \|偏差\| p99 < 1 ms；20 Hz 不得回退 |
+
+### 11.3 P0-C 远程 / SSH 会话下的窗口创建崩溃
+
+| 项 | 内容 |
+|---|---|
+| 现象（用户报告）| SSH 里启动导出成品 → `glfw.get_video_mode(monitor)` → `OSError: access violation reading 0x108` |
+| 根因 | 进程不在交互式桌面会话里（SSH 会话有独立 window station）→ `glfwInit()` 成功，但 `get_primary_monitor()` 交回的句柄指向失效结构，GLFW 直接解引用 |
+| 已修（2026-11-10）| ① 所有显示查询走 `_safe_primary_monitor` / `_safe_video_mode`（失败即停用后续查询，不抛）② 分辨率优先 `MGE_WINDOW_SIZE` → Win32 `EnumDisplaySettings` → GLFW → 1920×1080 ③ `MGE_WINDOW=windowed\|borderless\|fullscreen` 覆盖模式 ④ `MGE_MONITOR=off` 完全跳过显示器枚举 ⑤ FULLSCREEN 无可用显示器 → 自动降级 BORDERLESS |
+| 诊断工具 | `Utils/Dev/display_diag.py`（会话身份 / Win32 三源 / GLFW 实际路径并排输出，`--json` 落盘）|
+| 验证 | 本地：`MGE_MONITOR=off MGE_WINDOW=fullscreen MGE_WINDOW_SIZE=1024x600` → 打印降级日志、`mode=borderless`、exit 0 |
+| 仍待 | ① 真实 SSH 会话复测（需要用户环境）② 把 `display_diag` 的 JSON 收进 issue 模板 |
+
+### 11.4 P0-D 编辑器 idle 占用 ~2 核
+
+| 项 | 内容 |
+|---|---|
+| 实测 | 编辑器空闲 197% 单核；PIE 268%（16 线程机器）|
+| 根因 | `EditorHost` 的 `logic_target_fps = 0`（不限帧）+ 内联循环靠 `window.Update()` 卡 |
+| 修复方向 | 给 `EditorHost` 设 `logic_target_fps = 60`，或内联循环补 `sleep` |
+| 验收 | 空闲 < 100% 单核；帧率不下降 |
+
+### 11.5 P0-E 节点编辑器面板成本与 PIE 自动隐藏
+
+| 项 | 内容 |
+|---|---|
+| 实测 | 160 节点图：面板可见 **35 fps (28 ms/帧)** ↔ 隐藏 **156 fps (6.4 ms/帧)**；净成本 **21.5 ms/帧** |
+| 定位 | 面板绘制（`_draw_nodes` / `_draw_pins` / `_draw_group_hints`），**不是**图求值（0.07 ms/帧）|
+| 修复方向 | ① **PIE 期间自动隐藏**（实验运行不需要看图，一行逻辑，收益 4.4×）② 只在可见时 `_draw_*` ③ 视口裁剪（屏幕外节点跳过）|
+| 验收 | PIE 期间默认 ≥ 120 fps；用户手动打开面板时行为不变 |
+
+### 11.6 与 §11 相关但不进 P0 的项
+
+| 项 | 原因 |
+|---|---|
+| 节点图求值优化（常量折叠 / 死链裁剪 / 记忆化）| 已有独立议题：`node_graph_optimization_plan.md` |
+| 运行时相邻节点融合 | 实测上限仅占整帧 2.4%，**不做**（见上述议题文档 §5）|
+| `FrameProfiler` 分段归因 | 先有 HUD/UI 组件再谈，见 `node_graph_optimization_plan.md` §6 |
+| 采集设备扩展 `export:false` 阻断 4/7 示例成品 | 扩展侧决定，已在其审计回执里点名 |
 
 **内置对话框改为同一编译器**：`RuntimeUILayer._builtin_elements()` 生成 `UIElement`（负 eid），
 与场景 UI 共用 `build_ui` —— 只有一份布局/绘制/命中实现；`build_quads()` 行为与 M0 完全兼容（12 quad / `_rects` yes/no）。
@@ -540,3 +608,164 @@ P3 主题 token（颜色/间距/字号不写死在组件里）→ P4 `SetPaused`
 提案：`Doc/Dev/content_schema_plan.md` —— `FieldSpec` 单一结构 + GLSL `//!` 注解 + 稀疏材质覆盖 +
 `schema.get` op + 覆盖率守卫测试；S1/S2 即可解决“颜色/漫反射/SSVEP 参数怎么调”且不碰 op 契约。
 顺带发现：`SSVEP.time` 无任何运行期写入者（方块实际是静态的），需按 `owner=runtime` 每帧注入。
+
+### 10.13 S1 已落地：shader 注解 + 参数化材质 + `time` 注入（2026-11-06）
+
+**做了什么**
+
+1. **`Application/Resource/UniformSpec.py`** —— `UniformSpec`（kind / label / group / range / step /
+   unit / default / choices / owner / editable / doc）+ `parse_annotation()` + `build_spec()` +
+   `build_default_uniforms()`。`build_default_uniforms` 成为**默认值唯一实现**。
+2. **解析器**：`parse_shader_files` 返回值 5 → 6 元组，多一张 spec 表；注解取位支持「声明上一行」
+   与「同行 `;` 之后」；无注解 → 按 GLSL 类型推断，行为与 2026-11 之前逐字段一致。
+3. **三个内置 shader 全部注解**：`uColor`（color4）/ `uShininess`（1–256，默认 32）/
+   `ks`·`kd`·`ka`（范围下限 > 0，避开 0 哨兵）/ `uSpecularModel`（enum Phong/Blinn）/
+   `freq`（Hz 1–60）/ `phase_shift`（rad 0–2π）/ `time`（`owner=runtime`）/ 矩阵（`owner=engine`）。
+4. **`time` 每帧注入** —— `OpenGLEntities._inject_runtime` + `_elapsed_seconds`；
+   `runtime_uniforms` 在注册 program 时从 spec 收集。`time` 不进材质、GUI 只读、
+   逐实体上传二次拦截。**SSVEP 方块从「静态黑」变成真的闪**。
+5. **面板** —— `ScenePanel._draw_material_uniforms` 按 spec 分组渲染（color4 → 色盘 + 预设；
+   float/int → 带范围滑杆；enum → 下拉；readonly/owner≠content → 灰显 + 原因），
+   已改标记 + 单参数/整组复位；共享/内置材质提示。`_draw_color_picker` 与
+   `if shader_name == 'Basic'` 分支删除。
+6. **控制器** —— `get_entity_material_info` 增 `uniform_specs / shader_ref / is_builtin /
+   shared_count`；新增 `count_material_users` / `reset_material_uniform(s)` /
+   `LoadMaterialFromFile`（统一入口）。
+7. **引用唯一性** —— `.mat` 增 `shader_ref` 与 `texture_refs`；`ResourceManager` 增
+   `ShaderRef/ResolveShaderRef`、`TextureRef/ResolveTextureRef`，与既有
+   `MaterialRef/ResolveMaterialRef` 同一解析顺序（builtin 精确 → 路径精确 → 文件名唯一）。
+   `.mat` 里的 `shader_id` / `texture_ids` 降级为兼容回退。
+
+**验证**
+
+- `Test/Application/Core/test_uniform_schema.py` **50/50**（新增，已登记 test map）。
+- `--tier core` **96/96**（修掉 `test_test_map` / `test_print_inventory` 两处待刷新产物）。
+- GL 探针（`Test/_runs/ssvep_time_probe.py`）：10 Hz、相位 0，t=0 黑 / 0.025 s 白 / 0.075 s 黑 /
+  0.125 s 白 —— `time` 注入 + 相位数学正确。
+- 编辑器实拍（`Test/_runs/schema_panel4.png`）：`row` 实体切到 SSVEP 后，面板出现
+  `Stimulus` 组：`Frequency 10.000 Hz`、`Phase 0.000 rad`、`Time: —（engine-driven）`；
+  视口方块在连续两张截图里由白变黑 —— 即运行期闪烁。
+
+**修掉的问题**
+
+1. 材质面板两条渲染路径同时在画（注解路径 + 旧通用列表）→ 每个参数画两遍：旧路径现在只在
+   shader 拿不到 spec 时执行。
+2. `.mat` 的 `shader_id` 跨会话错位（SSVEP 材质绑到 Lighting）→ 改按 `shader_ref` 解析。
+3. `.mat` 的 `texture_ids` 同理 → 改按 `texture_refs`。
+4. `ResourceManager` 硬编码 `uShininess=32` 与 shader 注释「→ 默认 32」两份真相 → 只留注解。
+
+**未做（S2+，按原计划顺序）**
+
+- `.mat` 稀疏存储（只存改过的键）+ 旧文件 0 归一 → 哨兵约定退役、改 shader 默认值老材质自动跟随。
+- 节点图侧：`SetComponent/GetComponent` 按 spec 生成参数引脚 + 通用 `Get/SetMaterialParam`
+  （现在节点图里仍只有 `MaterialID`，没有逐参数读写）。
+- `schema.list` / `schema.get` 只读 op + `test_schema_coverage` 守卫（把“agent 工具缺口”变 CI 红灯）。
+- prefab 组件级 `__version` 与未知字段告警（本次只动了 `.mat` 引用层）。
+
+### 10.14 面板 UI 的文档化：控件目录 + 配方（2026-11-08 已落地）
+
+**问题**：扩展面板的入口只有 `ctx.ui.register_window(name, draw_fn)`，`draw_fn` 里就是原生
+`imgui.*`。此前 `extdev/ui_development.md` 只给了最小面板 / 窗口契约 / 坑表，**没有控件目录** ——
+社区开发者（以及内部新面板）要自己会 ImGui：查上游英文文档、自己发现 `selectable` 返回 tuple、
+自己踩 `##` 作用域与 `begin/end` 配对。仓库实测：**130 个**不同 imgui 函数、**1833 处**调用
+（`VirtualDevice/extension.py` 690 行，另一个设备类扩展 2795 行，全是手写）。
+
+**为什么可以自动化**：`imgui_bundle` 每个函数 `__doc__` 首行就是完整 Python 签名
+（含类型/默认值），枚举成员也在运行时可取。所以「按用途归类」的成本不在抄签名，
+而在**一张分组表**。
+
+**落地**（`Utils/Dev/imgui_docgen.py` → 工具仓 `docs_content/dev/imgui_api.md`）：
+
+| 层 | 内容 |
+|---|---|
+| 主体 | 16 个用途分组、143 个接口（文本/按钮/输入/布局/容器/表格/弹窗/交互状态/禁用/拖放/样式/原始输入/窗口/宿主侧禁止），每条 = 签名 + 用途 + 我们的约定 |
+| flag 速查 | 9 个枚举（`TableFlags_` / `WindowFlags_` / `InputTextFlags_` / `TreeNodeFlags_` / `SelectableFlags_` / `ComboFlags_` / `HoveredFlags_` / `Col_` / `StyleVar_`），**值在生成时读取**，不会和库版本漂移 |
+| 附录 | 未归类的 230 个函数 + 51 个枚举 + 95 个类型，只给签名（保证「搜得到」，不假装推荐） |
+| 配方 | `extdev/ui_recipes.md` 9 个可复制片段：参数行 / 设置持久化 / 表格 / 日志跟随 / 波形 / 确认框 / 禁用原因 / 线程队列 / 无头自测 |
+
+**守卫** `Test/Application/Editor/test_imgui_api_doc.py`（12 checks）：
+
+1. 产物新鲜（磁盘 == 现渲染；升级 `imgui_bundle` 会红）；
+2. 分组名真实存在且不重复（拼错/被删会红）；
+3. **引擎里用到的每个函数都被归类**（新增控件用法不补文档 → 红）；
+4. CLI 可寻址（`doc show dev/imgui_api#8` == 表格、`doc search` 命中）。
+
+**实测记录**：`from imgui_bundle.imgui import ImVec2 / TableFlags_` 会 `ImportError`
+（该模块不支持 from-import）；已在文档 §1 与配方里写明正确写法。
+
+**未做（后续）**
+
+- `ui_kit` 薄封装（`setting_row` / `table` / `log_view` / `confirm`），让 80% 面板不碰 raw imgui；
+  现在先靠配方覆盖。
+- 控件截图/效果图（表格里放图片，CLI 取不到，需要另建资产目录）。
+- 分组表的人工收编流程：新增函数会落入附录，暂靠「未归类」守卫提醒，没有自动建议分组。
+
+### 10.15 测试选测（affected）失效复查：入口有洞 + 规范没装（2026-11-08 已修）
+
+**现象**：每次改完都跑 `--tier core`（98 个测试 / 4 分钟），基于测试节点图的
+`--affected` / `--changed` 明明存在却没人用 —— 「改哪跑哪」的框架事实上退化成全量。
+
+**检查结论**（不是框架丢了，是入口和规范的问题）：
+
+| 问题 | 实测 |
+|---|---|
+| 规范只写在 CLI 文档 | 「内层循环用 `--affected`」只出现在工具仓 `docs_content/dev/test_protocol.md` §2；引擎侧 `Doc/Dev/test_protocol.md` 是 21 行 stub，`test_runner.py` 的用法段只列 `--tier`；`test_map_todo.md` 的 Phase 4 还把 `--affected` 标成未做 |
+| 改测试文件选不到自己 | `--affected Test/.../test_port_ledger.py` → `no related tests`（covers 只描述「源码 → 测试」的边） |
+| 未跟踪目录不展开 | `git status` 的 `?? dir/` 整目录形式匹配不到任何模块 |
+| affected 会拉进 manual/live | 默认 `tier=all`：候选里出现 `test_live_ui`（manual，等 ESC）与 `test_e2e_*`（live，会起编辑器）——与档位表「不进默认批次」矛盾 |
+| 文档改动被当成错误 | `--changed` 只命中文档 → 0 tests → 退出码 2（假失败） |
+
+**修复**（`Utils/Dev/test_runner.py`）：
+
+1. 测试文件 / `scenarios/*.py` 自身改动 → 直接选中它自己（`self:test` / `self:scenario`）；
+2. `_changed_paths` 展开 `?? dir/`（仅 `Application/ Test/ Utils/ Example` 源码根，产物目录不展开）；
+3. `--affected/--changed` 默认跳过 `manual`/`live`（显式 `--tier live|all` 仍可）；
+4. 无匹配语义分开：显式 `--affected` 路径错 = 退出 2；`--changed` 只有文档改动 = 0 tests、退出 0；
+5. 选中比例 > 50% 时提示「工作区积压的未提交改动会累加」；
+6. 规范装回入口：模块 docstring + `--help` epilog + 引擎侧 `Doc/Dev/test_protocol.md`「默认入口」段。
+
+**验证**：`--affected Application/Editor/Services/PortLedger.py` → 1 个测试；`StartupOptions.py` → 2 个；
+`Utils/Dev/test_runner.py` → 1 个（新守卫 `test_test_runner_selection`，13 checks）。
+新增节点 `core.test_runner_selection`，`test_map.py check` 104 nodes。
+
+**副产品（重要）**：`--changed` 把 heavy 档的 `test_material_cycle_stress` 拉进来说了；
+`shift` 场景（引擎中途新增内置材质）在**干净 HEAD worktree 上同样失败**（`bindFail=4`，
+`a1,a2,a3,s2_a1,s2_a2` 绑定丢失）—— 说明这是 1.1.0 起就存在的回归，而 `--tier core` 不含 heavy，
+所以一直没被门禁看见。已确认为**既存缺陷**，待单独定位（与 2026-10-15 的材质 id 重映射修复相关）。
+
+**仍未做**：
+
+- 11 个 core 节点 `covers` 为空（boundary / hygiene 类）→ 编辑其目标区域时选不到；
+- `Application.Core.NodeGraph` 被 29 个节点当**整包**覆盖（粗粒度）：按当前精确匹配，
+  改 `NodeGraph/canvas.py` 只命中显式写了该模块的 9 个；改成前缀匹配又会一次拉 30+ —— 需要按模块收敛地图；
+- `test_map.py check` 在 CI 中的接入（Phase 4 原计划，仍暂缓）。
+
+### 10.16 扩展「内置」定义修正 + 示例可见性（2026-11-10）
+
+**起因**：社区范式作者反馈「示例注入不到引擎」。首次定位发现扩展默认停用（示例根不登记），
+于是把激活策略改成「在 `Application/Functions` 里 = 内置 = 恒激活」。随后修正口径：
+**「在 Functions 里」≠「内置」** —— 整个 `Application/Functions` 在 `.gitignore` 里，
+只有放行行 `!Application/Functions/<Dir>/` 覆盖的目录才随仓库/安装包分发；
+本地/社区夹具（开发副本、社区插件）也常驻该目录，把它们的扩展锁成「不可停用、标成内置」是错的。
+
+**现在的口径**（唯一实现 `ExtensionManager.scope_of()`）：
+
+| scope | 判定 | 激活 |
+|---|---|---|
+| `builtin` | 位于 Functions **且** ∈ `official_extensions.json`（与 `.gitignore` 白名单互为镜像） | 恒激活、不可停用（`FVE_EXTENSIONS_BUNDLED=off` 安全模式） |
+| `local` | 位于 Functions 但不在 allowlist | opt-in（设置页/`extension.enable`） |
+| `user` | `%APPDATA%/FlyVibingEngine/extensions` | opt-in |
+
+**同时补上的可见性**：`File ▸ Open Example` 对「已安装、带 `Examples/`、但未启用」的扩展
+显示灰字 `「<扩展> — N 个示例（扩展未启用）」` 并给一键启用项 —— 这是作者真正需要的诊断面
+（他不需要知道 registry 机制，只需要知道"东西在，点一下就行"）。设置页每行显示 scope 三态。
+
+**守卫**：`test_extension_builtin_scope`（allowlist ↔ .gitignore 互为镜像、指向真实 manifest、
+`scope_of` 三态、非白名单一律 local）；`test_extension_activation` 增「builtin 必须来自 allowlist」；
+`test_live_command_server` 的 op 注销用例改用用户目录扩展（内置已不可停用）。
+
+**踩到的坑（已修）**：`ExtensionManager` 在早期实现里，扫描时会**清理状态文件中的 bundled 条目**
+（"恒激活所以不需要状态"）。当判定口径从「在 Functions 里」收窄到 allowlist 后，这段清理
+把本地夹具的启用状态也删掉了 —— 属于"策略变更 + 自动清理"叠加的隐蔽副作用。
+教训：自动清理类操作必须绑定**稳定的身份判据**，不能用会随策略变化而变化的判据。
+

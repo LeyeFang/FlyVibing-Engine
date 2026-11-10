@@ -646,10 +646,48 @@ def main() -> int:
     check("扩展 op 增量可用 (ext.sigproc.info 透传)",
           resp.get("ok") is True and (resp.get("result") or {}).get("extension") == "sigproc",
           str(resp)[:200])
+    # ★ 内置（allowlist）不可停用 —— 2026-11-10 起是受控拒绝，不是静默忽略
     resp = roundtrip(port, "extension.disable", {"id": "sigproc"})
-    check("extension.disable → op 注销", resp.get("ok") is True, str(resp)[:200])
+    check("extension.disable(内置) → 受控拒绝",
+          resp.get("ok") is False and "built" in str(resp.get("error", "")), str(resp)[:200])
     resp = roundtrip(port, "ext.sigproc.info", {})
+    check("被拒绝的停用不影响内置扩展 op",
+          resp.get("ok") is True, str(resp)[:200])
+
+    # op 注销走「用户目录扩展」—— 内置不可停用，不能拿它验证卸载路径
+    _user_root = os.path.join(os.path.dirname(_ext_state), "user_ext")
+    _probe_dir = os.path.join(_user_root, "uext_probe")
+    os.makedirs(_probe_dir, exist_ok=True)
+    os.environ["MGE_EXTENSIONS_DIR"] = _user_root
+    with open(os.path.join(_probe_dir, "extension.json"), "w", encoding="utf-8") as fh:
+        json.dump({"id": "uext_probe", "name": "Probe", "version": "1.0.0",
+                   "api_version": "1", "maturity": "skeleton",
+                   "entry": "extension.py:create_extension",
+                   "capabilities": ["ops"]}, fh)
+    with open(os.path.join(_probe_dir, "extension.py"), "w", encoding="utf-8") as fh:
+        fh.write(
+            "from Application.Core.Extension.ExtensionBase import ExtensionBase\n\n"
+            "class Probe(ExtensionBase):\n"
+            "    id = 'uext_probe'\n"
+            "    name = 'Probe'\n"
+            "    version = '1.0.0'\n\n"
+            "    def on_load(self, ctx):\n"
+            "        ctx.ops.register('info', lambda args: {'extension': 'uext_probe'})\n\n"
+            "def create_extension():\n"
+            "    return Probe()\n")
+    from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+    ExtensionManager.rescan()
+    resp = roundtrip(port, "extension.enable", {"id": "uext_probe"})
+    check("extension.enable 用户扩展 → loaded", resp.get("ok") is True and
+          (resp.get("result") or {}).get("extension", {}).get("loaded") is True, str(resp)[:200])
+    resp = roundtrip(port, "ext.uext_probe.info", {})
+    check("用户扩展 op 增量可用", resp.get("ok") is True
+          and (resp.get("result") or {}).get("extension") == "uext_probe", str(resp)[:200])
+    resp = roundtrip(port, "extension.disable", {"id": "uext_probe"})
+    check("extension.disable(用户) → op 注销", resp.get("ok") is True, str(resp)[:200])
+    resp = roundtrip(port, "ext.uext_probe.info", {})
     check("停用后扩展 op 不可用", resp.get("ok") is False, str(resp)[:200])
+    os.environ.pop("MGE_EXTENSIONS_DIR", None)
     os.environ.pop("MGE_EXTENSIONS_STATE", None)
     os.environ.pop("MGE_EXTENSIONS_DATA", None)
 

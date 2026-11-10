@@ -99,11 +99,13 @@ class OpenGLResourceManager:
             program       : GLuint — 编译链接的着色器程序
             uniforms_loc  : uniform 名称 → location 的缓存字典
             uniforms_type : uniform 名称 → GLSL 类型 ('float'/'mat4'/'int'/...) 的缓存字典
+            runtime_uniforms: 声明 `owner=runtime` 的 uniform（每帧由渲染器注入, 如 SSVEP 的 time）
             ref_count     : 引用计数
         """
         program: int = 0
         uniforms_loc: dict = None
         uniforms_type: dict = None
+        runtime_uniforms: dict = None
         ref_count: int = 0
 
         def __post_init__(self):
@@ -111,6 +113,8 @@ class OpenGLResourceManager:
                 self.uniforms_loc = {}
             if self.uniforms_type is None:
                 self.uniforms_type = {}
+            if self.runtime_uniforms is None:
+                self.runtime_uniforms = {}
 
     @dataclass
     class texture_data_struct:
@@ -285,6 +289,11 @@ class OpenGLResourceManager:
             program=program,
             uniforms_loc=uniforms_loc,
             uniforms_type=shader.uniforms_name_type.copy(),
+            # ★ owner=runtime 的 uniform（shader 用 `//! owner=runtime` 声明）——
+            #   渲染器每帧注入（当前实现 = 引擎 elapsed 秒），不进材质、不可编辑。
+            runtime_uniforms={name: spec.glsl_type
+                              for name, spec in (getattr(shader, 'uniform_specs', {}) or {}).items()
+                              if getattr(spec, 'owner', 'content') == 'runtime'},
             ref_count=1,
         )
 

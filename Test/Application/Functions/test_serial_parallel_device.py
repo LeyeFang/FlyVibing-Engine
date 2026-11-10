@@ -4,6 +4,7 @@ Test: SerialParallelDevice — 串口/并口 I/O 模块单元测试
 
 测试范围:
   - protocol.encode/decode  所有格式 (string / bytes / byte)
+  - 串口行协议前缀/后缀      prefix/suffix → `40,14\n`（刺激器 f,code）
   - I/O 线程生命周期         start / stop / is_running
   - 租约所有权              editor / runtime 交权（单线程, 多租约）
   - 严格写入                strict=True → DeviceNotReady（面板/op 路径）
@@ -98,6 +99,57 @@ def test_protocol():
     check(encode(-5, "byte") == b"\x01", "byte -5 → 1 (clamped)")
 
     # decode (byte format not in decode, so skip decode test for byte)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 串口行协议: prefix / suffix（刺激器 `f,code`）
+# ═══════════════════════════════════════════════════════════════
+
+def test_serial_line_affix():
+    print("── Serial Line Prefix/Suffix ──")
+    from Application.Functions.SerialParallelDevice.protocol import format_scalar
+
+    # 旧行为必须字节级不变（现有场景发 `14.0\n`）
+    check(encode(14.0, "string") == b"14.0\n", "legacy string unchanged (14.0)")
+
+    # prefix 非空 → 最短数字（`40,14` 而不是 `40,14.0`）
+    check(encode(14.0, "string", prefix="40,") == b"40,14\n", "prefix → 40,14")
+    check(encode(14, "string", prefix="20,") == b"20,14\n", "prefix → 20,14 (int)")
+    check(encode("13.0", "string", prefix="40,") == b"40,13\n",
+          "prefix coerces numeric text")
+
+    # suffix
+    check(encode(14, "string", suffix=";") == b"14;\n", "suffix → 14;")
+    check(encode(14, "string", prefix="P", suffix="!") == b"P14!\n", "prefix+suffix")
+
+    # 非数字值: 原样拼接（不强行转数字）
+    check(encode("abc", "string", prefix="X") == b"Xabc\n", "prefix keeps non-numeric text")
+
+    # format_scalar
+    check(format_scalar(14.0) == "14" and format_scalar("14.0") == "14",
+          "format_scalar strips .0")
+    check(format_scalar(14.5) == "14.5", "format_scalar keeps fraction")
+    check(format_scalar(0.1 + 0.2) == "0.3", f"format_scalar 6g (got {format_scalar(0.1 + 0.2)})")
+    check(format_scalar("not-a-number") == "not-a-number", "format_scalar passthrough")
+
+    # 显式拒绝（禁止静默忽略）
+    for label, kwargs in (("prefix with fmt=bytes", {"prefix": "40,"}),
+                          ("suffix with fmt=byte", {"suffix": ";"})):
+        raised = False
+        try:
+            encode(1, "bytes" if "bytes" in label else "byte", **kwargs)
+        except ValueError:
+            raised = True
+        check(raised, f"{label} → ValueError")
+
+    for label, kwargs in (("LF in prefix", {"prefix": "a\nb"}),
+                          ("CR in suffix", {"suffix": "a\rb"})):
+        raised = False
+        try:
+            encode(1, "string", **kwargs)
+        except ValueError:
+            raised = True
+        check(raised, f"{label} → ValueError")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -478,6 +530,7 @@ if __name__ == "__main__":
     print("=" * 60)
 
     test_protocol()
+    test_serial_line_affix()
     test_thread_lifecycle()
     test_lease_ownership()
     test_strict_writes()

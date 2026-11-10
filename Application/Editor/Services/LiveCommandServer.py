@@ -42,6 +42,14 @@ _OP_PUMP_TIMEOUT_OVERRIDES = {
 }
 _MAX_OPS_PER_FRAME = 16
 
+def _as_list(value) -> list[str]:
+    """逗号串 / 列表 → 字符串列表（`instance.describe` 的 tags/touches 两种写法都收）。"""
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [str(value).strip()] if str(value).strip() else []
+
 
 class LiveCommandServer:
     """编辑器命令总线（类级单例; 随编辑器生命周期启停）。"""
@@ -107,6 +115,14 @@ class LiveCommandServer:
         cls.port = sock.getsockname()[1]
         cls._sock = sock
         cls._running = True
+        # 端口台账: 后来者（另一个 agent / 编辑器）查端口时能看到「谁 / 为什么 / 涉及什么」。
+        # 只有配置端口才登记（port=0 是测试用的系统分配端口，登记会污染共享台账）。
+        if int(port or 0) > 0:
+            try:
+                from Application.Editor.Services.PortLedger import register as ledger_register
+                ledger_register(cls.port)
+            except Exception as e:  # noqa: BLE001 — 台账不可用不应阻塞命令总线
+                print(f"[Live] port ledger register failed: {e}")
         cls._thread = threading.Thread(
             target=cls._accept_loop, name="LiveCommandServer", daemon=True
         )
@@ -123,6 +139,11 @@ class LiveCommandServer:
         cls._running = False
         cls._input_actions.clear()
         cls._input_events.clear()
+        try:
+            from Application.Editor.Services.PortLedger import unregister as ledger_unregister
+            ledger_unregister()
+        except Exception:  # noqa: BLE001 — 退出路径不因台账失败而中断
+            pass
         sock, cls._sock = cls._sock, None
         if sock is not None:
             try:
@@ -265,6 +286,8 @@ class LiveCommandServer:
             "sim.play": cls._op_sim_play,
             "sim.stop": cls._op_sim_stop,
             "sim.state": cls._op_sim_state,
+            "instance.info": cls._op_instance_info,
+            "instance.describe": cls._op_instance_describe,
             "view.set_mode": cls._op_view_set_mode,
             "view.set_grid": cls._op_view_set_grid,
             "ui.panels": cls._op_ui_panels,
@@ -305,6 +328,7 @@ class LiveCommandServer:
             "project.export": cls._op_project_export,
             # ── 扩展体系（L1, M0; 扩展 op 本身经 register_extension_ops 增量注册） ──
             "extension.list": cls._op_extension_list,
+            "extension.python": cls._op_extension_python,
             "extension.enable": cls._op_extension_enable,
             "extension.disable": cls._op_extension_disable,
             # ── settings（编辑器全局设置; 与设置面板同一业务单点 EditorSettings） ──
@@ -953,6 +977,68 @@ class LiveCommandServer:
                 "forced_unknown_types": dict(getattr(
                     SimulationController, "forced_unknown_types", {}) or {})}
 
+    # ── 实例自述（端口台账: 让后来者知道这个端口在做什么）──────────
+
+    @staticmethod
+    def _op_instance_info(args: dict) -> dict:
+        """本实例自述（只读）— 端口 / 目的 / 归属 / 工程 / 场景 / 运行状态。
+
+        用途: 另一个 agent 启动前先查，判断能否复用这个实例、会不会撞同一个工程。
+        台账（`PortLedger`）里的静态信息 + 本帧实时状态（PIE / 运行期线程）。
+        """
+        from Application.Editor.Services.PortLedger import current, entry_path, read
+
+        entry = dict(current() or read(LiveCommandServer.port) or {})
+        entry.setdefault("port", int(LiveCommandServer.port))
+        entry.setdefault("pid", os.getpid())
+        try:
+            from Application.Editor.UI.controllers.SimulationController import (
+                SimulationController,
+            )
+            entry["state"] = SimulationController.get_state_label()
+        except Exception:  # noqa: BLE001 — 无头环境没有 UI 控制器
+            pass
+        try:
+            from Application.Runtime.GameRuntime import GameRuntime
+            entry["runtime_alive"] = bool(GameRuntime.is_running())
+        except Exception:  # noqa: BLE001
+            entry["runtime_alive"] = False
+        entry["uptime_s"] = LiveCommandServer._entry_uptime(entry.get("started_at"))
+        return {"instance": entry, "ledger_path": str(entry_path(int(LiveCommandServer.port)))}
+
+    @staticmethod
+    def _op_instance_describe(args: dict) -> dict:
+        """改写本实例的对外描述（purpose / owner / tags / touches / notes）。
+
+        写进端口台账后**立即**对后来者可见（不需要重启）; 用于「这个实例接下来做什么」。
+        """
+        from Application.Editor.Services import PortLedger
+
+        fields: dict = {}
+        for key in ("purpose", "owner", "notes"):
+            if key in args and args[key] is not None:
+                fields[key] = str(args[key])
+        for key in ("tags", "touches"):
+            if key in args and args[key] is not None:
+                fields[key] = _as_list(args[key])
+        if not fields:
+            raise ValueError("nothing to describe: pass purpose/owner/tags/touches/notes")
+        if PortLedger.current() is None:
+            PortLedger.register(int(LiveCommandServer.port))
+        updated = PortLedger.update(**fields) or {}
+        return {"instance": updated, "changed": sorted(fields)}
+
+    @staticmethod
+    def _entry_uptime(started_at) -> int:
+        """台账 `started_at` → 已运行秒数（解析失败 → 0）。"""
+        from datetime import datetime
+
+        try:
+            return max(0, int((datetime.now().astimezone()
+                               - datetime.fromisoformat(str(started_at))).total_seconds()))
+        except (TypeError, ValueError):
+            return 0
+
     @staticmethod
     def _op_camera_get(args: dict) -> dict:
         """读取场景摄像机实体（role: '3d' / '2d' / 'overlay'）。"""
@@ -1503,6 +1589,13 @@ class LiveCommandServer:
             result.setdefault("hint", "enable them: extension.enable id=<ext>")
         if previous_name and not previous_saved:
             result["warning"] = f"previous project '{previous_name}' had unsaved changes"
+        # 端口台账跟随工程/场景（后来者查端口即可知道这个实例在用哪个工程）
+        try:
+            from Application.Editor.Services.PortLedger import update as ledger_update
+            ledger_update(project=result.get("path"), project_name=result.get("name"),
+                          scene=result.get("active"))
+        except Exception:  # noqa: BLE001 — 台账失败不影响打开工程
+            pass
         return result
 
     @staticmethod
@@ -1651,6 +1744,23 @@ class LiveCommandServer:
             "extension_ops": LiveCommandServer.extension_ops_snapshot(),
             "extension_nodes": by_owner,
         }
+
+    @staticmethod
+    def _op_extension_python(args: dict) -> dict:
+        """读/写扩展解释器（含运行期覆盖）— `extension.python id=device [path=...] [probe=true]`。
+
+        - 给 `path` → 写入覆盖并**立即生效**（空串 = 清除，回落 env → manifest → 引擎）；
+        - 不给 `path` → 只读解析结果（`probe=false` 跳过 import 自检，省时间）。
+        """
+        from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+
+        ext_id = str(args.get("id") or "").strip()
+        if not ext_id:
+            raise ValueError("id is required")
+        if "path" in args:
+            return ExtensionManager.set_python_override(ext_id, str(args.get("path") or ""))
+        probe = bool(args.get("probe", True))
+        return ExtensionManager.python_status(ext_id, probe=probe)
 
     @staticmethod
     def _op_extension_enable(args: dict) -> dict:

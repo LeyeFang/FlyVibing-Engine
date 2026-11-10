@@ -11,6 +11,7 @@ from Application.Core.Input.InputPipeline import InputPipeline
 
 from enum import Enum
 import ctypes
+import os
 from ctypes import wintypes
 import glfw
 
@@ -144,6 +145,36 @@ class glfwWindow(Window):
     _saved_window_rect: tuple[int, int, int, int] | None = None  # (x, y, w, h) 用于退出全屏时恢复
     _default_size_override: tuple[int, int] | None = None  # 窗口化尺寸覆盖 (PIE Settings)
 
+    # ── 垂直同步 / 帧率上限 ──
+    #   默认 swap interval = 1（跟随显示器刷新率）。性能测试需要看见真实上限时，
+    #   设环境变量 `MGE_VSYNC=0` → swap interval = 0（不限帧）。
+    #   为什么需要: 200 Hz 显示器上所有场景都报 199.7 fps，看起来全都一模一样，
+    #   实际差异（渲染成本 / 帧时间分布）被 vsync 完全遮住。
+    _vsync: bool = True
+
+    @staticmethod
+    def _resolve_vsync() -> bool:
+        """读 `MGE_VSYNC` 环境变量（未设 = 开）。"""
+        raw = os.environ.get("MGE_VSYNC")
+        if raw is None:
+            return True
+        return str(raw).strip().lower() not in ("0", "false", "off", "no", "")
+
+    @classmethod
+    def ApplySwapInterval(cls) -> None:
+        """设置 swap interval —**必须在上下文 current 之后**调用。
+
+        `_vsync` 为 True → interval 1（跟随显示器）；False → 0（不限帧）。
+        实际取值再受 `MGE_VSYNC` 环境变量覆盖（性能测试用）。
+        """
+        try:
+            interval = 1 if (cls._vsync and cls._resolve_vsync()) else 0
+            glfw.swap_interval(interval)
+            print(f"[glfwWindow] swap interval = {interval} "
+                  f"({'vsync' if interval else 'uncapped'})")
+        except Exception as exc:  # noqa: BLE001 — 设不上不影响启动
+            print(f"[glfwWindow] swap interval unsupported: {exc}")
+
     @classmethod
     def Create(
         cls
@@ -210,20 +241,190 @@ class glfwWindow(Window):
             pass
 
     # ════════════════════════════════════════════════════════════
-    # 系统分辨率查询（GLFW 实现）
+    # 显示查询（远程 / SSH / 无交互桌面会话的安全封装）
     # ════════════════════════════════════════════════════════════
+    #
+    # 背景（2026-11-10，用户实测）: 通过 SSH 启动导出成品时
+    #     glfw.get_video_mode(monitor) → OSError: access violation reading 0x108
+    # 机器本身有屏幕、通过远程软件可以正常看到桌面 —— 问题是 **进程不在
+    # 交互式桌面会话里**（Windows SSH 会话有自己的 window station），
+    # glfwInit() 能成功、但 get_primary_monitor() 交回的句柄指向已失效的
+    # 显示器结构；GLFW 的 get_video_mode 直接解引用它 → 访问违例。
+    #
+    # 处理原则: **任何显示查询都不允许把进程打死**。查不到就用回退值，
+    # 并把 FULLSCREEN 降级成 BORDERLESS（用户仍能看到完整窗口）。
+
+    # 一旦某次显示查询失败，就整体停用后续 monitor 查询（避免反复踩坑/刷屏）
+    _monitor_queries_broken: bool = False
+    # 通过 MGE_WINDOW_SIZE / MGE_MONITOR 显式给定的分辨率（优先于所有探测）
+    _env_resolution: tuple[int, int] | None = None
+
+    @staticmethod
+    def _env_str(name: str) -> str:
+        return str(os.environ.get(name, "") or "").strip()
+
+    @staticmethod
+    def _env_window_mode() -> "WindowMode | None":
+        """`MGE_WINDOW=windowed|borderless|fullscreen` 覆盖窗口模式。
+
+        远程/SSH 场景推荐 `windowed` —— 它完全不依赖显示器枚举。
+        """
+        raw = glfwWindow._env_str("MGE_WINDOW").lower()
+        _map = {"windowed": WindowMode.WINDOWED,
+                "borderless": WindowMode.BORDERLESS,
+                "fullscreen": WindowMode.FULLSCREEN,
+                "overlay": WindowMode.BORDERLESS}
+        return _map.get(raw)
+
+    @staticmethod
+    def _env_size() -> tuple[int, int] | None:
+        """`MGE_WINDOW_SIZE=1280x720` 直接指定窗口/边框尺寸。"""
+        raw = glfwWindow._env_str("MGE_WINDOW_SIZE").lower().replace(" ", "")
+        if not raw:
+            return None
+        for sep in ("x", "*", ","):
+            if sep in raw:
+                a, _, b = raw.partition(sep)
+                try:
+                    w, h = int(a), int(b)
+                except ValueError:
+                    return None
+                if w >= 64 and h >= 64:
+                    return (w, h)
+                return None
+        return None
+
+    @staticmethod
+    def _monitors_disabled() -> bool:
+        """`MGE_MONITOR=off` 或已探测失败 → 不再查询显示器。"""
+        raw = glfwWindow._env_str("MGE_MONITOR").lower()
+        if raw in ("off", "0", "false", "no", "none"):
+            return True
+        return bool(glfwWindow._monitor_queries_broken)
+
+    @classmethod
+    def _safe_primary_monitor(cls):
+        """返回可用的主显示器句柄；不可用/查询异常 → None（永不抛异常）。"""
+        if cls._monitors_disabled():
+            return None
+        try:
+            monitor = glfw.get_primary_monitor()
+        except OSError as exc:
+            cls._mark_monitors_broken("get_primary_monitor", exc)
+            return None
+        return monitor or None
+
+    @classmethod
+    def _safe_video_mode(cls, monitor):
+        """`glfw.get_video_mode` 的安全包装；失败返回 None 并停用后续查询。"""
+        if monitor is None or cls._monitors_disabled():
+            return None
+        try:
+            return glfw.get_video_mode(monitor)
+        except OSError as exc:
+            cls._mark_monitors_broken("get_video_mode", exc)
+            return None
+
+    @classmethod
+    def _mark_monitors_broken(cls, where: str, exc: BaseException) -> None:
+        first = not cls._monitor_queries_broken
+        cls._monitor_queries_broken = True
+        if first:
+            print(f"[glfwWindow] display query failed at {where}: {exc}")
+            print("[glfwWindow] monitor queries disabled for this session — "
+                  "using fallback resolution (remote / non-interactive desktop). "
+                  "Set MGE_WINDOW=windowed MGE_WINDOW_SIZE=1280x720 to skip "
+                  "display probing entirely.")
+
+    @staticmethod
+    def _win32_system_resolution() -> tuple[int, int] | None:
+        """Win32 取当前显示模式（不经过 GLFW 的显示器结构）。
+
+        `EnumDisplaySettingsW(None, ENUM_CURRENT_SETTINGS)` 在 SSH / 服务会话里
+        仍能返回该会话桌面的尺寸；比 GLFW 的 monitor 指针安全得多。
+        """
+        if os.name != "nt":
+            return None
+        try:
+            class _DEVMODE(ctypes.Structure):
+                _fields_ = [
+                    ("dmDeviceName", wintypes.WCHAR * 32),
+                    ("dmSpecVersion", wintypes.WORD),
+                    ("dmDriverVersion", wintypes.WORD),
+                    ("dmSize", wintypes.WORD),
+                    ("dmDriverExtra", wintypes.WORD),
+                    ("dmFields", wintypes.DWORD),
+                    ("dmPositionX", ctypes.c_long),
+                    ("dmPositionY", ctypes.c_long),
+                    ("dmDisplayOrientation", wintypes.DWORD),
+                    ("dmDisplayFixedOutput", wintypes.DWORD),
+                    ("dmColor", wintypes.SHORT),
+                    ("dmDuplex", wintypes.SHORT),
+                    ("dmYResolution", wintypes.SHORT),
+                    ("dmTTOption", wintypes.SHORT),
+                    ("dmCollate", wintypes.SHORT),
+                    ("dmFormName", wintypes.WCHAR * 32),
+                    ("dmLogPixels", wintypes.WORD),
+                    ("dmBitsPerPel", wintypes.DWORD),
+                    ("dmPelsWidth", wintypes.DWORD),
+                    ("dmPelsHeight", wintypes.DWORD),
+                    ("dmDisplayFlags", wintypes.DWORD),
+                    ("dmDisplayFrequency", wintypes.DWORD),
+                    ("dmICMMethod", wintypes.DWORD),
+                    ("dmICMIntent", wintypes.DWORD),
+                    ("dmMediaType", wintypes.DWORD),
+                    ("dmDitherType", wintypes.DWORD),
+                    ("dmReserved1", wintypes.DWORD),
+                    ("dmReserved2", wintypes.DWORD),
+                    ("dmPanningWidth", wintypes.DWORD),
+                    ("dmPanningHeight", wintypes.DWORD),
+                ]
+
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+            dm = _DEVMODE()
+            dm.dmSize = ctypes.sizeof(_DEVMODE)
+            # ENUM_CURRENT_SETTINGS = -1
+            if not user32.EnumDisplaySettingsW(None, -1, ctypes.byref(dm)):
+                return None
+            w, h = int(dm.dmPelsWidth), int(dm.dmPelsHeight)
+            if w >= 320 and h >= 240:
+                return (w, h)
+            return None
+        except Exception:  # noqa: BLE001 — 任何 Win32 异常都走回退
+            return None
 
     @classmethod
     def _get_system_resolution(cls) -> tuple[int, int]:
-        """获取主显示器当前分辨率（通过 GLFW）。"""
-        monitor = glfw.get_primary_monitor()
-        if monitor is None:
-            # 回退默认
-            return 1920, 1080
-        video_mode = glfw.get_video_mode(monitor)
-        if video_mode is None:
-            return 1920, 1080
-        return video_mode.size.width, video_mode.size.height
+        """获取主显示器当前分辨率（多级回退，绝不抛异常）。
+
+        取值的优先级:
+          1. `MGE_WINDOW_SIZE` 显式给定（远程场景最稳）
+          2. Win32 `EnumDisplaySettings`（不经 GLFW 的 monitor 指针）
+          3. GLFW `get_video_mode(primary_monitor)`
+          4. 硬编码 1920x1080
+        """
+        if cls._env_resolution is not None:
+            return cls._env_resolution
+        env_size = cls._env_size()
+        if env_size is not None:
+            cls._env_resolution = env_size
+            print(f"[glfwWindow] resolution from MGE_WINDOW_SIZE: {env_size[0]}x{env_size[1]}")
+            return env_size
+
+        win32 = cls._win32_system_resolution()
+        if win32 is not None:
+            cls._env_resolution = win32
+            return win32
+
+        monitor = cls._safe_primary_monitor()
+        mode = cls._safe_video_mode(monitor)
+        if mode is not None:
+            cls._env_resolution = (mode.size.width, mode.size.height)
+            return cls._env_resolution
+
+        print("[glfwWindow] WARNING: display size unavailable — assuming 1920x1080")
+        cls._env_resolution = (1920, 1080)
+        return cls._env_resolution
 
     # ════════════════════════════════════════════════════════════
     # 窗口创建
@@ -235,6 +436,12 @@ class glfwWindow(Window):
         if not glfw.init():
             print("无法初始化 GLFW")
             return
+        # 1b. 远程/SSH 场景: `MGE_WINDOW` 覆盖窗口模式（须在窗口提示之前）
+        _env_mode = cls._env_window_mode()
+        if _env_mode is not None and _env_mode != cls._window_mode:
+            print(f"[glfwWindow] window mode overridden by MGE_WINDOW: "
+                  f"{cls._window_mode.value} → {_env_mode.value}")
+            cls._window_mode = _env_mode
         # 2. 设置窗口提示 (子类重写 _set_window_hints)
         cls._set_window_hints()
 
@@ -249,7 +456,15 @@ class glfwWindow(Window):
         # ── BORDERLESS: 不用 GLFW 的 DECORATED=FALSE (会导致 WS_POPUP, DWM 不兼容)
         #    改为先创建正常窗口, 再用 Win32 剥离标题栏/边框 ——
         #    3. 取比当前显示器小一圈的常见分辨率（保持同比例）
-        monitor = glfw.get_primary_monitor()
+        #    ★ monitor 只在 FULLSCREEN 下才需要；其它模式**不触碰**显示器句柄，
+        #      这样 SSH / 非交互桌面会话不会因为一次无效的 get_video_mode 崩掉。
+        monitor = None
+        if cls._window_mode == WindowMode.FULLSCREEN:
+            monitor = cls._safe_primary_monitor()
+            if monitor is None:
+                print("[glfwWindow] WARNING: no usable monitor — "
+                      "FULLSCREEN degraded to BORDERLESS (remote / SSH session?)")
+                cls._window_mode = WindowMode.BORDERLESS
         sys_w, sys_h = cls._get_system_resolution()
         width, height = cls._compute_default_size()
 
@@ -262,11 +477,18 @@ class glfwWindow(Window):
             use_monitor = None
             width, height = sys_w, sys_h
         else:  # FULLSCREEN
-            # 独占全屏: 使用主显示器
+            # 独占全屏: 使用主显示器（monitor 已在上面安全校验过）
             use_monitor = monitor
-            mode = glfw.get_video_mode(monitor)
+            mode = cls._safe_video_mode(monitor)
             if mode is not None:
                 width, height = mode.size.width, mode.size.height
+            else:
+                # 拿不到刷新率/尺寸也别硬进独占全屏 —— 退回无边框窗口化
+                print("[glfwWindow] WARNING: video mode unavailable — "
+                      "FULLSCREEN degraded to BORDERLESS")
+                cls._window_mode = WindowMode.BORDERLESS
+                use_monitor = None
+                width, height = sys_w, sys_h
 
         # 4. 创建窗口
         title = getattr(cls, '_window_title', 'FlyVibingEngine')
@@ -301,6 +523,10 @@ class glfwWindow(Window):
             width, height = sys_w, sys_h
 
         print(f"[glfwWindow] Created: {width}x{height} mode={cls._window_mode.value}")
+
+        # NOTE: swap interval 不能在创建窗口后立刻设 —— 此刻上下文尚未 current
+        #       （GLFW 会报 "Cannot set swap interval without a current context"）。
+        #       真正设置的时机是渲染线程接管时的 MakeContextCurrent()。
 
         # ── 透明窗口 Win32 设置 ──
         if cls._transparent:
@@ -362,7 +588,7 @@ class glfwWindow(Window):
             return
 
         prev = cls._window_mode
-        monitor = glfw.get_primary_monitor()
+        monitor = cls._safe_primary_monitor()
         sys_w, sys_h = cls._get_system_resolution()
 
         if mode == WindowMode.FULLSCREEN:
@@ -370,13 +596,23 @@ class glfwWindow(Window):
             # 保存当前窗口矩形 (如果之前是窗口模式)
             if prev != WindowMode.FULLSCREEN:
                 cls._saved_window_rect = cls._get_current_rect()
-            vmode = glfw.get_video_mode(monitor)
-            if vmode is not None:
+            vmode = cls._safe_video_mode(monitor)
+            if vmode is not None and monitor is not None:
                 glfw.set_window_monitor(
                     cls.glfw_window, monitor,
                     0, 0, vmode.size.width, vmode.size.height,
                     vmode.refresh_rate,
                 )
+            else:
+                # 远程 / SSH 会话: 没有可用显示器 → 退化为无边框铺满
+                print("[glfwWindow] set_window_mode: FULLSCREEN unavailable "
+                      "(no usable monitor) → BORDERLESS")
+                hwnd = glfw.get_win32_window(cls.glfw_window)
+                _win32_strip_chrome(hwnd)
+                _win32_fill_rect(hwnd, 0, 0, sys_w, sys_h)
+                cls._window_mode = WindowMode.BORDERLESS
+                print(f"[glfwWindow] Mode: {prev.value} → {cls._window_mode.value}")
+                return
 
         elif mode == WindowMode.WINDOWED:
             if prev == WindowMode.FULLSCREEN:

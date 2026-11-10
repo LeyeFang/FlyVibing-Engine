@@ -4,14 +4,23 @@
 开发规范: Doc/ExtDev/extension_dev_protocol.md
 
 M0 实装范围:
-  - 发现: 内置 `Application/Functions/**/extension.json` + 用户目录（env
+  - 发现: `Application/Functions/**/extension.json` + 用户目录（env
     `FVE_EXTENSIONS_DIR` / 旧 `MGE_EXTENSIONS_DIR`，或 `%APPDATA%/FlyVibingEngine/extensions`）
+  - **激活策略（2026-11-10，11-10 修正）**: 只有 **内置**（allowlist =
+    `Application/Functions/official_extensions.json` ∪ `.gitignore` 白名单）才 **恒激活**
+    （`always_on`，不可停用; `FVE_EXTENSIONS_BUNDLED=off` 为安全模式）;
+    `local`（同在 Functions 下但**不在** allowlist 的本地/社区夹具）与 `user`
+    （用户目录）都仍 opt-in（状态文件 / 设置页 Extensions 页签）。
+    判定集中在一处: `ExtensionManager.scope_of()`。
   - manifest 校验（id / api_version / entry; 非法 → broken 隔离展示）
   - 启停: 持久化到 `%APPDATA%/FlyVibingEngine/editor_state/extensions.json`（env
     `FVE_EXTENSIONS_STATE` / 旧 `MGE_EXTENSIONS_STATE` 可覆盖; 测试沙箱用）
   - ops 贡献: ctx.ops.register → LiveCommandServer 扩展注册表（ext.<id>.* 强制前缀）
   - nodes 贡献: ctx.nodes.register_pack → NodePackRegistry（节点类型/evaluator/控件字段）
   - 异常遏制: 加载失败 → broken（菜单/op 可见错误原因, 不拖垮编辑器）
+
+菜单分工（2026-11-10）: 主菜单 Extensions 只列**有 UI 面板**的扩展（`has_ui`），
+  纯后台扩展（ops/nodes/examples/devices）统一在 设置 ▸ Extensions 页管理。
 
 设计未实装（见 dev protocol §13）: threads / jobs / settings /
 外部安装(.mgext) / 依赖拓扑（requires 仅解析展示）。
@@ -37,6 +46,36 @@ from Application.Core.Extension.ExtensionContext import ExtensionContext
 _ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _API_MAJOR = "1"    # 支持 api_version: "1" / "1.x"
 
+# 内置扩展 allowlist（随引擎/安装包分发的那一批）。**不是**「位于 Application/Functions」。
+_BUILTIN_MANIFEST = "official_extensions.json"
+_GITIGNORE_FILE = ".gitignore"
+
+
+def _norm_name(name: str) -> str:
+    """目录名归一化 —— Windows 大小写不敏感，allowlist 与 .gitignore 必须同一口径。"""
+    return os.path.normcase(str(name or "").strip())
+
+
+def _is_within(path: str, root: str) -> bool:
+    """`path` 是否位于 `root` 之下（跨盘符 → False; 不做符号链接解析）。"""
+    try:
+        target = os.path.abspath(path)
+        base = os.path.abspath(root)
+        return os.path.commonpath([target, base]) == base
+    except (ValueError, OSError):
+        return False
+
+
+def _has_registered_panel(ext_id: str) -> bool:
+    """该扩展当前是否注册了 UI 窗口（事实判据 — 无编辑器/无 UI 环境 → False）。"""
+    try:
+        from Application.Editor.Extensions.ExtensionUI import ExtensionPanel
+        from Application.Editor.UI.UIManager import UIManager
+        return any(isinstance(panel, ExtensionPanel) and panel.ext_id == ext_id
+                   for panel in list(UIManager._panels))
+    except Exception:  # noqa: BLE001 — 无 UI 环境（无头/测试）按无面板处理
+        return False
+
 
 # ════════════════════════════════════════════════════════════════
 # 数据模型
@@ -55,10 +94,15 @@ class ExtensionInfo:
     requires: list = field(default_factory=list)
     provider: str = ""                # Example 默认签名（manifest provider/signature；空 = @<id>）
     export: bool = True               # 是否随 Project Export 游戏层分发（manifest export:false 可关）
+    python: dict = field(default_factory=dict)          # manifest 声明的解释器协议（原始规格）
+    python_runtime: dict = field(default_factory=dict)  # 已装载时的解析结果（ctx.python.explain）
     dir: str = ""
     manifest_path: str = ""
+    scope: str = "user"               # builtin | local | user（见 ExtensionManager.scope_of）
+    bundled: bool = False             # = scope == "builtin"（allowlist 内, 随引擎分发、恒激活）
+    always_on: bool = False           # 本次会话被强制激活（bundled 且未被 env 关闭）
     loadable: bool = False             # entry 存在且 manifest 合法
-    enabled: bool = False              # 用户启用状态（持久化）
+    enabled: bool = False              # 用户启用状态（持久化; bundled 恒为 True）
     loaded: bool = False               # 当前已装载
     error: str = ""                    # broken 原因（空 = 健康）
     ops: list = field(default_factory=list)   # 已注册的 op 名（查询时动态填充）
@@ -70,6 +114,18 @@ class ExtensionInfo:
             return "planned"
         return "enabled" if self.loaded else "disabled"
 
+    @property
+    def has_ui(self) -> bool:
+        """是否向编辑器贡献了 UI 面板（决定它出现在哪一级菜单）。
+
+        两条判据（任一成立即可）:
+          1. manifest `capabilities` 声明 `ui`（意图 — 未启用时也能被识别，菜单据此保留入口）;
+          2. 当前确实注册了 `ExtensionPanel` 窗口（事实 — 兜住未声明但用了 `ctx.ui` 的扩展）。
+        """
+        if "ui" in [str(c) for c in (self.capabilities or [])]:
+            return True
+        return _has_registered_panel(self.id)
+
     def to_dict(self) -> dict:
         return {
             "id": self.id, "name": self.name, "version": self.version,
@@ -80,6 +136,13 @@ class ExtensionInfo:
             "capabilities": list(self.capabilities), "requires": list(self.requires),
             "provider": self.provider,
             "export": bool(self.export),
+            # scope: builtin（allowlist 内, 恒启用）| local（Functions 下的非白名单夹具）
+            #        | user（用户目录）—— 后两者都由此处/设置页 opt-in
+            "scope": self.scope or ("builtin" if self.bundled else "user"),
+            "always_on": bool(self.always_on),
+            "has_ui": bool(self.has_ui),
+            "python": {**({"declared": dict(self.python)} if self.python else {}),
+                       **(dict(self.python_runtime) if self.python_runtime else {})},
         }
 
 
@@ -151,11 +214,13 @@ class ExtensionManager:
     _instances: dict[str, ExtensionBase] = {}
     _node_facades: dict[str, _ExtensionNodeRegistrar] = {}
     _example_facades: dict[str, object] = {}
+    _python_facades: dict[str, object] = {}     # ext id → ExtensionPython（子进程托管/诊断）
     # 最近一次 enable 就地恢复的节点（op 回执用）
     last_rehydrated_nodes: list = []
     # 最近一次 disable 后画布上变成“未注册类型”的节点数（面板 X=停用 的边界提示）
     last_disable_unresolved: int = 0
     _scanned: bool = False
+    _builtin_cache: frozenset | None = None   # 内置目录名缓存（scan/rescan 重算）
 
     # 挂起停用请求（窗口 X 关闭等可从渲染线程发起 — 实际执行在主线程 pump）
     _pending_disable: set = set()
@@ -166,6 +231,110 @@ class ExtensionManager:
     @classmethod
     def _engine_root(cls) -> str:
         return str(Path(__file__).resolve().parents[3])   # .../Application/Editor/Extensions → repo root
+
+    @classmethod
+    def _extensions_root(cls) -> str:
+        """引擎扩展根（`Application/Functions`）。
+
+        **注意**：放在这里的扩展**不一定**是内置的。本地/社区夹具
+        也常驻该目录（目录整体在 .gitignore 里），它们不进安装包，仍按 opt-in 管理。
+        """
+        return os.path.join(cls._engine_root(), "Application", "Functions")
+
+    # ── 内置判定（allowlist ∪ .gitignore 白名单）─────────────────
+
+    @classmethod
+    def builtin_allowlist(cls) -> dict:
+        """内置扩展 allowlist（`Application/Functions/official_extensions.json`）。
+
+        返回 `{"dirs": set, "ids": set, "source": str, "ok": bool}`；文件缺失
+        → `ok=False`（不崩，届时内置集合只来自 .gitignore 白名单）。
+        """
+        path = os.path.join(cls._extensions_root(), _BUILTIN_MANIFEST)
+        dirs: set = set()
+        ids: set = set()
+        ok = True
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            entries = data.get("extensions") if isinstance(data, dict) else None
+            for entry in entries or []:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("dir"):
+                    dirs.add(_norm_name(entry["dir"]))
+                if entry.get("id"):
+                    ids.add(str(entry["id"]).strip().lower())
+        except FileNotFoundError:
+            ok = False
+        except Exception as e:  # noqa: BLE001 — allowlist 坏了不拖垮扩展体系
+            ok = False
+            print(f"[Extensions] allowlist read failed ({path}): {e!r}")
+        return {"dirs": dirs, "ids": ids, "source": path, "ok": ok}
+
+    @classmethod
+    def gitignore_builtin_dirs(cls) -> set:
+        """`.gitignore` 白名单行（`!Application/Functions/<Dir>/`）→ 目录名集合。
+
+        这是「内置」的第二信号：能被那行白名单放行入库/进安装包的目录，就是主线的一部分。
+        与 allowlist 必须一致 —— 守卫测试 `test_extension_builtin_scope` 在两者漂移时失败。
+        """
+        path = os.path.join(cls._engine_root(), _GITIGNORE_FILE)
+        out: set = set()
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    text = line.strip()
+                    if not text.startswith("!") or not text.endswith("/"):
+                        continue          # 只认「目录」白名单（`!.../<Dir>/`）
+                    target = text[1:].replace("\\", "/").strip().strip("/")
+                    parts = target.split("/")
+                    if (len(parts) == 3 and parts[0] == "Application"
+                            and parts[1] == "Functions"):
+                        out.add(_norm_name(parts[2]))
+        except OSError:
+            pass
+        return out
+
+    @classmethod
+    def builtin_dirs(cls) -> set:
+        """内置扩展目录名 = allowlist ∪ .gitignore 白名单（缓存到下一次 scan）。"""
+        cached = cls._builtin_cache
+        if cached is not None:
+            return set(cached)
+        dirs = set(cls.builtin_allowlist()["dirs"]) | cls.gitignore_builtin_dirs()
+        cls._builtin_cache = frozenset(dirs)
+        return dirs
+
+    @classmethod
+    def scope_of(cls, directory: str, ext_id: str = "") -> str:
+        """扩展目录 → scope: `builtin` | `local` | `user`。
+
+        - **builtin**: 位于 `Application/Functions` **且**在 allowlist/.gitignore 白名单内
+          → 随引擎分发，恒激活、不可停用；
+        - **local**  : 位于 `Application/Functions` 但**不在** 白名单（本地/社区夹具）
+          → 与用户扩展同一套 opt-in，可在 设置 ▸ Extensions 启停；
+        - **user**   : 用户目录（`%APPDATA%/FlyVibingEngine/extensions`）。
+        """
+        directory = str(directory or "")
+        if not _is_within(directory, cls._extensions_root()):
+            return "user"
+        name = _norm_name(os.path.basename(os.path.normpath(directory)))
+        if name in cls.builtin_dirs():
+            return "builtin"
+        if ext_id and str(ext_id).strip().lower() in cls.builtin_allowlist()["ids"]:
+            return "builtin"     # 目录名被改过，但 id 仍在 allowlist 内
+        return "local"
+
+    @classmethod
+    def bundled_activation(cls) -> bool:
+        """内置扩展是否强制激活（默认 True）。
+
+        `FVE_EXTENSIONS_BUNDLED=off`（旧 `MGE_` 前缀同样生效）关闭 —— 给测试沙箱和
+        "某个内置扩展把编辑器搞崩了" 的排查场景留一条生路。
+        """
+        raw = str(AppIdentity.env_get("EXTENSIONS_BUNDLED", "on") or "on").strip().lower()
+        return raw not in ("0", "off", "false", "no", "disabled")
 
     @classmethod
     def _user_dir(cls) -> str:
@@ -185,23 +354,94 @@ class ExtensionManager:
     # ── 状态持久化 ───────────────────────────────────────────────
 
     @classmethod
-    def _read_state(cls) -> dict:
+    def _read_state_full(cls) -> dict:
+        """状态文件 → `{"enabled": {...}, "python": {ext_id: exe}}`（v1 文件兼容）。"""
         try:
             with open(cls._state_path(), "r", encoding="utf-8") as fh:
                 data = json.load(fh)
-            return dict(data.get("enabled", {})) if isinstance(data, dict) else {}
         except FileNotFoundError:
-            return {}
+            return {"enabled": {}, "python": {}}
         except Exception as e:  # noqa: BLE001 — 损坏状态文件按默认处理
             print(f"[Extensions] state read failed (using defaults): {e!r}")
-            return {}
+            return {"enabled": {}, "python": {}}
+        if not isinstance(data, dict):
+            return {"enabled": {}, "python": {}}
+        python = data.get("python") or {}
+        return {
+            "enabled": dict(data.get("enabled") or {}),
+            "python": {str(k): str(v) for k, v in python.items() if str(v).strip()}
+            if isinstance(python, dict) else {},
+        }
 
     @classmethod
-    def _write_state(cls, enabled: dict) -> None:
+    def _read_state(cls) -> dict:
+        return cls._read_state_full()["enabled"]
+
+    @classmethod
+    def _write_state(cls, enabled: dict, python: dict | None = None) -> None:
         path = cls._state_path()
+        if python is None:
+            python = cls._read_state_full()["python"]
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
-            json.dump({"version": 1, "enabled": enabled}, fh, indent=2, ensure_ascii=False)
+            json.dump({"version": 2, "enabled": enabled, "python": python},
+                      fh, indent=2, ensure_ascii=False)
+
+    # ── 解释器覆盖（`extension.python` op）───────────────────────
+
+    @classmethod
+    def python_overrides(cls) -> dict:
+        """全部解释器覆盖（ext id → exe；不含环境变量/manifest 的解析）。"""
+        return dict(cls._read_state_full()["python"])
+
+    @classmethod
+    def set_python_override(cls, ext_id: str, path: str) -> dict:
+        """设置/清除某扩展的解释器覆盖（立即生效，不需重启）。
+
+        path 为空 = 清除覆盖（回落到 env → manifest → 引擎解释器）。
+        """
+        info = cls._require(ext_id)
+        full = cls._read_state_full()
+        value = str(path or "").strip()
+        if value:
+            full["python"][ext_id] = value
+        else:
+            full["python"].pop(ext_id, None)
+        cls._write_state(full["enabled"], full["python"])
+        facade = cls._python_facades.get(info.id)
+        if facade is not None:
+            facade.apply_override(value)
+        return cls.python_status(ext_id)
+
+    @classmethod
+    def python_status(cls, ext_id: str, probe: bool = True) -> dict:
+        """某扩展的解释器状态（未装载时给声明 + 覆盖，不猜运行期字段）。"""
+        cls.ensure_init()
+        info = cls._require(ext_id)
+        facade = cls._python_facades.get(info.id)
+        if facade is None:
+            # 未装载也能回答「会选哪个解释器」——临时解析（不 spawn、不落盘）
+            try:
+                from Application.Core.Extension.ExtensionPython import ExtensionPython
+                facade = ExtensionPython(
+                    info.id, extension_dir=info.dir, data_dir=cls._data_dir(info.id),
+                    engine_root=cls._engine_root(), spec=info.python,
+                    override=cls.python_overrides().get(info.id, ""))
+            except Exception:  # noqa: BLE001 — 解析失败按声明返回
+                facade = None
+        if facade is not None:
+            data = facade.explain(probe=probe and bool(facade.exists()))
+        else:
+            declared = dict(info.python or {})
+            data = {"mode": declared.get("mode", "engine"),
+                    "source": "declared", "executable": "",
+                    "declared": declared, "problems": [], "children": 0}
+        return {
+            "id": info.id,
+            "loaded": bool(info.loaded),
+            "override": cls.python_overrides().get(info.id, ""),
+            "python": data,
+        }
 
     # ── 扫描 / 发现 ──────────────────────────────────────────────
 
@@ -214,6 +454,7 @@ class ExtensionManager:
     @classmethod
     def scan(cls) -> None:
         """发现并解析全部扩展; 自动装载已启用者。"""
+        cls._builtin_cache = None          # allowlist / .gitignore 可能刚被改过
         root = Path(cls._engine_root())
         paths: list[Path] = []
         funcs = root / "Application" / "Functions"
@@ -235,14 +476,41 @@ class ExtensionManager:
         cls._infos = infos
         cls._scanned = True
 
+        # ── 激活策略（2026-11-10 起）─────────────────────────────
+        #   **内置**（allowlist 内 `official_extensions.json` + `.gitignore` 白名单）
+        #   → 恒激活：它们随引擎/安装包分发，“装好即用”的一部分；
+        #     local（Functions 下但不内置）与 user（用户目录）→ 仍由状态文件 opt-in。
+        #     判定见 `scope_of()`；白名单外的本地夹具属于 local，不受恒激活影响。
         state = cls._read_state()
+        force_bundled = cls.bundled_activation()
         for info in infos.values():
-            if info.loadable and state.get(info.id, False):
+            if not info.loadable:
+                continue
+            if info.bundled and force_bundled:
+                info.always_on = True
                 info.enabled = True
                 cls._load(info)
+            elif state.get(info.id, False):
+                info.enabled = True
+                cls._load(info)
+        # ★ 状态文件只应记录「非内置」扩展：内置恒激活，留着的旧条目会误导
+        #   （"device: false" 但实际是开着的）。仅在恒激活模式下清理 —— 安全模式下
+        #   状态文件仍是内置扩展的权威开关，不能动。
+        if force_bundled:
+            stale = [ext_id for ext_id in state
+                     if (infos.get(ext_id) is not None and infos[ext_id].bundled)]
+            if stale:
+                for ext_id in stale:
+                    state.pop(ext_id, None)
+                cls._write_state(state)
+                print(f"[Extensions] state pruned (built-in is always-on): {sorted(stale)}")
         print(f"[Extensions] scan: {len(infos)} found"
               f" ({sum(1 for i in infos.values() if i.loadable)} loadable,"
-              f" {sum(1 for i in infos.values() if i.error)} broken)")
+              f" {sum(1 for i in infos.values() if i.error)} broken,"
+              f" {sum(1 for i in infos.values() if i.always_on)} built-in always-on,"
+              f" {sum(1 for i in infos.values() if i.scope == 'local')} local)"
+              f" — built-in activation {force_bundled}"
+              f"{'' if force_bundled else ' (FVE_EXTENSIONS_BUNDLED=off)'}")
 
     @classmethod
     def rescan(cls) -> None:
@@ -256,6 +524,11 @@ class ExtensionManager:
     def _parse_manifest(cls, path: Path) -> ExtensionInfo:
         folder_id = path.parent.name.lower()
         info = ExtensionInfo(id=folder_id, dir=str(path.parent), manifest_path=str(path))
+        # ★ 内置 = allowlist（`official_extensions.json` ∪ `.gitignore` 白名单）**且**位于
+        #   Application/Functions —— 不是“放进该目录就算内置”：不在白名单的本地
+        #   夹具也常驻那里（目录整体已 gitignore），它们不进安装包，仍按 opt-in 管理。
+        info.scope = cls.scope_of(str(path.parent))
+        info.bundled = info.scope == "builtin"
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
@@ -263,6 +536,10 @@ class ExtensionManager:
                 raise ValueError("manifest must be a JSON object")
             info.id = str(data.get("id") or folder_id)
             info.name = str(data.get("name") or info.id)
+            # allowlist 也按 id 登记（目录名可改）—— 真实 id 解析后再确认一次
+            if info.scope != "builtin":
+                info.scope = cls.scope_of(str(path.parent), info.id)
+                info.bundled = info.scope == "builtin"
             info.version = str(data.get("version") or "0.0.0")
             info.api_version = str(data.get("api_version") or "")
             info.maturity = str(data.get("maturity") or "planned")
@@ -272,6 +549,13 @@ class ExtensionManager:
             info.requires = list(data.get("requires") or [])
             info.provider = str(data.get("provider") or data.get("signature") or "")
             info.export = bool(data.get("export", True))
+            raw_python = data.get("python")
+            if isinstance(raw_python, str):
+                info.python = {"mode": raw_python.strip().lower()}
+            elif isinstance(raw_python, dict):
+                info.python = dict(raw_python)
+            elif raw_python not in (None, ""):
+                raise ValueError("manifest python must be a string or an object")
             if not _ID_RE.match(info.id):
                 raise ValueError(f"invalid id {info.id!r} (expect [a-z][a-z0-9_]*)")
             if not info.api_version or not info.api_version.startswith(_API_MAJOR):
@@ -290,12 +574,22 @@ class ExtensionManager:
 
     @classmethod
     def enable(cls, ext_id: str) -> dict:
-        """启用扩展（加载 + on_enable; 持久化）。等同 Extensions 菜单勾选。"""
+        """启用扩展（加载 + on_enable; 持久化）。等同设置页/菜单勾选。
+
+        内置扩展（allowlist 内）恒激活：这里只保证"已装载 + 面板显示"
+        （用户点它通常是"把我刚才关掉的面板叫回来"），不写状态文件。
+        """
         info = cls._require(ext_id)
         if not info.loadable:
             raise ValueError(
                 f"extension '{ext_id}' is not loadable "
                 f"(maturity={info.maturity}; see its TODO.md / dev protocol)")
+        if info.always_on:
+            if not info.loaded:
+                cls._load(info)
+            cls.show_panels(ext_id)
+            cls._sync_ops(info)
+            return info.to_dict()
         info.enabled = True
         state = cls._read_state()
         state[ext_id] = True
@@ -344,8 +638,19 @@ class ExtensionManager:
 
     @classmethod
     def disable(cls, ext_id: str) -> dict:
-        """停用扩展（on_disable → on_unload → 注销其全部 ops; 持久化）。"""
+        """停用扩展（on_disable → on_unload → 注销其全部 ops; 持久化）。
+
+        **内置**扩展（allowlist 内，随引擎/安装包分发）拒绝停用 —— "取消勾选"会连带让
+        示例/面板消失且下次升级又回来。要从本地移除请把它移出 `Application/Functions`
+        或改用 `FVE_EXTENSIONS_BUNDLED=off` 启动（安全模式）。
+        `local`（Functions 下的非白名单夹具）与 `user` 扩展可以正常停用。
+        """
         info = cls._require(ext_id)
+        if info.always_on:
+            raise ValueError(
+                f"extension '{ext_id}' is built into the engine "
+                f"({info.dir}) and is always enabled; remove it from Application/Functions "
+                f"or start with FVE_EXTENSIONS_BUNDLED=off")
         state = cls._read_state()
         state[ext_id] = False
         cls._write_state(state)
@@ -382,6 +687,30 @@ class ExtensionManager:
     def toggle(cls, ext_id: str, on: bool) -> dict:
         return cls.enable(ext_id) if on else cls.disable(ext_id)
 
+    @classmethod
+    def show_panels(cls, ext_id: str) -> int:
+        """把某扩展的主窗口置为可见；返回显示数量（无 UI/无环境 → 0）。
+
+        供菜单项使用：内置扩展不能"取消勾选"，点它就是"叫回面板"。
+        """
+        try:
+            from Application.Editor.Extensions.ExtensionUI import ExtensionUI
+            before = cls._visible_panel_count(ext_id)
+            ExtensionUI.show_all(ext_id)
+            return cls._visible_panel_count(ext_id) or before
+        except Exception:  # noqa: BLE001 — 无 UI 环境
+            return 0
+
+    @staticmethod
+    def _visible_panel_count(ext_id: str) -> int:
+        try:
+            from Application.Editor.Extensions.ExtensionUI import ExtensionPanel
+            from Application.Editor.UI.UIManager import UIManager
+            return sum(1 for p in list(UIManager._panels)
+                       if isinstance(p, ExtensionPanel) and p.ext_id == ext_id and p.visible)
+        except Exception:  # noqa: BLE001
+            return 0
+
     # ── 挂起停用（跨线程安全入口 — 窗口 X 关闭等） ──────────────
 
     @classmethod
@@ -390,7 +719,14 @@ class ExtensionManager:
 
         只入队；实际执行在主线程维护点（LiveCommandServer.pump 每帧 →
         `consume_pending_disables`）— 保证扩展生命周期方法始终在主线程执行。
+
+        内置扩展直接拒绝入队（它们不可停用；窗口 X 只隐藏面板）。
         """
+        info = cls._infos.get(str(ext_id))
+        if info is not None and info.always_on:
+            print(f"[Extensions] '{ext_id}' is bundled/always-on — "
+                  f"closing its panel does not disable it")
+            return
         with cls._pending_lock:
             cls._pending_disable.add(str(ext_id))
         print(f"[Extensions] disable requested: {ext_id} (applied by main-thread pump)")
@@ -462,6 +798,19 @@ class ExtensionManager:
                           "capabilities": list(info.capabilities)},
                 extension_dir=info.dir, data_dir=data_dir, engine_root=cls._engine_root())
             ctx.ops = _ExtensionOpRegistrar(info.id)
+            # ctx.python: 解释器协议（manifest `python` 声明 → 解析/自检/子进程托管）。
+            # 总是注入（默认 = 引擎解释器），扩展不需要自己猜 sys.executable。
+            try:
+                from Application.Core.Extension.ExtensionPython import ExtensionPython
+                facade = ExtensionPython(
+                    info.id, extension_dir=info.dir, data_dir=data_dir,
+                    engine_root=cls._engine_root(), spec=info.python,
+                    override=cls.python_overrides().get(info.id, ""))
+                ctx.python = facade
+                cls._python_facades[info.id] = facade
+            except Exception:  # noqa: BLE001 — 协议实现异常不拖垮扩展加载
+                traceback.print_exc()
+                ctx.python = None
             if "nodes" in [str(c) for c in (info.capabilities or [])]:
                 ctx.nodes = _ExtensionNodeRegistrar(info.id, info.dir)
                 cls._node_facades[info.id] = ctx.nodes
@@ -522,8 +871,20 @@ class ExtensionManager:
         cls._purge_nodes(info.id)
         cls._purge_examples(info.id)
         cls._purge_ui(info.id)
+        cls._purge_python(info.id)
         info.loaded = False
+        info.python_runtime = {}
         print(f"[Extensions] unloaded: {info.id}")
+
+    @classmethod
+    def _purge_python(cls, ext_id: str) -> None:
+        """卸载：终止扩展通过 ctx.python.spawn 拉起的子进程（扩展自己 Popen 的不在其内）。"""
+        facade = cls._python_facades.pop(ext_id, None)
+        if facade is not None:
+            try:
+                facade.close()
+            except Exception:  # noqa: BLE001 — 回收失败不拖垮其余清理
+                traceback.print_exc()
 
     @classmethod
     def _purge_ops(cls, ext_id: str) -> None:
@@ -587,6 +948,8 @@ class ExtensionManager:
         out = []
         for info in sorted(cls._infos.values(), key=lambda i: i.id):
             cls._sync_ops(info)
+            facade = cls._python_facades.get(info.id)
+            info.python_runtime = facade.explain() if facade is not None else {}
             out.append(info.to_dict())
         return out
 

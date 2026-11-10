@@ -1,0 +1,17 @@
+{
+  "_comment": "引擎 ↔ 工具链 版本锁定。发布时两边必须与此文件一致；build_installer 会在不一致时打印 WARNING。",
+  "_guard": "Test/Application/Core/test_toolchain_lock.py 校验本文件与 pyproject 的 engine version 一致",
+  "engine_version": "1.1.0",
+  "toolchain_version": "0.8.0",
+  "toolchain_commit": "39c1774",
+  "packages": {
+    "engine-editor-mcp": "0.8.0",
+    "flyvibing-extension-kit": "0.1.1",
+    "flyvibing-node-editor": "0.1.1"
+  },
+  "locked_at": "2026-11-10",
+  "notes": [
+    "引擎 1.1.0 的编辑器 MCP / 节点编辑器工具链 = 工具仓 0.8.0（含端口台账、instance.info/describe、测试选测）。",
+    "工具仓 0.9+ 若改了 op 契约或文档契约，必须先升本文件并在 CHANGELOG 里写明兼容性。"
+  ]
+}

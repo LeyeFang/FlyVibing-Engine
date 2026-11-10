@@ -20,7 +20,7 @@ from Application.Editor.Services.ControllerRegistry import (
 from imgui_bundle import icons_fontawesome_6 as fa
 
 from Application.Editor.UI.FileDialog import FileDialog
-from Application.Editor.I18n import t
+from Application.Editor.I18n import t, t_optional
 from Application.Editor.DisplayLabels import component_label
 
 
@@ -989,9 +989,8 @@ class ScenePanel(BasePanel):
                     imgui.set_item_default_focus()
             imgui.end_combo()
 
-        # ── Basic Shader 颜色 ──
-        if info.get('shader_name') == 'Basic':
-            self._draw_color_picker(entity_id, info)
+        # ── 参数（shader `//!` 注解驱动：形态/范围/单位/默认值都来自 shader 自己）──
+        self._draw_material_uniforms(entity_id, info)
 
         # ── Textures ──
         tex_names = {tid: name for tid, name in tex_options}
@@ -1019,11 +1018,213 @@ class ScenePanel(BasePanel):
                 imgui.end_popup()
             imgui.tree_pop()
 
-        # ── Uniforms ──
-        uniforms = info.get('uniforms', {})
-        if uniforms and imgui.tree_node(t("scene.material.uniforms") + "##mat_uniforms"):
+        # ── Uniforms（旧路径：只有"连类型推断都拿不到 spec"的 shader 才走）──
+        #   ★ 必须二选一：spec 路径已经把 uniform 画全了，两条都跑会把每个参数画两遍。
+        if not info.get('uniform_specs'):
+            self._draw_material_uniforms_legacy(entity_id, info.get('uniforms', {}))
+
+    # 渲染器每帧注入 / 自动管理的 uniform —— 不进材质面板
+    _RENDERER_UNIFORMS = ("model", "view", "projection")
+
+    @staticmethod
+    def _spec_label(spec: dict) -> str:
+        """spec.label → 显示名（`mat.*` 由 shader 注解声明，走 i18n；其它原样）。"""
+        raw = str(spec.get("label") or spec.get("name") or "")
+        return t_optional(raw, raw) if raw else ""
+
+    @staticmethod
+    def _unit_text(unit: str) -> str:
+        return {"deg": "\u00b0", "rad": "rad", "hz": "Hz"}.get(str(unit).lower(), str(unit))
+
+    @staticmethod
+    def _fmt_uniform(value) -> str:
+        try:
+            if hasattr(value, "__len__") and not isinstance(value, str):
+                return ", ".join(f"{float(v):.2f}" for v in value)
+            return f"{float(value):.3f}"
+        except (TypeError, ValueError):
+            return str(value)
+
+    @staticmethod
+    def _is_modified(spec: dict, value) -> bool:
+        """当前值是否偏离注解默认值（决定复位按钮是否出现）。"""
+        default = spec.get("default")
+        if default is None or value is None:
+            return False
+        try:
+            if isinstance(default, (list, tuple)) and len(default) > 1:
+                vals = [float(v) for v in value]
+                return (len(vals) != len(default)
+                        or any(abs(a - float(b)) > 1e-6 for a, b in zip(vals, default)))
+            return abs(float(value) - float(default[0])) > 1e-6
+        except (TypeError, ValueError):
+            return False
+
+    def _draw_material_uniforms(self, entity_id: int, info: dict) -> None:
+        """按 shader 注解渲染材质参数：分组折叠 + 范围/单位 + 已改标记 + 复位。"""
+        specs = info.get("uniform_specs") or []
+        values = info.get("uniforms") or {}
+        if not specs:
+            return
+        shown = [s for s in specs if s.get("name") not in self._RENDERER_UNIFORMS]
+        if not shown:
+            return
+
+        # ── 共享/内置材质提示：编辑会自动 clone 一份，不动别人 ──
+        shared = int(info.get("shared_count") or 0)
+        if info.get("is_builtin") or shared > 1:
+            imgui.text_disabled(t("scene.material.shared", n=max(shared, 1)))
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(t("scene.material.shared_tip"))
+        if imgui.small_button(f"{fa.ICON_FA_ROTATE_LEFT}  "
+                              + t("scene.material.reset_all") + f"##mat_rst_all_{entity_id}"):
+            self._browser_ctrl.reset_material_uniforms(entity_id)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(t("scene.material.reset_tip"))
+
+        # 分组（dict 保序 = shader 声明顺序）
+        groups: dict[str, list] = {}
+        for spec in shown:
+            groups.setdefault(str(spec.get("group") or ""), []).append(spec)
+
+        imgui.push_item_width(160)
+        if len(groups) == 1 and "" in groups:
+            for spec in groups[""]:
+                self._draw_uniform_row(entity_id, spec, values)
+        else:
+            for group, items in groups.items():
+                # 分组名同样来自 shader 注解（`mat.group.<名>`，缺失回退原样）
+                key = "mat.group." + group.lower() if group else ""
+                title = t_optional(key, group) if key else ""
+                title = title or t("scene.material.uniforms")
+                if not imgui.tree_node(f"{title}##mat_g_{entity_id}_{group or '_'}"):
+                    continue
+                for spec in items:
+                    self._draw_uniform_row(entity_id, spec, values)
+                imgui.tree_pop()
+        imgui.pop_item_width()
+
+    def _draw_uniform_row(self, entity_id: int, spec: dict, values: dict) -> None:
+        """一行参数：label + 按 kind 的控件 + 单位 + 复位。"""
+        name = str(spec.get("name"))
+        kind = str(spec.get("kind") or "readonly")
+        label = self._spec_label(spec)
+        uid = f"{label}##mat_{entity_id}_{name}"
+        cur = values.get(name)
+
+        # ── 只读 / 引擎驱动（如 SSVEP 的 time、mat4 矩阵）──
+        if not spec.get("editable", True) or cur is None:
+            shown = "—" if cur is None else self._fmt_uniform(cur)
+            owner = str(spec.get("owner") or "content")
+            suffix = t("scene.material.engine_driven") if owner != "content" else t("scene.material.readonly")
+            imgui.text_disabled(f"{label}: {shown}  ({suffix})")
+            if imgui.is_item_hovered() and spec.get("doc"):
+                imgui.set_tooltip(str(spec.get("doc")))
+            return
+
+        lo, hi, step = spec.get("min"), spec.get("max"), spec.get("step")
+        changed, new_value = False, cur
+
+        if kind in ("color3", "color4"):
+            # color3 也要喂 4 个分量（imgui 色盘固定 RGBA）；写回时按 kind 截断
+            vals = [float(c) for c in cur]
+            if len(vals) == 3:
+                vals.append(1.0)
+            elif len(vals) != 4:
+                vals = (vals + [0.0] * 4)[:4]
+                vals[-1] = 1.0
+            changed, col = imgui.color_edit4(uid, vals,
+                                             flags=imgui.ColorEditFlags_.display_hsv
+                                             | imgui.ColorEditFlags_.float)
+            if changed:
+                new_value = tuple(col)[:3] if kind == "color3" else tuple(col)
+            imgui.same_line()
+            if imgui.small_button(f"{fa.ICON_FA_PALETTE}##mat_pal_{entity_id}_{name}"):
+                imgui.open_popup(f"mat_pal_{entity_id}_{name}")
+            self._draw_color_presets(entity_id, name)
+        elif kind in ("vec2", "vec3", "vec4"):
+            vals = [float(v) for v in cur]
+            speed = float(step or 0.01)
+            if kind == "vec2":
+                changed, out = imgui.drag_float2(uid, vals, speed, lo or 0.0, hi or 0.0)
+            elif kind == "vec3":
+                changed, out = imgui.drag_float3(uid, vals, speed, lo or 0.0, hi or 0.0)
+            else:
+                changed, out = imgui.drag_float4(uid, vals, speed, lo or 0.0, hi or 0.0)
+            if changed:
+                new_value = tuple(out)
+        elif kind == "enum" and spec.get("choices"):
+            choices = spec["choices"]                     # [[值, 标签键], ...]
+            cur_idx = next((i for i, c in enumerate(choices)
+                            if int(c[0]) == int(round(float(cur)))), 0)
+            labels = [t_optional(str(c[1]), str(c[1])) for c in choices]
+            opened = imgui.begin_combo(uid, labels[cur_idx] if labels else "")
+            if opened:
+                for i, text in enumerate(labels):
+                    if imgui.selectable(f"{text}##mat_sel_{entity_id}_{name}_{i}", i == cur_idx)[0]:
+                        changed, new_value = True, int(choices[i][0])
+                    if i == cur_idx:
+                        imgui.set_item_default_focus()
+                imgui.end_combo()
+        elif kind == "bool":
+            changed, flag = imgui.checkbox(uid, bool(float(cur) > 0.5))
+            if changed:
+                new_value = 1.0 if flag else 0.0
+        elif kind == "int":
+            changed, out = imgui.drag_int(uid, int(round(float(cur))), float(step or 1.0),
+                                          int(lo) if lo is not None else 0,
+                                          int(hi) if hi is not None else 0)
+            if changed:
+                new_value = int(out)
+        else:   # float
+            changed, out = imgui.drag_float(uid, float(cur), float(step or 0.01),
+                                            float(lo) if lo is not None else 0.0,
+                                            float(hi) if hi is not None else 0.0,
+                                            "%.3f")
+            if changed:
+                new_value = float(out)
+
+        if changed:
+            self._browser_ctrl.set_material_uniform(entity_id, name, new_value)
+
+        unit = str(spec.get("unit") or "")
+        if unit:
+            imgui.same_line()
+            imgui.text_disabled(self._unit_text(unit))
+
+        if self._is_modified(spec, new_value):
+            imgui.same_line()
+            if imgui.small_button(f"{fa.ICON_FA_ROTATE_LEFT}##mat_rst_{entity_id}_{name}"):
+                self._browser_ctrl.reset_material_uniform(entity_id, name)
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(t("scene.material.reset_tip"))
+
+    def _draw_color_presets(self, entity_id: int, uniform_name: str) -> None:
+        """颜色预设弹层（点击色板图标后出现）。"""
+        from Application.Resource.ResourceManager import COLOR_PRESETS
+        if not imgui.begin_popup(f"mat_pal_{entity_id}_{uniform_name}"):
+            return
+        cols = 5
+        for idx, preset in enumerate(COLOR_PRESETS.keys()):
+            rgba = COLOR_PRESETS[preset]
+            imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(*rgba))
+            if imgui.button(f"##preset_{uniform_name}_{preset}", (18, 18)):
+                self._browser_ctrl.set_material_uniform(
+                    entity_id, uniform_name, tuple(float(c) for c in rgba))
+            imgui.pop_style_color(1)
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(_color_label(preset))
+            if (idx + 1) % cols != 0:
+                imgui.same_line()
+        imgui.end_popup()
+
+    def _draw_material_uniforms_legacy(self, entity_id: int, uniforms: dict) -> None:
+        """无注解 shader 的兜底渲染（与 2026-11 之前完全一致）。"""
+        if not uniforms:
+            return
+        if imgui.tree_node(t("scene.material.uniforms") + "##mat_uniforms"):
             for u_name, u_value in uniforms.items():
-                if u_name == 'uColor' and info.get('shader_name') == 'Basic':
+                if u_name == 'uColor':
                     continue
                 val = u_value
                 if hasattr(val, 'shape'):
@@ -1049,48 +1250,6 @@ class ScenePanel(BasePanel):
                 else:
                     imgui.text_disabled(f"{u_name}: {type(val).__name__}")
             imgui.tree_pop()
-
-    def _draw_color_picker(self, entity_id: int, info: dict) -> None:
-        """Basic Shader 专属颜色调色盘 — 预设按钮 + ColorEdit4。"""
-        from Application.Resource.ResourceManager import ResourceManager, COLOR_PRESETS
-
-        u_color = info['uniforms'].get('uColor')
-        if u_color is None:
-            return
-        current_color = tuple(float(c) for c in u_color)  # (r, g, b, a)
-
-        # ── 预设颜色按钮 ──
-        imgui.text(t("scene.material.presets"))
-        preset_names = list(COLOR_PRESETS.keys())
-        # 每行 5 个
-        cols = 5
-        for idx, name in enumerate(preset_names):
-            rgba = COLOR_PRESETS[name]
-            # 用彩色小按钮
-            imgui.push_style_color(imgui.Col_.button, imgui.ImVec4(*rgba))
-            imgui.push_style_color(imgui.Col_.button_hovered, imgui.ImVec4(
-                min(rgba[0]*1.2, 1.0), min(rgba[1]*1.2, 1.0),
-                min(rgba[2]*1.2, 1.0), 1.0))
-            imgui.push_style_color(imgui.Col_.button_active, imgui.ImVec4(*rgba))
-            if imgui.button(f"##preset_{name}", (16, 16)):
-                self._browser_ctrl.set_material_color(
-                    entity_id, *rgba)
-            imgui.pop_style_color(3)
-            # tooltip on hover
-            if imgui.is_item_hovered():
-                imgui.set_tooltip(_color_label(name))
-            if (idx + 1) % cols != 0:
-                imgui.same_line()
-
-        imgui.spacing()
-
-        # ── ColorEdit4 调色盘 ──
-        changed, new_color = imgui.color_edit4(
-            t("scene.material.color") + f"##mat_{entity_id}", current_color,
-            flags=imgui.ColorEditFlags_.display_hsv | imgui.ColorEditFlags_.float,
-        )
-        if changed:
-            self._browser_ctrl.set_material_color(entity_id, *new_color)
 
     def _draw_add_component(self, entity_id: int) -> None:
         """绘制 'Add Component' 下拉按钮 — 列出所有已注册但未添加的 Component。"""

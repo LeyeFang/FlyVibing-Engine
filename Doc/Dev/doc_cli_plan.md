@@ -25,9 +25,13 @@
 
 - **内容家**：工具仓 `packages/editor-mcp/src/engine_editor_mcp/docs_content/{dev,extdev}/<topic>.md`
   - 随 wheel 打包（`pyproject` package-data + `build_wheel.py` 递归采集均已接）。
-- **服务层**：`doclib.py` —— 按 `## ` 分节；裸名解析；跨主题搜索；目的行/预览自动提取
+- **服务层**：`doclib.py` —— 按 `## ` / `### ` 分节（三层寻址，2026-11-10）；裸名解析；
+  跨主题搜索（命中标签精确到小节号，如 `dev/shader_protocol#6.1`）；目的行/预览自动提取
   （句号收尾、CJK 折行伪影清理、去列表标记）。
 - **CLI**：`engine-editor-cli doc [list|outline|show|search] <topic[#节号|标题片段]>`
+  - `#3` = 第 3 章（正文仍含其 `### 3.x`，旧行为不变）；`#3.3` = 单小节；
+  - 小节无自带编号时自动补 `<父号>.<序号>`，保证长文档里每一节都可寻址
+    （此前只切 `##`，`#11.1` 这类小节取不到 → agent 只能整章加载）。
 - **指针 stub**：引擎仓 `Doc/Dev|ExtDev/<name>.md` = "面对什么问题" + "去哪获得内容"
   （CLI 命令块 + 章节清单 + 内容权威路径）。
 - **容量参考线（②层次级标题）**：每主题建议 ≤ 12 节；超出先并节或拆主题（现状：最大 ui_protocol 13 节；

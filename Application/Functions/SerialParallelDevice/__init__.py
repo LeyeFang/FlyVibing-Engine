@@ -13,6 +13,7 @@ SerialParallelDevice — 串口 + 并口 I/O 模块。
 子模块:
   - tasks             : SerialTask / ParallelTask 数据类
   - state             : 模块级共享状态（驱动引用、端口字典、队列、监视缓冲）
+  - device_registry   : 逻辑设备名（@alias）→ 物理端点台账（扩展自持；过渡期委托核心）
   - serial_manager    : 串口打开/关闭/生命周期
   - parallel_manager  : 并口写入 + 5ms 自动复位调度
   - io_thread         : I/O 线程主循环 + 任务分发 + 监视 poll
@@ -47,6 +48,7 @@ from .api import (
 )
 
 # ── 设备身份（逻辑设备名 → 物理端口; 协议 device_io_protocol §10） ──
+from .device_registry import DeviceUnresolved
 from .serial_manager import resolve_port
 
 # ── 任务类型（供高级用户直接构造） ──────────────────────────
@@ -72,6 +74,7 @@ from .test_hooks import (
 )
 
 __all__ = [
+    "DeviceUnresolved",
     "DeviceNotReady",
     "start",
     "stop",

@@ -23,6 +23,15 @@ class NodeCanvas(DataContract):
         self._links: dict[int, LinkInstance] = {}
         # 外部/扩展修改计数 — Node Editor 面板用它失效屏幕矩形缓存并请求重绘。
         self._revision: int = 0
+        # 求值用索引缓存 (pin→node / pin→meta / 邻接 / 事件入口)。
+        # None = 需要重建; 任何结构变更 (增删节点连线/清空/整体替换) 都必须失效，
+        # 否则 GraphEvaluator 会读到过期邻接表。见 _invalidate_index()。
+        self._pin_owner: Optional[dict[int, int]] = None
+        self._pin_meta: Optional[dict[int, tuple[str, str, str]]] = None
+        self._link_out: Optional[dict[int, list[int]]] = None
+        self._link_src: Optional[dict[int, int]] = None
+        self._event_nodes: Optional[dict[str, list[int]]] = None
+        self._index_key: tuple = ()
         # 节点组元数据（tools 层宏的记账; 引擎只做不透明保留 — 不参与求值）。
         # 结构见 flyvibing_node_editor.node_groups; 空 dict = 无组。
         self.node_groups: dict = {}
@@ -49,7 +58,94 @@ class NodeCanvas(DataContract):
     def mark_changed(self) -> int:
         """标记画布已变更；返回新 revision。"""
         self._revision += 1
+        self._invalidate_index()
         return self._revision
+
+    # ── 索引（pin / 邻接 / 事件入口）────────────────────────
+
+    def _invalidate_index(self) -> None:
+        """丢弃索引缓存 — 下一帧首次访问时重建。"""
+        self._pin_owner = None
+        self._pin_meta = None
+        self._link_out = None
+        self._link_src = None
+        self._event_nodes = None
+        self._index_key = ()
+
+    def _ensure_index(self) -> None:
+        """按需重建索引。
+
+        为什么需要: 求值热路径上 `find_pin_node` / 下游节点查询原来每次都
+        线性扫全部节点 × 全部引脚 (O(nodes×pins) 每引脚读写) ——
+        实测 MI-SSSEP 图 60%+ 的图求值时间花在这两个循环里。
+
+        失效策略: 结构变更即失效 (`_invalidate_index`)；另外把
+        `(revision, len(nodes), len(links), len(_TYPES))` 作为二次保险，
+        防止绕过 mutator 的极端改法读到过期表。
+        """
+        key = (self._revision, len(self._nodes), len(self._links), len(_TYPES))
+        if self._pin_owner is not None and key == self._index_key:
+            return
+        pin_owner: dict[int, int] = {}
+        pin_meta: dict[int, tuple[str, str, str]] = {}
+        event_nodes: dict[str, list[int]] = {}
+        for nid, inst in self._nodes.items():
+            nd = _TYPES.get(inst.node_type)
+            if nd is None:
+                continue           # 未注册类型 — 引脚不可解析，与旧行为一致
+            if nd.category == "Event":
+                event_nodes.setdefault(inst.node_type, []).append(nid)
+            for p in nd.pins:
+                pid = inst.pin_ids.get(p.name)
+                if pid is None:
+                    continue
+                # setdefault: 万一出现重复 pin id（历史数据），保留**第一个**归属，
+                # 与旧实现的线性扫描（先遇到谁就返回谁）完全一致。
+                pin_owner.setdefault(pid, nid)
+                pin_meta.setdefault(pid, (p.name, p.direction, p.data_type))
+        link_out: dict[int, list[int]] = {}
+        link_src: dict[int, int] = {}
+        for link in self._links.values():
+            nid = pin_owner.get(link.to_pin)
+            if nid is not None:
+                bucket = link_out.get(link.from_pin)
+                if bucket is None:
+                    link_out[link.from_pin] = [nid]
+                elif nid not in bucket:
+                    bucket.append(nid)
+            # 多条连线接到同一输入引脚时保留**第一条**（与旧 _read_input 一致）
+            link_src.setdefault(link.to_pin, link.from_pin)
+        self._pin_owner = pin_owner
+        self._pin_meta = pin_meta
+        self._link_out = link_out
+        self._link_src = link_src
+        self._event_nodes = event_nodes
+        self._index_key = key
+
+    def pin_owner_of(self, pin_id: int) -> Optional[int]:
+        """实例级 pin → 所属节点 id（O(1)）。未注册类型的引脚返回 None。"""
+        self._ensure_index()
+        return self._pin_owner.get(pin_id)
+
+    def pin_meta_of(self, pin_id: int) -> Optional[tuple[str, str, str]]:
+        """实例级 pin → (name, direction, data_type)（O(1)）。"""
+        self._ensure_index()
+        return self._pin_meta.get(pin_id)
+
+    def downstream_of(self, output_pin_id: int) -> list[int]:
+        """输出引脚 → 下游节点 id 列表（O(1)，按连线加入顺序去重）。"""
+        self._ensure_index()
+        return self._link_out.get(output_pin_id) or []
+
+    def source_pin_of(self, input_pin_id: int) -> Optional[int]:
+        """输入引脚 → 上游输出引脚 id（O(1)）。无连线返回 None。"""
+        self._ensure_index()
+        return self._link_src.get(input_pin_id)
+
+    def event_nodes_of(self, event_type: str) -> list[int]:
+        """事件节点类型 → 节点 id 列表（O(1)）。按节点加入顺序。"""
+        self._ensure_index()
+        return self._event_nodes.get(event_type) or []
 
     # ── 节点 CRUD ──────────────────────────────────────────
 
@@ -105,33 +201,17 @@ class NodeCanvas(DataContract):
 
     def find_pin_dir(self, pin_id: int) -> Optional[str]:
         """查找实例级 Pin 的方向 ("input" / "output")"""
-        for inst in self._nodes.values():
-            nd = _TYPES.get(inst.node_type)
-            if nd:
-                for p in nd.pins:
-                    if inst.pin_ids.get(p.name) == pin_id:
-                        return p.direction
-        return None
+        meta = self.pin_meta_of(pin_id)
+        return meta[1] if meta else None
 
     def find_pin_node(self, pin_id: int) -> Optional[int]:
         """查找实例级 Pin 所属的节点 ID"""
-        for nid, inst in self._nodes.items():
-            nd = _TYPES.get(inst.node_type)
-            if nd:
-                for p in nd.pins:
-                    if inst.pin_ids.get(p.name) == pin_id:
-                        return nid
-        return None
+        return self.pin_owner_of(pin_id)
 
     def find_pin_name(self, pin_id: int) -> Optional[str]:
         """查找实例级 Pin 的名称 (如 "Value", "exec_in")"""
-        for inst in self._nodes.values():
-            nd = _TYPES.get(inst.node_type)
-            if nd:
-                for p in nd.pins:
-                    if inst.pin_ids.get(p.name) == pin_id:
-                        return p.name
-        return None
+        meta = self.pin_meta_of(pin_id)
+        return meta[0] if meta else None
 
     def find_pin_data_type(self, pin_id: int) -> str:
         """查找实例级 Pin 的 data_type (如 "float", "exec", "vec3")。
@@ -139,13 +219,8 @@ class NodeCanvas(DataContract):
         用于连线着色——根据 pin 的数据类型决定连线颜色。
         找不到时返回 "exec"（默认为执行流样式）。
         """
-        for inst in self._nodes.values():
-            nd = _TYPES.get(inst.node_type)
-            if nd:
-                for p in nd.pins:
-                    if inst.pin_ids.get(p.name) == pin_id:
-                        return p.data_type
-        return "exec"
+        meta = self.pin_meta_of(pin_id)
+        return meta[2] if meta else "exec"
 
     # ── 默认节点 ───────────────────────────────────────────
 
@@ -310,6 +385,7 @@ class NodeCanvas(DataContract):
         self._links.clear()
         self.node_groups.clear()
         self.unknown_node_types = {}
+        self._invalidate_index()
 
     # ── 未注册类型：重判定 / 就地补全（2026-11-03 ISSUE） ────────
     def refresh_unknown_types(self) -> dict[str, list[int]]:
@@ -362,6 +438,7 @@ class NodeCanvas(DataContract):
         for lid, lk in other.links.items():
             self._links[lid] = lk
         self.node_groups = dict(getattr(other, "node_groups", {}) or {})
+        self._invalidate_index()
 
 
 # ── 注册到 Serializable 注册表 ──

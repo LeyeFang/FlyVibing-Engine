@@ -359,10 +359,149 @@ def _draw_debug_page() -> None:
     imgui.end_disabled()
 
 
+# ═══════════════════════════════════════════════
+# 内置页: Extensions —— 扩展管理（扫描 / 启停 / 诊断）
+# ═══════════════════════════════════════════════
+
+def _extension_example_roots(ext_id: str) -> list[str]:
+    """该扩展登记的 Example 根目录（无扩展体系/未登记 → 空）。"""
+    try:
+        from Application.Editor.Extensions.ExtensionExamples import ExtensionExamplesRegistry
+        return [item["root"] for item in ExtensionExamplesRegistry.roots()
+                if item.get("owner") == ext_id]
+    except Exception:  # noqa: BLE001 — 无示例注册表
+        return []
+
+
+def _extension_rows() -> list[dict]:
+    """扩展清单（失败返回空 + 由调用方显示错误）。"""
+    from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+    ExtensionManager.ensure_init()
+    return ExtensionManager.list_infos()
+
+
+def _draw_extensions_page() -> None:
+    """Extensions 页 — **扩展管理的唯一入口**（主菜单只列有面板的扩展）。
+
+    数据源: `ExtensionManager.list_infos()`。scope 三态（`ExtensionManager.scope_of`）:
+      - `builtin`（allowlist = `official_extensions.json` ∪ `.gitignore` 白名单）→ 恒激活;
+      - `local`（同在 `Application/Functions` 下但不在 allowlist 的本地/社区夹具）
+        与 `user`（用户目录）→ 都在本页 opt-in。
+    本页同时承担"为什么我的示例/面板不出现"的自检面:
+    状态 / scope / has_ui / 目录 / capabilities / 解释器 / 示例根 / 已注册 op。
+    """
+    try:
+        from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+        rows = _extension_rows()
+    except Exception as e:  # noqa: BLE001 — 扩展体系异常不得让设置页崩
+        imgui.text_disabled(t("settings.ext.error", error=repr(e)))
+        return
+
+    bundled = sum(1 for r in rows if r.get("always_on"))
+    with_ui = sum(1 for r in rows if r.get("has_ui"))
+    imgui.text_disabled(t("settings.ext.summary", total=len(rows),
+                          bundled=bundled, panels=with_ui))
+    imgui.same_line()
+    if imgui.small_button(t("settings.ext.rescan") + "##ext_rescan"):
+        try:
+            ExtensionManager.rescan()
+            rows = _extension_rows()
+        except Exception as e:  # noqa: BLE001
+            print(f"[Extensions] rescan failed: {e!r}")
+    imgui.separator()
+
+    if not rows:
+        imgui.text_disabled(t("settings.ext.none"))
+        return
+
+    imgui.text_wrapped(t("settings.ext.note"))
+    imgui.spacing()
+
+    for row in rows:
+        ext_id = str(row.get("id", ""))
+        scope_value = str(row.get("scope", ""))
+        if scope_value == "builtin":
+            scope_text = t("settings.ext.scope.bundled")
+        elif scope_value == "local":
+            scope_text = t("settings.ext.scope.local")
+        else:
+            scope_text = t("settings.ext.scope.user")
+        ui_text = (t("settings.ext.ui.panel") if row.get("has_ui")
+                   else t("settings.ext.ui.headless"))
+        label = f"{row.get('name') or ext_id}  ·  {scope_text}  ·  {ui_text}"
+        state = str(row.get("status", ""))
+        color = {"broken": (0.85, 0.35, 0.30, 1.0),
+                 "disabled": (0.60, 0.60, 0.60, 1.0)}.get(state)
+        if color is not None:
+            imgui.push_style_color(imgui.Col_.text, imgui.ImVec4(*color))
+        opened = imgui.tree_node(f"{label}##ext_{ext_id}")
+        if color is not None:
+            imgui.pop_style_color(1)
+        if not opened:
+            continue
+
+        imgui.bullet_text(f"{t('settings.ext.detail.id')}: {ext_id}   "
+                          f"v{row.get('version', '')}   [{row.get('maturity', '')}]")
+        if state == "enabled":
+            status_text = t("settings.ext.status.enabled")
+        elif state == "disabled":
+            status_text = t("settings.ext.status.disabled")
+        elif state == "broken":
+            status_text = t("settings.ext.status.broken")
+        elif state == "planned":
+            status_text = t("settings.ext.status.planned")
+        else:
+            status_text = state
+        imgui.bullet_text(f"{t('settings.ext.status')}: {status_text}")
+        imgui.bullet_text(f"{t('settings.ext.detail.caps')}: "
+                          f"{', '.join(row.get('capabilities') or []) or '-'}")
+        imgui.bullet_text(f"{t('settings.ext.detail.dir')}: {row.get('dir', '')}")
+
+        python = row.get("python") or {}
+        if python.get("executable"):
+            imgui.bullet_text(f"{t('settings.ext.detail.python')}: "
+                              f"{python.get('executable')}  ({python.get('source', '')})")
+            for problem in python.get("problems") or []:
+                imgui.text_colored(imgui.ImVec4(0.85, 0.60, 0.25, 1.0), f"    {problem}")
+
+        roots = _extension_example_roots(ext_id)
+        if roots:
+            imgui.bullet_text(f"{t('settings.ext.detail.examples')}: {len(roots)}")
+            for root in roots:
+                imgui.text_disabled(f"    {root}")
+
+        ops = row.get("ops") or []
+        if ops:
+            imgui.bullet_text(f"{t('settings.ext.detail.ops')}: {len(ops)} "
+                              f"({', '.join(ops[:4])}{'…' if len(ops) > 4 else ''})")
+
+        if row.get("error"):
+            imgui.text_colored(imgui.ImVec4(0.85, 0.35, 0.30, 1.0), str(row["error"]))
+
+        # ── 启停（内置只读）──
+        if row.get("always_on"):
+            imgui.text_disabled(t("settings.ext.bundled_locked"))
+        elif not row.get("loadable"):
+            imgui.text_disabled(t("settings.ext.not_loadable"))
+        else:
+            changed, enabled = imgui.checkbox(
+                f"{t('settings.ext.enabled_box')}##ext_en_{ext_id}",
+                bool(row.get("enabled")))
+            if changed:
+                try:
+                    ExtensionManager.toggle(ext_id, bool(enabled))
+                except Exception as e:  # noqa: BLE001 — 单个失败不影响其余
+                    print(f"[Extensions] toggle {ext_id} failed: {e!r}")
+        imgui.tree_pop()
+
+
 # ── 内置页注册（import 即注册 — 与面板类同批加载; id 稳定不可改名） ──
 SettingsPanel.register_page(SettingsPage(
     id="common", title_key="settings.page.common", draw_fn=_draw_common_page, order=0))
 SettingsPanel.register_page(SettingsPage(
     id="export", title_key="settings.page.export", draw_fn=_draw_export_page, order=10))
 SettingsPanel.register_page(SettingsPage(
-    id="debug", title_key="settings.page.debug", draw_fn=_draw_debug_page, order=20))
+    id="extensions", title_key="settings.page.extensions",
+    draw_fn=_draw_extensions_page, order=20))
+SettingsPanel.register_page(SettingsPage(
+    id="debug", title_key="settings.page.debug", draw_fn=_draw_debug_page, order=30))

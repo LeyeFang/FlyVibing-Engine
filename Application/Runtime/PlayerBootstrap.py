@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass, field
 
 from Application.Core.Layers.Layer import Layer
@@ -302,10 +303,24 @@ def dry_run(source: str, frames: int = 0, verbose: bool = False,
 
 
 class _AutoExitLayer(Layer):
-    """--frames N 支撑层: N 次 OnUpdate 后请求退出（冒烟/CI 用）。"""
+    """--frames N / --seconds T 支撑层: 到达任一限制后请求退出（冒烟/CI 用）。
+
+    ★ 两种计数不是一回事:
+      `OnUpdate` 在**逻辑循环**里跑，导出模式下内联循环不受 vsync 限制，
+      120 次迭代可能只花 0.2 s —— 用帧数当“运行时间”会量不到稳态。
+      所以性能统计请用 `--seconds`（墙钟截止）。
+    """
 
     _count = 0
     _max_frames = 0
+    _deadline = 0.0
+
+    @classmethod
+    def configure(cls, max_frames: int = 0, max_seconds: float = 0.0) -> None:
+        cls._count = 0
+        cls._max_frames = int(max_frames or 0)
+        cls._deadline = (time.perf_counter() + float(max_seconds or 0.0)
+                         if max_seconds and max_seconds > 0 else 0.0)
 
     @classmethod
     def OnAttach(cls):
@@ -318,10 +333,15 @@ class _AutoExitLayer(Layer):
     @classmethod
     def OnUpdate(cls):
         cls._count += 1
-        if cls._max_frames and cls._count >= cls._max_frames:
+        reached = bool(cls._max_frames and cls._count >= cls._max_frames)
+        why = f"--frames {cls._max_frames}"
+        if not reached and cls._deadline and time.perf_counter() >= cls._deadline:
+            reached = True
+            why = "--seconds limit"
+        if reached:
             from Application.Runtime.GameRuntime import GameRuntime
 
-            print(f"[Player] --frames {cls._max_frames} reached — exiting")
+            print(f"[Player] {why} reached — exiting")
             GameRuntime.run_state = False
 
     @classmethod
@@ -333,8 +353,15 @@ class _AutoExitLayer(Layer):
         pass
 
 
-def run(source: str, max_frames: int = 0) -> int:
-    """真实运行会话（阻塞直到窗口关闭 / ExitGame / --frames 触发）。"""
+def run(source: str, max_frames: int = 0, max_seconds: float = 0.0,
+        stats_json: str | None = None, stats_interval: float = 1.0) -> int:
+    """真实运行会话（阻塞直到窗口关闭 / ExitGame / --frames / --seconds 触发）。
+
+    max_seconds: 墙钟时长上限（毫秒级精度到逻辑循环）—— 性能统计用这个，
+                 不要用 max_frames（内联逻辑循环不受 vsync 限制）。
+    stats_json:  非空时挂载 `PerfStatsLayer`，结束时把帧时间分布 / 卡顿 / CPU /
+                 内存写成 JSON（同时写 `<path>.jsonl` 采样趋势）。
+    """
     session = prepare_offline(source)
     mode = resolve_window_mode(session)
 
@@ -389,9 +416,18 @@ def run(source: str, max_frames: int = 0) -> int:
         from Application.Runtime.OverlayInputLayer import OverlayInputLayer
 
         layers.append(OverlayInputLayer)
-    if max_frames > 0:
-        _AutoExitLayer._max_frames = max_frames
+    if max_frames > 0 or max_seconds > 0:
+        _AutoExitLayer.configure(max_frames=max_frames, max_seconds=max_seconds)
         layers.append(_AutoExitLayer)
+
+    # ── 成品性能统计（--stats-json）──
+    #   必须在 GameRuntime.init() 之后 push（帧计时器已启动），且要在 run() 前
+    if stats_json:
+        from Application.Runtime.PerfStatsLayer import PerfStatsLayer
+
+        PerfStatsLayer.configure(stats_json, stats_interval)
+        layers.append(PerfStatsLayer)
+        print(f"[Player] perf stats → {stats_json}")
 
     # ★ 输入层最后 push（栈顶）— 与 PIE 顺序一致。
     from Application.Runtime.RuntimeInputLayer import RuntimeInputLayer

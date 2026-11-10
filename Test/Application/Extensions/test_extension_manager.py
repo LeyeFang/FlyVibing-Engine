@@ -108,10 +108,13 @@ def main() -> int:
     devices_path = os.path.join(tmp, "devices.json")
     saved_env = {k: os.environ.get(k) for k in
                  ("MGE_EXTENSIONS_DIR", "MGE_EXTENSIONS_STATE", "MGE_EXTENSIONS_DATA",
-                  "MGE_DEVICES_FILE")}
+                  "MGE_DEVICES_FILE", "FVE_EXTENSIONS_BUNDLED")}
     os.environ["MGE_EXTENSIONS_DIR"] = user_dir
     os.environ["MGE_EXTENSIONS_STATE"] = state_path
     os.environ["MGE_EXTENSIONS_DATA"] = data_dir
+    # ★ 本用例锁的是 **opt-in 语义**（启用/停用/持久化）——关掉内置恒激活，
+    #   否则 Functions/** 的官方扩展会在扫描时就被强制装载（见 test_extension_activation）。
+    os.environ["FVE_EXTENSIONS_BUNDLED"] = "off"
     # device 扩展 on_enable 会跑 ext.device.autobind → 必须落在沙箱注册表上
     os.environ["MGE_DEVICES_FILE"] = devices_path
 

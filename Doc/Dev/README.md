@@ -32,6 +32,7 @@
 |---|---|---|
 | `../..` → **`Utils/README.md`** | `Utils/**`（工具层布局：受众 × 分发命运） | **往 Utils/ 放任何东西前必读**：三层词表（Dev/ExtDev/User 与 Doc 三分区同名）、依赖资格（ExtDev 禁 import 编辑器内部）、导出卫生（游戏包只带 `Utils/User`） |
 | `ui_protocol.md` | `Application/Editor/UI/**`（Panel / Widget / 样式 / 菜单 / FileDialog） | 改编辑器 UI、加内联控件、调 Add 菜单、改删除交互 |
+| `imgui_api.md` | `Utils/Dev/imgui_docgen.py` + 工具仓 `docs_content/dev/imgui_api.md`（生成物） | **写任何面板（内部或扩展）前查控件**：按用途归类的 imgui-bundle 接口（归类 143 个 / 引擎已用 130 个 / 附录 230 函数 + 146 枚举类型）、`##` 作用域/返回 tuple/begin-end 配对等约定、flag 速查、宿主侧禁用清单；新增控件用法后跑生成器补文档 |
 | `i18n_protocol.md` | `Application/Editor/I18n.py` + `Application/Editor/Locale/**` + `Utils/Dev/i18n_tool.py` + `Doc/Dev/i18n_baseline.json` | **写任何 UI 文案 / 加菜单项 / 新增语言前必读**：角色分工、键规范与可提取性、不翻译边界表（agent 面=中文不随语言变化）、**发布门（`ui_complete`，zh 已发布；未完成语言不进设置）**、运行时回退链、守卫三层与棘轮口径、新增语言 Runbook（全量适配门槛）、扩展侧约定 |
 | `node_editor_protocol.md` | `Application/Core/NodeGraph/**`（运行时）+ `Application/Editor/UI/panels/node_editor/**`（编辑器交互）+ `FlyVibing-User-And-Developer-Utils/packages/node-editor/**` | 新增/修改节点类型、求值器、图约束、图校验、MCP 文档 |
 | `node_editor_pitfalls.md` | 节点编辑器 ImGui / imgui-node-editor 交互层 | 改框选、组框、标题、resize、live UI 注入前先扫一遍：坐标空间、组中心洞、渲染帧外原生 API 崩溃等实战坑 |
@@ -46,7 +47,8 @@
 | `product_todo.md` | 扩展剥离 / 节点编辑器 UX / 1.0 Release / macOS | 产品级待办与暂缓决策（CI、社区扩展仓库治理、组编辑后续、Release 清单） |
 | `scene_format.md` | `Application/Core/Scene/**` + `.scene` JSON + `Application/Core/Math/CoordinateSystem.py` | 直接读写 `.scene`（实体组件字段、`node_graph` 的 pin id/引脚名两套表示、编辑器坐标 vs GL 坐标、手改与批量改的安全流程）前必读 |
 | `tooling_friction_triage.md` | `FlyVibing-User-And-Developer-Utils/packages/editor-mcp/**` + `Application/Editor/Services/LiveCommandServer.py` | 社区扩展作者的 20+ 条摩擦分诊（设计缺陷 / 文档缺口 / 用户用法），以及每条落点与待办；改 CLI/op 语义或补文档前先查 |
-| `remote_display_white_screen.md` | 远程/无物理显示器下 OpenGL 窗口呈现 | 用户报告“白屏”、远程开发、PIE/成品窗口看似全白时先读；区分渲染缺陷与呈现层问题 |
+| `remote_display_white_screen.md` | 远程/无物理显示器下 OpenGL 窗口呈现 | 用户报告“白屏”、远程开发、PIE/成品窗口看似全白时先读；区分渲染缺陷与呈现层问题。**§8 另记 SSH 会话启动成品崩溃（`glfw.get_video_mode` 访问违例）与 `MGE_WINDOW*` / `MGE_MONITOR` 逃生开关、`Utils/Dev/display_diag.py`** |
+| `node_graph_optimization_plan.md` | `Application/Core/NodeGraph/**` 求值性能 | **议题文档（讨论中）**：图求值冗余度实测（85% 白算）、dispatch 开销与融合上限（7–12%）、常量折叠/死链裁剪/纯节点记忆化各自怎么做与风险、明确不做的项；改求值器或评估"图太慢"前先读 |
 | `runtime_scene_ui_input_plan.md` | `RuntimeSceneService` / `UISystem` / 运行时输入 | 规划运行时场景切换、无 imgui 游戏内 GUI、键鼠/ESC 输入与 UI 事件消费顺序时读 |
 | `runtime_ui_protocol.md` | `Application/Core/UI/**` + `Core/Scene/UIComponents.py` + `Runtime/RuntimeUILayer.py` + `Examples/UIShowcase` | 做场景驱动游戏内 UI（UICanvas/UIRect/UIPanel/UILabel/UIButton、布局/命中/动作/ESC/overlay 穿透/线程模型）前必读 |
 | `threading_protocol.md` | `Application/Core/ThreadRegistry.py` + 全体线程启动点 + `Utils/Dev/thread_probe.py` | **新开线程/跨线程通信/服务进程集成前必读**：三通道纪律、心跳注册四步、实时探针、检查单 |

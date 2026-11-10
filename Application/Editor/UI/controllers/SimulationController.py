@@ -154,6 +154,21 @@ class SimulationController:
     # ── ECS → Scene 同步 ────────────────────────────────────
 
     @staticmethod
+    def _replace_scene_entities(scene, new_entities: dict) -> None:
+        """整表替换场景实体（并发安全；兼容最小桓场景）。
+
+        真 `Scene` 走 `replace_entities()`（锁内原子替换，读方永不见半空表）；
+        测试 / 第三方的最小桓场景（只有 `entities` 属性）回退到 clear+update。
+        回退路径**不是**线程安全的，仅供单线程桓使用。
+        """
+        replace = getattr(scene, "replace_entities", None)
+        if callable(replace):
+            replace(new_entities)
+            return
+        scene.entities.clear()
+        scene.entities.update(new_entities)
+
+    @staticmethod
     def _sync_ecs_to_scene(scene, scene_mgr=None) -> None:
         """将 ECS 世界中的实体同步到 Scene.entities 注册表（PIE 模板来源）。
 
@@ -182,7 +197,12 @@ class SimulationController:
             scene_mgr.get_main_camera_2d_id(),
         }
 
-        scene.entities.clear()
+        # ★ 并发（2026-11-10 P0）: 旧实现 `scene.entities.clear()` + 逐条写，
+        #   渲染线程的 `_ensure_default_scene()` 与主线程 `deepcopy(editor_scene)`
+        #   会在 clear 之后 / 填充完成之前读到半空表 → 抛
+        #   "dictionary changed size during iteration" 并把渲染循环打死。
+        #   改为：整表在旁边建好，最后一次原子替换。
+        new_entities: dict = {}
         for eid, xform in [(e, c) for e, c in scene_mgr.GetAllEntitiesWithComponent(Transform)]:
             if eid in _sys_ids:
                 continue
@@ -222,10 +242,13 @@ class SimulationController:
                     comps[_ui_name] = copy.deepcopy(scene_mgr.GetComponent(eid, _ui_cls))
                 except Exception:
                     pass
-            scene.entities[eid] = EntityData(name=name, components=comps, parent_id=parent_id)
+            new_entities[eid] = EntityData(name=name, components=comps, parent_id=parent_id)
+
+        # ★ 整表原子替换 —— 读方（渲染线程同步 / deepcopy / 序列化）永远看到完整表
+        cls_replace = SimulationController._replace_scene_entities
+        cls_replace(scene, new_entities)
 
     # ── 宿主桥接实现 (供 GameRuntime 回呼; 运行时侧无 Editor 依赖) ──
-
     @staticmethod
     def _sync_scene_to_runtime() -> None:
         """PIE 启动前: 从编辑器同步 game_type + 摄像机 + 渲染实体到 Runtime。

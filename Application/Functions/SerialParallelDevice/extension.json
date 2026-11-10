@@ -1,11 +1,15 @@
 {
   "id": "device",
   "name": "Device (Serial/Parallel)",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "api_version": "1",
   "maturity": "partial",
-  "description": "Serial / parallel monitor panel + Device Manager (bind/rebind/unbind @alias with node-impact confirmation) + discovered-port picker + comm send + parallel write with payload preview (byte/float32/string) and configurable pulse width - official example extension",
+  "description": "Serial / parallel monitor panel + Device Manager (bind/rebind/unbind @alias with node-impact confirmation) + discovered-port picker + comm send + parallel write with payload preview (byte/float32/string) and configurable pulse width + extension-owned @alias registry (transitional delegation to core while present) - official example extension",
   "capabilities": ["ops", "nodes", "ui", "graph"],
   "entry": "extension.py:create_extension",
-  "requires": []
+  "requires": [],
+  "python": {
+    "mode": "engine",
+    "probe": ["serial"]
+  }
 }

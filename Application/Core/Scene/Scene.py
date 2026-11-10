@@ -18,6 +18,7 @@ Scene 是纯数据类，不依赖 esper、Renderer、Window 等运行时模块�
 from __future__ import annotations
 
 import copy
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
@@ -155,6 +156,27 @@ class Scene:
     # {scene-local entity id: EntityData}  — 稳定 ID, 不随 esper 重分配变化
     entities: dict[int, EntityData] = field(default_factory=dict)
 
+    # ── 并发保护（2026-11-10 P0 竞态修复）────────────────────
+    #    `entities` 会被**两个线程**写: 渲染线程的 NodeEditorPanel
+    #    `_ensure_default_scene()`（每帧）与主线程的
+    #    `SimulationController._sync_ecs_to_scene()`（点 Play）。
+    #    同时主线程 `copy.deepcopy(scene)` 在迭代 `entities` ——
+    #    实测会抛 `RuntimeError: dictionary changed size during iteration`
+    #    并把 `_render_loop` 打死（编辑器直接退出）。
+    #
+    #    修法（三层，缺一不可）：
+    #      1. 本锁保护所有**原地**增删（add_entity / remove_entity / 组件替换）；
+    #      2. 批量重建走 `replace_entities()` —— **整表原子替换**，读方永远
+    #         看到"旧完整表"或"新完整表"，永远看不到半空表；
+    #      3. `__deepcopy__` 先在锁内取快照再深拷，不迭代 live dict。
+    #
+    #    为什么不靠标准库: Python 3.14 free-threading 让 `dict.copy()` 变成
+    #    **锁下原子快照**（实测 20000 次 copy 无一次 k!=v），但**没有任何内置类型**
+    #    能让"边迭代边被改"变安全（`MappingProxyType` 是视图不是快照，
+    #    `copy.deepcopy` 内部仍是 Python 层迭代，实测首次就抛）。
+    _entities_lock: threading.RLock = field(
+        default_factory=threading.RLock, repr=False, compare=False)
+
     # 节点图 — 定义此场景的运行时行为
     # 类型为 Optional[NodeCanvas] — 延迟引用以避免循环导入
     node_graph: Optional[object] = None
@@ -200,14 +222,47 @@ class Scene:
         for comp_type_name, comp_instance in components.items():
             comp_dict[comp_type_name] = comp_instance
 
-        self.entities[eid] = EntityData(name=name, components=comp_dict)
+        with self._entities_lock:
+            self.entities[eid] = EntityData(name=name, components=comp_dict)
         return eid
 
     def remove_entity(self, entity_id: int) -> None:
         """移除实体定义。"""
-        self.entities.pop(entity_id, None)
+        with self._entities_lock:
+            self.entities.pop(entity_id, None)
         if self.main_camera_entity_id == entity_id:
             self.main_camera_entity_id = None
+
+    # ── 并发安全的批量读写（2026-11-10 P0）────────────────────
+
+    def entities_snapshot(self) -> dict[int, EntityData]:
+        """返回 `entities` 的**原子快照**（浅拷贝：EntityData 对象共享）。
+
+        读方应在快照上迭代，不要直接迭代 `scene.entities` —— 后者可能被
+        另一个线程整表替换或原地增删。
+        """
+        with self._entities_lock:
+            return dict(self.entities)
+
+    def entities_items_snapshot(self) -> list[tuple[int, EntityData]]:
+        """`[(eid, EntityData), ...]` 的原子快照（迭代首选）。"""
+        with self._entities_lock:
+            return list(self.entities.items())
+
+    def replace_entities(self, new_entities: dict[int, EntityData]) -> None:
+        """**整表原子替换** —— 批量重建场景实体时用这个，不要 clear + 逐条 add。
+
+        读方（渲染线程 / 深拷贝 / 序列化）拿到的是对 `entities` 的引用：
+        替换后它们继续迭代旧表（完整），新读方看到新表（完整）。
+        **永远不存在半空表**。
+        """
+        with self._entities_lock:
+            self.entities = dict(new_entities)
+
+    def clear_entities(self) -> None:
+        """原子清空实体表。"""
+        with self._entities_lock:
+            self.entities = {}
 
     def get_entity(self, entity_id: int) -> Optional[EntityData]:
         """获取实体定义。"""
@@ -219,7 +274,7 @@ class Scene:
         Returns:
             (entity_id, EntityData) 或 None
         """
-        for eid, ed in self.entities.items():
+        for eid, ed in self.entities_items_snapshot():
             if ed.name == name:
                 return (eid, ed)
         return None
@@ -227,7 +282,7 @@ class Scene:
     def get_entity_names(self) -> list[str]:
         """返回所有实体定义的名称列表（按 ID 排序）。"""
         return sorted(
-            [ed.name for ed in self.entities.values()],
+            [ed.name for ed in self.entities_snapshot().values()],
             key=lambda n: n.lower(),
         )
 
@@ -249,7 +304,6 @@ class Scene:
         if ed is None:
             return None
         return ed.components.get(component_type.__name__)
-
     def set_component(
         self,
         entity_id: int,
@@ -264,7 +318,8 @@ class Scene:
         ed = self.entities.get(entity_id)
         if ed is None:
             return
-        ed.components[type(component_instance).__name__] = component_instance
+        with self._entities_lock:
+            ed.components[type(component_instance).__name__] = component_instance
 
     def remove_component(
         self,
@@ -275,7 +330,8 @@ class Scene:
         ed = self.entities.get(entity_id)
         if ed is None:
             return
-        ed.components.pop(component_type.__name__, None)
+        with self._entities_lock:
+            ed.components.pop(component_type.__name__, None)
 
     def get_entities_with_component(
         self,
@@ -288,7 +344,7 @@ class Scene:
         """
         type_name = component_type.__name__
         result: list[tuple[int, EntityData]] = []
-        for eid, ed in self.entities.items():
+        for eid, ed in self.entities_items_snapshot():
             if type_name in ed.components:
                 result.append((eid, ed))
         return result
@@ -391,13 +447,61 @@ class Scene:
         """
         return copy.deepcopy(self)
 
+    # ── 深拷贝: 锁内快照 + 离线构造（2026-11-10 P0）──────────────
+    #
+    # 为什么必须自定义:
+    #   ① 默认的 deepcopy 会 `for k, v in scene.__dict__['entities'].items()`
+    #      **直接迭代 live dict** —— 实测另一个线程增删时 0 次能活过；
+    #   ② `_entities_lock`（RLock）本身不可深拷贝，默认路径会直接 TypeError。
+    #
+    # 实现要点: 只对**需要特殊处理**的字段写死，其余 dataclass 字段走通用
+    # deepcopy —— 将来给 Scene 加字段不会静默丢失。
+    # 特例表:
+    #   entities       → 锁内快照后深拷（唯一有并发风险的字段）
+    #   _entities_lock → 新实例新建一把（锁不可继承）
+    #   node_graph     → 普通深拷（PIE 期间不允许改动编辑器原图）
+    _DEEPCOPY_SPECIAL = frozenset({"_entities_lock"})
+
+    def __deepcopy__(self, memo: dict) -> 'Scene':
+        import dataclasses
+
+        cls = self.__class__
+        new = cls.__new__(cls)
+        memo[id(self)] = new
+
+        # ① 锁内取快照 —— 之后全程离线，不再触碰 live 结构
+        with self._entities_lock:
+            entities_snap = dict(self.entities)
+
+        # ② 逐字段复制
+        for f in dataclasses.fields(self):
+            name = f.name
+            if name == "entities":
+                value = copy.deepcopy(entities_snap, memo)
+            elif name in self._DEEPCOPY_SPECIAL:
+                value = threading.RLock()          # 新实例自己的锁
+            else:
+                value = copy.deepcopy(getattr(self, name), memo)
+            setattr(new, name, value)
+
+        # ③ 非 dataclass 字段（若将来有）
+        for name, raw in getattr(self, "__dict__", {}).items():
+            if name.startswith("__") or name in new.__dict__:
+                continue
+            if name in self._DEEPCOPY_SPECIAL:
+                setattr(new, name, threading.RLock())
+            else:
+                setattr(new, name, copy.deepcopy(raw, memo))
+        return new
+
     def to_dict(self) -> dict:
         """转为可序列化的 dict。
 
         通过 Serializable 协议统一序列化所有支持的类型。
         """
         entities_dict: dict[str, dict] = {}
-        for eid, ed in self.entities.items():
+        # 快照迭代 — 保存可能发生在渲染线程同步的同时
+        for eid, ed in self.entities_items_snapshot():
             comps: dict[str, dict] = {}
             for type_name, comp in ed.components.items():
                 comps[type_name] = format_value(comp)
@@ -509,7 +613,7 @@ class Scene:
         lines.append(f"  Entities: {len(self.entities)}")
         lines.append(f"  Main Camera: {self.main_camera_entity_id}")
         lines.append(f"  Node Graph: {'present' if self.node_graph else 'none'}")
-        for eid, ed in self.entities.items():
+        for eid, ed in self.entities_items_snapshot():
             comp_names = list(ed.components.keys())
             lines.append(f"    [{eid}] {ed.name}: {comp_names}")
         return "\n".join(lines)

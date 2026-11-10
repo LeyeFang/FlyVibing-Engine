@@ -417,6 +417,60 @@ class UIManager:
         except Exception:  # noqa: BLE001
             return False
 
+    @classmethod
+    def _disabled_example_hints(cls) -> list[tuple[str, int, str]]:
+        """已安装但**未启用**的扩展里带 `Examples/` 的 → [(显示名, 项目数, ext_id)]。
+
+        背景: 扩展示例只有在扩展**启用**时才登记进
+        `ExtensionExamplesRegistry`。扩展停着时菜单什么都不显示，作者会以为
+        "示例注入失败"。这里把"它其实有示例，只是没启用"直接说出来。
+        """
+        try:
+            from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+            ExtensionManager.ensure_init()
+            rows = ExtensionManager.list_infos()
+        except Exception:  # noqa: BLE001 — 无扩展环境/异常 → 不提示
+            return []
+        out: list[tuple[str, int, str]] = []
+        for row in rows:
+            if row.get("enabled") or not row.get("loadable"):
+                continue
+            root = os.path.join(str(row.get("dir") or ""), "Examples")
+            if not os.path.isdir(root):
+                continue
+            count = 0
+            try:
+                for name in os.listdir(root):
+                    path = os.path.join(root, name)
+                    if os.path.isfile(path) and name.lower().endswith(".myproj"):
+                        count += 1
+                    elif os.path.isdir(path) and any(
+                            f.lower().endswith(".myproj") for f in os.listdir(path)):
+                        count += 1
+            except OSError:
+                continue
+            if count:
+                out.append((str(row.get("name") or row.get("id")), count,
+                            str(row.get("id") or "")))
+        return out
+
+    @classmethod
+    def _draw_disabled_example_hints(cls) -> None:
+        """`Open Example` 底部的灰字提示：`<扩展> — 3 examples（扩展未启用）` + 一键启用。"""
+        hints = cls._disabled_example_hints()
+        if not hints:
+            return
+        imgui.separator()
+        for name, count, ext_id in hints:
+            imgui.text_disabled(t("menu.file.example_disabled", name=name, count=count))
+            if imgui.menu_item(t("menu.file.example_enable", name=name)
+                               + "##enable_ext_" + ext_id, "", False, True)[0]:
+                try:
+                    from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+                    ExtensionManager.enable(ext_id)
+                except Exception as e:  # noqa: BLE001 — 启用失败不拖垮菜单
+                    print(f"[Extensions] enable {ext_id} failed: {e!r}")
+
     @staticmethod
     def _draw_example_menu_item(label: str, provider: str, path: str) -> bool:
         """Project name + muted provider, e.g. ``MI @Official`` (not right-aligned)."""
@@ -498,14 +552,14 @@ class UIManager:
                 if imgui.menu_item(t("menu.file.open_project"), "", False, True)[0]:
                     cls._on_open_project()
                 examples = cls._example_projects()
-                if examples:
-                    if imgui.begin_menu(t("menu.file.open_example")):
-                        for label, path in examples:
-                            provider = cls._example_provider(path)
-                            if cls._draw_example_menu_item(label, provider, path):
-                                cls._do_open_project(path)
-                                imgui.close_current_popup()
-                        imgui.end_menu()
+                if imgui.begin_menu(t("menu.file.open_example")):
+                    for label, path in examples:
+                        provider = cls._example_provider(path)
+                        if cls._draw_example_menu_item(label, provider, path):
+                            cls._do_open_project(path)
+                            imgui.close_current_popup()
+                    cls._draw_disabled_example_hints()
+                    imgui.end_menu()
                 imgui.separator()
                 from Application.Editor.ProjectManager import ProjectManager
                 has_path = bool(ProjectManager.is_open() and ProjectManager.get_project_dir())

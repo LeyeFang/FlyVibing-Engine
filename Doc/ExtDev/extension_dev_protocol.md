@@ -16,6 +16,6 @@ engine-editor-cli doc show extdev/extension_dev_protocol#<节号|标题片段>  
 engine-editor-cli doc search <关键词>                    # 跨主题检索
 ```
 
-章节：1 适用范围与阅读顺序 · 2 快速上手（最小扩展） · 3 目录与命名规范 · 4 manifest 参考（extension.json） · 5 生命周期契约 · 6 ctx 能力总表（M0 实装 vs 规划） · 7 UI 规范（`ctx.ui` — `register_window` 已实装 2026-10-11） · 8 节点包规范（`[M1]` 设计） · 9 MCP/CLI 服务规范（增量扫描生态 — 本协议的生态核心） · 10 线程规范（现状纪律 + `[M2]` 受管模型） · 11 设置与数据目录 · 12 测试规范（扩展必带自测） · 13 实装地图（M0 → M3） · 14 提交检查单（无上下文 agent 开工前自查）
+章节：1 适用范围与阅读顺序 · 2 快速上手（最小扩展） · 3 目录与命名规范（含 3.1 开发态/发布态扫描根 · 3.2 面板关闭语义 · **3.3 激活策略与入口分工** — `builtin` = allowlist（`official_extensions.json` ∪ `.gitignore` 白名单）恒激活；Functions 下的非白名单夹具 = `local` 仍 opt-in；主菜单栏只列有面板的；管理面在 Settings ▸ Extensions） · 4 manifest 参考（extension.json） · 5 生命周期契约 · 6 ctx 能力总表（M0 实装 vs 规划） · 7 UI 规范（`ctx.ui` — `register_window` 已实装 2026-10-11） · 8 节点包规范（`[M1]` 设计） · 9 MCP/CLI 服务规范（增量扫描生态 — 本协议的生态核心） · 10 线程规范（现状纪律 + `[M2]` 受管模型） · 11 设置与数据目录（含 11.1 Python 解释器与依赖 — `ctx.python`） · 12 测试规范（扩展必带自测） · 13 实装地图（M0 → M3） · 14 提交检查单（无上下文 agent 开工前自查）
 
 内容权威（唯一）：工具仓 `packages/editor-mcp/src/engine_editor_mcp/docs_content/extdev/extension_dev_protocol.md`。

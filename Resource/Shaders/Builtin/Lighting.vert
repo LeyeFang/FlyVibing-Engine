@@ -4,8 +4,11 @@ layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec2 aTexCoord;
 layout(location = 2) in vec3 aNormal;
 
+//! ui: readonly | owner=engine | label=mat.model
 uniform mat4 model;
+//! ui: readonly | owner=engine | label=mat.view
 uniform mat4 view;
+//! ui: readonly | owner=engine | label=mat.projection
 uniform mat4 projection;
 
 layout(location = 0) out vec2 TexCoord;

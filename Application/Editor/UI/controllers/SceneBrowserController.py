@@ -581,7 +581,11 @@ class SceneBrowserController:
 
     @classmethod
     def get_entity_material_info(cls, entity_id: int) -> dict | None:
-        """获取实体当前 material 的详细信息（含 meta）。"""
+        """获取实体当前 material 的详细信息（含 meta + uniform 说明 + 共享计数）。
+
+        `uniform_specs` 来自 shader 的 `//!` 注解（`Application/Resource/UniformSpec.py`）——
+        面板据此决定控件形态/范围/单位/只读，不再按 shader 名字分支。
+        """
         try:
             mid = EditorHost.scene.GetEntityMaterial(entity_id)
             from Application.Resource.ResourceManager import ResourceManager
@@ -594,12 +598,56 @@ class SceneBrowserController:
                 'file_path': mat._file_path,
                 'shader_id': mat.shader_id,
                 'shader_name': ResourceManager.GetShaderName(mat.shader_id),
+                'shader_ref': getattr(mat, 'shader_ref', ''),
                 'blend': getattr(mat, 'blend', 'opaque'),
                 'texture_ids': list(mat.texture_id_list),
                 'uniforms': dict(mat.uniforms_data),
+                'uniform_specs': [s.to_dict() for s in
+                                  ResourceManager.GetShaderSpecs(mat.shader_id).values()],
+                'is_builtin': getattr(mat, 'builtin_name', None) is not None,
+                'shared_count': cls.count_material_users(mid),
             }
         except Exception:
             return None
+
+    @classmethod
+    def count_material_users(cls, material_id: int) -> int:
+        """有多少实体引用该材质（0 = 未引用；>1 = 共享 → 编辑会自动 clone 一份）。"""
+        try:
+            import esper
+            from Application.Core.Scene.BasicComponents import MeshRenderer
+            return sum(1 for _eid, mr in esper.get_component(MeshRenderer)
+                       if int(mr.material_id) == int(material_id))
+        except Exception:
+            return 0
+
+    @classmethod
+    def reset_material_uniform(cls, entity_id: int, name: str) -> bool:
+        """把单个 uniform 复位为 shader 注解里的默认值（先保证材质唯一，不动共享/内置模板）。"""
+        try:
+            from Application.Core.Scene.BasicComponents import MeshRenderer
+            from Application.Core.Scene.SceneManager import SceneManager
+            from Application.Resource.ResourceManager import ResourceManager
+            import esper
+            mr = esper.component_for_entity(entity_id, MeshRenderer)
+            SceneManager._ensure_unique_material(EditorHost.scene, entity_id, mr)
+            return ResourceManager.ResetMaterialUniform(mr.material_id, name)
+        except Exception:
+            return False
+
+    @classmethod
+    def reset_material_uniforms(cls, entity_id: int) -> int:
+        """复位该实体材质的全部可编辑参数（同样先保证唯一性）。"""
+        try:
+            from Application.Core.Scene.BasicComponents import MeshRenderer
+            from Application.Core.Scene.SceneManager import SceneManager
+            from Application.Resource.ResourceManager import ResourceManager
+            import esper
+            mr = esper.component_for_entity(entity_id, MeshRenderer)
+            SceneManager._ensure_unique_material(EditorHost.scene, entity_id, mr)
+            return ResourceManager.ResetMaterialUniforms(mr.material_id)
+        except Exception:
+            return 0
 
     @classmethod
     def set_material_name(cls, entity_id: int, new_name: str) -> None:
@@ -679,14 +727,10 @@ class SceneBrowserController:
 
     @classmethod
     def load_material_from_file(cls, entity_id: int, file_path: str) -> bool:
-        """从 .mat 文件加载 material 并绑定到 entity。"""
+        """从 .mat 文件加载 material 并绑定到 entity（shader 按名/路径解析，不信任会话 id）。"""
         try:
-            from Application.Resource.Material import Material
-            mat = Material.load_from_file(file_path)
             from Application.Resource.ResourceManager import ResourceManager
-            new_mid = ResourceManager.material_count + 1
-            ResourceManager.material_count = new_mid
-            ResourceManager.loaded_material[str(new_mid)] = mat
+            new_mid = ResourceManager.LoadMaterialFromFile(file_path)
             EditorHost.scene.SetEntityMaterial(entity_id, new_mid)
             return True
         except Exception as e:

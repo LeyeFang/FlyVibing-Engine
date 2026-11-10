@@ -1566,6 +1566,173 @@
       "requires": [],
       "exercises": [],
       "visualizes": []
+    },
+    {
+      "id": "core.extension_python",
+      "path": "Test/Application/Core/test_extension_python.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Extension.ExtensionPython",
+        "Application.Editor.Extensions.ExtensionManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.test_runner_selection",
+      "path": "Test/Application/Core/test_test_runner_selection.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "core",
+      "covers": [
+        "Utils.Dev.test_runner"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.uniform_schema",
+      "path": "Test/Application/Core/test_uniform_schema.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core",
+      "covers": [
+        "Application.Resource.UniformSpec",
+        "Application.Resource._resource_utils",
+        "Application.Resource.Material",
+        "Application.Resource.ResourceManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.imgui_api_doc",
+      "path": "Test/Application/Editor/test_imgui_api_doc.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "editor",
+      "covers": [
+        "Utils.Dev.imgui_docgen"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "editor.port_ledger",
+      "path": "Test/Application/Editor/test_port_ledger.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "editor",
+      "covers": [
+        "Application.Editor.Services.PortLedger",
+        "Application.Editor.StartupOptions",
+        "Application.Editor.Services.LiveCommandServer"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "extensions.extension_activation",
+      "path": "Test/Application/Extensions/test_extension_activation.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "extensions",
+      "covers": [
+        "Application.Editor.Extensions.ExtensionManager",
+        "Application.Editor.Extensions.ExtensionMenu",
+        "Application.Editor.UI.panels.SettingsPanel"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "extensions.extension_builtin_scope",
+      "path": "Test/Application/Extensions/test_extension_builtin_scope.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "extensions",
+      "covers": [
+        "Application.Editor.Extensions.ExtensionManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "nodegraph.canvas_pin_index",
+      "path": "Test/Application/NodeGraph/test_canvas_pin_index.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "nodegraph",
+      "covers": [
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.canvas",
+        "Application.Core.NodeGraph.evaluator_engine"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.perf_profiler",
+      "path": "Test/Application/Core/test_perf_profiler.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Stats.FrameProfiler",
+        "Application.Runtime.PerfStatsLayer"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.window_display_fallback",
+      "path": "Test/Application/Core/test_window_display_fallback.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Window.glfwWindow"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.scene_concurrency",
+      "path": "Test/Application/Core/test_scene_concurrency.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Scene.Scene"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.toolchain_lock",
+      "path": "Test/Application/Core/test_toolchain_lock.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Utils.Dev.Installer.toolchain_lock"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
     }
   ]
 }

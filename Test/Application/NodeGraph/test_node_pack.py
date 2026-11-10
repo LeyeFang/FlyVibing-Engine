@@ -73,7 +73,51 @@ check("props survive roundtrip",
       str(restored.nodes[nid].props))
 check("restored graph still has no links", not restored.links)
 
-print("-- 3. unload / re-register --")
+print("-- 3. SerialSend line framing (prefix/suffix) --")
+_serial_fields = {f.get("key") for f in NodePackRegistry.fields_for("SerialSend")}
+check("SerialSend declares prefix/suffix",
+      {"prefix", "suffix"} <= _serial_fields, str(sorted(_serial_fields)))
+
+
+class _Inst:
+    node_type = "SerialSend"
+    pin_ids: dict = {}
+
+
+class _Ctx:
+    dry_run = True
+    logs: list = []
+
+    @staticmethod
+    def emit_log(nid, kind, action, text):
+        _Ctx.logs.append((nid, kind, action, text))
+
+
+def _eval_serial(props: dict) -> list:
+    _Ctx.logs.clear()
+    inst = _Inst()
+    inst.props = dict(props)
+    graph = type("G", (), {"_canvas": type("C", (), {"nodes": {1: inst}})(),
+                           "_types": {"SerialSend": _TYPES["SerialSend"]},
+                           "_read_input": lambda self, *a, **k: None})()
+    _EVALUATORS["SerialSend"](1, _Ctx(), graph)
+    return [t for _n, _k, _a, t in _Ctx.logs]
+
+
+_base = {"port": "@SSSEP-Stimulator", "baud_rate": 115200, "format": "string"}
+_detail = (_eval_serial(_base) or [""])[-1]
+check("dry-run legacy line (no prefix)", "line='0\\n'" in _detail, _detail)
+check("dry-run keeps val= last (L2 parser contract)",
+      _detail.rstrip().endswith("val=0"), _detail)
+
+_detail = (_eval_serial(dict(_base, prefix="40,")) or [""])[-1]
+check("dry-run shows framed line", "line='40,0\\n'" in _detail, _detail)
+
+_bad = _eval_serial(dict(_base, format="bytes", prefix="40,"))
+check("bad affix surfaces as error log",
+      any("prefix/suffix apply to text lines" in t for t in _bad), str(_bad))
+
+print("-- 4. unload / re-register --")
 removed = NodePackRegistry.unregister_owner("device")
 check("unregister removes types", "SerialSend" not in _TYPES, str(removed))
 check("unregister removes evaluator", "SerialSend" not in _EVALUATORS)

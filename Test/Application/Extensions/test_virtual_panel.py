@@ -84,10 +84,12 @@ def main() -> int:
 
     tmp = tempfile.mkdtemp(prefix="mge_vd_test_")
     saved_env = {k: os.environ.get(k) for k in
-                 ("MGE_EXTENSIONS_DIR", "MGE_EXTENSIONS_STATE", "MGE_EXTENSIONS_DATA")}
+                 ("MGE_EXTENSIONS_DIR", "MGE_EXTENSIONS_STATE", "MGE_EXTENSIONS_DATA",
+                  "FVE_EXTENSIONS_BUNDLED")}
     os.environ["MGE_EXTENSIONS_DIR"] = os.path.join(tmp, "user_ext")
     os.environ["MGE_EXTENSIONS_STATE"] = os.path.join(tmp, "state.json")
     os.environ["MGE_EXTENSIONS_DATA"] = os.path.join(tmp, "data")
+    os.environ["FVE_EXTENSIONS_BUNDLED"] = "off"
 
     inst = None
     try:

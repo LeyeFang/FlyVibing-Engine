@@ -19,7 +19,7 @@
    （`Doc/Dev/...` 与 `Doc/ExtDev/...` 只是 CLI 迁移后的入口占位页，正文权威在工具仓库的 `docs_content/`）
 4. `Application/Functions/SerialParallelDevice/Doc/NODE_PACK_MIGRATION_2026-10-20.md`
    （2026-10-20 节点包迁移：已改项 / 验证命令 / Serial 侧收尾清单 / 约束）
-5. `Application/Functions/SerialParallelDevice/extension.py` + `Application/Core/DeviceRegistry.py`（源码即规范）
+5. `Application/Functions/SerialParallelDevice/extension.py` + `device_registry.py`（源码即规范；台账过渡期委托 `Application/Core/DeviceRegistry.py`）
 
 **红线（违反即返工）**:
 

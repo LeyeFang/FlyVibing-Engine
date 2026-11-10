@@ -119,6 +119,110 @@ spd-io: deadline += period 累加发送（不随帧漂移，不随渲染帧率�
 
 ---
 
+## 〇之三、主线第三批回执（2026-11-11）— `spd-io` 无条件启动（主线的锅，需你们配合一个钩子）
+
+> **性质**: 主线自己的缺陷（不是你们引入的），但修法需要你们提供一个查询入口。
+
+### 1. 实测事实
+
+用零设备节点的工程（`Examples/UIShowcase`，`node_graph` 只有 4 种节点、没有任何
+`SerialSend` / `ParallelSend` / `ext.*`）跑成品：
+
+```text
+[SPD] I/O thread started                 ← 出现了
+threads:
+   MainThread              daemon=False
+   Thread-1 (_render_loop) daemon=True
+   spd-io                  daemon=True     ← 出现了
+```
+
+调用链（主线侧，**裸 import**）：
+
+| 形态 | 位置 |
+|---|---|
+| PIE | `Runtime/GameRuntime.py:122-123` → `spd_start("runtime")` |
+| 成品 | `Runtime/GameRuntime.py:163-164` → `spd_start("runtime")` |
+
+`spd_start` 内部只看 `state._running`，**不看**图里有没有设备节点、扩展是否启用、
+`FVE_EXTENSIONS_BUNDLED=off`。
+
+### 2. 比线程本身更严重的副作用
+
+`api.start()` 在驱动可用时会向**所有已知并口地址写 0**（`api.py:23,64`：
+`0x3FF8 / 0x3FF0 / 0x3FE8`），而 `state.py:18` 在**模块 import 时**就已经
+`_p.driver_open()` 打开了 InpOut 内核驱动。
+
+→ 结果是：**一个纯 UI 的成品，只要装了 InpOut 驱动，启动时就会把 LPT1/2/3 拉低。**
+如果那台机器上另一个程序（厂商 Recorder / 刺激器控制）正在用并口，会被这次复位打断。
+
+> 顺带说明：空闲 CPU 成本实测 ≈ 0（3 s 内 < 0.03% 单核，阻塞在
+> `queue.get(timeout=0.05)`）。**所以这不是性能问题，是行为副作用问题。**
+
+### 3. 主线的判断
+
+这是**依赖方向**问题，与你们 Batch A 无关：
+
+- 引擎为了一个扩展**无条件**执行设备初始化；
+- 复位并口对"用户根本没用设备"的场景是纯风险；
+- 与审计 P0-7（`start()` 不看启用状态）是同一根源，但后果更重。
+
+### 4. 需要你们提供什么（一个钩子，不是一套实现）
+
+主线希望由**扩展自己回答**"这个场景需不需要设备 I/O"，而不是主线去猜节点类型白名单。
+请在 `extension.py` 上加一个可选钩子：
+
+```python
+def needs_device_io(scene_node_types) -> bool:
+    """本场景是否会用到本扩展的 I/O（节点类型集合由宿主传入）。
+
+    允许两种实现，任选：
+      a) 简单版: any(t in {"SerialSend","ParallelSend"} for t in scene_node_types)
+      b) 精确版: 再检查这些节点是否真的配置了 port（未配置 = 不会发）
+    """
+```
+
+主线随后把 `GameRuntime` 的两处裸 import 改成：
+
+```python
+if <扩展已启用 and 扩展.needs_device_io(scene_types)>:
+    spd_start("runtime")
+```
+
+### 5. 主线的配套改动（我们的活）
+
+| 项 | 内容 |
+|---|---|
+| 判定入口 | 用 `NodePackRegistry.extension_dirs_for_types()` 已有的"场景节点类型 → 扩展目录"结果，不新增扫描 |
+| 扩展启用 | 绑定 `ExtensionManager` 的启用状态（同时修掉 P0-7）|
+| 逃生开关 | `MGE_DEVICE_IO=off` 强制不启动；`MGE_DEVICE_IO=on` 强制启动（排查用）|
+| 并口复位 | `api.start()` 的复位改为**只对本次运行声明会用的地址**做（见 §6 建议）|
+| 已跟踪 | `Doc/Dev/product_todo.md §11.7`（P0-F）|
+
+### 6. 建议你们同时考虑的一点
+
+即使启动是必要的，`start()` 里对**全部三个**已知地址无条件写 0 也偏激进。建议：
+
+- 复位只针对"本场景配置了 `ParallelSend` 且地址匹配"的那些地址；
+- 或者提供 `start(reset_ports=False)`，由宿主在确定场景用到并口时才传 `True`。
+
+这样即使将来因为别的路径被拉起，也不会误伤无关并口。
+
+### 7. 验收（主线复验口径）
+
+| 项 | 门槛 |
+|---|---|
+| `Examples/UIShowcase` 成品 | 线程表**无** `spd-io`；日志无 `[SPD] I/O thread started` |
+| 7 个 MI-SSSEP 示例 | 刺激时序**不得回退**（20 Hz p50 = 50.0000 ms；40 Hz 按 §〇之二 的口径）|
+| `extension.disable id=device` 后新建场景 | 不再起 `spd-io` |
+| 并口 | 未声明用并口的场景，**不产生任何 LPT 写**（可用日志/`monitor_snapshot` 的 `parallel_writes` 核对）|
+
+> 这条**不阻塞**你们的 Batch A，也不阻塞下一个版本的其它工作；如果你们认为
+> `needs_device_io` 这个钩子形态不合适，请在回执里给出你们的替代方案（例如
+> `extension.json` 里声明 `capabilities:["device"]` + 场景节点前缀匹配），
+> 主线可以按你们的方案接。
+
+---
+
 ## 一、结论摘要（三句话）
 
 1. **审计接受**。扩展侧按 §8.1 工作单推进，本轮已完成 Batch A：端点台账自持、节点语义文本补全、

@@ -789,3 +789,22 @@ free-threading 让 `dict.copy()` / `list(d)` 成为**锁下原子快照**（2000
 | 运行时相邻节点融合 | 实测上限仅占整帧 2.4%，**不做**（见上述议题文档 §5）|
 | `FrameProfiler` 分段归因 | 先有 HUD/UI 组件再谈，见 `node_graph_optimization_plan.md` §6 |
 | 采集设备扩展 `export:false` 阻断 4/7 示例成品 | 扩展侧决定，已在其审计回执里点名 |
+
+### 11.7 P0-F `spd-io` 线程无条件启动（且启动即写并口）—— 未修
+
+> 审计 P0-7 的**实测放大版**：原先只记作"`start()` 不看扩展启用状态"，
+> 2026-11-11 实测发现更严重的一面 —— **零设备节点的图也会拉起线程并写 LPT**。
+
+| 项 | 内容 |
+|---|---|
+| 现象 | 零设备节点的工程（`Examples/UIShowcase`，node_graph 仅 4 种节点）跑成品，日志出现 `[SPD] I/O thread started`，且 `--stats-json` 的线程表含 `spd-io` |
+| 调用链（PIE）| `GameRuntime.start()` → `GameRuntime.py:122-123` **裸 import** `start` → `spd_start("runtime")` |
+| 调用链（成品）| `GameRuntime.run()` → `GameRuntime.py:163-164` 同样**裸 import** + `spd_start("runtime")` |
+| 无任何判定 | `spd_start` 内部只看"线程是否已在跑"（`state._running`），**不看**：① 图里有没有 `SerialSend`/`ParallelSend`；② 扩展是否启用；③ `FVE_EXTENSIONS_BUNDLED=off` |
+| **副作用（比线程本身严重）** | `api.start()` 在驱动可用时对所有已知并口地址**写 0**（`api.py:23,64`：`0x3FF8 / 0x3FF0 / 0x3FE8`）；且 `state.py:18` 在**模块 import 时**就 `_pp.driver_open()` 打开了 InpOut 内核驱动。→ **一个纯 UI 成品启动时会触碰 LPT1/2/3** |
+| CPU 成本 | 实测 ≈ 0（空闲阻塞在 `queue.get(timeout=0.05)`，3 s 内 CPU < 0.03% 单核）。**所以这不是性能问题，是行为/耦合问题** |
+| 为什么算设计缺陷 | 引擎（`GameRuntime`）为了一个扩展**无条件**执行设备初始化，方向与"引擎不依赖扩展"相反；用户开一个棋盘游戏会被写并口 |
+| 修复方向 | ① **懒启动**：由 `NodePackRegistry` 已在算的"本场景用到的节点类型"决定 —— 无设备节点则不 `spd_start`；② 即使启动，**并口复位只对"本场景声明使用并口"的情况做**；③ 绑定扩展启用状态（P0-7 原意）；④ 至少提供 `MGE_DEVICE_IO=off` 逃生开关 |
+| 分层建议 | 判定"要不要设备线程"应由扩展自己回答（`extension.json` 声明 + `needs(scene_types)` 钩子），主线只负责调用 —— 与 `scheduler_plan.md §5` 的分工一致 |
+| 验收 | ① `Examples/UIShowcase` 成品线程表**无** `spd-io` ② 7 个 MI-SSSEP 示例的刺激时序**不得回退**（20 Hz p50 = 50.0000 ms / 40 Hz 见 §11.2）③ `extension.disable id=device` 后新开场景不再起线程 |
+| 关联 | `scheduler_plan.md §5`（调度器与 `spd-io` 分工）；SPD 回执 §〇之三 |

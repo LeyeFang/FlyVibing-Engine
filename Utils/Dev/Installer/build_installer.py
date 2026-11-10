@@ -224,7 +224,8 @@ def _check_toolchain_lock(tools_root: str) -> None:
             print(f"[installer] WARNING: toolchain locked at {locked_tools}, "
                   f"but toolchain repo is at {tools_ver}")
         elif tools_ver:
-            print(f"[installer] toolchain lock OK: engine {engine_ver} ↔ tools {tools_ver}")
+            # 注: 只用 ASCII —— GBK 控制台打不出 U+2194 会 UnicodeEncodeError 崩构建
+            print(f"[installer] toolchain lock OK: engine {engine_ver} <-> tools {tools_ver}")
 
 
 def _install_editor_mcp() -> None:

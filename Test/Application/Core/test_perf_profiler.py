@@ -98,6 +98,11 @@ def main() -> int:
             p2.snapshot_stats()
             p2.get_current_stats()
     finally:
+        # 等窗口真正有数据（writer 可能只跑了一两次 tick —— 首次 tick 只设基准时刻，
+        # 第二次才 append，主循环太快时会出现"还没有数据"的假失败）
+        deadline = time.perf_counter() + 2.0
+        while time.perf_counter() < deadline and p2.snapshot_stats()["window_frames"] == 0:
+            time.sleep(0.01)
         stop_flag.set()
         th.join(timeout=2.0)
     check("并发 snapshot 无异常", not errors, "; ".join(errors[:2]))

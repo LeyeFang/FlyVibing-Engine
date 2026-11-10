@@ -432,74 +432,6 @@ P3 主题 token（颜色/间距/字号不写死在组件里）→ P4 `SetPaused`
 | overlay 穿透联动（按钮上 = 捕获） | `RuntimeWindow._cursor_over_ui` + `RuntimeUILayer.captures_at` |
 | 新增缩放模式 `contain`（窄视口不裁切） | `Core/UI/layout.content_box` |
 ---
-
-## 11. P0 稳定性待办（2026-11-10 性能战役产出）
-
-> 来源：2026-11-10 成品/编辑器性能测量与竞态复现。详细证据见
-> `Test/_runs/perf_2026-11-10/`（本地，不入库）与本文档各条内联数据。
-> **这批不是"更快"，而是"不坏结果 / 不崩"。优先于任何优化。**
-
-### 11.1 P0-A 场景字典无锁竞态 → 编辑器直接退出
-
-| 项 | 内容 |
-|---|---|
-| 现象 | `RuntimeError: dictionary changed size during iteration` 抛在 `_render_loop` 里 → 编辑器 `exit code 1`，无对话框 |
-| 触发点 1 | `SimulationController._try_consume_start` → `copy.deepcopy(editor_scene)`（`SimulationController.py:431`）|
-| 触发点 2 | `graph.import` / `replace_from` 替换画布，渲染线程正在 `_draw_nodes` 遍历 |
-| 写者 A（渲染线程，**每帧**）| `NodeEditorPanel.draw()` → `_ensure_default_scene()`（`panel.py:608`）→ `scene.entities.clear()` + 逐条 `add_entity` |
-| 写者 B（主线程）| `SimulationController._sync_ecs_to_scene()`（`:157`）→ 同样 `clear()` + `add_entity` |
-| 复现率排序 | ① 场景实体多 + 点 Play（16 实体时几乎必崩）② `graph.import` ③ 批量 `entity.add/delete` ④ `extension.enable`（rehydrate）⑤ 1–5 实体时几乎不撞 |
-| 修复方向 | **A 脏标记**（`_ensure_default_scene` 只在 ECS 实体版本号变化时跑）+ **D 原子替换**（先建新 dict，再整体换引用，永不半空）。B（给 `Scene.entities` 加锁）太重，C（挪到主线程）可选 |
-| 验收 | ① 连点 Play/Stop 30 次不崩 ② `graph.import` 50 次不崩 ③ 新守卫测试覆盖"渲染线程迭代 + 主线程替换" |
-
-### 11.2 P0-B 脉冲调度下沉到 I/O 线程（实验数据质量）
-
-| 项 | 内容 |
-|---|---|
-| 实测 | 20 Hz：间隔 p50 **50.0000 ms**、\|偏差\| p99 1.0 ms（已达标）；40 Hz：mean 24.97 ms 但**单次间隔 16–35 ms**，\|偏差\| p50 5 ms |
-| 根因 | 脉冲由 `TimeTrigger` 在**图求值帧**触发，而图只在逻辑 tick 的奇数帧跑（≈8.3 ms 一格）→ 25 ms 无法整除，只能落 16.7/25/33.3 |
-| 关键结论 | **与帧率无关**：掉到 34 fps 时 40 Hz 平均值仍是 24.94 ms，只是抖动扩大到 ±10 ms。所以"优化渲染"不能修这条 |
-| 修复方向 | `spd-io` 线程里做**绝对时刻调度**（`deadline += period` 累加，不随帧漂移），图只负责"登记/撤销脉冲序列" |
-| 验收 | 40 Hz 连发 60 s，间隔 \|偏差\| p99 < 1 ms；20 Hz 不得回退 |
-
-### 11.3 P0-C 远程 / SSH 会话下的窗口创建崩溃
-
-| 项 | 内容 |
-|---|---|
-| 现象（用户报告）| SSH 里启动导出成品 → `glfw.get_video_mode(monitor)` → `OSError: access violation reading 0x108` |
-| 根因 | 进程不在交互式桌面会话里（SSH 会话有独立 window station）→ `glfwInit()` 成功，但 `get_primary_monitor()` 交回的句柄指向失效结构，GLFW 直接解引用 |
-| 已修（2026-11-10）| ① 所有显示查询走 `_safe_primary_monitor` / `_safe_video_mode`（失败即停用后续查询，不抛）② 分辨率优先 `MGE_WINDOW_SIZE` → Win32 `EnumDisplaySettings` → GLFW → 1920×1080 ③ `MGE_WINDOW=windowed\|borderless\|fullscreen` 覆盖模式 ④ `MGE_MONITOR=off` 完全跳过显示器枚举 ⑤ FULLSCREEN 无可用显示器 → 自动降级 BORDERLESS |
-| 诊断工具 | `Utils/Dev/display_diag.py`（会话身份 / Win32 三源 / GLFW 实际路径并排输出，`--json` 落盘）|
-| 验证 | 本地：`MGE_MONITOR=off MGE_WINDOW=fullscreen MGE_WINDOW_SIZE=1024x600` → 打印降级日志、`mode=borderless`、exit 0 |
-| 仍待 | ① 真实 SSH 会话复测（需要用户环境）② 把 `display_diag` 的 JSON 收进 issue 模板 |
-
-### 11.4 P0-D 编辑器 idle 占用 ~2 核
-
-| 项 | 内容 |
-|---|---|
-| 实测 | 编辑器空闲 197% 单核；PIE 268%（16 线程机器）|
-| 根因 | `EditorHost` 的 `logic_target_fps = 0`（不限帧）+ 内联循环靠 `window.Update()` 卡 |
-| 修复方向 | 给 `EditorHost` 设 `logic_target_fps = 60`，或内联循环补 `sleep` |
-| 验收 | 空闲 < 100% 单核；帧率不下降 |
-
-### 11.5 P0-E 节点编辑器面板成本与 PIE 自动隐藏
-
-| 项 | 内容 |
-|---|---|
-| 实测 | 160 节点图：面板可见 **35 fps (28 ms/帧)** ↔ 隐藏 **156 fps (6.4 ms/帧)**；净成本 **21.5 ms/帧** |
-| 定位 | 面板绘制（`_draw_nodes` / `_draw_pins` / `_draw_group_hints`），**不是**图求值（0.07 ms/帧）|
-| 修复方向 | ① **PIE 期间自动隐藏**（实验运行不需要看图，一行逻辑，收益 4.4×）② 只在可见时 `_draw_*` ③ 视口裁剪（屏幕外节点跳过）|
-| 验收 | PIE 期间默认 ≥ 120 fps；用户手动打开面板时行为不变 |
-
-### 11.6 与 §11 相关但不进 P0 的项
-
-| 项 | 原因 |
-|---|---|
-| 节点图求值优化（常量折叠 / 死链裁剪 / 记忆化）| 已有独立议题：`node_graph_optimization_plan.md` |
-| 运行时相邻节点融合 | 实测上限仅占整帧 2.4%，**不做**（见上述议题文档 §5）|
-| `FrameProfiler` 分段归因 | 先有 HUD/UI 组件再谈，见 `node_graph_optimization_plan.md` §6 |
-| 采集设备扩展 `export:false` 阻断 4/7 示例成品 | 扩展侧决定，已在其审计回执里点名 |
-
 **内置对话框改为同一编译器**：`RuntimeUILayer._builtin_elements()` 生成 `UIElement`（负 eid），
 与场景 UI 共用 `build_ui` —— 只有一份布局/绘制/命中实现；`build_quads()` 行为与 M0 完全兼容（12 quad / `_rects` yes/no）。
 
@@ -537,6 +469,7 @@ P3 主题 token（颜色/间距/字号不写死在组件里）→ P4 `SetPaused`
 - 主题文件 `ui_theme.json` 加载 + 多主题 + 热重载（token 仍在代码）
 - 文本图集/自动折行/圆角/九宫格/图标；焦点链与键盘导航
 - 场景 UI 文本走字符串表（现在字面量）；世界空间 UI
+
 
 ### 10.11 M2 已落地：设置控件 + UI 节点（2026-11-05）
 
@@ -769,3 +702,90 @@ P3 主题 token（颜色/间距/字号不写死在组件里）→ P4 `SetPaused`
 把本地夹具的启用状态也删掉了 —— 属于"策略变更 + 自动清理"叠加的隐蔽副作用。
 教训：自动清理类操作必须绑定**稳定的身份判据**，不能用会随策略变化而变化的判据。
 
+---
+
+## 11. P0 稳定性待办（2026-11-10 性能战役产出）
+
+> 来源：2026-11-10 成品/编辑器性能测量与竞态复现。详细证据见
+> `Test/_runs/perf_2026-11-10/`（本地，不入库）与本文档各条内联数据。
+> **这批不是"更快"，而是"不坏结果 / 不崩"。优先于任何优化。**
+
+### 11.1 P0-A 场景字典无锁竞态 → 编辑器直接退出 —— **已完成（1.1.0）**
+
+**修复摘要**（详见 `CHANGELOG.md` 1.1.0）：`Scene` 新增 `_entities_lock` + `entities_snapshot()` /
+`entities_items_snapshot()` / **`replace_entities()`（整表原子替换）** / `clear_entities()`；
+自定义 `__deepcopy__`（锁内快照 + 离线构造 + 新建 RLock）。两个写方（`_ensure_default_scene` /
+`_sync_ecs_to_scene`）都改成"旁边建新表 → 一次原子替换"。
+
+**关于 Python 3.14 官方特性（实测 `Utils/Dev/py_dict_concurrency_probe.py`）**：
+free-threading 让 `dict.copy()` / `list(d)` 成为**锁下原子快照**（20000 次零不一致），
+但**没有任何内置类型**能让"边迭代边被改"变安全 —— `copy.deepcopy` 内部仍是 Python 层迭代
+（首次即抛）、`MappingProxyType` 是视图不是快照。所以：快照官方给了，"谁什么时候写"必须我们自己管。
+
+| 项 | 内容 |
+|---|---|
+| 现象 | `RuntimeError: dictionary changed size during iteration` 抛在 `_render_loop` 里 → 编辑器 `exit code 1`，无对话框 |
+| 触发点 1 | `SimulationController._try_consume_start` → `copy.deepcopy(editor_scene)`（`SimulationController.py:431`）|
+| 触发点 2 | `graph.import` / `replace_from` 替换画布，渲染线程正在 `_draw_nodes` 遍历 |
+| 写者 A（渲染线程，**每帧**）| `NodeEditorPanel.draw()` → `_ensure_default_scene()`（`panel.py:608`）→ `scene.entities.clear()` + 逐条 `add_entity` |
+| 写者 B（主线程）| `SimulationController._sync_ecs_to_scene()`（`:157`）→ 同样 `clear()` + `add_entity` |
+| 复现率排序 | ① 场景实体多 + 点 Play（16 实体时几乎必崩）② `graph.import` ③ 批量 `entity.add/delete` ④ `extension.enable`（rehydrate）⑤ 1–5 实体时几乎不撞 |
+| **实际修复** | 原子替换（原方案 D）+ 锁（原方案 B 的轻量版，只保护单条增删）+ 安全 `__deepcopy__`。原方案 A（脏标记）未做 —— 原子替换已足够，脏标记留作后续性能优化（§11.5） |
+| 验收 | ✅ `test_scene_concurrency.py` 20/20（含"旧写法确实会崩"对照）✅ 活体 14 轮 Play/Stop + 反复 open 零崩溃（修复前 7 个示例中途崩 3 次）|
+
+### 11.2 P0-B 脉冲调度 —— **责任移交 SPD 扩展（2026-11-10 主线裁定）**
+
+**裁定结果**：绝对时刻调度归 **SPD 扩展**（只有它掌握自己的 I/O 线程/端口/载荷规则；
+放到主线等于把设备语义搬回核心，与解耦方向相反）。主线只负责"图里的开始/停止表达"
+与"验收工具与回归门槛"。
+
+**已发出**：`Application/Functions/SerialParallelDevice/Doc/REPLY_TO_MAINLINE_2026-11-10.md`
+**§〇之二 主线第二批回执** —— 含实测数据、根因、责任划分、新工作项（`StartPulseTrain` /
+`StopPulseTrain` 节点而非"更准的计时器节点"）、四条契约要点、四条验收门槛。
+
+| 项 | 内容 |
+|---|---|
+| 实测 | 20 Hz：间隔 p50 **50.0000 ms**、\|偏差\| p99 1.0 ms（已达标）；40 Hz：mean 24.97 ms 但**单次间隔 16–35 ms**，\|偏差\| p50 5 ms |
+| 根因 | 脉冲由 `TimeTrigger` 在**图求值帧**触发，而图只在逻辑 tick 的奇数帧跑（≈8.3 ms 一格）→ 25 ms 无法整除，只能落 16.7/25/33.3 |
+| 关键结论 | **与帧率无关**：掉到 34 fps 时 40 Hz 平均值仍是 24.94 ms，只是抖动扩大到 ±10 ms。所以"优化渲染"不能修这条 |
+| 为什么不是"更准的计时器节点" | 只要节点仍在图求值帧里被拉取，8.3 ms 天花板就还在。必须"图声明意图、I/O 线程负责时刻" |
+| 主线待做（本轮未做） | ① 图侧"何时开始/停止一串脉冲"的表达（现有 `OnGameStart`/`SetTimer`/`VarSet` 已够，等 SPD 节点落地后写范式文档）② `_PARADIGM_BASE.md` 里写明现实上限 |
+| 验收（主线复验口径） | 40 Hz 连发 60 s \|偏差\| p99 < 1 ms 且无漏发；20 Hz 不得回退；34 fps 下重跑不恶化；`OnGameStop` 后 200 ms 内零 TX/PX |
+
+### 11.3 P0-C 远程 / SSH 会话下的窗口创建崩溃
+
+| 项 | 内容 |
+|---|---|
+| 现象（用户报告）| SSH 里启动导出成品 → `glfw.get_video_mode(monitor)` → `OSError: access violation reading 0x108` |
+| 根因 | 进程不在交互式桌面会话里（SSH 会话有独立 window station）→ `glfwInit()` 成功，但 `get_primary_monitor()` 交回的句柄指向失效结构，GLFW 直接解引用 |
+| 已修（2026-11-10）| ① 所有显示查询走 `_safe_primary_monitor` / `_safe_video_mode`（失败即停用后续查询，不抛）② 分辨率优先 `MGE_WINDOW_SIZE` → Win32 `EnumDisplaySettings` → GLFW → 1920×1080 ③ `MGE_WINDOW=windowed\|borderless\|fullscreen` 覆盖模式 ④ `MGE_MONITOR=off` 完全跳过显示器枚举 ⑤ FULLSCREEN 无可用显示器 → 自动降级 BORDERLESS |
+| 诊断工具 | `Utils/Dev/display_diag.py`（会话身份 / Win32 三源 / GLFW 实际路径并排输出，`--json` 落盘）|
+| 验证 | 本地：`MGE_MONITOR=off MGE_WINDOW=fullscreen MGE_WINDOW_SIZE=1024x600` → 打印降级日志、`mode=borderless`、exit 0 |
+| 仍待 | ① 真实 SSH 会话复测（需要用户环境）② 把 `display_diag` 的 JSON 收进 issue 模板 |
+
+### 11.4 P0-D 编辑器 idle 占用 ~2 核
+
+| 项 | 内容 |
+|---|---|
+| 实测 | 编辑器空闲 197% 单核；PIE 268%（16 线程机器）|
+| 根因 | `EditorHost` 的 `logic_target_fps = 0`（不限帧）+ 内联循环靠 `window.Update()` 卡 |
+| 修复方向 | 给 `EditorHost` 设 `logic_target_fps = 60`，或内联循环补 `sleep` |
+| 验收 | 空闲 < 100% 单核；帧率不下降 |
+
+### 11.5 P0-E 节点编辑器面板成本与 PIE 自动隐藏
+
+| 项 | 内容 |
+|---|---|
+| 实测 | 160 节点图：面板可见 **35 fps (28 ms/帧)** ↔ 隐藏 **156 fps (6.4 ms/帧)**；净成本 **21.5 ms/帧** |
+| 定位 | 面板绘制（`_draw_nodes` / `_draw_pins` / `_draw_group_hints`），**不是**图求值（0.07 ms/帧）|
+| 修复方向 | ① **PIE 期间自动隐藏**（实验运行不需要看图，一行逻辑，收益 4.4×）② 只在可见时 `_draw_*` ③ 视口裁剪（屏幕外节点跳过）|
+| 验收 | PIE 期间默认 ≥ 120 fps；用户手动打开面板时行为不变 |
+
+### 11.6 与 §11 相关但不进 P0 的项
+
+| 项 | 原因 |
+|---|---|
+| 节点图求值优化（常量折叠 / 死链裁剪 / 记忆化）| 已有独立议题：`node_graph_optimization_plan.md` |
+| 运行时相邻节点融合 | 实测上限仅占整帧 2.4%，**不做**（见上述议题文档 §5）|
+| `FrameProfiler` 分段归因 | 先有 HUD/UI 组件再谈，见 `node_graph_optimization_plan.md` §6 |
+| 采集设备扩展 `export:false` 阻断 4/7 示例成品 | 扩展侧决定，已在其审计回执里点名 |

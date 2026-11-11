@@ -1,4 +1,4 @@
-# 议题 — 导出成品的扩展节点可见性与分发策略（2026-11-11 立项，未实现）
+# 议题 — 导出成品的扩展节点可见性与分发策略（2026-11-11 立项，同日落地）
 
 > **性质**: 设计/计划文档（`*_plan`）。实现完成后按 `Doc/Dev/README.md` 约定迁到工具仓
 > `docs_content/dev/export_distribution_protocol.md`。
@@ -157,7 +157,9 @@ for pack in cls._packs.values():
 ```
 
 - 导出器**只读清单**即可解析 `type → 目录`，**不要求扩展已启用、不要求文件名是 `node_pack.py`**；
-- 两者都存在时以 `node_pack.py` 为准（向后兼容，现有 4 个扩展不用改）；
+- 解析顺序以**清单优先**为准（见 §5.3）: 只有未声明的类型才回落到运行时 registry；
+  声明与 `node_pack.py` 冲突时以清单为准 —— 导出必须是**确定性**的，
+  而 `node_pack.py` 的可见性依赖"本次会话是否导入过"；
 - `types` 支持前缀通配，用于**离线推导**（此时模块不导入）。
 
 ### 5.2 B — 把「再分发」与「本机部署」拆开（修 G3）
@@ -274,3 +276,49 @@ engine-editor-cli call project.open path=<proj>
 engine-editor-cli call project.export target_parent=<tmp> include_player=false
 # 看 export_manifest.json 的 extensions.required_dirs / unresolved_types
 ```
+
+---
+
+## 11. 落地状态（2026-11-11）
+
+### 11.1 代码改动
+
+| 件 | 文件 | 内容 |
+|---|---|---|
+| A | `Application/Core/NodeGraph/node_packs.py` | 新增 `_manifest_roots` / `manifest_node_index` / `_pattern_matches` / `_manifest_lookup`；`extension_dirs_for_types` 改为**清单优先**（离线、只读 JSON、不导入模块），registry 兜底 |
+| B | `Application/Editor/ProjectManager.py` | `_resolve_export_extensions` 读 `export` + `deploy`；细节新增 `local_only` / `redistributable` / `deploy`，随 `export_manifest.json` 的 `extensions` 落盘 |
+| B′ | `Application/Editor/ProjectManager.py` | `_export_excluded_paths`: 传了 `required_dirs` 时**不再二次否决** `export:false` —— 否则 B 会被这一层静默吃掉（**实现期实测缺陷**，见 §11.2） |
+| D | `Application/Runtime/PlayerBootstrap.py` | 新增 `_report_missing_node_types` + 模块级 `_MISSING_NODE_TYPES`（可供宿主/日志查询）；窗口模式启动时打横幅与类型清单 |
+
+### 11.2 实现期发现的新缺陷（已修）
+
+第一版只改了 `_resolve_export_extensions`，`export_dirs` 已经收下夹具目录，
+但**紧随其后的** `_export_excluded_paths(engine_root, required_ext_dirs)`
+仍按"`export:false` 无条件排除"再剔一次 —— 现象是清单写着
+`local_only: ["<fixture>"]` 而目录并不在产物里（**自相矛盾的产物**）。
+
+> 教训: **许可决策只能有一个裁判**。上层已经判过"可以进包"，
+> 下层就只该做目录筛选，不能拿同一个字段再判一次。
+
+守卫: `test_export_manifest_nodes.py` 的「excluded-path filter keeps deploy:local extension」。
+
+### 11.3 验收结果
+
+| 项 | 结果 |
+|---|---|
+| 离线解析（夹具从未 enable）| ✅ `ext.<fixture>.*` → 目录，`unresolved` 为空 |
+| 真实工程解析 | ✅ `MI-SSSEP-NoFeedback-20Hz-Block`（31 类型，3 个夹具类型）→ `required_dirs` 含夹具 + 串口；`local_only=["<fixture>"]`；`redistributable=false` |
+| 复制过滤 | ✅ 同一 `required_dirs` 走 `_copy_tree_for_export` → 夹具目录与其 `nodes.py` 均在 |
+| 分发路径不受影响 | ✅ `required_dirs=None`（整树）仍无条件排除；`test_release_layout` / `test_export_extension_scope` 绿 |
+| 显式降级 | ✅ 缺类型画布 → `_report_missing_node_types` 返回 `{type: [nid...]}` 并打横幅；健康图清空状态 |
+| 回归 | ✅ `--tier core` **108/108**（新增 `editor.export_manifest_nodes` 30 项断言）|
+
+### 11.4 未做 / 待办
+
+| 项 | 说明 |
+|---|---|
+| 完整成品实机采集验证 | 需要编辑器 GUI 打开工程才能走完整 `export_project_bundle`（headless `open_project` 依赖 `SyncFromScene`）；本轮用"决策 + 复制过滤"同路径验证，**仍需一次编辑器导出 + 运行**确认 |
+| 用户目录扩展（`%APPDATA%/**/extensions`）| 仍被 `_resolve_export_extensions` 以"outside `Application/Functions`"拒绝 —— 与实际需求冲突，单独立项 |
+| 成品内可见降级标记 | 仅日志横幅；标题栏 `[degraded]` 未做（§5.4 已列为可选）|
+| 夹具 `LOCAL_COMPAT.md` | 其中"已验证 `_export_excluded_paths` 包含本目录"的旧结论已过时，需夹具方同步 |
+

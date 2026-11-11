@@ -302,6 +302,45 @@ def dry_run(source: str, frames: int = 0, verbose: bool = False,
 # ────────────────────────────────────────────────────────────────
 
 
+# 缺扩展节点的运行状态（供宿主/日志查询；不是错误，是"降级"事实）
+_MISSING_NODE_TYPES: dict[str, list[int]] = {}
+
+
+def _report_missing_node_types(canvas) -> dict[str, list[int]]:
+    """缺扩展时必须**显式降级**，不能静默 no-op（2026-11-11）。
+
+    为什么需要: `NodeCanvas.from_dict` 对未注册类型是"保留节点但不求值"，
+    窗口模式又不跑静态校验 —— 结果是成品**能启动、能渲染、时间轴在走，
+    但采集/训练类节点永不执行**（用户收回来的数据是空的，且看不出问题）。
+
+    PIE 预检与 `--dry-run` 会硬拦；窗口模式选择**降级 + 大声告知**：
+    展示型产物应能跑，但使用者必须知道"这次结果不完整"。
+    """
+    unknown = dict(getattr(canvas, "unknown_node_types", None) or {})
+    # 先按**当前**注册表重算（扩展可能在场景加载后才被启用/发现）
+    refresh = getattr(canvas, "refresh_unknown_types", None)
+    if callable(refresh):
+        try:
+            unknown = dict(refresh() or {})
+        except Exception:  # noqa: BLE001 — 诊断失败不得影响启动
+            pass
+    _MISSING_NODE_TYPES.clear()
+    _MISSING_NODE_TYPES.update(unknown)
+    if not unknown:
+        return unknown
+
+    total = sum(len(ids) for ids in unknown.values())
+    names = ", ".join(f"{t} x{len(ids)}" for t, ids in sorted(unknown.items()))
+    print("=" * 60)
+    print(f"[Player] WARNING: {total} node(s) from {len(unknown)} missing "
+          f"extension type(s) are NOT evaluated — THIS RUN IS DEGRADED")
+    print(f"[Player]          {names}")
+    print("[Player]          enable the owning extension and re-export, or use "
+          "--dry-run to see the full static report")
+    print("=" * 60)
+    return unknown
+
+
 class _AutoExitLayer(Layer):
     """--frames N / --seconds T 支撑层: 到达任一限制后请求退出（冒烟/CI 用）。
 
@@ -406,6 +445,7 @@ def run(source: str, max_frames: int = 0, max_seconds: float = 0.0,
         RuntimeNodeLayer.set_scene(scene.copy())   # 模板副本, 与 PIE 语义一致
         RuntimeNodeLayer.set_context_hooks(on_stop_request=None)  # 中立兜底退出
         layers.append(RuntimeNodeLayer)
+        _report_missing_node_types(scene.node_graph)
     else:
         print("[Player] WARNING: startup scene has no node_graph — running visuals only")
 

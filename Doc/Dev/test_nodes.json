@@ -319,6 +319,22 @@
       "visualizes": []
     },
     {
+      "id": "editor.export_manifest_nodes",
+      "path": "Test/Application/Editor/test_export_manifest_nodes.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.NodeGraph.canvas",
+        "Application.Core.NodeGraph.node_packs",
+        "Application.Editor.ProjectManager",
+        "Application.Runtime.PlayerBootstrap"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "editor.i18n_coverage",
       "path": "Test/Application/Editor/test_i18n_coverage.py",
       "tier": "core",

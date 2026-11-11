@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
@@ -186,14 +187,28 @@ class NodePackRegistry:
         return "core" if type_name in _TYPES else ""
 
     @classmethod
-    def extension_dirs_for_types(cls, types) -> tuple[set[str], set[str]]:
+    def extension_dirs_for_types(
+        cls,
+        types,
+        engine_root: str | None = None,
+    ) -> tuple[set[str], set[str]]:
         """按场景节点类型收集需要随游戏分发的扩展目录。
+
+        解析顺序（**离线优先**，2026-11-11）:
+          1. `extension.json` 的 `nodes.types` 声明 —— 只读清单，不导入模块，
+             因此**不要求扩展已启用**、也不要求存在 `node_pack.py`；
+          2. 运行时注册表里 pack 记录的来源目录（约定式发现 / `ctx.nodes` 注册）。
+
+        为什么要离线优先: 导出是「用户态、按场景」的决策，必须是**确定性**的。
+        旧实现只看运行时 registry，导致"这个编辑器会话恰好 enable 了扩展"才能
+        导出对应节点 —— 同一工程开关扩展会得到不同产物。
 
         Returns:
             (dirs, unresolved_types) — dirs 为绝对路径；core 类型不需要目录。
-            运行期通过 ctx.nodes 注册、但没有来源目录的 pack 会进入 unresolved。
         """
         cls.load_all()
+        roots = cls._manifest_roots(engine_root)
+        index = cls.manifest_node_index(roots)
         owner_dirs: dict[str, str] = {}
         for pack in cls._packs.values():
             directory = str(pack.get("dir") or "").strip()
@@ -203,15 +218,99 @@ class NodePackRegistry:
         dirs: set[str] = set()
         unresolved: set[str] = set()
         for type_name in sorted({str(t) for t in (types or ()) if str(t).strip()}):
+            # ① 清单声明（离线，最可靠）
+            declared = cls._manifest_lookup(type_name, index)
+            if declared:
+                dirs.add(declared)
+                continue
+            # ② core 类型不需要目录
             owner = cls.owner_of(type_name)
             if owner == "core":
                 continue
+            # ③ 运行时 registry 兜底
             directory = owner_dirs.get(owner)
             if directory:
                 dirs.add(directory)
             else:
                 unresolved.add(type_name)
         return dirs, unresolved
+
+    # ── 清单声明（离线解析；导出确定性来源）──────────────────────
+
+    @staticmethod
+    def _manifest_roots(engine_root: str | None = None) -> list[Path]:
+        """扩展根目录列表：内置 `Application/Functions` + 用户扩展目录。"""
+        if engine_root:
+            roots = [Path(engine_root) / "Application" / "Functions"]
+        else:
+            roots = [Path(__file__).resolve().parents[2] / "Functions"]
+        user_root = AppIdentity.env_get("EXTENSIONS_DIR") or os.path.join(
+            os.environ.get("APPDATA", os.path.expanduser("~")),
+            AppIdentity.APP_NAME, "extensions")
+        roots.append(Path(user_root))
+        return [r for r in roots if r.is_dir()]
+
+    @classmethod
+    def manifest_node_index(
+        cls, roots: list[Path] | None = None
+    ) -> list[tuple[str, str, dict]]:
+        """扫描各扩展 `extension.json` 的 `nodes` 声明 → [(patterns, dir, manifest)]。
+
+        清单格式（全部可选，缺省仍走 `node_pack.py` 约定）::
+
+            "nodes": {
+              "module": "acq_nodes", "factory": "build_pack", "dir": ".",
+              "types": ["ext.acq.*", "MyExactType"]
+            }
+
+        `types` 每项是**精确类型名**或 `前缀.*` 通配。**不导入任何模块**，所以
+        扩展未启用、甚至依赖缺失时也能解析 —— 这正是导出确定性所需。
+
+        守卫: `Test/Application/Core/test_export_manifest_nodes.py`。
+        """
+        out: list[tuple[list[str], str, dict]] = []
+        scan_roots = roots if roots is not None else cls._manifest_roots()
+        for root in scan_roots:
+            for manifest_path in sorted(root.glob("*/extension.json")):
+                if "__pycache__" in manifest_path.parts:
+                    continue
+                try:
+                    with open(manifest_path, "r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                except (OSError, ValueError):
+                    continue          # 坏清单不阻断；启用时另有校验
+                if not isinstance(data, dict):
+                    continue
+                spec = data.get("nodes")
+                if not isinstance(spec, dict):
+                    continue
+                patterns = [str(t).strip() for t in (spec.get("types") or ())
+                            if str(t).strip()]
+                if not patterns:
+                    continue
+                base = manifest_path.parent
+                rel = str(spec.get("dir") or "").strip()
+                directory = os.path.abspath(str(base / rel)) if rel else str(base)
+                out.append((patterns, directory, data))
+        return out
+
+    @staticmethod
+    def _pattern_matches(pattern: str, type_name: str) -> bool:
+        """`ext.acq.*` → 前缀匹配；其他按**精确**类型名匹配。"""
+        if pattern.endswith("*"):
+            return type_name.startswith(pattern[:-1])
+        return pattern == type_name
+
+    @classmethod
+    def _manifest_lookup(
+        cls, type_name: str, index: list[tuple[list[str], str, dict]]
+    ) -> str | None:
+        """在清单索引里查一个类型 → 扩展目录（绝对路径）。"""
+        for patterns, directory, _manifest in index:
+            for pattern in patterns:
+                if cls._pattern_matches(pattern, type_name):
+                    return directory
+        return None
 
     @classmethod
     def fields_for(cls, type_name: str) -> list[dict]:

@@ -809,7 +809,7 @@ free-threading 让 `dict.copy()` / `list(d)` 成为**锁下原子快照**（2000
 | 验收 | ① `Examples/UIShowcase` 成品线程表**无** `spd-io` ② 7 个 MI-SSSEP 示例的刺激时序**不得回退**（20 Hz p50 = 50.0000 ms / 40 Hz 见 §11.2）③ `extension.disable id=device` 后新开场景不再起线程 |
 | 关联 | `scheduler_plan.md §5`（调度器与 `spd-io` 分工）；`thread_ownership_plan.md §8`（第 6 项迁移点）；SPD 回执 §〇之三 |
 
-### 11.8 P0-G 导出成品缺扩展节点时**静默 no-op**（数据采集扩展的成品全不可用）—— 未修
+### 11.8 P0-G 导出成品缺扩展节点时**静默 no-op**（数据采集扩展的成品全不可用）—— **已修（2026-11-11）**
 
 > 详细分析、四道闸门盘点与修复设计：**`export_distribution_plan.md`**。
 
@@ -824,6 +824,22 @@ free-threading 让 `dict.copy()` / `list(d)` 成为**锁下原子快照**（2000
 | 不动 | G1 品牌探针、G2 安装包 allowlist、`.gitignore` 白名单 —— 三者与本文无关 |
 | 验收 | 夹具扩展本机导出的成品能采集；`package_release` 仍不含夹具；扩展开/关导出结果一致；缺扩展有显式警告 |
 | 关联 | `thread_ownership_plan.md §4`（同一根因：声明式 vs 运行时）；REPLY_TO_MAINLINE 待发 §〇之四 |
+
+**落地（同日）** —— 实现细节与验收数据见 `export_distribution_plan.md §11`：
+
+- A 清单声明：`NodePackRegistry.extension_dirs_for_types` 改为**清单优先 + 离线**
+  （`manifest_node_index` 只读 JSON，不导入模块）；
+- B 双轴：`export:false` + `deploy:"local"` → 目录进产物，清单记
+  `local_only` / `redistributable:false`；
+- B′ **实现期新缺陷**: `_export_excluded_paths` 会拿 `export:false` 再否决一次，
+  把 B 静默吃掉（清单说 local_only、目录却不在产物里）—— 已改为“许可决策只有一个裁判”；
+- D 显式降级：`PlayerBootstrap._report_missing_node_types` 启动横幅 + 类型清单 +
+  模块级 `_MISSING_NODE_TYPES`；
+- 守卫 `Test/Application/Editor/test_export_manifest_nodes.py`（30 项）；`--tier core` 108/108。
+
+**仍未验**：完整成品需**编辑器 GUI 导出**再跑一次（headless `open_project` 依赖
+`SyncFromScene`）；另：用户目录扩展（`%APPDATA%/**/extensions`）仍被
+“outside `Application/Functions`”拒绝，单独立项。
 
 
 ### 11.9 P0-H 扩展线程所有权（ctx.threads 托管层）—— 待办，未实现

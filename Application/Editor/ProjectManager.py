@@ -524,7 +524,8 @@ class ProjectManager:
         export_excluded: set[str] = set()
         ext_details: dict = {"mode": "project_only", "scene_node_types": [],
                              "required_dirs": [], "non_mainline": [],
-                             "unresolved_types": []}
+                             "local_only": [], "redistributable": True,
+                             "deploy": {}, "unresolved_types": []}
         if include_player:
             # 5a. game.json（播放器清单）
             cls._write_json(os.path.join(out_dir, "game.json"), {
@@ -723,10 +724,12 @@ class ProjectManager:
     def _export_excluded_paths(engine_root: str, required_dirs: set[str] | None = None) -> set[str]:
         """扫描 `Application/Functions/**/extension.json`，返回不进入游戏层的绝对目录集。
 
-        - `export:false` 永远排除（扩展作者/用户的明确 opt-out）；
-        - `required_dirs` 非 None 时按需分发：只保留场景实际用到的扩展目录，
-          未用到的官方扩展不随游戏包分发（安装包走独立 allowlist，见
-          `Utils/Dev/Installer/build_installer.py`）。
+        - `required_dirs is None`（旧口径：整棵 Functions 都进包）时 `export:false`
+          仍是无条件排除；
+        - 传了 `required_dirs` 时 Supersede 规则变了：`_resolve_export_extensions`
+          已经做完**许可决策**（`export:false` + `deploy:"local"` 会进 `required`），
+          这里只做**目录筛选**，不再二次否决 —— 否则 `deploy:"local"` 会被这一层
+          静默吃掉（2026-11-11 实测：清单写 local_only 但目录没进产物）。
         """
         excluded: set[str] = set()
         required = (None if required_dirs is None else
@@ -746,9 +749,11 @@ class ProjectManager:
             if not isinstance(data, dict):
                 continue
             key = os.path.normcase(os.path.abspath(dirpath))
-            if data.get("export", True) is False:
-                excluded.add(os.path.abspath(dirpath))
-            elif required is not None and key not in required:
+            if required is not None:
+                # 允许集合由上层给出；不在其中的一律不进包（含未被场景引用的官方扩展）
+                if key not in required:
+                    excluded.add(os.path.abspath(dirpath))
+            elif data.get("export", True) is False:
                 excluded.add(os.path.abspath(dirpath))
         return excluded
 
@@ -815,18 +820,33 @@ class ProjectManager:
     ) -> tuple[set[str], list[str], dict]:
         """按场景实际节点类型选出随游戏层分发的扩展目录。
 
-        游戏导出是用户态、按需的：只带当前工程真正用到的扩展节点包；
-        `export:false` 仍是一票否决（第三方 fixture 可明确拒绝再分发）。
-        安装包则走独立 official allowlist，见 build_installer.py。
+        两条独立策略（2026-11-11 拆开，别混）:
+
+        | 字段 | 值 | 语义 |
+        |---|---|---|
+        | `export` | `true`（默认）/ `false` | `false` = **禁止再分发** |
+        | `deploy` | `"any"`（默认）/ `"local"` | `"local"` = 可打进**本机**产物 |
+
+        `export:false` + `deploy:"local"` 的组合表示：**本机可以跑，但不得再分发**。
+        产物清单会写 `extensions.redistributable=false` 并列出 `local_only`，
+        调用方据此决定是否交付给第三方。
+
+        常见误读：`export:false` 曾同时表达"别再分发"和"别进任何产物"，结果
+        数据采集类扩展连自己机器上的成品都用不了。**污染只发生在分发，不发生在部署。**
+
+        安装包不复用本规则（走 `official_extensions.json` mainline allowlist）。
         """
         from Application.Core.NodeGraph.node_packs import NodePackRegistry
 
         warnings: list[str] = []
-        required, unresolved = NodePackRegistry.extension_dirs_for_types(scene_types)
+        required, unresolved = NodePackRegistry.extension_dirs_for_types(
+            scene_types, engine_root=engine_root)
         funcs = os.path.abspath(os.path.join(engine_root, "Application", "Functions"))
         official_ids = cls._official_extension_ids(engine_root)
         kept: set[str] = set()
         non_mainline: list[str] = []
+        local_only: list[str] = []
+        deploy_modes: dict[str, str] = {}
         for directory in sorted(required):
             abs_dir = os.path.abspath(directory)
             try:
@@ -846,12 +866,23 @@ class ProjectManager:
                     data = json.load(fh)
                 if isinstance(data, dict):
                     manifest_id = str(data.get("id") or manifest_id)
-                    if data.get("export", True) is False:
-                        warnings.append(
-                            f"scene uses nodes from extension '{manifest_id}' but its "
-                            f"extension.json declares export:false — excluded from game"
-                        )
-                        continue
+                    exportable = data.get("export", True) is not False
+                    deploy = str(data.get("deploy") or "any").strip().lower()
+                    deploy_modes[manifest_id] = deploy or "any"
+                    if not exportable:
+                        if deploy == "local":
+                            local_only.append(manifest_id)
+                            warnings.append(
+                                f"extension '{manifest_id}' declares export:false "
+                                f"+ deploy:local — bundled for LOCAL use only; "
+                                f"do not redistribute this build"
+                            )
+                        else:
+                            warnings.append(
+                                f"scene uses nodes from extension '{manifest_id}' but its "
+                                f"extension.json declares export:false — excluded from game"
+                            )
+                            continue
             except (OSError, ValueError):
                 warnings.append(
                     f"extension manifest unreadable, directory kept for game export: {manifest}"
@@ -873,6 +904,10 @@ class ProjectManager:
             "scene_node_types": sorted(scene_types),
             "required_dirs": sorted(kept),
             "non_mainline": sorted(non_mainline),
+            "local_only": sorted(local_only),
+            # 有任何 local_only 扩展 → 整个产物不可再分发（保守口径）
+            "redistributable": not local_only,
+            "deploy": dict(sorted(deploy_modes.items())),
             "unresolved_types": sorted(unresolved),
         }
         return kept, warnings, details

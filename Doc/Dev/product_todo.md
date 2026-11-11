@@ -807,4 +807,4 @@ free-threading 让 `dict.copy()` / `list(d)` 成为**锁下原子快照**（2000
 | 修复方向 | ① **懒启动**：由 `NodePackRegistry` 已在算的"本场景用到的节点类型"决定 —— 无设备节点则不 `spd_start`；② 即使启动，**并口复位只对"本场景声明使用并口"的情况做**；③ 绑定扩展启用状态（P0-7 原意）；④ 至少提供 `MGE_DEVICE_IO=off` 逃生开关 |
 | 分层建议 | 判定"要不要设备线程"应由扩展自己回答（`extension.json` 声明 + `needs(scene_types)` 钩子），主线只负责调用 —— 与 `scheduler_plan.md §5` 的分工一致 |
 | 验收 | ① `Examples/UIShowcase` 成品线程表**无** `spd-io` ② 7 个 MI-SSSEP 示例的刺激时序**不得回退**（20 Hz p50 = 50.0000 ms / 40 Hz 见 §11.2）③ `extension.disable id=device` 后新开场景不再起线程 |
-| 关联 | `scheduler_plan.md §5`（调度器与 `spd-io` 分工）；SPD 回执 §〇之三 |
+| 关联 | `scheduler_plan.md §5`（调度器与 `spd-io` 分工）；`thread_ownership_plan.md §8`（第 6 项迁移点）；SPD 回执 §〇之三 |

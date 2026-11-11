@@ -50,6 +50,7 @@
 | `remote_display_white_screen.md` | 远程/无物理显示器下 OpenGL 窗口呈现 | 用户报告“白屏”、远程开发、PIE/成品窗口看似全白时先读；区分渲染缺陷与呈现层问题。**§8 另记 SSH 会话启动成品崩溃（`glfw.get_video_mode` 访问违例）与 `MGE_WINDOW*` / `MGE_MONITOR` 逃生开关、`Utils/Dev/display_diag.py`** |
 | `node_graph_optimization_plan.md` | `Application/Core/NodeGraph/**` 求值性能 | **议题文档（讨论中）**：图求值冗余度实测（85% 白算）、dispatch 开销与融合上限（7–12%）、常量折叠/死链裁剪/纯节点记忆化各自怎么做与风险、明确不做的项；改求值器或评估"图太慢"前先读 |
 | `scheduler_plan.md` | `Application/Core/Scheduler.py`（规划）+ `Engine._get_scheduler()` | **设计文档（未实现）**：为什么调度器归 `Engine` 而不是全局单例（per-engine 时间基/暂停作用域/线程命名）、三种运行形态的线程账（导出 3 / PIE 5+N）、懒创建与五个清理点、`sched:{Engine}` 命名、与 `spd-io` 的分工（派发器 ≠ 节拍器）、扩展门面 `ctx.scheduler` 与验收门槛；动手实现或讨论"延时/定时不准"前先读 |
+| `thread_ownership_plan.md` | `Application/Core/Threads/`（规划）+ `ctx.threads` + `ThreadRegistry` | **设计文档（未实现，`scheduler_plan` 的上游）**：引擎能"管理"线程但不能"调度"线程的能力边界；责任分层（功能/性能归扩展作者，**可退出/不崩/可归因归宿主**）；引擎进程内 4 处扩展线程的实测归类（Gtec 重 IO 已在服务进程）；两种托管原型（`spawn_io` / `submit`）与为什么阻塞 IO 绝不能池化；采用率是真正风险；迁移清单与 P0-F 衔接 |
 | `runtime_scene_ui_input_plan.md` | `RuntimeSceneService` / `UISystem` / 运行时输入 | 规划运行时场景切换、无 imgui 游戏内 GUI、键鼠/ESC 输入与 UI 事件消费顺序时读 |
 | `runtime_ui_protocol.md` | `Application/Core/UI/**` + `Core/Scene/UIComponents.py` + `Runtime/RuntimeUILayer.py` + `Examples/UIShowcase` | 做场景驱动游戏内 UI（UICanvas/UIRect/UIPanel/UILabel/UIButton、布局/命中/动作/ESC/overlay 穿透/线程模型）前必读 |
 | `threading_protocol.md` | `Application/Core/ThreadRegistry.py` + 全体线程启动点 + `Utils/Dev/thread_probe.py` | **新开线程/跨线程通信/服务进程集成前必读**：三通道纪律、心跳注册四步、实时探针、检查单 |

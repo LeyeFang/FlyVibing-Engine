@@ -286,9 +286,12 @@ engine-editor-cli call project.export target_parent=<tmp> include_player=false
 | 件 | 文件 | 内容 |
 |---|---|---|
 | A | `Application/Core/NodeGraph/node_packs.py` | 新增 `_manifest_roots` / `manifest_node_index` / `_pattern_matches` / `_manifest_lookup`；`extension_dirs_for_types` 改为**清单优先**（离线、只读 JSON、不导入模块），registry 兜底 |
+| A″ | `Application/Core/NodeGraph/node_packs.py` | **A 还缺一半**（实测才发现）: 目录进包了，但成品里没有任何人**注册**这些节点 —— 新增 `load_declared_packs()` / `_call_declared_factory()`，按 `nodes{module,factory}` 导入模块并注册 |
+| A‴ | `Application/Runtime/PlayerBootstrap.py` | `prepare_offline()` 开头调 `_install_declared_node_packs()`（**必须早于场景加载**）；编辑器路径不受影响（那里由 `extension.enable` 负责，禁用即消失）|
 | B | `Application/Editor/ProjectManager.py` | `_resolve_export_extensions` 读 `export` + `deploy`；细节新增 `local_only` / `redistributable` / `deploy`，随 `export_manifest.json` 的 `extensions` 落盘 |
 | B′ | `Application/Editor/ProjectManager.py` | `_export_excluded_paths`: 传了 `required_dirs` 时**不再二次否决** `export:false` —— 否则 B 会被这一层静默吃掉（**实现期实测缺陷**，见 §11.2） |
 | D | `Application/Runtime/PlayerBootstrap.py` | 新增 `_report_missing_node_types` + 模块级 `_MISSING_NODE_TYPES`（可供宿主/日志查询）；窗口模式启动时打横幅与类型清单 |
+| D′ | `Application/Runtime/PlayerBootstrap.py` | 校验报告里的 `✗` / `⚠` 在 GBK 控制台会 `UnicodeEncodeError` **把错误列表噎死**（实测）→ 换成 ASCII `x` / `!` |
 
 ### 11.2 实现期发现的新缺陷（已修）
 
@@ -311,14 +314,43 @@ engine-editor-cli call project.export target_parent=<tmp> include_player=false
 | 复制过滤 | ✅ 同一 `required_dirs` 走 `_copy_tree_for_export` → 夹具目录与其 `nodes.py` 均在 |
 | 分发路径不受影响 | ✅ `required_dirs=None`（整树）仍无条件排除；`test_release_layout` / `test_export_extension_scope` 绿 |
 | 显式降级 | ✅ 缺类型画布 → `_report_missing_node_types` 返回 `{type: [nid...]}` 并打横幅；健康图清空状态 |
-| 回归 | ✅ `--tier core` **108/108**（新增 `editor.export_manifest_nodes` 30 项断言）|
+| **成品实机采集** | ✅ 见 §11.5（两个 Block 示例从**编辑器导出**的成品里真采集到数据）|
+| 回归 | ✅ `--tier core` **108/108**（新增 `editor.export_manifest_nodes` 37 项断言）|
 
 ### 11.4 未做 / 待办
 
 | 项 | 说明 |
 |---|---|
-| 完整成品实机采集验证 | 需要编辑器 GUI 打开工程才能走完整 `export_project_bundle`（headless `open_project` 依赖 `SyncFromScene`）；本轮用"决策 + 复制过滤"同路径验证，**仍需一次编辑器导出 + 运行**确认 |
 | 用户目录扩展（`%APPDATA%/**/extensions`）| 仍被 `_resolve_export_extensions` 以"outside `Application/Functions`"拒绝 —— 与实际需求冲突，单独立项 |
 | 成品内可见降级标记 | 仅日志横幅；标题栏 `[degraded]` 未做（§5.4 已列为可选）|
 | 夹具 `LOCAL_COMPAT.md` | 其中"已验证 `_export_excluded_paths` 包含本目录"的旧结论已过时，需夹具方同步 |
+| **仓库内示例场景 pin_ids 陈旧** | 见 §11.5 末尾 —— `--dry-run` 会对 repo 里的示例报 `missing_pin`，而 PIE / 成品不受影响 |
+
+### 11.5 实机验证（2026-11-11，两个 Block 示例）
+
+用**编辑器**导出（不是 headless）——`EditorHost` 才有场景内存态。两次导出均
+`required_dirs=[<夹具>, 串口]`、`local_only=[<夹具>]`、`redistributable=false`。
+
+| 成品 | `--dry-run` | 8 s 运行 | 落盘 |
+|---|---|---|---|
+| `MI-SSSEP-NoFeedback-20Hz-Block` | ✅ PASSED | 199.1 fps (5.024 ms) | 11232 × 65 float32 / 4.68 s |
+| `MI-SSSEP-NoFeedback-40Hz-Block` | ✅ PASSED | 199.7 fps (5.009 ms) | 15120 × 65 float32 / 6.30 s |
+
+关键证据（`SaveData` 节点日志）::
+
+    [Device] saved 11232 samples x 65 ch (4.68s) -> ...\missssep_block_20261111_114355_056092.npz
+    [LOG] #11439<SaveData> saved | 'missssep_block' saved 11232 samples (4.68s, scope=session)
+
+> 这是修复前后的**本质差别**: 修复前成品同样"跑得很好看"，但 `SaveData` 从不执行、落盘为空。
+
+**为什么必须从编辑器导出**: 仓库里 `MI-SSSEP-NoFeedback-*-Block.scene` 的
+`ext.<fixture>.SaveData` 节点只存了 exec 两条 `pin_ids`，6 个数据输出 pin 缺失
+（`NodeCanvas.from_dict` 会给**已注册类型**补生成 —— 所以内部自动痊愈）。
+编辑器导出走 `scene_obj.save_to_file()`（内存态），产物场景因此是**已补全**的；
+而 `PlayerEntry --dry-run` 读的是**磁盘原始 JSON**，于是对 repo 里的示例报 6 条
+`missing_pin` error（PIE 预检读画布，不受影响）。
+
+结论: 不是导出缺陷，是**示例场景长期没被重存**。要消掉这两条噪音，二选一:
+① 打开示例 → 保存工程（场景自重存即补全）；② 让 `missing_pin` 对齐"canvas 会自动补"
+的语义降为 warning（`missing_pin` 规则在工具仓 `node_graph_validator.py`，需独立发版）。
 

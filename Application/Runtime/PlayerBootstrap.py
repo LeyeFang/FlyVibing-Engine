@@ -54,6 +54,8 @@ def prepare_offline(source: str) -> PlayerSession:
     if not os.path.isfile(abs_source):
         raise FileNotFoundError(f"入口不存在: {abs_source}")
 
+    _install_declared_node_packs()
+
     ext = os.path.splitext(abs_source)[1].lower()
     if ext == ".json":
         return _prepare_from_game_json(abs_source)
@@ -62,6 +64,27 @@ def prepare_offline(source: str) -> PlayerSession:
     if ext == ".scene":
         return _prepare_from_scene(abs_source, root=os.path.dirname(abs_source))
     raise ValueError(f"不支持的入口类型: {source}（期望 game.json / .myproj / .scene）")
+
+
+def _install_declared_node_packs() -> None:
+    """成品内按 `extension.json` 的 `nodes` 声明注册节点包（**必须先于场景加载**）。
+
+    为什么成品需要这一步: 成品里没有扩展管理器 —— `NodeGraph/__init__` 只调
+    `discover_builtin()`（扫 `**/node_pack.py`）。走 `ctx.nodes.register_pack()`
+    运行时注册的扩展**没有** `node_pack.py`，于是目录虽然被导出器复制进产物，
+    节点类型却永远不会注册 → 节点 unknown → 采集怡终不执行。
+
+    PIE / 编辑器不受影响（那里由 `extension.enable` 负责）。
+    """
+    try:
+        from Application.Core.NodeGraph.node_packs import NodePackRegistry
+
+        pack_infos = NodePackRegistry.load_declared_packs()
+        for info in pack_infos:
+            print(f"[Player] extension nodes: {info['pack']} "
+                  f"({len(info['types'])} type(s))")
+    except Exception as e:  # noqa: BLE001 — 扩展加载失败不得阻断启动
+        print(f"[Player] WARNING: declared node packs failed: {type(e).__name__}: {e}")
 
 
 def _prepare_from_game_json(path: str) -> PlayerSession:
@@ -260,13 +283,13 @@ def dry_run(source: str, frames: int = 0, verbose: bool = False,
         failures += len(static_errors)
         print(f"[Player] Static validation: {len(static_errors)} error(s)")
         for e in static_errors:
-            print(f"  ✗ {e['message']}")
+            print(f"  x {e['message']}")
     else:
         print("[Player] Static validation: PASSED")
     if static_warnings:
         print(f"[Player] Static validation: {len(static_warnings)} warning(s)")
         for e in static_warnings:
-            print(f"  ⚠ {e['message']}")
+            print(f"  ! {e['message']}")
 
     if frames > 0:
         options = {"frames": frames, "verbose": verbose}
@@ -280,7 +303,7 @@ def dry_run(source: str, frames: int = 0, verbose: bool = False,
             failures += len(errors)
             print(f"[Player] Dry-run: {len(errors)} error(s)")
             for e in errors:
-                print(f"  ✗ {e}")
+                print(f"  x {e}")
         else:
             rt = report["runtime"]
             print(

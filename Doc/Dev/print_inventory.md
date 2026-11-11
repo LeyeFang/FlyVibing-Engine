@@ -9,11 +9,11 @@
 |---|---:|
 | Functions | 241 |
 | Editor | 192 |
-| Core | 117 |
-| Runtime | 63 |
+| Core | 118 |
+| Runtime | 65 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **620** |
+| **合计** | **623** |
 
 热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **50** 条。
 
@@ -46,7 +46,7 @@
 | 文件 | 条数 |
 |---|---:|
 | `Application/Editor/ProjectManager.py` | 51 |
-| `Application/Runtime/PlayerBootstrap.py` | 40 |
+| `Application/Runtime/PlayerBootstrap.py` | 42 |
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
 | `Application/Core/Window/glfwWindow.py` | 19 |
 | `Application/Editor/UI/panels/node_editor/panel.py` | 19 |
@@ -85,6 +85,7 @@
 | `Application/Core/NodeGraph/evaluators/entity/camera.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/destroy.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/mesh.py` | 2 |
+| `Application/Core/NodeGraph/node_packs.py` | 2 |
 | `Application/Core/Renderer/OpenGL/OpenGLEntities.py` | 2 |
 | `Application/Core/Renderer/ZenGL/ZenGLRenderer.py` | 2 |
 | `Application/Editor/EditorGizmoLayer.py` | 2 |
@@ -102,7 +103,6 @@
 | `Application/Core/NodeGraph/evaluators/inputs.py` | 1 |
 | `Application/Core/NodeGraph/evaluators/media.py` | 1 |
 | `Application/Core/NodeGraph/evaluators/time.py` | 1 |
-| `Application/Core/NodeGraph/node_packs.py` | 1 |
 | `Application/Core/Scene/GizmoQuery.py` | 1 |
 | `Application/Core/Scene/SceneManager.py` | 1 |
 | `Application/Core/Scene/SceneSync.py` | 1 |

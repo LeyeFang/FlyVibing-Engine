@@ -252,6 +252,85 @@ def main() -> int:
           _MISSING_NODE_TYPES == {},
           str(_MISSING_NODE_TYPES))
 
+    # ── 7. 成品侧：按清单声明**注册**节点包 ─────────────────────────
+    # A 的第一步（离线解析目录）只让目录进了包；成品里没有扩展管理器，
+    # 若不再按清单把 pack 注册进 _TYPES，节点依旧 unknown —— 目录白复制。
+    with tempfile.TemporaryDirectory(prefix="mge_declared_packs_") as tmp:
+        funcs2 = os.path.join(tmp, "Functions")
+        mod_dir = os.path.join(funcs2, "FxRuntime")
+        os.makedirs(mod_dir, exist_ok=True)
+        with open(os.path.join(mod_dir, "fx_runtime_pack.py"), "w",
+                  encoding="utf-8") as fh:
+            fh.write(
+                "def build_pack():\n"
+                "    return {'id': 'zzruntime', 'name': 'Fixture Runtime',\n"
+                "            'owner': 'zzruntime',\n"
+                "            'nodes': [{'type': 'zz.runtime.Echo',\n"
+                "                       'label': 'Echo', 'category': 'Fixture',\n"
+                "                       'pins': [{'name': 'exec_in', 'kind': 'exec',\n"
+                "                                 'direction': 'input'},\n"
+                "                                {'name': 'exec_out', 'kind': 'exec',\n"
+                "                                 'direction': 'output'}]}]}\n"
+            )
+        _write_json(os.path.join(mod_dir, "extension.json"), {
+            "id": "zzruntime", "name": "Fixture Runtime",
+            "version": "0.1.0", "api_version": "1",
+            "entry": "extension.py:create_extension",
+            "nodes": {"module": "fx_runtime_pack", "factory": "build_pack",
+                      "dir": ".", "types": ["zz.runtime.*"]},
+        })
+        # 坏扩展：工厂抛异常，不得拖垮其它扩展
+        bad_dir = os.path.join(funcs2, "FxBrokenFactory")
+        os.makedirs(bad_dir, exist_ok=True)
+        with open(os.path.join(bad_dir, "fx_broken_pack.py"), "w",
+                  encoding="utf-8") as fh:
+            fh.write("def build_pack():\n    raise RuntimeError('boom')\n")
+        _write_json(os.path.join(bad_dir, "extension.json"), {
+            "id": "zzbroken", "name": "Fixture Broken",
+            "version": "0.1.0", "api_version": "1",
+            "entry": "extension.py:create_extension",
+            "nodes": {"module": "fx_broken_pack", "factory": "build_pack",
+                      "types": ["zz.broken.*"]},
+        })
+
+        roots2 = [Path(funcs2)]
+        try:
+            check("declared pack is not registered before load",
+                  not NodePackRegistry.is_registered("zz.runtime.Echo"))
+            loaded = NodePackRegistry.load_declared_packs(roots2)
+            check("declared factory is invoked and registered",
+                  NodePackRegistry.is_registered("zz.runtime.Echo"), str(loaded))
+            check("broken factory is isolated to its own extension",
+                  loaded and loaded[0]["pack"] == "zzruntime", str(loaded))
+            again = NodePackRegistry.load_declared_packs(roots2)
+            check("declared load is idempotent", again == [], str(again))
+            check("manifest_ids filter skips other extensions",
+                  NodePackRegistry.load_declared_packs(roots2, {"zzzz"}) == [])
+
+            # 载入后场景里该类型的节点不再算 unknown（成品不再静默 no-op）
+            graph = NodeCanvas.from_dict({
+                "next_id": 20,
+                "nodes": {
+                    "1": {"node_type": "OnFrameUpdate", "pos": [0.0, 0.0], "pin_ids": {}},
+                    "2": {"node_type": "zz.runtime.Echo", "pos": [0.0, 0.0],
+                          "pin_ids": {}},
+                },
+                "links": {},
+            })
+            check("declared type resolves on a freshly loaded canvas",
+                  _report_missing_node_types(graph) == {},
+                  str(_MISSING_NODE_TYPES))
+        finally:
+            NodePackRegistry.unregister_owner("zzruntime")
+            NodePackRegistry.unregister_owner("zzbroken")
+            sys.modules.pop("fx_runtime_pack", None)
+            sys.modules.pop("fx_broken_pack", None)
+            for d in (mod_dir, bad_dir):
+                if d in sys.path:
+                    sys.path.remove(d)
+        check("cleanup removes fixture types",
+              not NodePackRegistry.is_registered("zz.runtime.Echo"))
+
     print()
     print("=" * 60)
     total = _passed + len(_failed)

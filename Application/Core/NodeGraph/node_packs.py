@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 import os
@@ -432,6 +433,70 @@ class NodePackRegistry:
     def load_all(cls) -> list[dict]:
         """公开入口（NodeGraph 包初始化时调用；幂等）。"""
         return cls.discover_builtin()
+
+    # ── 清单声明式节点包（运行时入口，2026-11-11）─────────────────
+
+    @classmethod
+    def load_declared_packs(
+        cls,
+        roots: list[Path] | None = None,
+        manifest_ids: set[str] | None = None,
+    ) -> list[dict]:
+        """按 `extension.json` 的 `nodes{module,factory}` 声明**注册**节点包。
+
+        为什么需要（与 `discover_builtin` 的分工）:
+          - **编辑器**: 扩展 `enable` 时经 `ctx.nodes.register_pack()` 注册，
+            启用状态决定节点是否可见 —— 本函数不参与，避免"禁用了却还在"；
+          - **导出成品**: 成品里没有扩展管理器（`PlayerBootstrap` 只 import Core/
+            Runtime），只能读清单。没有 `node_pack.py` 的扩展（走 `ctx.nodes`
+            运行时注册的那些）否则**永远不会注册** —— 目录随包复制了，节点
+            依然 unknown，等于白复制。
+
+        幂等: 已注册同名 pack / 同 owner 的直接跳过，编辑器内重复调用安全。
+        `manifest_ids` 可限定只加载指定扩展（成品按需加载时省掉无关模块导入）。
+        """
+        results: list[dict] = []
+        known_owners = {str(p.get("owner") or "") for p in cls._packs.values()}
+        for patterns, directory, manifest in cls.manifest_node_index(roots):
+            spec = manifest.get("nodes") or {}
+            module_name = str(spec.get("module") or "").strip()
+            if not module_name:
+                continue          # 纯声明（只用于导出解析），没有可加载的工厂
+            ext_id = str(manifest.get("id") or os.path.basename(directory)).strip()
+            if manifest_ids is not None and ext_id not in manifest_ids:
+                continue
+            if ext_id in cls._packs or ext_id in known_owners:
+                continue          # 已由 node_pack.py 约定或 ctx.nodes 注册
+            factory_name = str(spec.get("factory") or "build_pack").strip() or "build_pack"
+            try:
+                pack = cls._call_declared_factory(module_name, factory_name, directory)
+                pack.setdefault("owner", ext_id)
+                pack.setdefault("dir", directory)
+                results.append(cls.register(pack))
+                known_owners.add(str(pack.get("owner") or ext_id))
+            except Exception as e:  # noqa: BLE001 — 单个坏扩展不拖垮启动
+                print(f"[NodePacks] WARNING: {directory}: {type(e).__name__}: {e}")
+        return results
+
+    @classmethod
+    def _call_declared_factory(cls, module_name: str, factory_name: str,
+                               directory: str) -> dict:
+        """从扩展目录导入 `module_name` 并调用 `factory_name()` 取 pack。"""
+        if not os.path.isdir(directory):
+            raise NodePackError(f"declared nodes dir not found: {directory}")
+        if directory not in sys.path:
+            sys.path.insert(0, directory)
+        module = importlib.import_module(module_name)
+        factory = getattr(module, factory_name, None)
+        if not callable(factory):
+            raise NodePackError(
+                f"{module_name}.{factory_name} is not callable "
+                f"(manifest nodes.factory)")
+        pack = factory()
+        if not isinstance(pack, dict):
+            raise NodePackError(
+                f"{module_name}.{factory_name}() must return a dict")
+        return pack
 
 
 __all__ = ["NodePackError", "NodePackRegistry"]

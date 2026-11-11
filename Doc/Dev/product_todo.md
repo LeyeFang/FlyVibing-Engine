@@ -829,17 +829,26 @@ free-threading 让 `dict.copy()` / `list(d)` 成为**锁下原子快照**（2000
 
 - A 清单声明：`NodePackRegistry.extension_dirs_for_types` 改为**清单优先 + 离线**
   （`manifest_node_index` 只读 JSON，不导入模块）；
+- A″ **只做 A 不够**（实测才发现）：目录进包了，成品里却没人**注册**这些节点 ——
+  成品没有扩展管理器，`NodeGraph/__init__` 只扫 `**/node_pack.py`。新增
+  `NodePackRegistry.load_declared_packs()`，由 `PlayerBootstrap.prepare_offline()`
+  在**场景加载前**调用；编辑器路径不变（启用状态仍决定节点可见性）；
 - B 双轴：`export:false` + `deploy:"local"` → 目录进产物，清单记
   `local_only` / `redistributable:false`；
 - B′ **实现期新缺陷**: `_export_excluded_paths` 会拿 `export:false` 再否决一次，
-  把 B 静默吃掉（清单说 local_only、目录却不在产物里）—— 已改为“许可决策只有一个裁判”；
+  把 B 静默吃掉（清单说 local_only、目录却不在产物里）—— 已改为"许可决策只有一个裁判"；
 - D 显式降级：`PlayerBootstrap._report_missing_node_types` 启动横幅 + 类型清单 +
-  模块级 `_MISSING_NODE_TYPES`；
-- 守卫 `Test/Application/Editor/test_export_manifest_nodes.py`（30 项）；`--tier core` 108/108。
+  模块级 `_MISSING_NODE_TYPES`；顺带把 `✗`/`⚠` 换成 ASCII（GBK 控制台会把校验
+  错误列表噎死）；
+- 守卫 `Test/Application/Editor/test_export_manifest_nodes.py`（37 项）；`--tier core` 108/108。
 
-**仍未验**：完整成品需**编辑器 GUI 导出**再跑一次（headless `open_project` 依赖
-`SyncFromScene`）；另：用户目录扩展（`%APPDATA%/**/extensions`）仍被
-“outside `Application/Functions`”拒绝，单独立项。
+**实机验收（同日）**：两个 Block 示例从编辑器导出后，成品 `--dry-run` PASSED，
+8 s 运行均 199 fps，`ext.<fixture>.SaveData` 真落盘
+（11232×65 / 15120×65 float32）。详见 `export_distribution_plan.md §11.5`。
+
+**遗留**：① 用户目录扩展（`%APPDATA%/**/extensions`）仍被
+"outside `Application/Functions`"拒绝，单独立项；② 仓库内示例场景 `pin_ids` 陈旧，
+`--dry-run` 会对 repo 副本报 `missing_pin`（PIE/成品不受影响，导出会自愈）。
 
 
 ### 11.9 P0-H 扩展线程所有权（ctx.threads 托管层）—— 待办，未实现

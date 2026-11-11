@@ -130,9 +130,30 @@ def _draw_random_set_seed_widgets(nid: int, inst, _canvas) -> None:
 
 # ── PathVar ────────────────────────────────────────────────
 
+_RELATIVE_TO_KEYS = ("output", "project", "cwd")
+
+
+def _draw_relative_to(nid: int, inst, tag: str) -> None:
+    """输出根选择器（写文件节点的落点；见 Core/FileSystem/DataPaths.py）。
+
+    ★ 默认 `output`。旧场景没有这个 prop → 走默认，不需要迁移。
+    """
+    current = str(inst.props.get("relative_to", "output"))
+    try:
+        idx = _RELATIVE_TO_KEYS.index(current)
+    except ValueError:
+        idx = 0
+    labels = [t("widget.flow.rel_output"), t("widget.flow.rel_project"),
+              t("widget.flow.rel_cwd")]
+    changed, new_idx = _ne_combo(t("widget.flow.relative_to") + f"##{tag}_{nid}",
+                                 idx, labels)
+    if changed:
+        inst.props["relative_to"] = _RELATIVE_TO_KEYS[new_idx]
+
+
 @register("PathVar")
 def _draw_path_var_widgets(nid: int, inst, _canvas) -> None:
-    """BrowseMode 切换 (Dir/File) + Browse 按钮 + 路径文本。"""
+    """BrowseMode 切换 (Dir/File) + Browse 按钮 + 路径文本 + 落点根。"""
     imgui.dummy(imgui.ImVec2(0, 2))
     imgui.push_item_width(120)
 
@@ -163,6 +184,8 @@ def _draw_path_var_widgets(nid: int, inst, _canvas) -> None:
         imgui.text_disabled(display)
     else:
         imgui.text_disabled(t("widget.flow.no_path"))
+
+    _draw_relative_to(nid, inst, "pv_rel")
 
     imgui.pop_item_width()
 
@@ -331,6 +354,8 @@ def _draw_save_data_widgets(nid: int, inst, _canvas) -> None:
         imgui.text_disabled(display_fp)
     else:
         imgui.text_disabled(t("widget.flow.no_dir"))
+
+    _draw_relative_to(nid, inst, "sd_rel")
 
     imgui.dummy(imgui.ImVec2(0, 2))
 

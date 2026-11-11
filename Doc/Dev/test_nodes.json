@@ -36,6 +36,25 @@
       "visualizes": []
     },
     {
+      "id": "core.data_paths",
+      "path": "Test/Application/Core/test_data_paths.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Engine",
+        "Application.Core.Extension.ExtensionContext",
+        "Application.Core.FileSystem.DataPaths",
+        "Application.Core.NodeGraph",
+        "Application.Core.NodeGraph.evaluator_engine",
+        "Application.Core.NodeGraph.evaluators",
+        "Application.Editor.ProjectManager"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "core.input.input_pipeline",
       "path": "Test/Application/Core/Input/test_input_pipeline.py",
       "tier": "core",

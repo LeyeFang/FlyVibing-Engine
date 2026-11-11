@@ -227,9 +227,9 @@ Property pins use _SKIP sentinel: unconnected (pin mode) or unchecked (manual mo
 |--------------|-----------------------------------------|-------------|--------------------------------------------|
 | SerialSend   | exec_in,Value(var) | exec_out | format: string/bytes, port, baud_rate, prefix/suffix (string only) |
 | ParallelSend | exec_in,Address(int),Value(var)        | exec_out | mode: manual/pin, address: int (0x3FF8 LPT1, 0x3FF0 LPT2, 0x3FE8 LPT3), value: 1-255 |
-| PathVar      | —                                      | Path (string) | browse_mode: directory/file, path: string |
-| TextFileWrite| exec_in,FilePath(string),FileName(string),Value(var) | exec_out | mode: manual/pin, write_mode: w/a, delimiter: none/space/newline/tab/comma, file_path, file_name, value |
-| SaveData     | exec_in,Data(var),FilePath(string),FileName(string) | exec_out,Path(string),MetaPath(string),Rows(int),Cols(int),Samples(int),Written(int),Ok(int) | mode: manual/pin, format: npz/npy/csv/json, file_path, file_name, unique, tag, key, compress, save_meta, csv_delimiter, csv_header, csv_mode, json_indent, value (manual fallback) |
+| PathVar      | —                                      | Path (string) | browse_mode: directory/file, path: string, relative_to: output/project/cwd |
+| TextFileWrite| exec_in,FilePath(string),FileName(string),Value(var) | exec_out | mode: manual/pin, write_mode: w/a, delimiter: none/space/newline/tab/comma, file_path, file_name, value, relative_to: output/project/cwd |
+| SaveData     | exec_in,Data(var),FilePath(string),FileName(string) | exec_out,Path(string),MetaPath(string),Rows(int),Cols(int),Samples(int),Written(int),Ok(int) | mode: manual/pin, format: npz/npy/csv/json, file_path, file_name, unique, tag, key, compress, save_meta, csv_delimiter, csv_header, csv_mode, json_indent, value (manual fallback), relative_to: output/project/cwd |
 
 SerialSend format "string"→UTF-8, "bytes"→float32 LE 4 bytes. Port/BaudRate always read from node props; Value from upstream pin.
 SerialSend prefix/suffix frame the text line: prefix="40," + 14 → "40,14\n" (value formatted as shortest
@@ -238,6 +238,16 @@ ParallelSend always sends uint8 (1-255, 0 reserved for auto-reset after 5ms).
 PathVar outputs a directory or file path selected via OS file browser. browse_mode=directory uses select_folder, browse_mode=file uses open_file (.txt/.csv/.log/.json).
 TextFileWrite writes str(value) + delimiter to {file_path}/{file_name}.txt. FileName auto-appends .txt suffix. Directory created if missing. write_mode="w" overwrites, "a" appends. Delimiter appended after each write: none="", space=" ", newline="\\n", tab="\\t", comma=",".
 FilePath is always handled by widget (Browse button); pin connection overrides widget value.
+
+**Write location (relative_to — 2026-11-11)**: all three IO writers resolve *relative* paths
+against `relative_to`, which defaults to **`output`**:
+`output` = `<product>/output` (PIE: `<project>/output`; editor: `<engine>/output`),
+`project` = project root (product root in a build), `cwd` = process CWD (legacy behaviour).
+Absolute paths are always used as-is. Rationale: the old CWD-relative rule made products
+create stray directories inside their own install folder (and fail outright on read-only
+media). Scenes without the prop keep working — they just resolve to `output/` now.
+See `Application/Core/FileSystem/DataPaths.py`; export warns about absolute paths baked
+into scenes (`absolute_paths` in the manifest).
 
 #### SigGen Nodes (Virtual Signal Generator — IO ▸ SigGen)
 | type_name       | input pins | output pins | props |

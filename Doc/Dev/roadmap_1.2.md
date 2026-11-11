@@ -482,10 +482,43 @@ shader 版本号（半天）→ 全 GL 回归（1 天）→ mac 上补 GLFW coco
 
 | 档 | 内容 |
 |---|---|
-| **Must** | ⓿ ZenGL 全删（§0）· ① 分相计时 + 回归门 ② 面板去浪费（事件驱动 + clipper） ③ FrameSync 选项 C ④ `ctx.threads` 托管层 + P0-F ⑤ 成品 runtime 契约定稿（A/B/C） ⑥ DeviceRegistry 收尾 + `Editor→Functions` 那 1 处 |
-| **Should** | ⑦ 帧快照流水线（P1） ⑧ SignalProcess 基座（Init/滤波/参考/SDFT + `ProcessorState`） ⑨ FBCCA + TRCA ⑩ shrinkage-LDA + Riemannian + CV |
-| **Could** | ⑪ 大规模图拐点测量 → 决定闭包链 ⑫ PerfHUD ⑬ GL 4.1 化实验分支 ⑭ 死链检测做成编辑器提示 |
+| **Must** | ⓿ ZenGL 全删（§0）· ① 分相计时 ✅ ② 面板去浪费（事件驱动 + clipper） ③ FrameSync 解耦 ✅ ④ `ctx.threads` 托管层 + P0-F ⑤ 成品 runtime 契约定稿（A/B/C） ⑥ DeviceRegistry 收尾 + `Editor→Functions` 那 1 处 · ⑦ **文件读写落点统一 ✅**（§6.2） |
+| **Should** | ⑧ 帧快照流水线（P1） ⑨ SignalProcess 基座（Init/滤波/参考/SDFT + `ProcessorState`） ⑩ FBCCA + TRCA ⑪ shrinkage-LDA + Riemannian + CV |
+| **Could** | ⑫ 大规模图拐点测量 → 决定闭包链 ⑬ PerfHUD ⑭ GL 4.1 化实验分支 ⑮ 死链检测做成编辑器提示 ⑯ 按需 pick（见 §6.1） |
 | **Won't** | Vulkan · 运行时融合 · 并行图求值 · 常量折叠 · ICA（要 sklearn） · 多 GL 上下文 |
+
+### 6.1 记着但按住：按需 pick
+
+`gl.pick` 是**成品真实 CPU 的 66%**、PIE 的 32%（1.0–2.0 ms/帧）。成品里没有任何
+`pick_at()` 消费者；PIE 里只有 **overlay 点击穿透**真的需要它。
+
+正确形态是 **demand-driven**：编辑器永远要（点选是核心交互）、overlay PIE 要
+（`_is_click_through_target` 用它做命中判定）、windowed PIE / 成品只在被显式申请时跑。
+**能力不删，只在没人要时不付钱。**
+
+按住的原因：一次只引一个不确定因素（解耦已验证完再动）。重开条件 = 有人提出
+"成品/PIE 需要鼠标拾取"或准备做跨机器性能验收。
+
+### 6.2 文件读写落点统一（2026-11-11 落地第一批）
+
+起因是范式侧的 issue：成品能跑，但"文件往哪写"是散的 —— 写文件节点按进程 CWD 解析
+（成品里凭空造出深目录、装到只读位置直接失败）、扩展把开发机绝对路径写进场景 prop、
+成品自带的 `output/` 没有任何写入走它。四件事同一个病：**引擎没有"输出根"概念**。
+
+| 项 | 结果 |
+|---|---|
+| 输出根 | `Application/Core/FileSystem/DataPaths.py`；`Engine.set_data_roots()`；成品 = `output/`，PIE = `<工程>/output`，`MGE_OUTPUT_DIR` 可改道 |
+| 节点语义 | `PathVar` / `TextFileWrite` / `SaveData` 新增 `relative_to`（`output` 默认 / `project` / `cwd`）；绝对路径原样 |
+| dry-run | 真正零副作用（旧实现先 `mkdir` 再判 dry-run） |
+| 扩展接口 | `ctx.output_dir`（绝对路径）+ `resolve_write_path()`；`save_data(..., base_dir=)` |
+| 导出卫生 | 按名跳过 `.git`/`.venv`/`__pycache__` 等 + `*.pyc`；逐文件失败不中断，`copy_error_count` 上报 |
+| 可移植性审计 | 场景 prop 里的绝对路径 → 清单 `absolute_paths` + `[Export] PORTABILITY:` 告警（Windows 盘符 / POSIX 根 / UNC；`builtin://` 不算） |
+
+**没做（明确留给对方/后续）**：导出器不会替用户改场景里的绝对路径（只报）；
+`output/` 不做自动清理；扩展侧 prop 的**默认值**要各自改（引擎只提供机制 + 拦截）。
+
+守卫：`Test/Application/Core/test_data_paths.py`（38）。
+
 
 ---
 

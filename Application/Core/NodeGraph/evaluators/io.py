@@ -19,6 +19,11 @@ from typing import Any
 
 import numpy as np
 
+from Application.Core.FileSystem.DataPaths import (
+    DEFAULT_RELATIVE_TO,
+    resolve_write_path,
+)
+
 from ..evaluator_engine import ExecutionContext, GraphEvaluator, register_evaluator
 
 
@@ -56,9 +61,23 @@ def _write_output_raw(node_id: int, pin_name: str, value: Any,
 # ── PathVar ────────────────────────────────────────────────
 
 def _eval_path_var(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> None:
-    """PathVar — 输出一个文件/目录路径字符串（纯数据节点，懒求值）。"""
+    """PathVar — 输出一个文件/目录路径字符串（纯数据节点，懒求值）。
+
+    ★ 相对路径按 `relative_to`（默认 `output`）解析成**绝对路径**后再输出。
+    这样下游 `TextFileWrite`/`SaveData` 拿到的是确定落点，不会因两个节点各自
+    解释相对路径而产生分叉（2026-11-11 范式侧 issue：成品里凭空长出 `Test/...`）。
+    """
     inst = g._canvas.nodes[node_id]
     path = str(inst.props.get("path", ""))
+    if path.strip():
+        try:
+            path = resolve_write_path(
+                path,
+                relative_to=inst.props.get("relative_to", DEFAULT_RELATIVE_TO),
+                roots=ctx.data_roots(),
+            )
+        except Exception:      # noqa: BLE001 — 解析失败时保留原值（宁可报错也别丢路径）
+            pass
     _write_output_raw(node_id, "Path", path, ctx, g)
 
 register_evaluator("PathVar", _eval_path_var)
@@ -122,28 +141,36 @@ def _eval_text_file_write(node_id: int, ctx: ExecutionContext, g: GraphEvaluator
     content = str(value)
 
     # ── 构造完整路径 ──
-    if file_path:
-        os.makedirs(file_path, exist_ok=True)
-        full_path = os.path.join(file_path, file_name)
-    else:
-        # 无目录 → 当前工作目录
-        full_path = file_name
+    #    ★ 相对路径按 `relative_to`（默认 output）解析 —— 旧行为是按进程 CWD，
+    #      在成品里会直接落到成品目录（甚至只读的安装目录）。
+    rel = inst.props.get("relative_to", DEFAULT_RELATIVE_TO)
+    try:
+        full_path = resolve_write_path(
+            file_path, relative_to=rel, default_name=file_name,
+            roots=ctx.data_roots(),
+        )
+        if file_path.strip():
+            full_path = os.path.join(full_path, file_name)
+    except Exception:      # noqa: BLE001 — 解析失败回退旧行为（不静默吞掉路径）
+        full_path = os.path.join(file_path, file_name) if file_path else file_name
+    full_path = os.path.abspath(full_path)
 
-    # ── 写入 ──
+    # ── 写入（dry-run 必须先返回 —— 建目录也是副作用）──
     if ctx.dry_run:
         ctx.emit_log(node_id, "TextFileWrite", "write",
                      f"mode={write_mode}, path={full_path}, "
                      f"content={content[:80]}{'...' if len(content)>80 else ''}, "
-                     f"delim={delimiter_key}")
+                     f"delim={delimiter_key}, relative_to={rel}")
         return
 
     try:
+        os.makedirs(os.path.dirname(full_path) or ".", exist_ok=True)
         with open(full_path, write_mode, encoding="utf-8") as f:
             f.write(content + delim)
         print(f"[TextFileWrite] {write_mode} {len(content)} chars → {full_path}"
               f"  delim={delimiter_key}")
     except OSError as e:
-        print(f"[TextFileWrite] ERROR: {e}")
+        print(f"[TextFileWrite] ERROR: {e} (path={full_path}, relative_to={rel})")
 
 register_evaluator("TextFileWrite", _eval_text_file_write)
 
@@ -271,13 +298,24 @@ def _unique_path(path: Path) -> Path:
 
 
 def _prepare_path(file_path: Any, file_name: Any, fmt: str, *,
-                  unique: bool, tag: str) -> Path:
+                  unique: bool, tag: str, base_dir: str = "") -> Path:
+    """构造目标路径。
+
+    `base_dir` 非空时，相对 `file_path` 以它为基准（写文件节点的 output 根）；
+    为空 = 旧行为（相对进程 CWD），供直接调用本函数的旧代码/扩展使用。
+    """
     base = str(file_name or "data").strip() or "data"
     name_path = Path(base)
     if name_path.suffix.lower() in _SAVE_EXT.values():
         name_path = name_path.with_suffix("")
 
-    directory = Path(str(file_path or "").strip()) if str(file_path or "").strip() else Path(".")
+    raw_dir = str(file_path or "").strip()
+    if raw_dir and os.path.isabs(os.path.expanduser(raw_dir)):
+        directory = Path(os.path.expanduser(raw_dir))
+    elif raw_dir:
+        directory = Path(base_dir or ".") / raw_dir if base_dir else Path(raw_dir)
+    else:
+        directory = Path(base_dir) if base_dir else Path(".")
     if name_path.is_absolute():
         target = name_path
     else:
@@ -350,11 +388,17 @@ def save_data(data: Any, file_path: Any = "", file_name: Any = "data", *,
               unique: bool = True, tag: str = "", save_meta: bool = True,
               csv_delimiter: str = "comma", csv_header: str = "",
               csv_mode: str = "w", json_indent: int = 2,
-              elapsed_s: float = 0.0, dry_run: bool = False) -> SaveDataResult:
+              elapsed_s: float = 0.0, dry_run: bool = False,
+              base_dir: str = "") -> SaveDataResult:
     """通用数据保存 — 供 SaveData 节点与扩展直接调用。
 
     支持 npz (多数组/单数组)、npy、csv、json。返回实际路径与行列/样本数；
     dry_run 时只计算路径，不创建目录/文件。
+
+    Args:
+        base_dir: 相对 `file_path` 的基准目录（绝对路径）。写文件节点传输出根；
+                  **扩展应传 `ctx.output_dir`**（自拼 CWD 会把文件写进成品目录）。
+                  空 = 旧行为（相对进程 CWD）。
     """
     fmt = str(fmt or "npz").strip().lower()
     if fmt not in _SAVE_EXT:
@@ -365,7 +409,9 @@ def save_data(data: Any, file_path: Any = "", file_name: Any = "data", *,
         return SaveDataResult(False, detail="npy expects a single array; use npz for dict")
 
     try:
-        path = _prepare_path(file_path, file_name, fmt, unique=unique, tag=tag)
+        path = _prepare_path(file_path, file_name, fmt, unique=unique, tag=tag,
+                             base_dir=base_dir)
+        path = Path(os.path.abspath(path))
     except Exception as e:
         return SaveDataResult(False, detail=f"path error: {e}")
 
@@ -462,6 +508,10 @@ def _eval_save_data(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> N
         data,
         file_path=file_path,
         file_name=file_name,
+        base_dir=resolve_write_path(
+            "", relative_to=inst.props.get("relative_to", DEFAULT_RELATIVE_TO),
+            roots=ctx.data_roots(),
+        ),
         fmt=str(inst.props.get("format", "npz")),
         key=str(inst.props.get("key", "data")),
         compress=_as_bool(inst.props.get("compress", True), True),

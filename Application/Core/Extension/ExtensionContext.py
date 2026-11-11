@@ -12,6 +12,23 @@
 from __future__ import annotations
 
 
+def _resolve_output_dir(engine_root: str) -> str:
+    """扩展的默认数据落点（绝对路径）。
+
+    优先用当前 Engine 已设置的输出根（PIE/成品由宿主注入），否则
+    `<引擎>/output`。**绝不返回 CWD** —— 成品里 CWD 就是成品目录，
+    往那里写会污染安装目录（装到只读位置还会直接失败）。
+    """
+    try:
+        from Application.Core.FileSystem.DataPaths import data_roots
+        roots = data_roots()
+        if roots.get("output"):
+            return roots["output"]
+    except Exception:      # noqa: BLE001 — 无引擎上下文单测：退回引擎根
+        pass
+    return engine_root.rstrip("\\/") + "/output"
+
+
 class ExtensionContext:
     """扩展上下文 — 传透给 ExtensionBase.on_load。"""
 
@@ -34,6 +51,10 @@ class ExtensionContext:
         self.extension_dir: str = extension_dir     # 扩展文件目录（只读资产）
         self.data_dir: str = data_dir               # 扩展可写数据目录（隔离; 由 Manager 创建）
         self.engine_root: str = engine_root
+        # 默认数据落点（写文件请用它，不要用 os.getcwd()）——
+        #   编辑器里 = <引擎>/output；PIE/成品 = <工程|成品>/output。
+        #   见 Application/Core/FileSystem/DataPaths.py（相对路径默认落在 output/）。
+        self.output_dir: str = _resolve_output_dir(engine_root)
 
         # ── 能力门面（由 ExtensionManager 注入; 未实装的能力保持 None） ──
         self.ops = None      # M0: _ExtensionOpRegistrar — ctx.ops.register(name, fn, summary="")

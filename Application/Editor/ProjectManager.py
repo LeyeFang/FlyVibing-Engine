@@ -34,6 +34,29 @@ UTILS_EXPORT_SKIP_DIRS = {"dist", "tmp"}
 # 相对 engine root 的路径；守卫: test_export_game_bundle / test_release_layout。
 LOCAL_STATE_DIRS = ("Application/Editor/Config",)
 
+# 导出时**按目录名跳过**的版本控制 / 虚拟环境 / 工具缓存目录。
+#
+# 为什么必须跳过（2026-11-11 范式侧 issue）: 本地扩展目录常是一个独立 git 仓库
+# （`Application/Functions/<ext>/.git`），git 对象在 Windows 上是只读的 →
+# `copytree` 复制时刷出数百条 `Permission denied`，真告警被淹没，而且目录处于
+# "部分拷贝"状态无法判断成品完不完整。这些目录对成品毫无用处，跳过即可。
+EXPORT_SKIP_DIR_NAMES = frozenset({
+    ".git", ".hg", ".svn",          # 版本控制
+    ".venv", "venv", "env",          # 虚拟环境
+    "__pycache__", ".idea", ".vscode", ".vs",
+    ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox", ".nox",
+    "node_modules",
+})
+
+# 导出时跳过的文件后缀（编译产物 — 会随运行时/解释器重建）。
+EXPORT_SKIP_FILE_SUFFIXES = (".pyc", ".pyo")
+
+
+def _looks_like_absolute_path(value) -> bool:
+    """跨平台"看起来是绝对路径"（导出路径审计用）。"""
+    from Application.Core.FileSystem.DataPaths import looks_absolute_path
+    return looks_absolute_path(value)
+
 
 class ProjectManager:
     """项目文件管理器 — 纯数据层，不依赖渲染/窗口。"""
@@ -522,6 +545,10 @@ class ProjectManager:
         # ── 5. 游戏层（include_player）: 清单 + 冻结引擎 + Python 环境 + 启动器 ──
         game_info: dict | None = None
         export_excluded: set[str] = set()
+        # ★ 复制失败与可移植性审计分开收 —— 前者是导出器自己的错，
+        #   后者是"你刚把开发机路径打进成品了"，两者都不该沉默。
+        copy_errors: list[str] = []
+        path_audit: list[dict] = []
         ext_details: dict = {"mode": "project_only", "scene_node_types": [],
                              "required_dirs": [], "non_mainline": [],
                              "local_only": [], "redistributable": True,
@@ -562,13 +589,23 @@ class ProjectManager:
             app_files, app_bytes = cls._copy_tree_for_export(
                 os.path.join(engine_root, "Application"),
                 os.path.join(out_dir, "Application"), warnings,
-                exclude_paths=export_excluded,
+                exclude_paths=export_excluded, errors=copy_errors,
             )
             res_files, res_bytes = cls._copy_tree_for_export(
                 os.path.join(engine_root, "Resource"),
                 os.path.join(out_dir, "Resource"), warnings,
-                exclude_dirs={"wheels", "runtime"},
+                exclude_dirs={"wheels", "runtime"}, errors=copy_errors,
             )
+
+            # 5b-3. 可移植性审计: 成品里写死的绝对路径（换机器就断）
+            #   扩展把开发机路径写进 prop 是最容易漏的一类（范式侧 issue P3）。
+            path_audit = cls._scan_absolute_props(out_dir, scenes_rel)
+            for hit in path_audit:
+                warnings.append(
+                    f"scene '{hit['scene']}' node {hit['node']}<{hit['type']}>.{hit['prop']} "
+                    f"is an absolute path ({hit['value']}) — this build will write to a "
+                    f"machine-specific location; prefer empty (output/) or a relative path"
+                )
 
             # 5b-2. Utils 工具（仅 User 层 — Dev/ExtDev 工具链不进游戏包）
             utils_files, utils_bytes = cls._copy_tree_for_export(
@@ -679,6 +716,11 @@ class ProjectManager:
             "export_excluded": [os.path.relpath(p, engine_root).replace("\\", "/")
                                  for p in sorted(export_excluded)],
             "extensions": ext_details,
+            # 逐文件复制失败（非空 = 成品可能不完整，不能当成功交付）
+            "copy_errors": copy_errors[:50],
+            "copy_error_count": len(copy_errors),
+            # 场景里写死的绝对路径（跨机器不可移植）
+            "absolute_paths": path_audit,
             "game": game_info,
             "warnings": warnings,
         })
@@ -691,6 +733,9 @@ class ProjectManager:
             "bytes": total_bytes,
             "game": game_info,
             "extensions": ext_details,
+            "copy_errors": copy_errors[:20],
+            "copy_error_count": len(copy_errors),
+            "absolute_paths": path_audit,
             "export_excluded": [os.path.relpath(p, cls._get_engine_root()).replace("\\", "/")
                                 for p in sorted(export_excluded)],
             "warnings": warnings,
@@ -698,6 +743,18 @@ class ProjectManager:
         print(f"[Export] Bundle exported → {out_dir}")
         print(f"[Export]   project: {proj_file} | scenes: {len(scenes_rel)} | "
               f"assets: {copied} | {total_bytes / 1024:.1f} KB")
+        # ★ 复制失败与可移植性风险单独大声报 —— 混在 warnings 里会被淹没
+        #   （2026-11-11 实测: 一个 .git 目录能刷出数百条，真正的告警看不见）。
+        if copy_errors:
+            print(f"[Export]   ERROR: {len(copy_errors)} file(s) failed to copy — "
+                  f"this bundle may be incomplete")
+            for e in copy_errors[:5]:
+                print(f"[Export]     {e}")
+        if path_audit:
+            print(f"[Export]   PORTABILITY: {len(path_audit)} absolute path(s) baked into "
+                  f"scenes — this build is machine-specific")
+            for hit in path_audit[:5]:
+                print(f"[Export]     {hit['type']}.{hit['prop']} = {hit['value']}")
         for w in warnings:
             print(f"[Export]   WARNING: {w}")
         return summary
@@ -814,6 +871,56 @@ class ProjectManager:
             if isinstance(entry, dict) and entry.get("id")
         }
 
+    @staticmethod
+    def _scan_absolute_props(out_dir: str, scenes_rel: list[str]) -> list[dict]:
+        """审计导出场景里的**绝对路径 prop**（可移植性检查）。
+
+        为什么需要（2026-11-11 范式侧 issue P3）: 扩展把开发机绝对路径
+        （`C:\\WorkSpace\\...\\recordings\\<paradigm>`）写进节点 prop，然后被打进成品。
+        成品换机器 / 换用户名 / 换盘符就写不进去，或者**悄悄写到别人的同名目录**。
+        这类缺陷不会报错，只会让"数据去哪了"变成考古。
+
+        导出器是唯一能在**交付前**发现它的地方 —— 所以在这里扫，并作为告警返回。
+
+        Returns:
+            `[{"scene", "node", "type", "prop", "value"}]`（顺序稳定，便于对比）。
+        """
+        hits: list[dict] = []
+        for rel in scenes_rel:
+            path = os.path.join(out_dir, rel)
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+            except (OSError, ValueError):
+                continue
+            graph = data.get("node_graph") if isinstance(data, dict) else None
+            if graph is None and isinstance(data, dict):
+                nested = data.get("scene")
+                if isinstance(nested, dict):
+                    graph = nested.get("node_graph")
+            nodes = graph.get("nodes") if isinstance(graph, dict) else None
+            if isinstance(nodes, dict):
+                items = nodes.items()
+            elif isinstance(nodes, list):
+                items = ((str(i), n) for i, n in enumerate(nodes))
+            else:
+                items = ()
+            for nid, node in items:
+                if not isinstance(node, dict):
+                    continue
+                props = node.get("props")
+                if not isinstance(props, dict):
+                    continue
+                node_type = str(node.get("node_type") or node.get("type") or "")
+                for key, value in props.items():
+                    if not isinstance(value, str) or not _looks_like_absolute_path(value):
+                        continue
+                    hits.append({"scene": rel, "node": str(nid),
+                                 "type": node_type, "prop": str(key),
+                                 "value": value})
+        hits.sort(key=lambda h: (h["scene"], h["type"], h["node"], h["prop"]))
+        return hits
+
     @classmethod
     def _resolve_export_extensions(
         cls, engine_root: str, scene_types: set[str]
@@ -915,16 +1022,28 @@ class ProjectManager:
     @staticmethod
     def _copy_tree_for_export(src: str, dst: str, warnings: list[str],
                               exclude_dirs: set | None = None,
-                              exclude_paths: set | None = None) -> tuple[int, int]:
-        """复制目录树用于游戏层（排除 __pycache__、指定目录名/绝对路径）。
+                              exclude_paths: set | None = None,
+                              errors: list[str] | None = None) -> tuple[int, int]:
+        """复制目录树用于游戏层（跳过 VCS/虚拟环境/缓存 + 指定目录名/绝对路径）。
+
+        2026-11-11 加固（范式侧 issue P1）：
+          - 按**目录名**跳过 `.git` / `.venv` / `__pycache__` 等（见
+            `EXPORT_SKIP_DIR_NAMES`）—— 本地扩展常是独立 git 仓库，git 对象只读，
+            复制会刷出数百条 `Permission denied` 并留下"部分拷贝"的成品；
+          - 单个文件复制失败不再中断整棵树，而是**收集**到 `errors` 并继续；
+          - 供调用方把 `errors` 升级成显式告警（而不是淹没在 warnings 里）。
+
+        Args:
+            errors: 传入列表则收集**逐文件**失败（`"<src> → <dst>: <err>"`）。
 
         Returns:
-            (文件数, 字节数) — 复制失败时报 warning 并返回 (0, 0)
+            (文件数, 字节数)
         """
         import shutil as _shutil
 
-        skip = {"__pycache__"} | (set(exclude_dirs) if exclude_dirs else set())
+        skip = set(EXPORT_SKIP_DIR_NAMES) | (set(exclude_dirs) if exclude_dirs else set())
         blocked = {os.path.normcase(os.path.abspath(p)) for p in (exclude_paths or ())}
+        failures: list[str] = []
 
         def _ignore(_dir, names):
             ignored = set()
@@ -932,16 +1051,37 @@ class ProjectManager:
                 if n in skip:
                     ignored.add(n)
                     continue
+                if n.lower().endswith(EXPORT_SKIP_FILE_SUFFIXES):
+                    ignored.add(n)
+                    continue
                 p = os.path.normcase(os.path.abspath(os.path.join(_dir, n)))
                 if p in blocked:
                     ignored.add(n)
             return list(ignored)
 
+        def _copy(source, target):
+            """逐文件拷贝：失败不抛出（记录后继续），成功返回目标路径。"""
+            try:
+                _shutil.copy2(source, target)
+                return target
+            except OSError as exc:
+                failures.append(f"{source} → {target}: {exc}")
+                return target
+
         try:
-            _shutil.copytree(src, dst, ignore=_ignore, dirs_exist_ok=True)
+            _shutil.copytree(src, dst, ignore=_ignore, dirs_exist_ok=True,
+                             copy_function=_copy)
         except OSError as e:
             warnings.append(f"copy failed: {src} → {e}")
+            if errors is not None:
+                errors.append(f"{src}: {e}")
             return 0, 0
+        if failures:
+            msg = (f"{len(failures)} file(s) failed to copy under "
+                   f"{os.path.basename(src)}/ (first: {failures[0]})")
+            warnings.append(msg)
+            if errors is not None:
+                errors.extend(failures[:20])
         files = 0
         total = 0
         for dp, _dn, fn in os.walk(dst):

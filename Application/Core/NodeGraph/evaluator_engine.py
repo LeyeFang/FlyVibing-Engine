@@ -47,6 +47,21 @@ class ExecutionContext:
         # ── 输入快照 (RuntimeNodeLayer 每逻辑帧注入) ──
         self.input = None              # RuntimeInputFrame | None
         self.input_event = None        # 当前正在派发的 InputEventRecord | None
+        # ── 数据落点 (写文件节点用; 宿主注入；空 = DataPaths 回退链) ──
+        #    见 Application/Core/FileSystem/DataPaths.py
+        self.output_root = ""          # 默认写文件根（成品 output/ · PIE <工程>/output）
+        self.project_root = ""         # 工程根（成品里 = 成品根）
+
+    # ── 落点根（写文件节点 / 扩展共用）──────────────────────
+
+    def data_roots(self) -> dict:
+        """`{"output", "project", "cwd"}` —— 交给 `DataPaths.resolve_write_path`。"""
+        import os as _os
+        return {
+            "output": self.output_root or "",
+            "project": self.project_root or "",
+            "cwd": _os.getcwd(),
+        }
 
     # ── 停止请求 (ExitGame 等节点使用) ───────────────────────
 

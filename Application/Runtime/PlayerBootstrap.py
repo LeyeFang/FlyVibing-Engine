@@ -443,6 +443,13 @@ def run(source: str, max_frames: int = 0, max_seconds: float = 0.0,
     # ── 引擎初始化（创建窗口 + 渲染线程; 之后各自属性才可用）──
     from Application.Runtime.GameRuntime import GameRuntime
 
+    # ★ 数据落点根：必须在 init 之后、层挂载之前设好 ——
+    #   `RuntimeNodeLayer.OnAttach` 会把它们注入 ExecutionContext，
+    #   写文件节点（TextFileWrite/SaveData/PathVar）据此解析相对路径。
+    #   旧行为按进程 CWD 解析 → 文件落进成品目录（甚至只读安装位置）。
+    GameRuntime.set_data_roots(output_root=session.output_dir,
+                               project_root=session.root or "")
+
     GameRuntime.init()
 
     # ── 工程背景色 → 渲染器清屏色（overlay 保持透明; 命令首帧前消费）──

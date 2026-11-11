@@ -8,14 +8,14 @@
 | 区域 | print 条数 |
 |---|---:|
 | Functions | 241 |
-| Editor | 193 |
+| Editor | 199 |
 | Core | 119 |
-| Runtime | 65 |
+| Runtime | 66 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **625** |
+| **合计** | **632** |
 
-热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **50** 条。
+热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **51** 条。
 
 保留项（不是调试遗留）: `Application/Core/NodeGraph/evaluators/debug.py`
 （`Print` / `PrintString` 节点的输出语义本身）。
@@ -25,9 +25,9 @@
 | 文件 | 条数 |
 |---|---:|
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
+| `Application/Runtime/RuntimeNodeLayer.py` | 5 |
 | `Application/Core/NodeGraph/evaluators/io.py` | 4 |
 | `Application/Runtime/GameRuntime.py` | 4 |
-| `Application/Runtime/RuntimeNodeLayer.py` | 4 |
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |
 | `Application/Core/NodeGraph/evaluators/entity/camera.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/destroy.py` | 2 |
@@ -45,13 +45,13 @@
 
 | 文件 | 条数 |
 |---|---:|
-| `Application/Editor/ProjectManager.py` | 51 |
+| `Application/Editor/ProjectManager.py` | 55 |
 | `Application/Runtime/PlayerBootstrap.py` | 42 |
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
 | `Application/Core/Window/glfwWindow.py` | 19 |
 | `Application/Editor/UI/panels/node_editor/panel.py` | 19 |
 | `Application/Editor/Services/LiveCommandServer.py` | 15 |
-| `Application/Editor/UI/controllers/SimulationController.py` | 13 |
+| `Application/Editor/UI/controllers/SimulationController.py` | 15 |
 | `Application/Editor/Extensions/ExtensionManager.py` | 12 |
 | `Application/Editor/UI/controllers/SceneBrowserController.py` | 10 |
 | `Application/Runtime/PerfStatsLayer.py` | 8 |
@@ -65,6 +65,7 @@
 | `Application/Editor/UI/panels/node_editor/validate.py` | 6 |
 | `Application/Core/Scene/PrefabManager.py` | 5 |
 | `Application/Editor/EditorHost.py` | 5 |
+| `Application/Runtime/RuntimeNodeLayer.py` | 5 |
 | `Application/Core/Media/MediaSystem.py` | 4 |
 | `Application/Core/NodeGraph/canvas.py` | 4 |
 | `Application/Core/NodeGraph/evaluators/io.py` | 4 |
@@ -72,7 +73,6 @@
 | `Application/Editor/UI/UIManager.py` | 4 |
 | `Application/Resource/ResourceManager.py` | 4 |
 | `Application/Runtime/GameRuntime.py` | 4 |
-| `Application/Runtime/RuntimeNodeLayer.py` | 4 |
 | `Application/Core/Engine.py` | 3 |
 | `Application/Core/NodeGraph/evaluator_engine.py` | 3 |
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Union
+import os
 import threading
 import atexit
 import signal
@@ -157,6 +158,12 @@ class Engine:
                 '_input_state': None,
                 # 帧性能分析器 (FrameProfiler 实例, 由 _get_profiler 延迟创建)
                 '_profiler': None,
+                # ── 数据落点根（写文件节点/扩展统一从这里取；见 FileSystem/DataPaths.py）──
+                #    output_root : 成品 = game.json 的 output_dir；PIE = <工程>/output
+                #    project_root: 工程根（成品里 = 成品根）
+                #    空 = 未设置 → DataPaths 按 环境变量 / CWD 回退链解析
+                'output_root': "",
+                'project_root': "",
                 # ── 时间系统 ──
                 '_engine_start_time': 0.0,   # init() 时设置
                 '_last_frame_time': 0.0,     # 上一帧 perf_counter
@@ -238,6 +245,38 @@ class Engine:
             return vulkanRenderer
         else:
             raise ValueError(f"Unknown renderer type: {renderer_type}")
+
+    # ════════════════════════════════════════════════════════════
+    # 数据落点根（写文件节点 / 扩展共用）
+    # ════════════════════════════════════════════════════════════
+
+    @classmethod
+    def set_data_roots(cls, *, output_root: str = "", project_root: str = "") -> None:
+        """设置数据落点根（成品/PIE 启动时由宿主注入）。
+
+        为什么放在 Engine 而不是传参: 写文件发生在**节点求值器**里，而求值器只拿
+        得到 `ExecutionContext`；把根挂在 Engine 的 per-class state 上，编辑器与
+        PIE/成品各持一份，互不干扰，且不需要给每个 evaluator 加参数。
+
+        Args:
+            output_root:  默认写文件根（成品 = `output/`；PIE = `<工程>/output`）。
+            project_root: 工程根（成品里 = 成品根）。
+        """
+        st = cls._state()
+        if output_root:
+            st['output_root'] = os.path.abspath(output_root)
+        if project_root:
+            st['project_root'] = os.path.abspath(project_root)
+
+    @classmethod
+    def data_roots(cls) -> dict:
+        """返回 `{"output", "project", "cwd"}`（绝对路径；未设置项为 ""）。"""
+        st = cls._state()
+        return {
+            "output": str(st.get('output_root') or ""),
+            "project": str(st.get('project_root') or ""),
+            "cwd": os.getcwd(),
+        }
 
     @classmethod
     def _get_input_state(cls) -> InputState:

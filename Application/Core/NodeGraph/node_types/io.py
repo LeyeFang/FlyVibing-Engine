@@ -8,6 +8,11 @@ SaveData 与 TextFileWrite 职责分离:
   - TextFileWrite: 面向人读的文本日志 (str(value) + 分隔符, .txt);
   - SaveData:      面向算法/后处理的通用数据 (npy/npz/csv/json + meta),
                    信号处理/设备/epoch 扩展统一走这里。
+
+★ 落点（2026-11-11）: 三个节点都有 `relative_to`（output / project / cwd）。
+  相对路径**默认落在输出根**（成品 `output/`、PIE `<工程>/output`），
+  不再按进程 CWD 解析 —— 旧行为会把文件写进成品目录，装到只读位置直接失败。
+  见 `Application/Core/FileSystem/DataPaths.py`。
 """
 
 from . import _reg, _gen_id, IO_COLOR

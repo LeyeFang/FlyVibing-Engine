@@ -1,6 +1,8 @@
 """模拟状态机 — 统一管理 Run / Pause / Stop 状态"""
 from enum import Enum, auto
 
+import os
+
 from Application.Core.Engine import RendererType, WindowType
 from Application.Core.Events.EngineEvent import EngineLifecycleEvent
 from Application.Editor.EditorHost import EditorHost
@@ -526,6 +528,21 @@ class SimulationController:
                 _clear_color = None
 
         # ── 注册运行时宿主桥接 + 上下文钩子 (运行时对 Editor 零反向依赖) ──
+        # ★ 数据落点根: PIE 写到 <工程>/output（与成品 output/ 同语义）——
+        #   否则写文件节点按 CWD 落到引擎根，开发和成品行为不一致。
+        try:
+            from Application.Editor.ProjectManager import ProjectManager
+            _proj_dir = ""
+            pm_path = getattr(ProjectManager, "_project_path", "") or ""
+            if pm_path:
+                _proj_dir = os.path.dirname(os.path.abspath(pm_path))
+            if _proj_dir:
+                GameRuntime.set_data_roots(
+                    output_root=os.path.join(_proj_dir, "output"),
+                    project_root=_proj_dir)
+                print(f"[Simulation] output root: {os.path.join(_proj_dir, 'output')}")
+        except Exception as e:  # noqa: BLE001 — 落点根失败不阻断 PIE
+            print(f"[Simulation] data roots skipped: {e!r}")
         # ★ 帧同步只在 lockstep 时挂载 —— 否则传 None，`GameRuntime` 走与
         #   导出成品**完全相同**的渲染路径（零同步对象、零阻塞）。
         _sync = EditorHost._frame_sync if cls._pending_lockstep else None

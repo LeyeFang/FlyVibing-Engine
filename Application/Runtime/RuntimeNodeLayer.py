@@ -182,6 +182,16 @@ class RuntimeNodeLayer(Layer):
         # ★ 宿主注入: 模板场景 (EntitySpawn) + 停止回调 (ExitGame)
         cls._context.template_scene = cls._scene
         cls._context.on_stop_request = cls._on_stop_request
+        # ★ 数据落点根: 写文件节点（TextFileWrite/SaveData/PathVar）统一从这里解析
+        #   相对路径 —— 否则会按 CWD 落到成品目录里（2026-11-11 范式侧 issue）。
+        try:
+            _roots = cls._engine.data_roots() if cls._engine is not None else {}
+        except Exception:      # noqa: BLE001 — 无 Engine（纯逻辑测试）时降级为空
+            _roots = {}
+        cls._context.output_root = str(_roots.get("output") or "")
+        cls._context.project_root = str(_roots.get("project") or "")
+        if cls._context.output_root:
+            print(f"[RuntimeNodeLayer] output root: {cls._context.output_root}")
         cls._frame = 0
 
         # ── 延迟 OnGameStart 到逻辑线程的第一次 OnUpdate ──

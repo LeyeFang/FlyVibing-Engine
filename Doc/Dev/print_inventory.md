@@ -8,12 +8,12 @@
 | 区域 | print 条数 |
 |---|---:|
 | Functions | 241 |
-| Editor | 192 |
+| Editor | 193 |
 | Core | 119 |
 | Runtime | 65 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **624** |
+| **合计** | **625** |
 
 热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **50** 条。
 
@@ -51,8 +51,8 @@
 | `Application/Core/Window/glfwWindow.py` | 19 |
 | `Application/Editor/UI/panels/node_editor/panel.py` | 19 |
 | `Application/Editor/Services/LiveCommandServer.py` | 15 |
+| `Application/Editor/UI/controllers/SimulationController.py` | 13 |
 | `Application/Editor/Extensions/ExtensionManager.py` | 12 |
-| `Application/Editor/UI/controllers/SimulationController.py` | 12 |
 | `Application/Editor/UI/controllers/SceneBrowserController.py` | 10 |
 | `Application/Runtime/PerfStatsLayer.py` | 8 |
 | `Application/Core/Project/RuntimeProjectLoader.py` | 7 |

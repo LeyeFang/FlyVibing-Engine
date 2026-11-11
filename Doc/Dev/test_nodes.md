@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**114**
-- `core`：109
+- 节点数：**115**
+- `core`：110
 - `heavy`：1
 - `live`：2
 - `manual`：2
@@ -125,6 +125,7 @@
 | `resource.resource_manager` | `core` | `integration` | `resource` | `Test/Application/Resource/test_resource_manager.py` | Application.Resource.ResourceManager |
 | `runtime.input` | `core` | `integration` | `runtime` | `Test/Application/Runtime/test_runtime_input.py` | Application.Core.Events.Event<br>Application.Core.Input.InputBinding<br>Application.Core.NodeGraph<br>Application.Runtime.RuntimeInputLayer<br>Application.Runtime.RuntimeNodeLayer |
 | `runtime.pie_bare` | `core` | `integration` | `runtime` | `Test/Application/Runtime/test_pie_bare.py` | Application.Core.Engine<br>Application.Core.Events.Event<br>Application.Core.Input.InputState<br>Application.Core.Scene.SceneManager<br>Application.Resource.ResourceManager<br>Application.Runtime.GameRuntime<br>Application.Runtime.RuntimeLayer |
+| `runtime.pie_framesync_decoupled` | `core` | `integration` | `runtime` | `Test/Application/Runtime/test_pie_framesync_decoupled.py` | Application.Core.Engine<br>Application.Editor.UI.controllers<br>Application.Editor.UI.controllers.SimulationController<br>Application.Runtime.GameRuntime |
 | `runtime.runtime_node_layer_race` | `core` | `integration` | `runtime` | `Test/Application/Runtime/test_runtime_node_layer_race.py` | Application.Core.Events.Event<br>Application.Core.NodeGraph<br>Application.Runtime.RuntimeNodeLayer |
 | `stress.material_cycle_stress` | `heavy` | `stress` | `stress` | `Test/Application/stress/test_material_cycle_stress.py` | Application.Core.Engine<br>Application.Core.NodeGraph.canvas<br>Application.Core.Scene.BasicComponents<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.ProjectManager<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Resource.Material<br>Application.Resource.ResourceManager |
 | `stress.stress_thread_races` | `core` | `stress` | `stress` | `Test/Application/stress/test_stress_thread_races.py` | Application.Core.Engine<br>Application.Core.Events.Event<br>Application.Core.Input.InputState<br>Application.Core.ThreadRegistry<br>Application.Editor.Services.LiveCommandServer |

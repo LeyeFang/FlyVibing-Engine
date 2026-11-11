@@ -17,6 +17,10 @@ class SimulationController:
 
     _state: SimulationState = SimulationState.STOPPED
     _pending_start: bool = False
+    # PIE 帧同步模式（1.2）: False = 解耦（默认），True = 与编辑器严格逐帧交替
+    _pending_lockstep: bool = False
+    # 上次 PIE 是否以 lockstep 运行（诊断用；sim.state 暴露）
+    last_lockstep: bool = False
     # 上次 PIE 启动失败原因 (章 T M2: 显式错误态; sim.state 可查) — 成功启动时清空
     last_error: str = ""
     # force=true 越过预检时保留的未注册类型（运行期持续可见 — 不是只警告一次）
@@ -385,8 +389,21 @@ class SimulationController:
         return problems
 
     @classmethod
-    def play(cls, force: bool = False) -> bool:
+    def play(cls, force: bool = False, lockstep: bool = False) -> bool:
         """▶ 请求启动模拟（由渲染线程 ImGui 回调触发）。
+
+        Args:
+            force:    跳过 PIE 预检（未注册节点类型等）。
+            lockstep: PIE 渲染是否与编辑器**严格逐帧交替**（旧行为）。
+                      默认 False = 解耦，各自跑自己的帧率。
+
+        为什么解耦是默认: 旧行为让 PIE 的帧率恒等于编辑器帧率 —— 实测
+        `frame.sync_wait` 占 PIE 帧的 **84.5%**（28.0 / 33.2 ms），而它的
+        真实工作量只有 5.1 ms。换句话说：一个 30 fps 的编辑器把 PIE 钉在
+        30 fps，只因为两个**互不合成**的窗口被强制对齐。
+
+        保留 lockstep 的理由: 它是唯一能“确定性地把两个窗口锁在一起看”的
+        手段，出视觉/时序怪现象时作对照开关用（`sim.play lockstep=true`）。
 
         先跑 `preflight_problems()` 硬校验（force=true 跳过）；有阻断项时不启动，
         把原因写进 `last_error` 并打印（sim.state 可查）。
@@ -412,9 +429,13 @@ class SimulationController:
             )
             return False
         cls._pending_start = True
+        cls._pending_lockstep = bool(lockstep)
         cls.last_error = ""
         EngineLifecycleEvent.Pack(
-            stage="simulation", message="Play requested (pending)", engine=EditorHost
+            stage="simulation",
+            message=("Play requested (pending)" +
+                     (" [lockstep]" if lockstep else " [decoupled]")),
+            engine=EditorHost
         )
         return True
 
@@ -505,9 +526,14 @@ class SimulationController:
                 _clear_color = None
 
         # ── 注册运行时宿主桥接 + 上下文钩子 (运行时对 Editor 零反向依赖) ──
+        # ★ 帧同步只在 lockstep 时挂载 —— 否则传 None，`GameRuntime` 走与
+        #   导出成品**完全相同**的渲染路径（零同步对象、零阻塞）。
+        _sync = EditorHost._frame_sync if cls._pending_lockstep else None
+        cls.last_lockstep = _sync is not None
+        print(f"[Simulation] frame sync: {'lockstep' if _sync else 'decoupled'}")
         RuntimeNodeLayer.set_context_hooks(on_stop_request=cls.stop)
         GameRuntime.set_host_bridge(RuntimeHostBridge(
-            frame_sync=EditorHost._frame_sync,
+            frame_sync=_sync,
             sync_scene_from_host=cls._sync_scene_to_runtime,
             protected_entity_ids=cls._protected_runtime_entities,
             clear_color=_clear_color,

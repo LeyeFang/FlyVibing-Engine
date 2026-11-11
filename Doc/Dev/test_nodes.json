@@ -1460,6 +1460,22 @@
       "visualizes": []
     },
     {
+      "id": "runtime.pie_framesync_decoupled",
+      "path": "Test/Application/Runtime/test_pie_framesync_decoupled.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "runtime",
+      "covers": [
+        "Application.Core.Engine",
+        "Application.Editor.UI.controllers",
+        "Application.Editor.UI.controllers.SimulationController",
+        "Application.Runtime.GameRuntime"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "stress.material_cycle_stress",
       "path": "Test/Application/stress/test_material_cycle_stress.py",
       "tier": "heavy",

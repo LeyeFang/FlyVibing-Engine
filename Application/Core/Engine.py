@@ -64,18 +64,27 @@ class WindowType(Enum):
 # ════════════════════════════════════════════════════════════════
 
 class FrameSync:
-    """单生产者单消费者帧同步。
+    """单生产者单消费者帧同步 — **严格逐帧交替**。
 
     master (Editor) 每帧结束后调用 master_tick()，
     slave  (PIE)    每帧开始前调用 slave_wait()。
-    导出模式下不创建 FrameSync → 零开销。
 
-    enabled = False 可关闭同步锁，让 PIE 渲染线程自由竞速运行。
+    ★ 1.2 起 **默认不挂载**（`sim.play` 的 `lockstep=false`）。历史与实测：
+      这条锁把 PIE 的帧率钉在编辑器帧率上 —— 实测 `frame.sync_wait` 占
+      PIE 帧的 **84.5%**（28.0 / 33.2 ms），而 PIE 真实工作量只有 5.1 ms；
+      两个窗口是**独立 surface、互不合成**，编辑器视口画的是模板场景，
+      PIE 画自己生成的实体，对齐它们不产生任何视觉正确性。
+
+      保留它的唯一用途: 出视觉/时序怪现象时，作为**确定性对照**开关
+      （`sim.play lockstep=true`）。
+
+    导出成品从不创建 FrameSync → 零开销（解耦后的 PIE 与成品同路径）。
     """
 
     def __init__(self) -> None:
         self._lock = threading.Condition()
         self._counter: int = 0
+        self._waits: int = 0            # 诊断: slave 阻塞次数
         self.enabled: bool = True       # ★ 运行时可切换: False = 无锁自由运行
 
     def master_tick(self) -> None:
@@ -92,8 +101,16 @@ class FrameSync:
             return
         with self._lock:
             current = self._counter
+            self._waits += 1
             while self._counter == current:
                 self._lock.wait()
+
+    def describe(self) -> dict:
+        """诊断快照（`sim.state` / `threads.snapshot` 消费）。"""
+        with self._lock:
+            return {"enabled": bool(self.enabled),
+                    "ticks": int(self._counter),
+                    "waits": int(self._waits)}
 
 
 # ════════════════════════════════════════════════════════════════

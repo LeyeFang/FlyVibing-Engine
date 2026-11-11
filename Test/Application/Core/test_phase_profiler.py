@@ -264,6 +264,54 @@ def main() -> int:
            <= data["phases"]["half"]["excl"]["max"]),
           str(data["phases"]["half"]["excl"]))
 
+    # ── M. ★ 并发快照: 写线程狂采样，读线程狂 snapshot ──
+    #    2026-11-11 实测踩到 `deque mutated during iteration`（`perf.phases`
+    #    打爆了整个 op）。deque/dict 的复制在 free-threading 下不是原子快照，
+    #    必须乐观读（重试）而不是让诊断接口抛异常。
+    p11 = PhaseProfiler(enabled=True)
+    stop = threading.Event()
+    errors: list[str] = []
+
+    def _writer() -> None:
+        i = 0
+        try:
+            while not stop.is_set():
+                with p11.phase("w.a"):
+                    with p11.phase("w.b.counter"):
+                        pass
+                with p11.phase(f"w.dyn{i % 40}"):   # 不停新增相 → dict 会变长
+                    pass
+                p11.counter(f"c{i % 12}", 1)
+                p11.end_frame(4.0)
+                i += 1
+        except Exception as exc:      # noqa: BLE001
+            errors.append(f"writer: {type(exc).__name__}: {exc}")
+
+    writer = threading.Thread(target=_writer, name="phase-stress-writer", daemon=True)
+    writer.start()
+    try:
+        for _ in range(400):
+            try:
+                p11.snapshot()
+                p11.report_text()
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"reader: {type(exc).__name__}: {exc}")
+                break
+    finally:
+        stop.set()
+        writer.join(timeout=3.0)
+    check("snapshot never raises while the writer mutates dicts/deques",
+          not errors, str(errors[:2]))
+    check("writer made progress", not writer.is_alive())
+
+    # 并发下也要能拿到"诚实"的结果: 要么有样本，要么标 degraded（不能悄悄返回空）
+    final = p11.snapshot()["threads"].get("phase-stress-writer") or {}
+    check("concurrent snapshot keeps the writer thread",
+          bool(final), str(list(p11.snapshot()["threads"])))
+    check("degraded flag is present for every thread snapshot",
+          all("degraded" in d for d in p11.snapshot()["threads"].values()),
+          str([list(d) for d in p11.snapshot()["threads"].values()]))
+
     print()
     print("=" * 60)
     total = _RESULTS["pass"] + _RESULTS["fail"]

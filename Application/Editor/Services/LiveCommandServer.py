@@ -611,8 +611,9 @@ class LiveCommandServer:
         warning = LiveCommandServer._pie_runnability_warning()
         if warning:
             print(f"[Live] WARNING: {warning}")
-        started = bool(SimulationController.play())
-        result: dict = {"requested": started}
+        lockstep = _truthy(args.get("lockstep"))
+        started = bool(SimulationController.play(lockstep=lockstep))
+        result: dict = {"requested": started, "lockstep": lockstep}
         if started:
             result["state"] = "pending_start"
         else:
@@ -1020,7 +1021,15 @@ class LiveCommandServer:
 
     @staticmethod
     def _op_sim_state(args: dict) -> dict:
-        """模拟状态查询（只读）— state: Stopped / Running / Paused; runtime_alive: PIE 线程存活。"""
+        """模拟状态查询（只读）— state: Stopped / Running / Paused; runtime_alive: PIE 线程存活。
+
+        额外返回 PIE 帧率与帧同步模式（1.2 解耦后验证用）::
+
+            lockstep      : true = 与编辑器逐帧交替（旧行为）; false = 解耦
+            sync          : FrameSync.describe()（lockstep 时才有意义）
+            pie_fps       : PIE 渲染线程当前帧率（未运行时 0）
+            pie_frame     : PIE 渲染帧时间分布（mean/p50/p95/p99/max）
+        """
         from Application.Editor.UI.controllers.SimulationController import SimulationController
 
         try:
@@ -1028,10 +1037,24 @@ class LiveCommandServer:
             running = bool(GameRuntime.is_running())
         except Exception:  # noqa: BLE001
             running = False
-        return {"state": SimulationController.get_state_label(), "runtime_alive": running,
-                "last_error": getattr(SimulationController, "last_error", ""),
-                "forced_unknown_types": dict(getattr(
-                    SimulationController, "forced_unknown_types", {}) or {})}
+        out = {"state": SimulationController.get_state_label(), "runtime_alive": running,
+               "last_error": getattr(SimulationController, "last_error", ""),
+               "forced_unknown_types": dict(getattr(
+                   SimulationController, "forced_unknown_types", {}) or {}),
+               "lockstep": bool(getattr(SimulationController, "last_lockstep", False))}
+        # ── PIE 帧率（解耦验证的主指标；未运行时省略）──
+        if running:
+            try:
+                pie = GameRuntime._get_profiler().snapshot_stats()
+                out["pie_fps"] = pie.get("avg_fps", 0.0)
+                out["pie_frame"] = {k: pie.get(k) for k in
+                                    ("mean_ms", "p50_ms", "p95_ms", "p99_ms", "max_ms",
+                                     "stalls")}
+            except Exception:  # noqa: BLE001 — 统计不得影响查询
+                pass
+            sync = getattr(GameRuntime, "_frame_sync", None)
+            out["sync"] = sync.describe() if sync is not None else None
+        return out
 
     # ── 实例自述（端口台账: 让后来者知道这个端口在做什么）──────────
 

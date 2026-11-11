@@ -49,6 +49,31 @@ engine-editor-cli call perf.phases  target=all text=true       # text=true = 人
 > `reset=true`，否则两段不同状态的样本会混在一起 —— 实测曾因此得到
 > "相均值 23.8 ms > 帧均值 10.9 ms" 这种自相矛盾的报表。
 
+### 1.2b PIE 帧率（一键 A/B）
+
+解耦实验需要"同一套数字反复可复现"，用 `Utils/Dev/pie_perf.py`：
+
+```powershell
+# 单次：解耦跑 10 s
+python Utils/Dev/pie_perf.py --project <x.myproj> --seconds 10
+
+# A/B：lockstep → decoupled 各跑一次，并排打印
+python Utils/Dev/pie_perf.py --project <x.myproj> --seconds 10 --ab
+
+# 批量：目录下每个 *.myproj 各测一次
+python Utils/Dev/pie_perf.py --projects-dir Application\Functions\missssep\Examples --seconds 8
+
+# 落盘对比
+python Utils/Dev/pie_perf.py --ab --json out.json
+```
+
+它自动完成 `project.open → sim.play [lockstep] → 采样 pie_fps → perf.phases → sim.stop`，
+输出 PIE / 编辑器各自的 fps + 帧分布 + 各相排他时间。
+
+> ⚠ **Node Editor 必须在前台标签页才会计费**。作为后台 tab 时 `draw()` 不被调用，
+> 编辑器可跑到 140+ fps，lockstep 对照就看不到那个 30 fps 的极端值。
+> 让它上前台：`ui.panel name="Node Editor" visible=false` 再 `visible=true`，然后 `graph.fit`。
+
 > 注意：`perf.*` 目前只能在**引擎侧**命令总线使用。CLI/MCP 有本地 op 白名单
 > （工具仓 `ops.py` 的 `op_registry`），需要同步登记后才能在 CLI/MCP 直接调用；
 > 未登记时可走 `engine_editor_mcp.client.send_raw()`。
@@ -167,6 +192,34 @@ engine-editor-cli call perf.phases  target=all text=true       # text=true = 人
 > （≈200 fps 的能力），却被编辑器的 30 fps 钉住。这是"4 条线程表现得像 1.2 条"的
 > 直接证据。
 
+### 3.4 解耦后（1.2，`sim.play` 默认 `lockstep=false`）
+
+同工程、同会话、同一编辑器状态下的 A/B：
+
+| | lockstep（旧） | decoupled（默认） |
+|---|---:|---:|
+| PIE `avg_fps` | **29.2** | **199.6** |
+| PIE 帧 mean / p50 | 34.19 / 33.45 ms | **5.01 / 5.01 ms** |
+| PIE `frame.sync_wait` | 28.47 ms（83%） | **0（相不存在）** |
+| 编辑器 `avg_fps` | 29.2 | **29.1（不变）** |
+| `sim.state.sync` | `{ticks, waits}` | `null` |
+
+**vsync 关掉（`MGE_VSYNC=0`）后的真实能力**：PIE **517.7 fps**
+（mean 1.93 / p50 1.62 / p95 3.82 ms），相分布 `gl.pick` 1.01 + `gl.entities` 0.40
++ `frame.swap` 0.27 —— 即 **约 1.5 ms 的真实渲染工作**，其余是 vsync 空等。
+
+7 个 MI-SSSEP 示例批量（解耦 + vsync on）：PIE **189.9–199.4 fps**，编辑器仍 21.6–31.8 fps。
+
+**刺激时序不受影响**（这是解耦安全的核心论证 —— 时序在 `spd-io` 与逻辑帧上，
+不在渲染帧上）：
+
+| 20 Hz Block | lockstep | decoupled |
+|---|---:|---:|
+| 脉冲数 | 81 | 81 |
+| 间隔 p50 | **50.000 ms** | **50.000 ms** |
+| \|dev\| p95 | 0.83 ms | **0.44 ms** |
+
+
 ---
 
 ## 4. 已知限制
@@ -174,15 +227,18 @@ engine-editor-cli call perf.phases  target=all text=true       # text=true = 人
 | 项 | 说明 |
 |---|---|
 | 开关本身有开销 | 每相 2 次 `perf_counter` + 一次作用域对象；实测 ~20 相/帧 ≈ 2–4 µs。默认关，测量时打开 |
-| `frame.swap` 含 vsync | 它量的是"等缓冲"，看 CPU 成本时应扣除 |
+| `frame.swap` 含 vsync | 它量的是"等缓冲"，看 CPU 成本时应扣除。vsync on 时它常是最贵的一相（≈2.2–3.1 ms），那是**空等**不是工作 |
 | 非渲染线程无帧占比 | `end_frame(None)` 只冲刷样本；这是刻意的（逻辑帧 ≠ 渲染帧）|
 | 同名线程 | 用 `name#ident` 区分（PIE 反复启停会产生同名线程）；报表两代并存是正常的 |
 | 无限嵌套 | 栈深无上限但有失配保护（profiler 中途开关不会让父相认错孩子）|
+| **快照是乐观读** | 采样每帧写、快照每秒读。读侧撞上并发写会**重试**而不是加锁（给写侧加锁会污染被测对象，读侧持锁复制会把渲染线程卡 ~1 ms → 那个尖峰直接进 p99）。重试耗尽时该相退化为空并把 `degraded` 置 true —— **绝不返回错数字** |
 
 ---
 
 ## 5. 守卫
 
-`Test/Application/Core/test_phase_profiler.py`（36 项）：
-关态零样本 / 帧与未归因 / 嵌套排他 / 三层嵌套 / counter / worst_frames /
-开关语义 / **栈失配** / 线程隔离 / 多 profiler 隔离 / reset / 报表 / 百分位单调。
+| 守卫 | 覆盖 |
+|---|---|
+| `Test/Application/Core/test_phase_profiler.py`（40 项）| 关态零样本 / 帧与未归因 / 嵌套排他 / 三层嵌套 / counter / worst_frames / 开关语义 / **栈失配** / 线程隔离 / 多 profiler 隔离 / reset / 报表 / 百分位单调 / **并发快照不抛异常（乐观读）** |
+| `Test/Application/Runtime/test_pie_framesync_decoupled.py`（19 项）| 默认解耦 / `lockstep` 可选 / start() 先清残留再挂载 / 桥接条件传参 / `FrameSync` tick-wait 语义与 `enabled=False` 直通 |
+

@@ -231,31 +231,79 @@ def _percentiles(values: list[float]) -> dict:
     }
 
 
+# ════════════════════════════════════════════════════════════════
+# 乐观读（乐观：写线程不付任何代价，读线程冲突时重试）
+# ════════════════════════════════════════════════════════════════
+#
+# 为什么不是加锁
+#   采样是**每帧**写的（200 fps × 20 相 ≈ 4000 次/秒），快照是**每秒**读的。
+#   给写侧加锁会让被测量的东西本身变慢；而读侧持锁复制 20×1000 个元素会
+#   把渲染线程卡住 ~1 ms —— 那个尖峰会直接进 p99，污染我们要看的数字。
+#   所以用乐观读：读失败（正好撞上一次 append/插入）就重试；写侧零开销。
+#
+# 代价与诚实说明
+#   各相是**分别**取样的 —— 极短时间内可能差一两帧。对 1 Hz 的诊断表无影响；
+#   `degraded=true` 表示某几个相重试耗尽、退化成空分布（绝不返回错数字）。
+
+_RETRIES = 8
+
+
+def _safe_list(dq, retries: int = _RETRIES) -> tuple[list, bool]:
+    """deque → list（撞上并发 append 时重试）。返回 (items, ok)。"""
+    for _ in range(retries):
+        try:
+            return list(dq), True
+        except RuntimeError:          # deque mutated during iteration
+            continue
+    return [], False
+
+
+def _safe_items(mapping, retries: int = _RETRIES) -> tuple[list, bool]:
+    """dict → list(items)（撞上并发插入时重试）。返回 (items, ok)。"""
+    for _ in range(retries):
+        try:
+            return list(mapping.items()), True
+        except RuntimeError:          # dictionary changed size during iteration
+            continue
+    return [], False
+
+
 def _thread_snapshot(state: _ThreadState) -> dict:
-    frames = list(state.frame_ms)
+    frames, ok_frame = _safe_list(state.frame_ms)
+    unattr, ok_unattr = _safe_list(state.unattributed)
     frame_stats = _percentiles(frames)
-    unattr_stats = _percentiles(list(state.unattributed))
+    unattr_stats = _percentiles(unattr)
     mean_frame = frame_stats["mean"]
+    degraded = not (ok_frame and ok_unattr)
     out = {
         "flushes": state.flushes,
+        "degraded": False,
         "frame": frame_stats,
         "unattributed": unattr_stats,
         "unattributed_share": (round(unattr_stats["mean"] / mean_frame, 4)
                                if mean_frame > 0 else 0.0),
         "phases": {},
         "counters": {},
+        # worst 是会被 sort/截断的 list —— 先拷贝再格式化（读写不同线程）
         "worst_frames": [
             {"frame_ms": round(ms, 3), "phases": dict(parts)}
-            for ms, parts in state.worst
+            for ms, parts in _safe_list(state.worst)[0]
         ],
     }
-    for name, excl_deque in state.excl.items():
-        excl = _percentiles(list(excl_deque))
-        incl = _percentiles(list(state.incl.get(name) or ()))
+    excl_items, ok_excl = _safe_items(state.excl)
+    for name, excl_deque in excl_items:
+        excl_vals, ok_e = _safe_list(excl_deque)
+        incl_vals, ok_i = _safe_list(state.incl.get(name) or ())
+        degraded = degraded or not (ok_e and ok_i)
+        excl = _percentiles(excl_vals)
+        incl = _percentiles(incl_vals)
         share = (round(excl["mean"] / mean_frame, 4) if mean_frame > 0 else 0.0)
         out["phases"][name] = {"excl": excl, "incl": incl, "share": share}
-    for name, values in state.counters.items():
-        vals = list(values)
+    degraded = degraded or not ok_excl
+    counter_items, ok_ctr = _safe_items(state.counters)
+    for name, values in counter_items:
+        vals, ok_v = _safe_list(values)
+        degraded = degraded or not ok_v
         if not vals:
             continue
         out["counters"][name] = {
@@ -264,6 +312,7 @@ def _thread_snapshot(state: _ThreadState) -> dict:
             "mean": round(sum(vals) / len(vals), 3),
             "max": round(max(vals), 3),
         }
+    out["degraded"] = bool(degraded)
     return out
 
 

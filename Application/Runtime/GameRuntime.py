@@ -113,7 +113,14 @@ class GameRuntime(Engine):
                 bridge.sync_scene_from_host()
             # ── Overlay 模式: 透明背景由 OverlayInputLayer.OnAttach 设置 ──
             # (OnAttach 在渲染线程创建渲染器后、首帧前调用，保证确定性)
-            # ── 帧同步: PIE 作为 slave, 等待 Editor 每帧完成后再渲染 ──
+            # ── 帧同步: 仅在宿主显式提供 FrameSync 时挂载（lockstep 调试模式）──
+            #    ★ 默认**不**挂载（bridge.frame_sync = None）→ 与导出成品走完全
+            #      相同的渲染路径。旧行为把 PIE 渲染钉在编辑器帧率上（实测
+            #      sync_wait 占 84.5% 帧时长），而两个窗口并不合成。
+            #    ★ 先显式清零: 上一次运行若异常退出，残留的 _frame_sync 会让
+            #      本次"以为自己在 lockstep"，而 creator 侧已经没有 master_tick。
+            cls._frame_sync = None
+            cls._is_frame_sync_master = False
             if bridge is not None and bridge.frame_sync is not None:
                 cls._frame_sync = bridge.frame_sync  # 共享同一个 FrameSync
                 cls._is_frame_sync_master = False

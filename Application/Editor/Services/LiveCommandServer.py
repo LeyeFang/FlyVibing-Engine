@@ -340,6 +340,7 @@ class LiveCommandServer:
             "renderer.snapshot": cls._op_renderer_snapshot,
             "perf.profile": cls._op_perf_profile,
             "perf.phases": cls._op_perf_phases,
+            "path.roots": cls._op_path_roots,
             # ── v3: 实体 / 选中 / 组件 / 场景 / 资源 ──
             "entity.list": cls._op_entity_list,
             "entity.get": cls._op_entity_get,
@@ -465,6 +466,60 @@ class LiveCommandServer:
             "stats": stats,
             "phases": _phase_snapshot(),
         }
+
+    @staticmethod
+    def _op_path_roots(args: dict) -> dict:
+        """路径根与宏（`path.roots [resolve=<spec>]`）。
+
+        为什么要有这个 op: 宏的代价是"看不出最终落点"，而这个 op 就是那个出口 ——
+        agent / 扩展开发者不用翻文档或猜 `os.getcwd()`，直接问引擎"我现在在哪、
+        这个 spec 会落在哪"。与 `ctx.paths`（扩展侧门面）同源同实现。
+
+        Args:
+            resolve: 可选。一个路径 spec（可含 `<Macro>`），返回解析后的绝对路径。
+            text:    true = 附带人读摘要。
+        """
+        from Application.Core.FileSystem.DataPaths import (
+            MACRO_NAMES,
+            PathMacroError,
+            data_roots,
+            expand_macros,
+        )
+
+        roots = data_roots()
+        macros = {
+            f"<{name}>": roots.get(key, "")
+            for name, key in (("EngineRoot", "engine"), ("ProjectRoot", "project"),
+                              ("GameRoot", "game"), ("OutputRoot", "output"),
+                              ("Cwd", "cwd"))
+        }
+        out: dict = {
+            "roots": dict(roots),
+            "macros": macros,
+            "known_macros": [f"<{n}>" for n in MACRO_NAMES],
+            "aliases": {"<EditorRoot>": "<EngineRoot>"},
+            "relative_to": {"output": roots.get("output", ""),
+                            "project": roots.get("project", ""),
+                            "cwd": roots.get("cwd", "")},
+        }
+        spec = str(args.get("resolve") or "").strip()
+        if spec:
+            try:
+                out["resolve"] = {
+                    "spec": spec,
+                    "expanded": expand_macros(spec, roots),
+                    "absolute": _resolve_for_op(spec, roots),
+                }
+            except PathMacroError as exc:
+                out["resolve"] = {"spec": spec, "error": str(exc)}
+        if _truthy(args.get("text")):
+            lines = [f"{k} = {v}" for k, v in out["roots"].items()]
+            if out.get("resolve"):
+                r = out["resolve"]
+                lines.append(f"resolve({r['spec']!r}) -> "
+                             f"{r.get('absolute') or r.get('error')}")
+            out["text"] = "\n".join(lines)
+        return out
 
     @staticmethod
     def _op_perf_profile(args: dict) -> dict:
@@ -2643,6 +2698,12 @@ def _truthy(value) -> bool:
     if value is None:
         return False
     return str(value).strip().lower() in ("1", "true", "on", "yes")
+
+
+def _resolve_for_op(spec: str, roots: dict) -> str:
+    """`path.roots` 的 resolve 分支（独立成函数便于单测/复用）。"""
+    from Application.Core.FileSystem.DataPaths import resolve_write_path
+    return resolve_write_path(spec, roots=roots)
 
 
 def _perf_profilers(target: str) -> dict:

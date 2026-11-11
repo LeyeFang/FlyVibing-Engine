@@ -92,8 +92,8 @@ def main() -> int:
     live = set(LiveCommandServer._ops)
     doc = set(doc_ops)
 
-    check("op 计数一致 (registry / live / doc 同为 81)",
-          len(registry) == len(live) == len(doc) == 81,
+    check("op 计数一致 (registry / live / doc 同为 82)",
+          len(registry) == len(live) == len(doc) == 82,
           f"{len(registry)}/{len(live)}/{len(doc)}")
     missing = registry - doc
     extra = doc - registry

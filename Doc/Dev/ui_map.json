@@ -6,6 +6,7 @@
     "threads.snapshot",
     "perf.profile",
     "perf.phases",
+    "path.roots",
     "device.save",
     "console.tail",
     "frame.request",

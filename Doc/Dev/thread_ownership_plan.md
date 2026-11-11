@@ -48,19 +48,19 @@
 | 扩展 | 线程名 | 位置 | 原型 | 生命周期 |
 |---|---|---|---|---|
 | SerialParallelDevice | `spd-io` | `SerialParallelDevice/api.py:57` | **阻塞队列循环**（`queue.get(timeout=0.05)`）| 进程级，租约制 |
-| VirtualDevice（Gtec 复用）| `eeg-{brand}-service` | `VirtualDevice/ServiceClient.py:383` | **阻塞 recv（薄桥）** | 会话级 |
+| VirtualDevice（采集扩展复用）| `eeg-{brand}-service` | `VirtualDevice/ServiceClient.py:383` | **阻塞 recv（薄桥）** | 会话级 |
 | BCIAlgorithm | `bci-{name}` | `BCIAlgorithm/Jobs.py:81` | **一次性任务** | job 级 |
-| Gtec | `gtec-imp-{reason}` | `Gtec/extension.py:1187` | **一次性任务** | job 级 |
+| 夹具 | `acq-imp-{reason}` | `Functions/<fixture>/extension.py:1187` | **一次性任务** | job 级 |
 
 ### 2.2 进程外（不是引擎线程）
 
 | 扩展 | 线程名 | 位置 | 说明 |
 |---|---|---|---|
-| Gtec | `gtec-acq` + watchdog | `Gtec/brand_backend.py:288,290` | `brand_backend` **只被 `brand_service.py` 导入** → 跑在**服务进程**里（`python -m Application.Functions.Gtec.brand_service --port 47810`），由 `ServiceClient._proc = subprocess.Popen(...)` 拉起 |
+| 夹具 | `acq-loop` + watchdog | `Functions/<fixture>/brand_backend.py:288,290` | `brand_backend` **只被 `brand_service.py` 导入** → 跑在**服务进程**里（`python -m Application.Functions.夹具.brand_service --port 47810`），由 `ServiceClient._proc = subprocess.Popen(...)` 拉起 |
 
 ### 2.3 这个实测说明了什么
 
-> **Gtec 的重 IO 早就走"独立进程 + 引擎侧薄线程"了；引擎进程内剩下的确实只有
+> **夹具扩展的重 IO 早就走"独立进程 + 引擎侧薄线程"了；引擎进程内剩下的确实只有
 > 「通信」和「一次性任务」。**
 
 也就是说，你描述的模型不是"提议"，而是**代码已经在这么做、只是没有正式的并发原语**。
@@ -73,12 +73,12 @@
 | 原型 | 特征 | 是否池化 | 归谁 |
 |---|---|---|---|
 | **阻塞 IO 循环**（`spd-io`、`eeg-*-service`）| 独占一个线程跑 `recv` / `get(timeout)` | ❌ **绝不能池化** | 引擎管生命周期，扩展管循环体 |
-| **一次性任务**（`bci-*`、`gtec-imp-*`）| 有界时间内跑完即退 | ✅ 可进有界池 | 引擎管（并发上限 + 超时）|
+| **一次性任务**（`bci-*`、`acq-imp-*`）| 有界时间内跑完即退 | ✅ 可进有界池 | 引擎管（并发上限 + 超时）|
 | **周期巡检**（watchdog 类）| 低频、按点唤醒 | ✅ 归调度器 | `Scheduler`（`scheduler_plan.md`）|
 
 **为什么阻塞 IO 绝不能池化**：一个阻塞 `read()` 会长期占住池槽，把其他任务饿死 ——
 这是 Java `ThreadPoolExecutor` 上最经典的陷阱（无界队列 + 阻塞任务 = 静默饿死）。
-Gtec 把重 IO 挪进独立进程，本质上就是绕开了这个问题。
+夹具扩展把重 IO 挪进独立进程，本质上就是绕开了这个问题。
 
 ---
 
@@ -171,8 +171,8 @@ Blender 不做托管，结果扩展作者各自踩坑。**我们选中间路线�
 | 1 | `SerialParallelDevice/api.py:57` `spd-io` | 自建线程 + 租约 `_leases` | `ctx.threads.spawn_io("io", ...)`；租约保留（多 owner 语义）|
 | 2 | `VirtualDevice/ServiceClient.py:383` `eeg-*-service` | 自建线程 + `_reader_stop` | `spawn_io("service", ...)`；`_reader_stop` → `cancel` |
 | 3 | `BCIAlgorithm/Jobs.py:81` `bci-*` | 裸 Thread（一次性）| `ctx.threads.submit(...)` + 超时 |
-| 4 | `Gtec/extension.py:1187` `gtec-imp-*` | 裸 Thread（一次性）| `ctx.threads.submit(..., timeout_s=30)` |
-| 5 | `Gtec/brand_backend.py:288,290` | **服务进程内**，不属于引擎 | **不动**（进程外，已有 `Popen` 管理）|
+| 4 | `Functions/<fixture>/extension.py:1187` `acq-imp-*` | 裸 Thread（一次性）| `ctx.threads.submit(..., timeout_s=30)` |
+| 5 | `Functions/<fixture>/brand_backend.py:288,290` | **服务进程内**，不属于引擎 | **不动**（进程外，已有 `Popen` 管理）|
 | 6 | `GameRuntime` 两处 `spd_start`（P0-F）| 无条件启动 | 由 `needs_device_io` 决定是否 `spawn`（§11.7）|
 
 **迁移顺序**：托管层 → #3/#4（一次性任务，风险最低）→ #2（薄桥）→ #1（SPD，最重）→ #6。

@@ -808,3 +808,19 @@ free-threading 让 `dict.copy()` / `list(d)` 成为**锁下原子快照**（2000
 | 分层建议 | 判定"要不要设备线程"应由扩展自己回答（`extension.json` 声明 + `needs(scene_types)` 钩子），主线只负责调用 —— 与 `scheduler_plan.md §5` 的分工一致 |
 | 验收 | ① `Examples/UIShowcase` 成品线程表**无** `spd-io` ② 7 个 MI-SSSEP 示例的刺激时序**不得回退**（20 Hz p50 = 50.0000 ms / 40 Hz 见 §11.2）③ `extension.disable id=device` 后新开场景不再起线程 |
 | 关联 | `scheduler_plan.md §5`（调度器与 `spd-io` 分工）；`thread_ownership_plan.md §8`（第 6 项迁移点）；SPD 回执 §〇之三 |
+
+### 11.8 P0-G 导出成品缺扩展节点时**静默 no-op**（数据采集扩展的成品全不可用）—— 未修
+
+> 详细分析、四道闸门盘点与修复设计：**`export_distribution_plan.md`**。
+
+| 项 | 内容 |
+|---|---|
+| 现象 | mi-sssep 发现 + 本地采集夹具提报：采集节点在 PIE 正常，**导出成品里永不执行**，但画面/时间轴全部正常（`output/` 落盘为空）|
+| 为什么静默 | `NodeCanvas.from_dict` 对未注册类型**保留节点但不求值**；硬拦截只在 PIE 预检与 `--dry-run`，窗口模式 `run()` **不跑静态校验** |
+| 真因（不是版权） | `NodePackRegistry.discover_builtin()` 只扫 `**/node_pack.py`；`<fixture>`/`SignalProcess` 走 `ctx.nodes.register_pack` **运行时注册** → 未启用时导出器连目录都找不到（`unresolved`）|
+| 第二道杀手 | `Functions/<fixture>/extension.json` 的 `export:false` 一票否决 —— 即使解析到目录也整包剔除 |
+| 两条路都失败 | 启用 → 被 `export:false` 剔除；未启用 → `unresolved`。**警告文案不同，结果一样坏** |
+| 修复方向 | ① 清单新增 `nodes{module,factory,dir,types}` 声明（修发现）；② `export`（再分发）与 `deploy:"local"`（本机部署）拆开；③ 导出改为离线解析（不依赖运行时 registry）；④ 缺扩展时**显式降级**（日志/标题标记）而非静默 |
+| 不动 | G1 品牌探针、G2 安装包 allowlist、`.gitignore` 白名单 —— 三者与本文无关 |
+| 验收 | 夹具扩展本机导出的成品能采集；`package_release` 仍不含夹具；扩展开/关导出结果一致；缺扩展有显式警告 |
+| 关联 | `thread_ownership_plan.md §4`（同一根因：声明式 vs 运行时）；REPLY_TO_MAINLINE 待发 §〇之四 |

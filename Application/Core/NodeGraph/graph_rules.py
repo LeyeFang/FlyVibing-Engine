@@ -227,9 +227,9 @@ Property pins use _SKIP sentinel: unconnected (pin mode) or unchecked (manual mo
 |--------------|-----------------------------------------|-------------|--------------------------------------------|
 | SerialSend   | exec_in,Value(var) | exec_out | format: string/bytes, port, baud_rate, prefix/suffix (string only) |
 | ParallelSend | exec_in,Address(int),Value(var)        | exec_out | mode: manual/pin, address: int (0x3FF8 LPT1, 0x3FF0 LPT2, 0x3FE8 LPT3), value: 1-255 |
-| PathVar      | —                                      | Path (string) | browse_mode: directory/file, path: string, relative_to: output/project/cwd |
-| TextFileWrite| exec_in,FilePath(string),FileName(string),Value(var) | exec_out | mode: manual/pin, write_mode: w/a, delimiter: none/space/newline/tab/comma, file_path, file_name, value, relative_to: output/project/cwd |
-| SaveData     | exec_in,Data(var),FilePath(string),FileName(string) | exec_out,Path(string),MetaPath(string),Rows(int),Cols(int),Samples(int),Written(int),Ok(int) | mode: manual/pin, format: npz/npy/csv/json, file_path, file_name, unique, tag, key, compress, save_meta, csv_delimiter, csv_header, csv_mode, json_indent, value (manual fallback), relative_to: output/project/cwd |
+| PathVar      | —                                      | Path (string) | browse_mode: directory/file, path: string (支持宏), relative_to: output/project/cwd |
+| TextFileWrite| exec_in,FilePath(string),FileName(string),Value(var) | exec_out | mode: manual/pin, write_mode: w/a, delimiter: none/space/newline/tab/comma, file_path (支持宏), file_name, value, relative_to: output/project/cwd |
+| SaveData     | exec_in,Data(var),FilePath(string),FileName(string) | exec_out,Path(string),MetaPath(string),Rows(int),Cols(int),Samples(int),Written(int),Ok(int) | mode: manual/pin, format: npz/npy/csv/json, file_path (支持宏), file_name, unique, tag, key, compress, save_meta, csv_delimiter, csv_header, csv_mode, json_indent, value (manual fallback), relative_to: output/project/cwd |
 
 SerialSend format "string"→UTF-8, "bytes"→float32 LE 4 bytes. Port/BaudRate always read from node props; Value from upstream pin.
 SerialSend prefix/suffix frame the text line: prefix="40," + 14 → "40,14\n" (value formatted as shortest
@@ -248,6 +248,23 @@ create stray directories inside their own install folder (and fail outright on r
 media). Scenes without the prop keep working — they just resolve to `output/` now.
 See `Application/Core/FileSystem/DataPaths.py`; export warns about absolute paths baked
 into scenes (`absolute_paths` in the manifest).
+
+**Path macros (2026-11-11)**: paths may contain `<Name>` tokens, resolved at *evaluation*
+time (never at save time — `.scene` keeps the literal):
+
+| macro | alias | resolves to |
+|---|---|---|
+| `<EngineRoot>` | `<EditorRoot>` | engine root (holds `Application/`); equals the bundle root in a product |
+| `<ProjectRoot>` | — | directory containing the `.myproj`; equals the bundle root in a product |
+| `<GameRoot>` | — | game root (`game.json`); currently the same as `<ProjectRoot>` |
+| `<OutputRoot>` | — | the write root (see `relative_to` above) |
+| `<Cwd>` | — | process CWD (escape hatch; do not use as a default) |
+
+Names are case-insensitive. `<` `>` cannot appear in a Windows filename, so a real folder
+can never be mistaken for a macro. Unknown macros **raise** (`PathMacroError`) and the
+node skips the write instead of writing somewhere unintended.
+Example: `<OutputRoot>/seed` writes `<product>/output/seed/…` in a product and
+`<project>/output/seed/…` in the editor/PIE — same graph, no edits between forms.
 
 #### SigGen Nodes (Virtual Signal Generator — IO ▸ SigGen)
 | type_name       | input pins | output pins | props |

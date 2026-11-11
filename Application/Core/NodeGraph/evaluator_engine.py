@@ -51,15 +51,19 @@ class ExecutionContext:
         #    见 Application/Core/FileSystem/DataPaths.py
         self.output_root = ""          # 默认写文件根（成品 output/ · PIE <工程>/output）
         self.project_root = ""         # 工程根（成品里 = 成品根）
+        self.engine_root = ""          # 引擎根（含 Application/）
+        self.game_root = ""            # 游戏根（game.json 所在; 空 = 跟随 project）
 
     # ── 落点根（写文件节点 / 扩展共用）──────────────────────
 
     def data_roots(self) -> dict:
-        """`{"output", "project", "cwd"}` —— 交给 `DataPaths.resolve_write_path`。"""
+        """`{"engine","project","game","output","cwd"}` —— 交给 `DataPaths` 解析。"""
         import os as _os
         return {
-            "output": self.output_root or "",
+            "engine": self.engine_root or "",
             "project": self.project_root or "",
+            "game": self.game_root or self.project_root or "",
+            "output": self.output_root or "",
             "cwd": _os.getcwd(),
         }
 

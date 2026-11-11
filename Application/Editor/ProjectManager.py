@@ -172,6 +172,30 @@ class ProjectManager:
             return False
 
     @classmethod
+    def _sync_data_roots(cls) -> None:
+        """把工程根同步给 Engine 的路径服务（宏 `<ProjectRoot>` / `<OutputRoot>`）。
+
+        为什么在编辑器侧做: 根是“当前工程”的属性，而 Engine 不知道工程的存在。
+        不同步的话编辑器里 `<ProjectRoot>` 会退化成引擎根，同一个节点在
+        编辑器 / PIE / 成品里会指向三个不同目录。
+        """
+        try:
+            from Application.Editor.EditorHost import EditorHost
+            if cls._project_path:
+                proj_dir = os.path.dirname(os.path.abspath(cls._project_path))
+                EditorHost.set_data_roots(
+                    project_root=proj_dir,
+                    output_root=os.path.join(proj_dir, "output"))
+            else:
+                # 未保存工程 → 只清 project，output 回退到 <引擎>/output
+                st = EditorHost._state()
+                st['project_root'] = ""
+                st['game_root'] = ""
+                st['output_root'] = ""
+        except Exception as e:      # noqa: BLE001 — 根同步失败不阻断工程操作
+            print(f"[Project] data roots skipped: {e!r}")
+
+    @classmethod
     def create_new(cls, name: str = "Untitled") -> None:
         """创建新项目（仅内存，不写盘）。标记为未保存。
 
@@ -216,6 +240,7 @@ class ProjectManager:
                 panel._canvas_initialized = True
         except Exception as e:
             print(f"[Project] create_new cleanup failed: {e}")
+        cls._sync_data_roots()
         print(f"[Project] Created (unsaved): {name}")
 
     @classmethod
@@ -252,6 +277,8 @@ class ProjectManager:
             # ★ 引用审计 (2026-11-03): 材质/网格 id 是会话级自增的, 跨会话可能错位;
             #   这里在打开后立即点名告警，而不是等到“画出来是白的”反推
             cls.last_reference_audit = cls._audit_scene_references()
+            # ★ 路径根：工程根/输出根（宏 `<ProjectRoot>` / `<OutputRoot>`）
+            cls._sync_data_roots()
             return True
         except Exception as e:
             print(f"[Project] Failed to open: {e}")
@@ -296,6 +323,7 @@ class ProjectManager:
         cls._save()
         cls._is_saved = True
         cls._update_window_title()
+        cls._sync_data_roots()      # 换根后 <ProjectRoot>/<OutputRoot> 必须跟着变
         print(f"[Project] Saved As: {cls._project_path}")
         return True
 

@@ -161,9 +161,13 @@ class Engine:
                 # ── 数据落点根（写文件节点/扩展统一从这里取；见 FileSystem/DataPaths.py）──
                 #    output_root : 成品 = game.json 的 output_dir；PIE = <工程>/output
                 #    project_root: 工程根（成品里 = 成品根）
+                #    engine_root : 引擎根（含 Application/；成品里 = 成品根）
+                #    game_root   : 游戏根（game.json 所在；空 = 跟随 project_root）
                 #    空 = 未设置 → DataPaths 按 环境变量 / CWD 回退链解析
                 'output_root': "",
                 'project_root': "",
+                'engine_root': "",
+                'game_root': "",
                 # ── 时间系统 ──
                 '_engine_start_time': 0.0,   # init() 时设置
                 '_last_frame_time': 0.0,     # 上一帧 perf_counter
@@ -251,30 +255,45 @@ class Engine:
     # ════════════════════════════════════════════════════════════
 
     @classmethod
-    def set_data_roots(cls, *, output_root: str = "", project_root: str = "") -> None:
-        """设置数据落点根（成品/PIE 启动时由宿主注入）。
+    def set_data_roots(cls, *, output_root: str = "", project_root: str = "",
+                       engine_root: str = "", game_root: str = "") -> None:
+        """设置路径根（成品/PIE 启动时由宿主注入）。
 
         为什么放在 Engine 而不是传参: 写文件发生在**节点求值器**里，而求值器只拿
         得到 `ExecutionContext`；把根挂在 Engine 的 per-class state 上，编辑器与
         PIE/成品各持一份，互不干扰，且不需要给每个 evaluator 加参数。
 
         Args:
-            output_root:  默认写文件根（成品 = `output/`；PIE = `<工程>/output`）。
-            project_root: 工程根（成品里 = 成品根）。
+            output_root: 默认写文件根（成品 = `output/`；PIE = `<工程>/output`）。
+            project_root: 工程根（成品里 = 成品根）；<ProjectRoot> 宏。
+            engine_root: 引擎根（含 `Application/`）；成品里 = 成品根。
+            game_root:   游戏根（`game.json` 所在）；省略时跟随 project_root。
         """
         st = cls._state()
         if output_root:
             st['output_root'] = os.path.abspath(output_root)
         if project_root:
             st['project_root'] = os.path.abspath(project_root)
+        if engine_root:
+            st['engine_root'] = os.path.abspath(engine_root)
+        if game_root:
+            st['game_root'] = os.path.abspath(game_root)
 
     @classmethod
     def data_roots(cls) -> dict:
-        """返回 `{"output", "project", "cwd"}`（绝对路径；未设置项为 ""）。"""
+        """返回路径根的绝对路径表（未设置项由 DataPaths 回退解析）。
+
+        Keys: `engine` / `project` / `game` / `output` / `cwd`
+        （语义与宏 `<EngineRoot>` / `<ProjectRoot>` / `<GameRoot>` /
+        `<OutputRoot>` / `<Cwd>` 一一对应）。
+        """
         st = cls._state()
         return {
-            "output": str(st.get('output_root') or ""),
+            "engine": str(st.get('engine_root') or ""),
             "project": str(st.get('project_root') or ""),
+            # game 目前恒等于 project（成品里 myproj 与 game.json 同目录）
+            "game": str(st.get('game_root') or st.get('project_root') or ""),
+            "output": str(st.get('output_root') or ""),
             "cwd": os.getcwd(),
         }
 

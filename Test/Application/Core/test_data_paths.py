@@ -58,8 +58,11 @@ def main() -> int:
 
     from Application.Core.FileSystem.DataPaths import (
         DEFAULT_RELATIVE_TO,
+        PathMacroError,
         base_for,
+        contains_macro,
         data_roots,
+        expand_macros,
         looks_absolute_path,
         resolve_write_path,
     )
@@ -130,8 +133,83 @@ def main() -> int:
         check("relative is not absolute", not looks_absolute_path("seed/x.txt"))
         check("builtin:// is not a path", not looks_absolute_path("builtin://Cube"))
         check("empty is not absolute", not looks_absolute_path(""))
+        # ── A3. 宏（macro）—— 跨形态的"命名根" ──────────────────
+        roots_m = {
+            "engine": os.path.join(tmp, "eng"),
+            "project": os.path.join(tmp, "proj"),
+            "game": os.path.join(tmp, "game"),
+            "output": os.path.join(tmp, "game", "output"),
+            "cwd": os.path.join(tmp, "cwd"),
+        }
+        cases = {
+            "<GameRoot>./output/x.txt": os.path.join(tmp, "game", "output", "x.txt"),
+            "<GameRoot>output/x.txt": os.path.join(tmp, "game", "output", "x.txt"),
+            "<GameRoot>/output/x.txt": os.path.join(tmp, "game", "output", "x.txt"),
+            "<ProjectRoot>/assets/a.json": os.path.join(tmp, "proj", "assets", "a.json"),
+            "<EngineRoot>/Resource/x": os.path.join(tmp, "eng", "Resource", "x"),
+            "<EditorRoot>/y": os.path.join(tmp, "eng", "y"),
+            "<OutputRoot>/log.txt": os.path.join(tmp, "game", "output", "log.txt"),
+            "<gameroot>/z.txt": os.path.join(tmp, "game", "z.txt"),
+        }
+        for spec, want in cases.items():
+            got = resolve_write_path(spec, roots=roots_m)
+            check(f"macro {spec!r} resolves", _norm(got) == _norm(want), got)
 
-        # ── B. 节点行为（直接调求值器，不经引擎）──
+        check("contains_macro detects a macro", contains_macro("<GameRoot>/x"))
+        check("contains_macro is false for plain paths",
+              not contains_macro("seed/x.txt") and not contains_macro("C:/x"))
+        check("expand_macros is a pure replace (no normalization)",
+              expand_macros("<GameRoot>./output", roots_m)
+              == os.path.join(tmp, "game") + os.sep + "./output",
+              expand_macros("<GameRoot>./output", roots_m))
+        check("macro names are case-insensitive",
+              _norm(expand_macros("<PROJECTROOT>/a", roots_m))
+              == _norm(os.path.join(tmp, "proj") + "/a"))
+
+        # 未知宏必须报错 —— 不静默降级（写错地方比写失败难查）
+        try:
+            resolve_write_path("<Nope>/x", roots=roots_m)
+            raised = False
+        except PathMacroError:
+            raised = True
+        check("unknown macro raises PathMacroError", raised)
+        try:
+            expand_macros("<Gameroot/typo>", roots_m)
+            ok = True
+        except PathMacroError:
+            ok = False
+        # 语法不匹配（没有闭合 >）→ 不是宏，按普通路径处理
+        check("malformed macro is treated as text", ok)
+        try:
+            resolve_write_path("<OutputRoot>/x", roots={**roots_m, "output": ""})
+            empty_root_ok = True
+        except PathMacroError:
+            empty_root_ok = False
+        check("empty root falls back instead of failing", empty_root_ok)
+        # 部分键的根表（引擎在编辑器里只注入 project/output）→ 其余键派生
+        partial = resolve_write_path("<EngineRoot>/x",
+                                     roots={"project": os.path.join(tmp, "p2")})
+        check("partial roots fall back to derived engine root",
+              os.path.isabs(partial) and partial.endswith("x"), partial)
+
+        # 语法选择：`<` `>` 在 Windows 上是非法文件名字符 → 磁盘上不可能
+        # 存在与宏同名的真实目录（这正是选它而不是 $() 的理由）。
+        if os.name == "nt":
+            bad = os.path.join(tmp, "<GameRoot>")
+            try:
+                os.makedirs(bad, exist_ok=True)
+                creatable = os.path.isdir(bad)
+            except OSError:
+                creatable = False
+            check("a folder literally named like a macro cannot be created",
+                  not creatable)
+            if creatable:
+                try:
+                    os.rmdir(bad)
+                except OSError:
+                    pass
+
+
         from Application.Core.NodeGraph import NodeCanvas, _TYPES
         from Application.Core.NodeGraph.evaluator_engine import (
             ExecutionContext,

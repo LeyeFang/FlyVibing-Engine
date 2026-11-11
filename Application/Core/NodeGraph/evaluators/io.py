@@ -21,6 +21,8 @@ import numpy as np
 
 from Application.Core.FileSystem.DataPaths import (
     DEFAULT_RELATIVE_TO,
+    PathMacroError,
+    contains_macro,
     resolve_write_path,
 )
 
@@ -76,8 +78,14 @@ def _eval_path_var(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> No
                 relative_to=inst.props.get("relative_to", DEFAULT_RELATIVE_TO),
                 roots=ctx.data_roots(),
             )
-        except Exception:      # noqa: BLE001 — 解析失败时保留原值（宁可报错也别丢路径）
-            pass
+        except PathMacroError as exc:
+            # ★ 未知宏**不猜**：打一条 error 并把原始写法透传下去。
+            #   下游 TextFileWrite 会再解析一次 → 同样报错 → **不写盘**。
+            #   静默降级到某个根等于“文件去了别处”，比失败难查得多。
+            ctx.emit_log(node_id, "PathVar", "error", f"{exc} (raw={path!r})")
+        except Exception as exc:   # noqa: BLE001 — 其它解析失败保留原值
+            ctx.emit_log(node_id, "PathVar", "error",
+                         f"path resolve failed: {type(exc).__name__}: {exc}")
     _write_output_raw(node_id, "Path", path, ctx, g)
 
 register_evaluator("PathVar", _eval_path_var)
@@ -141,19 +149,28 @@ def _eval_text_file_write(node_id: int, ctx: ExecutionContext, g: GraphEvaluator
     content = str(value)
 
     # ── 构造完整路径 ──
-    #    ★ 相对路径按 `relative_to`（默认 output）解析 —— 旧行为是按进程 CWD，
-    #      在成品里会直接落到成品目录（甚至只读的安装目录）。
+    #    ★ 先展开宏、再判绝对/相对（相对基`relative_to` 默认 output）——
+    #      旧行为是按进程 CWD，在成品里会直接落到成品目录（甚至只读的安装目录）。
     rel = inst.props.get("relative_to", DEFAULT_RELATIVE_TO)
     try:
-        full_path = resolve_write_path(
-            file_path, relative_to=rel, default_name=file_name,
+        if file_name and contains_macro(file_name):
+            file_name = os.path.basename(
+                resolve_write_path(file_name, roots=ctx.data_roots()))
+        base = resolve_write_path(
+            file_path, relative_to=rel, default_name="",
             roots=ctx.data_roots(),
         )
-        if file_path.strip():
-            full_path = os.path.join(full_path, file_name)
-    except Exception:      # noqa: BLE001 — 解析失败回退旧行为（不静默吞掉路径）
-        full_path = os.path.join(file_path, file_name) if file_path else file_name
-    full_path = os.path.abspath(full_path)
+        full_path = os.path.normpath(os.path.join(base, file_name))
+    except PathMacroError as exc:
+        # ★ 未知宏 → **不写盘**（写错地方比写失败难查一百倍）。
+        msg = f"{exc} (file_path={file_path!r})"
+        print(f"[TextFileWrite] ERROR: {msg}")
+        ctx.emit_log(node_id, "TextFileWrite", "error", msg)
+        return
+    except Exception as exc:      # noqa: BLE001 — 其它异常保留旧行为
+        print(f"[TextFileWrite] WARNING: path resolve failed: {exc}")
+        full_path = os.path.abspath(
+            os.path.join(file_path, file_name) if file_path else file_name)
 
     # ── 写入（dry-run 必须先返回 —— 建目录也是副作用）──
     if ctx.dry_run:
@@ -298,11 +315,14 @@ def _unique_path(path: Path) -> Path:
 
 
 def _prepare_path(file_path: Any, file_name: Any, fmt: str, *,
-                  unique: bool, tag: str, base_dir: str = "") -> Path:
+                  unique: bool, tag: str, base_dir: str = "",
+                  roots: dict | None = None,
+                  relative_to: str = DEFAULT_RELATIVE_TO) -> Path:
     """构造目标路径。
 
-    `base_dir` 非空时，相对 `file_path` 以它为基准（写文件节点的 output 根）；
-    为空 = 旧行为（相对进程 CWD），供直接调用本函数的旧代码/扩展使用。
+    基准优先级: `roots`（含宏）> `base_dir` > 旧行为（相对进程 CWD）。
+    `base_dir` 保留给只有输出根的调用方；`roots` 给需要 `<ProjectRoot>` 等
+    其它宏的调用方（节点侧总是传 `ctx.data_roots()`）。
     """
     base = str(file_name or "data").strip() or "data"
     name_path = Path(base)
@@ -310,7 +330,11 @@ def _prepare_path(file_path: Any, file_name: Any, fmt: str, *,
         name_path = name_path.with_suffix("")
 
     raw_dir = str(file_path or "").strip()
-    if raw_dir and os.path.isabs(os.path.expanduser(raw_dir)):
+    if roots is not None:
+        # 宏 + 相对基准全部交给 resolver（一套语义，节点与扩展共用）
+        directory = Path(resolve_write_path(raw_dir, relative_to=relative_to,
+                                           roots=roots))
+    elif raw_dir and os.path.isabs(os.path.expanduser(raw_dir)):
         directory = Path(os.path.expanduser(raw_dir))
     elif raw_dir:
         directory = Path(base_dir or ".") / raw_dir if base_dir else Path(raw_dir)
@@ -389,7 +413,8 @@ def save_data(data: Any, file_path: Any = "", file_name: Any = "data", *,
               csv_delimiter: str = "comma", csv_header: str = "",
               csv_mode: str = "w", json_indent: int = 2,
               elapsed_s: float = 0.0, dry_run: bool = False,
-              base_dir: str = "") -> SaveDataResult:
+              base_dir: str = "", roots: dict | None = None,
+              relative_to: str = DEFAULT_RELATIVE_TO) -> SaveDataResult:
     """通用数据保存 — 供 SaveData 节点与扩展直接调用。
 
     支持 npz (多数组/单数组)、npy、csv、json。返回实际路径与行列/样本数；
@@ -399,6 +424,8 @@ def save_data(data: Any, file_path: Any = "", file_name: Any = "data", *,
         base_dir: 相对 `file_path` 的基准目录（绝对路径）。写文件节点传输出根；
                   **扩展应传 `ctx.output_dir`**（自拼 CWD 会把文件写进成品目录）。
                   空 = 旧行为（相对进程 CWD）。
+        roots:    路径根表（支持 `<ProjectRoot>` 等宏）；扩展传 `ctx.paths._roots()`
+                  或 `ctx.data_roots()`。**优先级高于 base_dir**。
     """
     fmt = str(fmt or "npz").strip().lower()
     if fmt not in _SAVE_EXT:
@@ -410,8 +437,11 @@ def save_data(data: Any, file_path: Any = "", file_name: Any = "data", *,
 
     try:
         path = _prepare_path(file_path, file_name, fmt, unique=unique, tag=tag,
-                             base_dir=base_dir)
+                             base_dir=base_dir, roots=roots,
+                             relative_to=relative_to)
         path = Path(os.path.abspath(path))
+    except PathMacroError as e:
+        return SaveDataResult(False, detail=f"path macro error: {e}")
     except Exception as e:
         return SaveDataResult(False, detail=f"path error: {e}")
 
@@ -508,10 +538,8 @@ def _eval_save_data(node_id: int, ctx: ExecutionContext, g: GraphEvaluator) -> N
         data,
         file_path=file_path,
         file_name=file_name,
-        base_dir=resolve_write_path(
-            "", relative_to=inst.props.get("relative_to", DEFAULT_RELATIVE_TO),
-            roots=ctx.data_roots(),
-        ),
+        roots=ctx.data_roots(),
+        relative_to=inst.props.get("relative_to", DEFAULT_RELATIVE_TO),
         fmt=str(inst.props.get("format", "npz")),
         key=str(inst.props.get("key", "data")),
         compress=_as_bool(inst.props.get("compress", True), True),

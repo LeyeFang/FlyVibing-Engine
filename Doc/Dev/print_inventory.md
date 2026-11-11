@@ -8,14 +8,14 @@
 | 区域 | print 条数 |
 |---|---:|
 | Functions | 241 |
-| Editor | 199 |
-| Core | 119 |
+| Editor | 200 |
+| Core | 121 |
 | Runtime | 66 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **632** |
+| **合计** | **635** |
 
-热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **51** 条。
+热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **53** 条。
 
 保留项（不是调试遗留）: `Application/Core/NodeGraph/evaluators/debug.py`
 （`Print` / `PrintString` 节点的输出语义本身）。
@@ -25,8 +25,8 @@
 | 文件 | 条数 |
 |---|---:|
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
+| `Application/Core/NodeGraph/evaluators/io.py` | 6 |
 | `Application/Runtime/RuntimeNodeLayer.py` | 5 |
-| `Application/Core/NodeGraph/evaluators/io.py` | 4 |
 | `Application/Runtime/GameRuntime.py` | 4 |
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |
 | `Application/Core/NodeGraph/evaluators/entity/camera.py` | 2 |
@@ -45,7 +45,7 @@
 
 | 文件 | 条数 |
 |---|---:|
-| `Application/Editor/ProjectManager.py` | 55 |
+| `Application/Editor/ProjectManager.py` | 56 |
 | `Application/Runtime/PlayerBootstrap.py` | 42 |
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
 | `Application/Core/Window/glfwWindow.py` | 19 |
@@ -58,6 +58,7 @@
 | `Application/Core/Project/RuntimeProjectLoader.py` | 7 |
 | `Application/Core/Renderer/ZenGL/ZenGLOverlays.py` | 7 |
 | `Application/Editor/UI/panels/ScenePanel.py` | 7 |
+| `Application/Core/NodeGraph/evaluators/io.py` | 6 |
 | `Application/Core/Renderer/ZenGL/ZenGLResourceManager.py` | 6 |
 | `Application/Editor/EditorImguiLayer.py` | 6 |
 | `Application/Editor/Services/ImportService.py` | 6 |
@@ -68,7 +69,6 @@
 | `Application/Runtime/RuntimeNodeLayer.py` | 5 |
 | `Application/Core/Media/MediaSystem.py` | 4 |
 | `Application/Core/NodeGraph/canvas.py` | 4 |
-| `Application/Core/NodeGraph/evaluators/io.py` | 4 |
 | `Application/Editor/Extensions/ExtensionMenu.py` | 4 |
 | `Application/Editor/UI/UIManager.py` | 4 |
 | `Application/Resource/ResourceManager.py` | 4 |

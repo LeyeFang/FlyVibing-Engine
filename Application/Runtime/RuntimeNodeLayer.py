@@ -190,6 +190,8 @@ class RuntimeNodeLayer(Layer):
             _roots = {}
         cls._context.output_root = str(_roots.get("output") or "")
         cls._context.project_root = str(_roots.get("project") or "")
+        cls._context.engine_root = str(_roots.get("engine") or "")
+        cls._context.game_root = str(_roots.get("game") or "")
         if cls._context.output_root:
             print(f"[RuntimeNodeLayer] output root: {cls._context.output_root}")
         cls._frame = 0

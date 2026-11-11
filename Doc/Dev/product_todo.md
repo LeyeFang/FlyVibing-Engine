@@ -824,3 +824,17 @@ free-threading 让 `dict.copy()` / `list(d)` 成为**锁下原子快照**（2000
 | 不动 | G1 品牌探针、G2 安装包 allowlist、`.gitignore` 白名单 —— 三者与本文无关 |
 | 验收 | 夹具扩展本机导出的成品能采集；`package_release` 仍不含夹具；扩展开/关导出结果一致；缺扩展有显式警告 |
 | 关联 | `thread_ownership_plan.md §4`（同一根因：声明式 vs 运行时）；REPLY_TO_MAINLINE 待发 §〇之四 |
+
+
+### 11.9 P0-H 扩展线程所有权（ctx.threads 托管层）—— 待办，未实现
+
+> 详细设计：**	hread_ownership_plan.md**（scheduler_plan.md 的上游）。
+
+| 项 | 内容 |
+|---|---|
+| 现状 | 引擎进程内 4 处扩展线程各自裸写四步协议（spd-io / eeg-*-service / ci-* / cq-imp-*）；重 IO 已在服务进程（Popen）|
+| 要做什么 | ctx.threads.spawn_io / submit（**登记语义**，非审批）+ 引擎自动命名/注册/取消/上报 + AST 守卫禁裸 spawn |
+| 强制边界 | 功能与性能归扩展作者；**可退出 / 故障隔离 / 可归因** 归宿主（含第三方）|
+| 不做什么 | 线程优先级、时间片、实时性保证（CPython 无法兑现）；池化阻塞 IO |
+| 验收 | disable 后 2 s 内线程消失；故意 while True: pass 的线程不阻止宿主退出；线程名 {ext_id}:{name} |
+| 关联 | §11.7（spd-io 按需启动是它的第一个迁移客户）；scheduler_plan.md（周期巡检归调度器）|

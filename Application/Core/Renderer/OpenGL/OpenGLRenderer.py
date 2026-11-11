@@ -188,22 +188,29 @@ class OpenGLRenderer(Renderer, RenderResourceManger):
             gl.glViewport(0, 0, rt['width'], rt['height'])
         try:
             # ── 1. 清屏 ──
-            self._core.clear_frame()
+            with self._phase("gl.clear"):
+                self._core.clear_frame()
             # ── 2. Entity pick + overlay pick (RT 激活时跳过 — 拾取面向屏幕) ──
             if rt is None:
-                self._pick._render_entities_pick_pass(view, proj)
-                self._pick._render_overlays_pick_pass(view, proj, vp_w, vp_h)
+                with self._phase("gl.pick"):
+                    self._pick._render_entities_pick_pass(view, proj)
+                    self._pick._render_overlays_pick_pass(view, proj, vp_w, vp_h)
             # ── 3. Pre-overlay callbacks (FBO 创建 / stencil 预设) ──
-            for cb in self._pre_overlay_callbacks:
-                cb(view, proj, vp_w, vp_h)
+            with self._phase("gl.pre_overlay"):
+                for cb in self._pre_overlay_callbacks:
+                    cb(view, proj, vp_w, vp_h)
             # ── 4. 实体渲染 (可能重定向到 Scene FBO) ──
-            self._entity.render_entities(view, proj)
+            with self._phase("gl.entities"):
+                self._entity.render_entities(view, proj)
             # ── 5. 后处理管线 ──
-            self._post._render_post_process(view, proj)
+            with self._phase("gl.post"):
+                self._post._render_post_process(view, proj)
             # ── 6. 统一 overlay 入口 ──
-            self._render_all_overlays(view, proj)
+            with self._phase("gl.overlays"):
+                self._render_all_overlays(view, proj)
             # ── 7. 运行时 UI（屏幕空间，永远最上）──
-            self._ui.render(getattr(self, "_ui_quads", ()), vp_w, vp_h)
+            with self._phase("gl.runtime_ui"):
+                self._ui.render(getattr(self, "_ui_quads", ()), vp_w, vp_h)
         finally:
             # ── 7. 恢复屏幕帧缓冲 + 视口 ──
             if rt is not None:

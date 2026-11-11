@@ -92,10 +92,15 @@ class PerfStatsLayer(Layer):
     # ── 配置 ────────────────────────────────────────────────
 
     @classmethod
-    def configure(cls, path: str, interval: float = 1.0) -> None:
-        """设置输出路径与采样间隔。必须在 push_layer 之前调用。"""
+    def configure(cls, path: str, interval: float = 1.0,
+                  engine=None) -> None:
+        """设置输出路径与采样间隔。必须在 push_layer 之前调用。
+
+        `engine` 用于拿 FrameProfiler（分相统计）—— 不传则只报整帧。
+        """
         cls._path = os.path.abspath(path)
         cls._interval = max(0.1, float(interval or 1.0))
+        cls._engine = engine
         cls._rows = []
         cls._started = False
 
@@ -174,6 +179,21 @@ class PerfStatsLayer(Layer):
             return {}
 
     @classmethod
+    def _phase_snapshot(cls) -> dict:
+        """分相统计快照（未启用分相时返回空 dict，不污染产物）。"""
+        eng = cls._engine
+        if eng is None:
+            from Application.Runtime.GameRuntime import GameRuntime
+            eng = GameRuntime
+        try:
+            phases = eng._get_profiler().phases
+            if not phases.enabled:
+                return {}
+            return phases.snapshot()
+        except Exception:  # noqa: BLE001
+            return {}
+
+    @classmethod
     def _sample(cls, now: float) -> dict:
         elapsed = now - cls._t_start
         cpu = time.process_time() - cls._cpu_start
@@ -223,6 +243,10 @@ class PerfStatsLayer(Layer):
                                        if hasattr(sys, "_is_gil_enabled") else None)},
             "samples": len(cls._rows),
         }
+        # ── 分相归因（1.2）: 整帧数字回答不了"时间花在哪" ──
+        phases = cls._phase_snapshot()
+        if phases:
+            summary["phases"] = phases
         try:
             with open(cls._path, "w", encoding="utf-8") as fh:
                 json.dump(summary, fh, ensure_ascii=False, indent=1)

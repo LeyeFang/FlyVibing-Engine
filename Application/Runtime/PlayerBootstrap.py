@@ -488,9 +488,15 @@ def run(source: str, max_frames: int = 0, max_seconds: float = 0.0,
     if stats_json:
         from Application.Runtime.PerfStatsLayer import PerfStatsLayer
 
-        PerfStatsLayer.configure(stats_json, stats_interval)
+        PerfStatsLayer.configure(stats_json, stats_interval, engine=GameRuntime)
         layers.append(PerfStatsLayer)
-        print(f"[Player] perf stats → {stats_json}")
+        # ★ 分相默认跟随 `MGE_PROFILE`；但用户既然要 stats-json，就说明他在
+        #   诊断性能 —— 整帧数字回答不了"时间花在哪"，所以这里直接打开分相。
+        try:
+            GameRuntime._get_profiler().phases.set_enabled(True)
+        except Exception:      # noqa: BLE001 — 统计不得阻断启动
+            pass
+        print(f"[Player] perf stats → {stats_json} (phase profiling on)")
 
     # ★ 输入层最后 push（栈顶）— 与 PIE 顺序一致。
     from Application.Runtime.RuntimeInputLayer import RuntimeInputLayer

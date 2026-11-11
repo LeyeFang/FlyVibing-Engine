@@ -1712,6 +1712,19 @@
       "visualizes": []
     },
     {
+      "id": "core.phase_profiler",
+      "path": "Test/Application/Core/test_phase_profiler.py",
+      "tier": "core",
+      "kind": "integration",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Stats.PhaseProfiler"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "core.window_display_fallback",
       "path": "Test/Application/Core/test_window_display_fallback.py",
       "tier": "core",

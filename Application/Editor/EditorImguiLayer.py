@@ -103,28 +103,49 @@ class EditorImguiLayer(Layer):
 
     @classmethod
     def OnRender(cls):
-        """ImGui 帧绘制 — new_frame → draw → render。"""
+        """ImGui 帧绘制 — new_frame → draw → render。
+
+        分相（1.2）刻意把 **构建 draw list**（Python）与 **提交 GPU**（C++）
+        分开：`imgui.panels` 是我们可以优化/并行的那部分，`imgui.submit`
+        基本只能在渲染线程串行。两着混在一起时，21.5 ms 到底谁占的说不清。
+        """
         if imgui.get_current_context() is None:
             return
+        ph = cls._phases()
         # 设置变更应用点（渲染线程帧首 — style 是渲染线程资产; 见 EditorSettings 线程模型）
         from Application.Editor.EditorSettings import EditorSettings
-        EditorSettings.apply_pending()
-        imgui.backends.glfw_new_frame()
-        imgui.backends.opengl3_new_frame()
-        # agent 输入注入必须位于 backend 之后：否则真实鼠标状态会覆盖
-        # ui.mouse/ui.click 的目标坐标（见 LiveCommandServer.apply_input）。
-        try:
-            from Application.Editor.Services.LiveCommandServer import LiveCommandServer
-            LiveCommandServer.apply_input()
-        except Exception:  # noqa: BLE001 — 无 live server/无头测试跳过
-            pass
-        imgui.new_frame()
+        with ph.phase("imgui.settings"):
+            EditorSettings.apply_pending()
+        with ph.phase("imgui.new_frame"):
+            imgui.backends.glfw_new_frame()
+            imgui.backends.opengl3_new_frame()
+            # agent 输入注入必须位于 backend 之后：否则真实鼠标状态会覆盖
+            # ui.mouse/ui.click 的目标坐标（见 LiveCommandServer.apply_input）。
+            try:
+                from Application.Editor.Services.LiveCommandServer import LiveCommandServer
+                LiveCommandServer.apply_input()
+            except Exception:  # noqa: BLE001 — 无 live server/无头测试跳过
+                pass
+            imgui.new_frame()
         # ── 热键派发（注册表 = 唯一事实源；文本框聚焦时自动让路）──
-        from Application.Editor.HotkeyDispatch import poll as _poll_hotkeys
-        _poll_hotkeys()
-        UIManager.draw_all()
-        imgui.render()
-        imgui.backends.opengl3_render_draw_data(imgui.get_draw_data())
+        with ph.phase("imgui.hotkeys"):
+            from Application.Editor.HotkeyDispatch import poll as _poll_hotkeys
+            _poll_hotkeys()
+        with ph.phase("imgui.panels"):
+            UIManager.draw_all()
+        with ph.phase("imgui.submit"):
+            imgui.render()
+            imgui.backends.opengl3_render_draw_data(imgui.get_draw_data())
+
+    @classmethod
+    def _phases(cls):
+        """本引擎的分相计时器（无 Engine / 未初始化时为零成本空对象）。"""
+        try:
+            from Application.Editor.EditorHost import EditorHost
+            return EditorHost._get_profiler().phases
+        except Exception:      # noqa: BLE001
+            from Application.Core.Stats.PhaseProfiler import NULL_SCOPE
+            return NULL_SCOPE
 
     # ════════════════════════════════════════════════════════════
     # 初始化辅助

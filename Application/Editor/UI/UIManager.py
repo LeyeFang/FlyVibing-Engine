@@ -177,6 +177,7 @@ class UIManager:
         by_name = {p.name: p for p in panels}
         ordered = [by_name[n] for n in cls.DEFAULT_PANEL_ORDER if n in by_name]
         ordered += [p for p in panels if p.name not in cls.DEFAULT_VISIBLE_PANELS]
+        ph = cls._phases()
         cls._panel_rects.clear()
         for panel in ordered:
             if panel.visible:
@@ -187,20 +188,33 @@ class UIManager:
                         and cls._right_dock_id:
                     imgui.set_next_window_dock_id(
                         cls._right_dock_id, imgui.Cond_.always)
-                expanded = panel.begin_panel()
-                # 📸 无论展开还是折叠，都记录窗口矩形，防止摄像头穿透
-                pos = imgui.get_window_pos()
-                size = imgui.get_window_size()
-                cls._panel_rects.append((pos.x, pos.y, size.x, size.y))
-                if expanded:
-                    panel.draw()
-                panel.end_panel()
+                with ph.phase(f"panel.{panel.name}"):
+                    expanded = panel.begin_panel()
+                    # 📸 无论展开还是折叠，都记录窗口矩形，防止摄像头穿透
+                    pos = imgui.get_window_pos()
+                    size = imgui.get_window_size()
+                    cls._panel_rects.append((pos.x, pos.y, size.x, size.y))
+                    if expanded:
+                        panel.draw()
+                    panel.end_panel()
 
         # ── 渲染文件对话框 (在 DockSpace 外部, 独立窗口) ──
-        FileDialog.render()
+        with ph.phase("panel.__filedialog"):
+            FileDialog.render()
 
         # ── 底部状态栏 ──
-        cls._draw_status_bar()
+        with ph.phase("panel.__statusbar"):
+            cls._draw_status_bar()
+
+    @classmethod
+    def _phases(cls):
+        """分相计时器（无 Engine 时为零成本空对象）。"""
+        try:
+            from Application.Editor.EditorHost import EditorHost
+            return EditorHost._get_profiler().phases
+        except Exception:      # noqa: BLE001
+            from Application.Core.Stats.PhaseProfiler import NULL_SCOPE
+            return NULL_SCOPE
 
     # ============================================================
     # Project 菜单回调

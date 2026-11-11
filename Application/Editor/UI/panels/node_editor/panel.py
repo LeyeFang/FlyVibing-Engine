@@ -94,6 +94,16 @@ from .validate import ValidateMixin
 _SUB_HDR_COLOR = imgui.ImVec4(0.500, 0.500, 0.500, 0.60)
 
 
+def _phases():
+    """分相计时器（无 Engine / 未初始化时为零成本空对象）。"""
+    try:
+        from Application.Editor.EditorHost import EditorHost
+        return EditorHost._get_profiler().phases
+    except Exception:      # noqa: BLE001 — 统计绝不能打断面板绘制
+        from Application.Core.Stats.PhaseProfiler import NULL_SCOPE
+        return NULL_SCOPE
+
+
 def _free_node_position(
     canvas: NodeCanvas,
     target: tuple[float, float],
@@ -383,9 +393,15 @@ class NodeEditorPanel(SelectionMixin, GroupContextMixin, GroupsWindowMixin,
             self._canvas_initialized = True
 
         # ── 确保默认 Scene 存在（饥渴创建，不等 EntitySpawn 下拉触发） ──
-        self._ensure_default_scene()
+        # 分相: 这一句每帧都跑（含 entities.clear() + 逐实体 deepcopy），
+        # 实测是 23ms/73ms 尖峰的嫌疑来源之一 —— 单独计时才能定罪。
+        ph = _phases()
+        with ph.phase("ne.scene_sync"):
+            self._ensure_default_scene()
 
         canvas = self._canvas
+        ph.counter("ne.nodes", len(getattr(canvas, "nodes", ()) or ()))
+        ph.counter("ne.links", len(getattr(canvas, "links", ()) or ()))
         # 扩展/agent 直接改画布时 revision 变化；清掉屏幕矩形/组框缓存，
         # 让本轮立即按新节点布局重绘（不强制 fit，保留用户当前视图）。
         _revision = int(getattr(canvas, "revision", 0) or 0)

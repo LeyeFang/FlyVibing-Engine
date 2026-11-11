@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**113**
-- `core`：108
+- 节点数：**114**
+- `core`：109
 - `heavy`：1
 - `live`：2
 - `manual`：2
@@ -28,6 +28,7 @@
 | `core.math.math` | `core` | `unit` | `core.math` | `Test/Application/Core/Math/test_math.py` | Application.Core.Math.Camera<br>Application.Core.Math.Transform |
 | `core.node_graph_boundary` | `core` | `contract` | `core` | `Test/Application/Core/test_node_graph_boundary.py` | - |
 | `core.perf_profiler` | `core` | `unit` | `core` | `Test/Application/Core/test_perf_profiler.py` | Application.Core.Stats.FrameProfiler<br>Application.Runtime.PerfStatsLayer |
+| `core.phase_profiler` | `core` | `integration` | `core` | `Test/Application/Core/test_phase_profiler.py` | Application.Core.Stats.PhaseProfiler |
 | `core.print_inventory` | `core` | `unit` | `core` | `Test/Application/Core/test_print_inventory.py` | Utils.Dev.print_audit<br>Doc.Dev.print_inventory |
 | `core.runtime_project_loader` | `core` | `integration` | `core` | `Test/Application/Core/test_runtime_project_loader.py` | Application.Core.Engine<br>Application.Core.NodeGraph<br>Application.Core.NodeGraph.canvas<br>Application.Core.NodeGraph.evaluator_engine<br>Application.Core.Project<br>Application.Resource.ResourceManager |
 | `core.runtime_ui` | `core` | `contract` | `core` | `Test/Application/Core/test_runtime_ui.py` | Application.Core.UI.layout<br>Application.Core.UI.theme<br>Application.Runtime.RuntimeUILayer |

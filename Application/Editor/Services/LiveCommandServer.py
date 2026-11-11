@@ -338,6 +338,8 @@ class LiveCommandServer:
             "frame.fetch": cls._op_frame_fetch,
             "threads.snapshot": cls._op_threads_snapshot,
             "renderer.snapshot": cls._op_renderer_snapshot,
+            "perf.profile": cls._op_perf_profile,
+            "perf.phases": cls._op_perf_phases,
             # ── v3: 实体 / 选中 / 组件 / 场景 / 资源 ──
             "entity.list": cls._op_entity_list,
             "entity.get": cls._op_entity_get,
@@ -461,7 +463,61 @@ class LiveCommandServer:
             },
             "overlays": overlays,
             "stats": stats,
+            "phases": _phase_snapshot(),
         }
+
+    @staticmethod
+    def _op_perf_profile(args: dict) -> dict:
+        """开关分相计时（`perf.profile on=true|false [target=editor|pie|all]`）。
+
+        为什么是独立 op: 分相有开销（每相两次 `perf_counter`），测量本身会
+        改变被测对象。默认关，需要时打开、看完关掉。
+        """
+        target = str(args.get("target") or "editor").strip().lower()
+        want = args.get("on", args.get("enabled"))
+        profilers = _perf_profilers(target)
+        if not profilers:
+            return {"target": target, "enabled": {},
+                    "reason": "no profiler for target (PIE not running?)"}
+        if want is None:
+            if _truthy(args.get("reset")):
+                for prof in profilers.values():
+                    prof.phases.reset()
+            return {"target": target,
+                    "enabled": {name: bool(p.phases.enabled)
+                                for name, p in profilers.items()},
+                    "diag": {name: {"started": p._is_started,
+                                    "window_frames": (len(p._frame_times_ms)
+                                                      if p._frame_times_ms else 0),
+                                    "phase_states": len(p.phases._states),
+                                    "last_tick": p._last_tick_time}
+                             for name, p in profilers.items()},
+                    "hint": "pass on=true/false to toggle; reset=true to clear samples"}
+        enabled = {name: p.phases.set_enabled(_truthy(want))
+                   for name, p in profilers.items()}
+        # ★ 已开启时 set_enabled 不会清样本（避免误丢数据）；要干净的降温实验
+        #   必须显式 reset，否则两段不同状态的样本会混在一起（实测踩过）。
+        if _truthy(want) and _truthy(args.get("reset")):
+            for prof in profilers.values():
+                prof.phases.reset()
+        return {"target": target, "enabled": enabled,
+                "reset": _truthy(args.get("reset")),
+                "note": "samples are cleared when enabling"}
+
+    @staticmethod
+    def _op_perf_phases(args: dict) -> dict:
+        """分相统计快照（`perf.phases [target=editor|pie|all] [text=true]`）。"""
+        target = str(args.get("target") or "all").strip().lower()
+        profilers = _perf_profilers(target)
+        out: dict = {"target": target, "profiles": {}}
+        for name, prof in profilers.items():
+            entry: dict = {"snapshot": prof.phases.snapshot()}
+            if _truthy(args.get("text")):
+                entry["text"] = prof.phases.report_text()
+            out["profiles"][name] = entry
+        if not profilers:
+            out["reason"] = "no profiler for target (PIE not running?)"
+        return out
 
     @staticmethod
     def _pie_runnability_warning() -> str | None:
@@ -2555,6 +2611,49 @@ def _editor_host():
     """EditorHost 类（延迟导入, 避免模块级循环）。"""
     from Application.Editor.EditorHost import EditorHost
     return EditorHost
+
+
+def _truthy(value) -> bool:
+    """宽松布尔（CLI 传 "1"/"true"/"on" 或 bool）。"""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in ("1", "true", "on", "yes")
+
+
+def _perf_profilers(target: str) -> dict:
+    """按 target 取 profiler 表：`{"editor": ..., "pie": ...}`。
+
+    PIE 的 `GameRuntime` 是类级单例，未运行时也拿得到 profiler 实例 ——
+    但那里没有样本，直接跳过。
+    """
+    wanted = str(target or "all").strip().lower()
+    if wanted not in ("editor", "pie", "all"):
+        raise ValueError(f"target must be editor|pie|all, got {target!r}")
+    out: dict = {}
+    if wanted in ("editor", "all"):
+        try:
+            out["editor"] = _editor_host()._get_profiler()
+        except Exception:      # noqa: BLE001
+            pass
+    if wanted in ("pie", "all"):
+        try:
+            from Application.Runtime.GameRuntime import GameRuntime
+            running = getattr(GameRuntime, "is_running", None)
+            if running is None or running():
+                out["pie"] = GameRuntime._get_profiler()
+        except Exception:      # noqa: BLE001 — PIE 未起 / 已停
+            pass
+    return out
+
+
+def _phase_snapshot() -> dict:
+    """分相快照（供 renderer.snapshot 附带；失败返回空 dict）。"""
+    try:
+        return _editor_host()._get_profiler().phases.snapshot()
+    except Exception:      # noqa: BLE001
+        return {}
 
 
 def _require_editor_scene():

@@ -9,11 +9,11 @@
 |---|---:|
 | Functions | 241 |
 | Editor | 192 |
-| Core | 118 |
+| Core | 119 |
 | Runtime | 65 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **623** |
+| **合计** | **624** |
 
 热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **50** 条。
 
@@ -106,6 +106,7 @@
 | `Application/Core/Scene/GizmoQuery.py` | 1 |
 | `Application/Core/Scene/SceneManager.py` | 1 |
 | `Application/Core/Scene/SceneSync.py` | 1 |
+| `Application/Core/Stats/PhaseProfiler.py` | 1 |
 | `Application/Editor/EditorDebugLayer.py` | 1 |
 | `Application/Editor/Gizmos/TransformGizmo.py` | 1 |
 | `Application/Editor/HotkeyDispatch.py` | 1 |

@@ -1,14 +1,21 @@
 import time
 import math
+import os
 import threading
 from collections import deque
 from typing import Optional, TYPE_CHECKING
 
 from Application.Core.Events.StatsEvent import PerformanceStatsEvent
+from Application.Core.Stats.PhaseProfiler import PhaseProfiler
 from Application.Core.Timer.Timer import ResetStartTime
 
 if TYPE_CHECKING:
     from Application.Core.Engine import Engine
+
+
+def _env_flag(name: str) -> bool:
+    """`MGE_PROFILE=1|true|on|yes` → True（其它/未设为 False）。"""
+    return str(os.environ.get(name, "")).strip().lower() in ("1", "true", "on", "yes")
 
 
 class FrameProfiler:
@@ -33,6 +40,10 @@ class FrameProfiler:
         #   renderer.snapshot op）在主线程读 —— 2026-11-10 加锁前用 `list(deque)`
         #   取值会撞 "deque mutated during iteration"。
         self._lock = threading.Lock()
+        # ── 分相计时（1.2）—— 整帧数字不知道时间花在哪时就是废数字。
+        #   默认跟随 `MGE_PROFILE`（成品默认关＝零开销）；`--stats-json` /
+        #   `perf.profile` op 会显式打开。
+        self.phases = PhaseProfiler(enabled=_env_flag("MGE_PROFILE"))
 
     def start(
         self,
@@ -66,6 +77,10 @@ class FrameProfiler:
         with self._lock:
             if self._frame_times_ms is not None:
                 self._frame_times_ms.clear()
+        try:
+            self.phases.reset()
+        except Exception:      # noqa: BLE001
+            pass
 
     def tick(
         self
@@ -74,13 +89,21 @@ class FrameProfiler:
         if not self._is_started:
             return
         now = time.perf_counter()
+        dt_ms = None
         if self._last_tick_time is not None:
             dt_ms = (now - self._last_tick_time) * 1000.0
             if dt_ms > 0:
                 with self._lock:
                     if self._frame_times_ms is not None:
                         self._frame_times_ms.append(dt_ms)
+            else:
+                dt_ms = None
         self._last_tick_time = now
+        # ── 分相结算：本帧记录的相落到样本桶，并算出未归因时间 ──
+        try:
+            self.phases.end_frame(dt_ms)
+        except Exception:      # noqa: BLE001 — 统计不得打断渲染
+            pass
         self._frame_count_since_report += 1
         if now - self._start_time >= self._next_report_time:
             elapsed = now - self._last_report_time

@@ -61,6 +61,25 @@ class Renderer(ABC):
         self._ui_quads: tuple = ()
         # 后端信息（GL vendor/version 等; 渲染线程采集, 只读消费 — renderer.snapshot op）
         self.gl_info: dict = {}
+        # 分相计时器（懒解析一次；渲染器生命周期内 Engine 不变）
+        self._phase_profiler = None
+        self._phase_resolved: bool = False
+
+    def _phase(self, name: str):
+        """取一个分相作用域（无 Engine / 无 profiler 时返回零成本空对象）。"""
+        if not self._phase_resolved:
+            self._phase_resolved = True
+            eng = self.engine
+            try:
+                self._phase_profiler = (eng._get_profiler().phases
+                                        if eng is not None else None)
+            except Exception:      # noqa: BLE001 — 统计不得影响渲染
+                self._phase_profiler = None
+        prof = self._phase_profiler
+        if prof is None:
+            from Application.Core.Stats.PhaseProfiler import NULL_SCOPE
+            return NULL_SCOPE
+        return prof.phase(name)
 
     def enqueue(self, cmd: RenderCommand) -> None:
         """主线程安全: 提交一条渲染命令。

@@ -306,11 +306,15 @@ class Engine:
         #   保证 renderer_ready / layers_attached 语义真实。
         cls._state()['renderer_ready'].clear()
         cls._state()['layers_attached'].clear()
-        cls.renderer_thread = Thread(target=cls._render_loop, daemon=True)
+        # ★ 线程命名: 分相报表 / thread_probe / crash 栈靠它辨认；
+        #   未命名时是 "Thread-7"，PIE 反复启停后完全对不上号。
+        cls.renderer_thread = Thread(target=cls._render_loop, daemon=True,
+                                     name=f"render:{cls.__name__}")
         cls.renderer_thread.start()
         # 5b. 如果启用逻辑线程模式，一并启动
         if cls._state()['_logic_thread_enabled']:
-            cls._logic_thread = Thread(target=cls._logic_loop, daemon=True)
+            cls._logic_thread = Thread(target=cls._logic_loop, daemon=True,
+                                       name=f"logic:{cls.__name__}")
             cls._logic_thread.start()
         # 6. 等待渲染线程准备好
         #    PIE 模式 (_logic_thread_enabled=True): 不阻塞调用线程。
@@ -382,14 +386,26 @@ class Engine:
             # 等待渲染线程完成所有 Layer.OnAttach() 后再开始处理窗口事件，
             # 避免 EditorLayer.OnEvent() 在 OnAttach() 之前被调用导致 AttributeError
             cls._state()['layers_attached'].wait()
+            # ★ 成品（导出游戏）就是这条路：逻辑内联在主线程。不插桩的话
+            #   "图求值/设备节点" 的成本在报表里完全不可见。
+            _ph = cls._get_profiler().phases
             try:
                 while cls.run_state:
-                    cls._tick_timing()
-                    cls.window.Update()
-                    for layer in cls._state()['layer_stack']:
-                        layer.OnUpdate()
-                        if not cls.run_state:
-                            break
+                    with _ph.phase("logic.tick"):
+                        cls._tick_timing()
+                        with _ph.phase("logic.window_poll"):
+                            cls.window.Update()
+                        with _ph.phase("logic.layers"):
+                            for layer in cls._state()['layer_stack']:
+                                with _ph.phase(
+                                    f"logic.layer.{getattr(layer, '__name__', 'unknown')}"
+                                ):
+                                    layer.OnUpdate()
+                                if not cls.run_state:
+                                    break
+                    # 内联循环的帧边界就是渲染帧（同一线程），但时序上与
+                    # 渲染线程的 tick 不同步 —— 传 None 只冲刷样本。
+                    _ph.end_frame(None)
             finally:
                 cls.shutdown()
 
@@ -404,21 +420,29 @@ class Engine:
         _reg = f"logic:{cls.__name__}"
         ThreadRegistry.register(_reg, owner=f"Engine:{cls.__name__}",
                                 expect_hz=20.0, note="每帧 OnUpdate")
+        _ph = cls._get_profiler().phases
         try:
             _cap_dt = (1.0 / cls.logic_target_fps) if cls.logic_target_fps else 0.0
             while cls.run_state:
                 _t0 = _time.perf_counter()
                 ThreadRegistry.heartbeat(_reg)
-                cls._tick_timing()
-                for layer in cls._state()['layer_stack']:
-                    layer.OnUpdate()
-                    if not cls.run_state:
-                        break
+                with _ph.phase("logic.tick"):
+                    cls._tick_timing()
+                    with _ph.phase("logic.layers"):
+                        for layer in cls._state()['layer_stack']:
+                            with _ph.phase(f"logic.layer.{getattr(layer, '__name__', 'unknown')}"):
+                                layer.OnUpdate()
+                            if not cls.run_state:
+                                break
+                # 逻辑线程的帧边界与渲染帧不同（且通常无帧率上限）:
+                # 传 None = 只冲刷样本，不参与"帧内占比/未归因"计算。
+                _ph.end_frame(None)
                 # ── 限帧 (章 T M2): 默认不限制; PIE 由 GameRuntime 设 240 防 busy-spin ──
                 if _cap_dt > 0.0:
                     _spent = _time.perf_counter() - _t0
                     if _spent < _cap_dt:
-                        _time.sleep(_cap_dt - _spent)
+                        with _ph.phase("logic.sleep"):
+                            _time.sleep(_cap_dt - _spent)
         finally:
             ThreadRegistry.unregister(_reg)
 
@@ -612,34 +636,53 @@ class Engine:
     def _render_one_frame(
         cls
     ) -> None:
-        """渲染一帧 — 子类可覆写以扩展（如 EditorHost 在 EndFrame 后加 ImGui 绘制）。"""
+        """渲染一帧 — 子类可覆写以扩展（如 EditorHost 在 EndFrame 后加 ImGui 绘制）。
+
+        分相插桩（1.2）: 每个 `with` 块都是一个可单独统计的相；嵌套结构的
+        排他时间由 `PhaseProfiler` 自动扣除子相。关闭时（`MGE_PROFILE` 未设）
+        每个 `with` 只多一次属性查找。
+        """
+        ph = cls._get_profiler().phases
+
         # ── 帧同步: slave 等待 master (PIE 等 Editor) ──
         if cls._frame_sync is not None and not cls._is_frame_sync_master:
-            cls._frame_sync.slave_wait()
+            with ph.phase("frame.sync_wait"):
+                cls._frame_sync.slave_wait()
 
         renderer = cls.renderer
         window = cls.window
         # ── 点击穿透更新 (PIE overlay 模式依赖此调用, Editor 主线冗余但无害) ──
         if hasattr(window, '_update_click_through_state'):
-            window._update_click_through_state()
+            with ph.phase("frame.click_through"):
+                window._update_click_through_state()
         # ── 帧开始 ──
-        renderer.StartFrame()
+        with ph.phase("renderer.start"):
+            renderer.StartFrame()
         # ── 层渲染 ──
-        for layer in cls._state()['layer_stack']:
-            layer.OnRender()
+        with ph.phase("frame.layers"):
+            for layer in cls._state()['layer_stack']:
+                # ★ layer 是**类**（不是实例）—— `type(layer).__name__` 得到的是
+                #   元类名 "ABCMeta"，所有层会挤在同一个相里（实测踩过）。
+                with ph.phase(f"layer.{getattr(layer, '__name__', 'unknown')}"):
+                    layer.OnRender()
         # ── 帧结束 ──
-        renderer.EndFrame()
+        with ph.phase("renderer.end"):
+            renderer.EndFrame()
         # ── 帧末抓帧（MCP frame.request）: 必须在 SwapBuffer 前读回后缓冲 ──
-        cls._maybe_capture()
+        if cls._state().get("_capture_slot") is not None:
+            with ph.phase("frame.capture"):
+                cls._maybe_capture()
         # ── 交换缓冲区 (OpenGL/ZenGL 需要; Vulkan 由 SwapChain 管理) ──
         if cls.renderer_type in (RendererType.OpenGL, RendererType.ZenGL):
-            window.SwapBuffer()
+            with ph.phase("frame.swap"):
+                window.SwapBuffer()
         # ── 性能统计 ──
         cls._get_profiler().tick()
 
         # ── 帧同步: master 唤醒 slave (Editor → PIE) ──
         if cls._frame_sync is not None and cls._is_frame_sync_master:
-            cls._frame_sync.master_tick()
+            with ph.phase("frame.sync_notify"):
+                cls._frame_sync.master_tick()
 
     # ════════════════════════════════════════════════════════════
     # 帧抓取（MCP 实时通道 — frame.request / frame.fetch）

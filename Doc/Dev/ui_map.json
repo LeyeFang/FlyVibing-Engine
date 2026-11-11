@@ -4,6 +4,8 @@
   "agent_only": [
     "renderer.snapshot",
     "threads.snapshot",
+    "perf.profile",
+    "perf.phases",
     "device.save",
     "console.tail",
     "frame.request",

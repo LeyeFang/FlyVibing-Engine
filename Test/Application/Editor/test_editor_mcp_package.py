@@ -74,7 +74,7 @@ def test_registry() -> None:
     src = os.path.join(ROOT, "Application", "Editor", "Services", "LiveCommandServer.py")
     with open(src, encoding="utf-8") as fh:
         engine_ops = set(re.findall(r'"([a-z_]+\.[a-z_.]+)":\s*cls\._op_', fh.read()))
-    check("engine ops found (79)", len(engine_ops) == 79, str(sorted(engine_ops)))
+    check("engine ops found (81)", len(engine_ops) == 81, str(sorted(engine_ops)))
     check("registry covers engine ops", engine_ops <= set(ops.OPS), str(engine_ops - set(ops.OPS)))
     check("no extra registry ops", set(ops.OPS) <= engine_ops, str(set(ops.OPS) - engine_ops))
     check("aliases resolve", ops.resolve("editor_run_pie") == ("sim.play", {}), str(ops.resolve("editor_run_pie")))

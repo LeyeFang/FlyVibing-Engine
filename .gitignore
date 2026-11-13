@@ -6,26 +6,11 @@ dist/
 /wheels/
 *.egg-info
 Application/Editor/Config
-.editor_cache.json
+.txt
 
-# 临时/备份文件（任何层级）—— 合并残留 / 手改备份 / 重命名遗留都不入库
-*.bak
-*.orig
-*.rej
-
-# 根目录临时产物（shell 重定向、崩溃日志、录制目录）—— 只锁根目录，不误伤资源
-/*.txt
-/*.log
-/*.tmp
-/*_recordings/
-
-# Virtual environments
-.venv
-.venv-*
-
-# 工具链安装产物（engine-editor-cli setup 写入；可随时重生成）
-.vscode
-.github
+# 隐藏文件/目录统一忽略（. 开头）——.vscode/.github/.venv/.editor_cache.json/.dsh-debug 等
+# 例外: 已跟踪的 .gitignore / .gitattributes 不受影响，无需逐行列举
+.*
 
 # Runtime packaging / game export (P2+)
 # 运行时镜像与 wheelhouse 不进 git（拉取轻量; 开发者按 README 用 uv/PyPI 重建）——

@@ -6,14 +6,11 @@ dist/
 /wheels/
 *.egg-info
 Application/Editor/Config
-.editor_cache.json
 .txt
 
-# Virtual environments
-.venv
-.venv-*
-.vscode
-.github
+# 隐藏文件/目录统一忽略（. 开头）——.vscode/.github/.venv/.editor_cache.json/.dsh-debug 等
+# 例外: 已跟踪的 .gitignore / .gitattributes 不受影响，无需逐行列举
+.*
 
 # Runtime packaging / game export (P2+)
 # 运行时镜像与 wheelhouse 不进 git（拉取轻量; 开发者按 README 用 uv/PyPI 重建）——

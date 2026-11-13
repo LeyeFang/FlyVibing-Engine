@@ -10,6 +10,12 @@
   "requires": [],
   "python": {
     "mode": "engine",
-    "probe": ["serial"]
+    "probe": ["serial"],
+    "runtime": {
+      "mode": "engine",
+      "requires": ["pyserial>=3.5"],
+      "probe": ["serial"],
+      "note": "pyserial is part of the base runtime image; declared so a future base trim cannot silently break the node pack"
+    }
   }
 }

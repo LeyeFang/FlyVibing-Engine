@@ -96,6 +96,8 @@ class ExtensionInfo:
     export: bool = True               # 是否随 Project Export 游戏层分发（manifest export:false 可关）
     python: dict = field(default_factory=dict)          # manifest 声明的解释器协议（原始规格）
     python_runtime: dict = field(default_factory=dict)  # 已装载时的解析结果（ctx.python.explain）
+    #: manifest `python.runtime` 依赖契约（产物侧；导出强制，见 ExtensionRuntimeDeps）
+    runtime_contract: dict = field(default_factory=dict)
     dir: str = ""
     manifest_path: str = ""
     scope: str = "user"               # builtin | local | user（见 ExtensionManager.scope_of）
@@ -149,6 +151,9 @@ class ExtensionInfo:
             "panel_state": _M.panel_state(self.id),
             "python": {**({"declared": dict(self.python)} if self.python else {}),
                        **(dict(self.python_runtime) if self.python_runtime else {})},
+            # 产物侧依赖契约（`python.runtime`）：导出时**强制**，缺失即导出失败。
+            # 面板/节点开发者用它确认"成品里到底会不会有这些包"。
+            "runtime": dict(self.runtime_contract) if self.runtime_contract else {},
         }
 
 
@@ -630,6 +635,19 @@ class ExtensionManager:
                 info.python = dict(raw_python)
             elif raw_python not in (None, ""):
                 raise ValueError("manifest python must be a string or an object")
+            # 产物侧依赖契约（`python.runtime`）—— 与导出器共用**同一个**解析实现，
+            # 所以在编辑器里 `extension.list` 看到的问题就是导出时会挡下来的问题。
+            try:
+                from Application.Core.Extension import (
+                    ExtensionRuntimeDeps as _RuntimeDeps,
+                )
+                info.runtime_contract = _RuntimeDeps.parse(
+                    data, ext_id=info.id, ext_dir=str(path.parent),
+                    data_dir=cls._data_dir(info.id),
+                    engine_root=cls._engine_root(),
+                ).to_dict()
+            except Exception as e:  # noqa: BLE001 — 契约问题不阻断扫描（导出会挡）
+                info.runtime_contract = {"problems": [f"{type(e).__name__}: {e}"]}
             if not _ID_RE.match(info.id):
                 raise ValueError(f"invalid id {info.id!r} (expect [a-z][a-z0-9_]*)")
             if not info.api_version or not info.api_version.startswith(_API_MAJOR):

@@ -54,7 +54,10 @@ def prepare_offline(source: str) -> PlayerSession:
     if not os.path.isfile(abs_source):
         raise FileNotFoundError(f"入口不存在: {abs_source}")
 
+    root = os.path.dirname(abs_source)
+    _apply_extension_envs(root)
     _install_declared_node_packs()
+    _probe_extension_deps(root)
 
     ext = os.path.splitext(abs_source)[1].lower()
     if ext == ".json":
@@ -64,6 +67,62 @@ def prepare_offline(source: str) -> PlayerSession:
     if ext == ".scene":
         return _prepare_from_scene(abs_source, root=os.path.dirname(abs_source))
     raise ValueError(f"不支持的入口类型: {source}（期望 game.json / .myproj / .scene）")
+
+
+def _apply_extension_envs(root: str) -> None:
+    """bundle 出去的扩展环境 → `FVE_EXT_PYTHON_<ID>`（**必须早于任何扩展代码**）。
+
+    产物里没有扩展管理器，`ctx.python` 不存在；但把所有环境变量在这里注入后，
+    任何遵守协议（读 env / 用 `ExtensionPython` 同一套解析）的代码在成品与编辑器里
+    选到的是同一个解释器。
+    """
+    try:
+        from Application.Core.Extension import ExtensionRuntimeDeps as deps
+
+        applied = deps.apply_env_overrides(root)
+        for ext_id, exe in applied:
+            print(f"[Player] extension env: {ext_id} → {exe}")
+    except Exception as e:  # noqa: BLE001 — 元数据坏了不该阻断启动
+        print(f"[Player] WARNING: extension env overrides failed: {type(e).__name__}: {e}")
+
+
+def _probe_extension_deps(root: str) -> None:
+    """按 `extensions/python_contracts.json` 检查三方依赖；缺包**大声报**。
+
+    为什么要在启动时（而不是第一次用到时）报: 设备类扩展的 hdf5 是在 `save_record` 里
+    才 import h5py —— 实验跑完、数据要落盘那一刻才炸，错误出现在最不该出现的时刻。
+    启动就报，用户能在开跑前换格式或补装。
+    """
+    try:
+        from Application.Core.Extension import ExtensionRuntimeDeps as deps
+
+        contracts = deps.load_product_contracts(root)
+        if not contracts:
+            return
+        fatal: list[str] = []
+        for ext_id, info in sorted(contracts.items()):
+            mode = str((info or {}).get("mode") or "none")
+            if mode == "none":
+                continue
+            required = list((info or {}).get("probe") or ())
+            optional = bool((info or {}).get("optional"))
+            missing = deps.missing_imports(required)
+            if not missing:
+                print(f"[Player] extension deps ok: {ext_id} ({mode})")
+                continue
+            line = f"extension '{ext_id}' ({mode}) missing module(s): {', '.join(missing)}"
+            if optional:
+                print(f"[Player] WARNING: {line} — declared optional, continuing")
+            else:
+                print(f"[Player] ERROR: {line}")
+                print(f"[Player] ERROR:   re-export with the dependency available, or add "
+                      f"it to `python.runtime.requires` in the extension manifest")
+                fatal.append(ext_id)
+        if fatal:
+            print(f"[Player] ERROR: {len(fatal)} extension(s) will fail at runtime: "
+                  f"{', '.join(fatal)}")
+    except Exception as e:  # noqa: BLE001 — 依赖检查不得变成新的崩溃点
+        print(f"[Player] WARNING: extension dependency probe failed: {type(e).__name__}: {e}")
 
 
 def _install_declared_node_packs() -> None:

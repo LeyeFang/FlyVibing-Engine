@@ -7,5 +7,12 @@
   "description": "Virtual signal generator live monitor: watch (view only) vs record (view + file), real-time waveform scope, software display filters and agent ops (ext.virtual.*). Reference example for device-family panel extensions.",
   "entry": "extension.py:create_extension",
   "capabilities": ["ops", "ui", "device", "nodes"],
-  "requires": []
+  "requires": [],
+  "python": {
+    "mode": "engine",
+    "runtime": {
+      "mode": "none",
+      "note": "numpy-based only; numpy is part of the base runtime image"
+    }
+  }
 }

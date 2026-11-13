@@ -7,5 +7,12 @@
   "description": "Classic BCI algorithm nodes (FBCSP / CCA implemented) + epoch datasets, owned by the extension; core only discovers the node pack.",
   "entry": "extension.py:create_extension",
   "capabilities": ["ops", "nodes"],
-  "requires": []
+  "requires": [],
+  "python": {
+    "mode": "engine",
+    "runtime": {
+      "mode": "none",
+      "note": "numpy/scipy-based only; both are part of the base runtime image"
+    }
+  }
 }

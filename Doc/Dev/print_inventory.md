@@ -8,12 +8,12 @@
 | 区域 | print 条数 |
 |---|---:|
 | Functions | 316 |
-| Editor | 202 |
+| Editor | 205 |
 | Core | 121 |
-| Runtime | 66 |
+| Runtime | 74 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **712** |
+| **合计** | **723** |
 
 热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **53** 条。
 
@@ -45,8 +45,8 @@
 
 | 文件 | 条数 |
 |---|---:|
-| `Application/Editor/ProjectManager.py` | 56 |
-| `Application/Runtime/PlayerBootstrap.py` | 42 |
+| `Application/Editor/ProjectManager.py` | 59 |
+| `Application/Runtime/PlayerBootstrap.py` | 50 |
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
 | `Application/Core/Window/glfwWindow.py` | 19 |
 | `Application/Editor/UI/panels/node_editor/panel.py` | 19 |

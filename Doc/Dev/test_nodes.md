@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**117**
-- `core`：112
+- 节点数：**118**
+- `core`：113
 - `heavy`：1
 - `live`：2
 - `manual`：2
@@ -84,6 +84,7 @@
 | `extensions.extension_examples` | `core` | `integration` | `extensions` | `Test/Application/Extensions/test_extension_examples.py` | Application.Editor.Extensions.ExtensionExamples<br>Application.Editor.Extensions.ExtensionManager<br>Application.Editor.UI.UIManager |
 | `extensions.extension_graph` | `core` | `contract` | `extensions` | `Test/Application/Extensions/test_extension_graph.py` | Application.Editor.Extensions.ExtensionGraph |
 | `extensions.extension_manager` | `core` | `integration` | `extensions` | `Test/Application/Extensions/test_extension_manager.py` | Application.Editor.Extensions.ExtensionManager<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.UIManager |
+| `extensions.extension_python_contract` | `core` | `unit` | `extensions` | `Test/Application/Extensions/test_extension_python_contract.py` | Application.Core.Extension.ExtensionRuntimeDeps<br>Application.Editor.Extensions.ExtensionPythonDist<br>Application.Editor.ProjectManager<br>Application.Runtime.PlayerBootstrap |
 | `extensions.extension_review` | `core` | `contract` | `extensions` | `Test/Application/Extensions/test_extension_review.py` | - |
 | `extensions.extension_ui` | `core` | `ui-behavior` | `extensions` | `Test/Application/Extensions/test_extension_ui.py` | Application.Core.Extension.ExtensionBase<br>Application.Editor.Extensions.ExtensionManager<br>Application.Editor.Extensions.ExtensionUI<br>Application.Editor.UI.UIManager |
 | `extensions.virtual_panel` | `core` | `ui-behavior` | `extensions` | `Test/Application/Extensions/test_virtual_panel.py` | Application.Editor.Extensions.ExtensionManager<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.UIManager<br>Application.Functions.VirtualDevice |

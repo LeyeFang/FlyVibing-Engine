@@ -1811,6 +1811,22 @@
       "requires": [],
       "exercises": [],
       "visualizes": []
+    },
+    {
+      "id": "extensions.extension_python_contract",
+      "path": "Test/Application/Extensions/test_extension_python_contract.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "extensions",
+      "covers": [
+        "Application.Core.Extension.ExtensionRuntimeDeps",
+        "Application.Editor.Extensions.ExtensionPythonDist",
+        "Application.Editor.ProjectManager",
+        "Application.Runtime.PlayerBootstrap"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
     }
   ]
 }

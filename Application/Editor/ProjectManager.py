@@ -25,6 +25,8 @@ import json
 import os
 from typing import Optional
 
+from Application.Core.Extension import ExtensionRuntimeDeps as RuntimeDeps
+
 # 导出游戏包时 Utils/User 下要跳过的目录（构建产物/临时文件 — 成品里只留运行时辅助）。
 # 守卫: Test/Application/Editor/test_utils_layout.py::test_utils_export_selection
 UTILS_EXPORT_SKIP_DIRS = {"dist", "tmp"}
@@ -604,6 +606,17 @@ class ProjectManager:
                 engine_root, scene_types
             )
             warnings.extend(ext_warnings)
+            # ★ 依赖契约是**强制**的：非法/缺失 → 在写任何大文件之前失败。
+            #   见 Application/Core/Extension/ExtensionRuntimeDeps.py 的模块文档。
+            python_problems = list(ext_details.get("python_problems") or ())
+            if python_problems:
+                for line in python_problems:
+                    print(f"[Export] ERROR: {line}")
+                raise RuntimeError(
+                    "extension python dependency contract invalid — "
+                    f"{len(python_problems)} issue(s); see the lines above or run "
+                    f"`Utils/Dev/check_extension_python.py --all`"
+                )
             export_excluded = (cls._export_excluded_paths(engine_root, required_ext_dirs)
                                | cls._local_state_paths(engine_root))
             ext_details = dict(ext_details)
@@ -616,6 +629,13 @@ class ProjectManager:
                 os.path.join(out_dir, "Application"), warnings,
                 exclude_paths=export_excluded, errors=copy_errors,
             )
+            # 5b-1. 扩展目录瘦身: 文档/测试/示例/wheels 与成品无关（2026-11-14）
+            pruned = cls._prune_extension_dirs(out_dir, engine_root, required_ext_dirs)
+            if pruned:
+                ext_details = dict(ext_details)
+                ext_details["pruned_subdirs"] = pruned
+                print(f"[Export]   extension dirs pruned: {len(pruned)} subdir(s) "
+                      f"({', '.join(sorted({p.split(':')[-1] for p in pruned}))})")
             res_files, res_bytes = cls._copy_tree_for_export(
                 os.path.join(engine_root, "Resource"),
                 os.path.join(out_dir, "Resource"), warnings,
@@ -683,6 +703,21 @@ class ProjectManager:
             if os.path.isdir(wheels_src):
                 wh_files, wh_bytes = cls._copy_tree_for_export(
                     wheels_src, os.path.join(out_dir, "wheelhouse"), warnings)
+            # 5d. 扩展依赖分发（manifest `python.runtime` 契约 → 产物）
+            #     engine: 包装进 runtime/Lib/site-packages（节点进程内 import）
+            #     bundle: 整个环境拷进 extensions/<id>/env（只给子进程）
+            #     见 Application/Core/Extension/ExtensionRuntimeDeps.py
+            python_info = cls._distribute_extension_python(
+                out_dir, engine_root, ext_details.get("python") or {},
+                runtime_included=bool(runtime_info["included"]),
+                warnings=warnings,
+            )
+            for ext_id, item in python_info.get("extensions", {}).items():
+                for failure in item.get("failed") or ():
+                    warnings.append(
+                        f"extension '{ext_id}' dependency not installed: "
+                        f"{failure.get('requirement')} ({failure.get('reason') or failure.get('detail')})"
+                    )
 
             # 5e. 启动器（ASCII only — 避免代码页问题）
             launcher = "\r\n".join([
@@ -711,6 +746,7 @@ class ProjectManager:
                 "game_json": "game.json",
                 "launcher": "run_game.cmd",
                 "runtime": runtime_info,
+                "extension_python": python_info,
                 "application_files": app_files,
                 "resource_files": res_files,
                 "utils_files": utils_files,
@@ -725,6 +761,8 @@ class ProjectManager:
                 f"runtime {'yes' if runtime_info['included'] else 'MISSING'} / "
                 f"wheelhouse {wh_files}f"
             )
+            if python_info.get("extensions"):
+                print(f"[Export]   extension python: {python_info.get('summary', '')}")
 
         # ── 6. 清单（覆盖占位版本） ──
         cls._write_json(manifest_path, {
@@ -881,6 +919,19 @@ class ProjectManager:
         return types
 
     @staticmethod
+    def _extension_data_dir(ext_id: str) -> str:
+        """扩展的可写数据目录（与 `ExtensionManager._data_dir` 同一规则）。
+
+        只用于展开依赖契约里的 `%EXT_DATA%` —— 导出器不读这里的文件，但它必须
+        能**解析**（bundle 模式的 venv 通常就装在这里）。
+        """
+        from Application.Core import AppIdentity
+
+        base = (AppIdentity.env_get("EXTENSIONS_DATA")
+                or AppIdentity.data_dir("extensions_data"))
+        return os.path.join(base, str(ext_id or ""))
+
+    @staticmethod
     def _official_extension_ids(engine_root: str) -> set[str]:
         """Read the mainline installer allowlist (empty when unavailable)."""
         path = os.path.join(engine_root, "Application", "Functions",
@@ -979,6 +1030,8 @@ class ProjectManager:
         non_mainline: list[str] = []
         local_only: list[str] = []
         deploy_modes: dict[str, str] = {}
+        python_contracts: dict = {}
+        python_problems: list[str] = []
         for directory in sorted(required):
             abs_dir = os.path.abspath(directory)
             try:
@@ -993,6 +1046,7 @@ class ProjectManager:
                 continue
             manifest = os.path.join(abs_dir, "extension.json")
             manifest_id = os.path.basename(abs_dir)
+            data: dict = {}
             try:
                 with open(manifest, "r", encoding="utf-8") as fh:
                     data = json.load(fh)
@@ -1025,6 +1079,20 @@ class ProjectManager:
                     f"non-mainline extension '{manifest_id}' is included in the game export "
                     f"because the scene uses its nodes; verify redistribution rights"
                 )
+            # ── 依赖契约（强制）─────────────────────────────────────────────
+            # 随产物分发的扩展**必须**显式声明 python.runtime：产物用独立运行时
+            # 镜像，未声明的三方依赖在成品里必然缺失（2026-11-14 落盘事故）。
+            contract = RuntimeDeps.parse(
+                data if isinstance(data, dict) else {},
+                ext_id=manifest_id, ext_dir=abs_dir,
+                data_dir=cls._extension_data_dir(manifest_id),
+                engine_root=engine_root,
+            )
+            problems = RuntimeDeps.export_problems(contract, ships_code=True)
+            if problems:
+                python_problems.extend(
+                    [f"extension '{manifest_id}': {p}" for p in problems])
+            python_contracts[manifest_id] = contract
             kept.add(abs_dir)
         for node_type in sorted(unresolved):
             warnings.append(
@@ -1041,8 +1109,137 @@ class ProjectManager:
             "redistributable": not local_only,
             "deploy": dict(sorted(deploy_modes.items())),
             "unresolved_types": sorted(unresolved),
+            # 依赖契约（`python.runtime`）—— 原样进导出清单，成品据此 probe
+            "python": {ext_id: contract.to_dict()
+                       for ext_id, contract in sorted(python_contracts.items())},
+            "python_problems": python_problems,
         }
         return kept, warnings, details
+
+    #: 扩展目录里与**运行无关**的子目录（导出时删除）。
+    #: `Test`/`Doc`/`Examples` 只有编辑期价值（示例菜单在成品里不存在），
+    #: `wheels` 已在顶部 wheelhouse 统一分发，扩展自带副本只是重复。
+    EXTENSION_SKIP_SUBDIRS = ("Test", "Doc", "Docs", "tests", "Examples", "wheels")
+
+    @classmethod
+    def _prune_extension_dirs(cls, out_dir: str, engine_root: str,
+                              required_dirs) -> list[str]:
+        """删掉随包扩展目录里的编辑期子目录 → `["<ext>:<subdir>", ...]`。
+
+        2026-11-14: 本地扩展的 `Test/` + `Doc/` + `Examples/` 会整棵打进产物，
+        既占体积又把"开发期脚本"暴露给终端用户。
+        """
+        import shutil as _shutil
+
+        funcs = os.path.abspath(os.path.join(engine_root, "Application", "Functions"))
+        pruned: list[str] = []
+        for directory in sorted(required_dirs or ()):
+            rel = os.path.relpath(os.path.abspath(directory), funcs)
+            target = os.path.join(out_dir, "Application", "Functions", rel)
+            if not os.path.isdir(target):
+                continue
+            for sub in cls.EXTENSION_SKIP_SUBDIRS:
+                path = os.path.join(target, sub)
+                if not os.path.isdir(path):
+                    continue
+                try:
+                    _shutil.rmtree(path)
+                    pruned.append(f"{rel}:{sub}")
+                except OSError:
+                    pass
+        return pruned
+
+    @classmethod
+    def _distribute_extension_python(cls, out_dir: str, engine_root: str,
+                                     contracts: dict, *, runtime_included: bool,
+                                     warnings: list[str]) -> dict:
+        """按 `python.runtime` 契约把依赖装进产物；总是写出两份元数据。
+
+        * `extensions/python_contracts.json` — 成品启动时据此 probe（缺包要大声报）
+        * `extensions/python_envs.json` — bundle 模式的环境路径 → `FVE_EXT_PYTHON_<ID>`
+
+        Returns: `{extensions: {id: result}, summary: "<one line>"}`
+        """
+        from Application.Editor.Extensions import ExtensionPythonDist as _Dist
+
+        info: dict = {"extensions": {}, "summary": ""}
+        if not contracts:
+            cls._write_json(os.path.join(out_dir, "extensions", "python_contracts.json"), {
+                "version": RuntimeDeps.SPEC_VERSION, "extensions": {},
+            })
+            return info
+
+        site_packages = os.path.join(out_dir, "runtime", "Lib", "site-packages")
+        runtime_python = ""
+        for candidate in ("python3.14t.exe", "python.exe"):
+            path = os.path.join(out_dir, "runtime", candidate)
+            if os.path.isfile(path):
+                runtime_python = path
+                break
+
+        envs: dict = {}
+        bits: list[str] = []
+        for ext_id, raw in sorted(contracts.items()):
+            contract = cls._contract_from_dict(ext_id, raw)
+            if contract.mode == "engine":
+                if not runtime_included:
+                    info["extensions"][ext_id] = {
+                        "mode": "engine", "requires": list(contract.requires),
+                        "installed": [], "present": [], "skipped": False,
+                        "failed": [{"requirement": "*",
+                                    "reason": "runtime image not included in this export"}],
+                    }
+                    bits.append(f"{ext_id}:no-runtime")
+                    continue
+                wheel_dirs = [
+                    os.path.join(engine_root, "Application", "Functions", ext_id, "wheels"),
+                    os.path.join(engine_root, "Resource", "wheels"),
+                ]
+                result = _Dist.install_contract(
+                    contract, runtime_python=runtime_python,
+                    site_packages=site_packages, wheel_dirs=wheel_dirs,
+                )
+                info["extensions"][ext_id] = result
+                if result.get("skipped"):
+                    bits.append(f"{ext_id}:none")
+                else:
+                    bits.append(
+                        f"{ext_id}:{len(result['installed'])} new + "
+                        f"{len(result['present'])} present"
+                        + (f" / {len(result['failed'])} FAILED" if result["failed"] else ""))
+            elif contract.mode == "bundle":
+                result = _Dist.bundle_environment(contract, out_dir)
+                info["extensions"][ext_id] = result
+                if result.get("executable"):
+                    envs[ext_id] = {"executable": result["executable"],
+                                    "dir": result["dir"], "source": result["source"]}
+                    bits.append(f"{ext_id}:bundled {result['files']}f")
+                else:
+                    warnings.append(
+                        f"extension '{ext_id}' bundle env unavailable: "
+                        f"{result.get('error')}")
+                    bits.append(f"{ext_id}:bundle-FAILED")
+            else:
+                info["extensions"][ext_id] = {"mode": "none", "skipped": True}
+                bits.append(f"{ext_id}:no third-party deps")
+
+        cls._write_json(os.path.join(out_dir, "extensions", "python_contracts.json"),
+                        {"version": RuntimeDeps.SPEC_VERSION,
+                         "extensions": dict(contracts)})
+        if envs:
+            cls._write_json(os.path.join(out_dir, "extensions", "python_envs.json"),
+                            {"version": RuntimeDeps.SPEC_VERSION, "extensions": envs})
+        info["summary"] = ", ".join(bits)
+        return info
+
+    @staticmethod
+    def _contract_from_dict(ext_id: str, raw: dict) -> "RuntimeDeps.RuntimeContract":
+        """导出清单里的契约 dict → `RuntimeContract`（只取数据字段）。"""
+        fields = RuntimeDeps.RuntimeContract.__dataclass_fields__
+        data = {k: v for k, v in (raw or {}).items() if k in fields}
+        data["ext_id"] = ext_id
+        data["problems"] = []
+        return RuntimeDeps.RuntimeContract(**data)
 
     @staticmethod
     def _copy_tree_for_export(src: str, dst: str, warnings: list[str],

@@ -7,5 +7,12 @@
   "description": "Electrophysiology signal-processing node family — init / filter / reference / transforms (FFT·SDFT·CWT·Hilbert) / bad channels / ICA",
   "entry": "extension.py:create_extension",
   "capabilities": ["ops", "nodes"],
-  "requires": []
+  "requires": [],
+  "python": {
+    "mode": "engine",
+    "runtime": {
+      "mode": "none",
+      "note": "base runtime image only; revisit when the node family lands"
+    }
+  }
 }

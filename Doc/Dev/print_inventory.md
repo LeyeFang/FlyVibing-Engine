@@ -9,11 +9,11 @@
 |---|---:|
 | Functions | 318 |
 | Editor | 205 |
-| Core | 127 |
+| Core | 128 |
 | Runtime | 71 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **728** |
+| **合计** | **729** |
 
 热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **51** 条。
 
@@ -81,6 +81,7 @@
 | `Application/Editor/UI/panels/SettingsPanel.py` | 3 |
 | `Application/Editor/UI/panels/node_editor/group_context.py` | 3 |
 | `Application/Core/AppIdentity.py` | 2 |
+| `Application/Core/DeviceAliases.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/debug.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/camera.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/destroy.py` | 2 |
@@ -99,7 +100,6 @@
 | `Application/Runtime/GameRuntime.py` | 2 |
 | `Application/Runtime/RuntimeUILayer.py` | 2 |
 | `Application/Runtime/StubWindow.py` | 2 |
-| `Application/Core/DeviceAliases.py` | 1 |
 | `Application/Core/Extension/ExtensionContext.py` | 1 |
 | `Application/Core/NodeGraph/evaluators/action.py` | 1 |
 | `Application/Core/NodeGraph/evaluators/inputs.py` | 1 |

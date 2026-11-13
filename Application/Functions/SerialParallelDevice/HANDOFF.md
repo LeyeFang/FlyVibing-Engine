@@ -18,10 +18,15 @@
 > 141 行核心模块（反向依赖 P0 / 核心方言 P1 / 编辑器词汇 P2 / 资产错位 P3），
 > **冻结现状、保留兼容**，由扩展侧按工作单重做后再由主线移出 —— 见
 > `Doc/MAINLINE_COUPLING_AUDIT_2026-11-10.md`（含逐项分工、兼容红线、完成定义与回执表）。
-> **解耦 Batch A（2026-11-10）**: 端点台账已由扩展自持（`device_registry.py`，过渡期整体委托
-> 核心模块；`ext.device.status.registry_backend` 可看当前后端）；节点语义文本已补齐
-> （`props_text`）；引擎生命周期钩子 `on_engine_start/on_engine_stop` 已实现（待主线调度）。
+> **解耦 Batch A（2026-11-10）**: 端点台账已由扩展自持（`device_registry.py`）；节点语义文本已补齐
+> （`props_text`）；引擎生命周期钩子 `on_engine_start/on_engine_stop` 已实现。
 > 计划与回执：`Doc/MAINLINE_DECOUPLING_PLAN_2026-11-10.md`。
+> **★ 最新（2026-11-14，主线已完成迁移）**: 核心 `Application/Core/DeviceRegistry.py` **已删除**，
+> 台账实现**唯一归属本扩展**；核心只保留能力凭据 `Application.Core.DeviceAliases`，
+> 并由 manifest `device_aliases.module` **按声明惰性发现**（离线校验器/未启用的编辑器也能读到）。
+> 引擎启动/收尾改由 `Application.Core.Extension.OptionalExtensions` 接缝调用（O9），
+> 两个生命周期钩子**目前无人调用**。行动清单与验收命令见
+> **`Doc/HANDOFF_2026-11-14_engine_decoupling.md`**（含必须保持的 4 条不变量）。
 > **→ 给主线的回信（交给主线维护者处理）: `Doc/REPLY_TO_MAINLINE_2026-11-10.md`**
 > （含我方裁决、已完成项、请主线先做的 8 步顺序、6 个待答复问题）。
 > **→ 扩展开发者请先读 `CHANGELOG.md`**（破坏性更改总览 + 迁移检查单 + 节点图构建指导）。
@@ -48,7 +53,7 @@
 | USB 指纹 / 自动重绑 | `identity.py` + `extension.py::_op_autobind` | `doc show dev/device_io_protocol#10` |
 | 串口/并口 IO + 线程 | `Application/Functions/SerialParallelDevice/{api,state,io_thread,tasks}.py` | `engine-editor-cli doc show dev/device_io_protocol#2`–`#7` |
 | 端口枚举 / 事件环缓 / watch | `.../monitor.py`（`state._events` 环缓 500） | `engine-editor-cli doc show dev/device_io_protocol#4` / `#10` |
-| **逻辑设备名（两级身份）** | `device_registry.py`（扩展自持；过渡期委托 `Application/Core/DeviceRegistry.py`） + `serial_manager.resolve_port()` | `engine-editor-cli doc show dev/device_io_protocol#10`（通读） |
+| **逻辑设备名（两级身份）** | `device_registry.py`（**实现唯一归属本扩展**；导入即自注册；manifest `device_aliases.module`） + `serial_manager.resolve_port()` | `engine-editor-cli doc show dev/device_io_protocol#10`（通读） |
 | 端口解析接线 | `api.send` / `monitor.start_watch`（入队前解析） | `engine-editor-cli doc show dev/device_io_protocol#10` |
 | 节点求值器 / 控件默认值 | `node_pack.py`（evaluator + 声明式 `fields`）；通用控件 `Editor/UI/panels/node_editor/widgets/core.py::_draw_declared_fields` | `engine-editor-cli doc show dev/device_io_protocol#10` |
 | 校验规则 13（未绑定 `@ref` 警告） | 规则实现：`packages/node-editor/src/flyvibing_node_editor/node_graph_validator.py`（引擎侧 `Core/NodeGraph/validation/checks.py` 仅为薄适配器） | `engine-editor-cli doc show dev/device_io_protocol#10` |

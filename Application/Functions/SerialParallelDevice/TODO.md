@@ -21,7 +21,7 @@
 | IO 线程 | `Application/Functions/SerialParallelDevice/io_thread.py` | 委托线程（thread boundary 白名单 delegated） |
 | 节点族 | `Application/Functions/SerialParallelDevice/node_pack.py` | Serial/Parallel Send 类型+求值器+fields；`NodePackRegistry` 自动发现 |
 | USB 指纹/自动重绑 | `identity.py` + `extension.py::_op_autobind` | serial > vid:pid；歧义显式拒绝 |
-| 端点台账（`@alias`） | `device_registry.py`（扩展自持；过渡期委托核心） | 路径/格式不变；`status.registry_backend` 显示 core/extension |
+| 端点台账（`@alias`） | `device_registry.py`（**实现唯一归属本扩展**；导入即向 `Application.Core.DeviceAliases` 注册能力） | 路径/格式不变；manifest `device_aliases.module` 让核心按声明发现（离线校验器/未启用的编辑器也能读到）；`status.registry_backend` 恒为 `extension` |
 | 协议 | `engine-editor-cli doc show dev/device_io_protocol` | 设备集成/双后端/线程纪律（正文在工具仓库 `docs_content/`） |
 
 ## 1. TODO
@@ -37,7 +37,7 @@
 ### b) 发送节点（复用既有）
 - [x] 迁移 Serial/Parallel Send 节点到扩展 Pack（type 名保持不变 — MI-SSSEP 场景兼容红线）；`node_pack.py` 自动发现注入
 - [x] `ext.device.*` ops: `status / list_ports / watch / send / monitor_snapshot / write_parallel`（agent 监视通道已通）
-- [x] **逻辑设备名（`@alias`）闭环（2026-10-12）**: `bind_alias` / `bind_nodes` + 面板 "Device names (@alias)" 段（Rebind / Unbind / Migrate N node(s)）+ `status` 别名视图；本机台账 = `device_registry.py`（扩展自持；2026-11-10 起过渡期委托 `Application/Core/DeviceRegistry.py`）（`device_io` §10）
+- [x] **逻辑设备名（`@alias`）闭环（2026-10-12）**: `bind_alias` / `bind_nodes` + 面板 "Device names (@alias)" 段（Rebind / Unbind / Migrate N node(s)）+ `status` 别名视图；本机台账 = `device_registry.py`（**2026-11-14 起完全归扩展**：核心 `Core/DeviceRegistry.py` 已删除，改为能力凭据 `Core/DeviceAliases.py` + manifest `device_aliases` 声明；见 `Doc/HANDOFF_2026-11-14_engine_decoupling.md`）（`device_io` §10）
 - [x] **面板 ↔ 场景同步示范（2026-10-12）**: 经 `ctx.graph`（capabilities 含 `graph`）读/写当前图节点 props；面板按钮与 agent 同一实现（动作单点）
 - [x] **自动重绑（P0）**: `identity.py` 指纹（serial > vid:pid，location 只诊断）+ `ext.device.autobind` + 面板 Auto-detect + enable 自动重绑 + 换口时面板端口跟随；单测 27/27；实机已验证“过期口 → 自动恢复”（物理拔插为可选复验）
 

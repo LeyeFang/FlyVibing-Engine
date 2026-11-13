@@ -98,9 +98,11 @@ def _functions_refs(path: str) -> list:
         elif isinstance(node, ast.ImportFrom):
             if str(node.module or "").startswith("Application.Functions"):
                 hits.append((node.lineno, f"from {node.module} import ..."))
-        # 字符串形式（importlib / find_spec / 延迟 import 拼装）
+        # 字符串形式（importlib / find_spec / 延迟 import 拼装）;
+        # 纯命名空间前缀 `"Application.Functions."` 是能力发现用的，允许。
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            if node.value.startswith("Application.Functions."):
+            if (node.value.startswith("Application.Functions.")
+                    and len(node.value) > len("Application.Functions.")):
                 hits.append((node.lineno, f'"{node.value}"'))
     return hits
 

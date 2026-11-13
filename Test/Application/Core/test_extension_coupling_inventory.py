@@ -191,7 +191,11 @@ def main() -> int:
                 if str(node.module or "").startswith("Application.Functions"):
                     hit = f"from {node.module} import ..."
             elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-                if id(node) not in skip and node.value.startswith("Application.Functions."):
+                # 允许**纯命名空间前缀** `"Application.Functions."`（能力发现用，拼包限定名）;
+                # 具体的 `Application.Functions.<Ext>` 仍然禁止。
+                if (id(node) not in skip
+                        and node.value.startswith("Application.Functions.")
+                        and len(node.value) > len("Application.Functions.")):
                     hit = f'"{node.value}"'
             if hit:
                 violations.append(f"{rel}:{node.lineno} {hit}")
@@ -207,6 +211,28 @@ def main() -> int:
 
     check("alias capability degrades safely without any extension",
           isinstance(DeviceAliases.names(), list) and DeviceAliases.get("nobody") is None)
+
+    # ── 2b. 能力提供者：按 manifest 声明发现，且与扩展自身 import 同一模块 ──
+    #     这条锁的是"功能完备"——旧实现（Core.DeviceRegistry）直接读文件，
+    #     所以离线校验器/扩展未启用的编辑器都能拿到别名。迁移后必须保持：
+    #     - 有人声明 `device_aliases.module`（离线可读，核心不认识扩展名）
+    #     - 发现到的 provider 与 `from Application.Functions.X import module` 是
+    #       **同一个模块对象**（否则两份内存缓存 → 刚绑的别名看不到）
+    declared = DeviceAliases._declared_providers()        # noqa: SLF001 — 端口用例
+    check("at least one extension declares the device alias capability",
+          bool(declared), str(declared))
+    check("declared provider resolves to a package-qualified module",
+          all(m.startswith("Application.Functions.") for m, _d in declared), str(declared))
+    check("alias capability is available through lazy discovery (no manual import)",
+          DeviceAliases.ensure() is True)
+    import importlib
+
+    for qualified, _directory in declared:
+        module = importlib.import_module(qualified)
+        check(f"discovered provider IS the normally imported module ({qualified})",
+              DeviceAliases.provider() is module,
+              f"{getattr(DeviceAliases.provider(), '__name__', '?')} vs {module.__name__}")
+        break
 
     # ── 3. C 类棘轮：已有耦合只许减少 ────────────────────────────
     actual = {}

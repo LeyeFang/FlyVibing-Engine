@@ -15,7 +15,8 @@ def resolve_port(port: str) -> str:
 
     协议: `Doc/Dev/device_io_protocol.md` §10（两级设备身份）。
       - `"COM5"`        → 原样返回（兼容旧场景的物理直写）;
-      - `"@mibox"`      → 查机器侧台账（本扩展 `device_registry.py`；过渡期委托核心实现）;
+      - `"@mibox"`      → 查机器侧台账（本扩展 `device_registry.py`；该模块导入即向
+                         `Application.Core.DeviceAliases` 注册，核心不含实现）;
       - 未绑定/缺 port  → 抛 `DeviceUnresolved`（**绝不静默回退** —— 静默发错端口比报错更糟）;
       - `""`            → 抛 `ValueError`（未配置端口）。
     """

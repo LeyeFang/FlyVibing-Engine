@@ -13,7 +13,8 @@ SerialParallelDevice — 串口 + 并口 I/O 模块。
 子模块:
   - tasks             : SerialTask / ParallelTask 数据类
   - state             : 模块级共享状态（驱动引用、端口字典、队列、监视缓冲）
-  - device_registry   : 逻辑设备名（@alias）→ 物理端点台账（扩展自持；过渡期委托核心）
+  - device_registry   : 逻辑设备名（@alias）→ 物理端点台账（本扩展自持；导入即向
+                        `Application.Core.DeviceAliases` 注册能力，2026-11-14）
   - serial_manager    : 串口打开/关闭/生命周期
   - parallel_manager  : 并口写入 + 5ms 自动复位调度
   - io_thread         : I/O 线程主循环 + 任务分发 + 监视 poll

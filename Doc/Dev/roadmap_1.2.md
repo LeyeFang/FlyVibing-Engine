@@ -482,13 +482,12 @@ shader 版本号（半天）→ 全 GL 回归（1 天）→ mac 上补 GLFW coco
 
 | 档 | 内容 |
 |---|---|
-| **Must** | ⓿ ZenGL 全删（§0）· ① 分相计时 ✅ ② 面板去浪费（事件驱动 + clipper） ③ FrameSync 解耦 ✅ ④ `ctx.threads` 托管层 + P0-F ⑤ 成品 runtime 契约定稿（A/B/C） ⑥ DeviceRegistry 收尾 + `Editor→Functions` 那 1 处 · ⑦ **文件读写落点统一 ✅**（§6.2） |
+| **Must** | ⓿ ZenGL 全删（§0）· ① 分相计时 ✅ ② 面板去浪费（事件驱动 + clipper） ③ FrameSync 解耦 ✅ ④ `ctx.threads` 托管层 + P0-F ⑤ 成品 runtime 契约定稿（A/B/C）✅ ⑥ DeviceRegistry 收尾 ✅ + `Editor→Functions` 那 1 处 ✅ · ⑦ **文件读写落点统一 ✅**（§6.2） · ⑧ **包扩展点（§6.3）** |
 | **Should** | ⑧ 帧快照流水线（P1） ⑨ SignalProcess 基座（Init/滤波/参考/SDFT + `ProcessorState`） ⑩ FBCCA + TRCA ⑪ shrinkage-LDA + Riemannian + CV |
 | **Could** | ⑫ 大规模图拐点测量 → 决定闭包链 ⑬ PerfHUD ⑭ GL 4.1 化实验分支 ⑮ 死链检测做成编辑器提示 ⑯ 按需 pick（见 §6.1） |
 | **Won't** | Vulkan · 运行时融合 · 并行图求值 · 常量折叠 · ICA（要 sklearn） · 多 GL 上下文 |
 
 ### 6.1 记着但按住：按需 pick
-
 `gl.pick` 是**成品真实 CPU 的 66%**、PIE 的 32%（1.0–2.0 ms/帧）。成品里没有任何
 `pick_at()` 消费者；PIE 里只有 **overlay 点击穿透**真的需要它。
 
@@ -518,6 +517,41 @@ shader 版本号（半天）→ 全 GL 回归（1 天）→ mac 上补 GLFW coco
 `output/` 不做自动清理；扩展侧 prop 的**默认值**要各自改（引擎只提供机制 + 拦截）。
 
 守卫：`Test/Application/Core/test_data_paths.py`（38）。
+
+### 6.3 包扩展点（2026-11-14 立项，偿还 C/D 类耦合）
+
+**现状**：O9（运行时硬 import）与 B 类（扩展实现住 core）已清零；剩下的是
+"核心/编辑器**按扩展节点类型名**写死行为" ——
+
+| 文件 | 引用数 | 归属 |
+|---|---|---|
+| `Core/NodeGraph/graph_constraints.py` | 19 | 设备池 / SigGen / Epoch / BCI |
+| `Editor/.../group_layout.py` | 7 | SigGen 5 + Serial/Parallel 2 |
+| `Editor/.../widgets/device_siggen.py` | 5 | SigGen |
+| `Editor/.../widgets/epoch.py` | 5 | Epoch |
+| `Editor/.../widgets/algorithm.py` | 4 | BCI |
+| `Editor/.../widgets/device_pool.py` | 3 | 设备池 |
+| `Editor/.../visible_pins.py` | 1 | Serial/Parallel |
+
+以及 D 类：`Core/NodeGraph/graph_rules.py` 里写死了各扩展族的节点语义（随每份 `.scene` 分发）。
+
+**为什么现在搬不动**：`node_pack.py` 只能声明 `pins / fields / evaluator / menu`，
+没有位置表达"我的引脚何时隐藏 / 我的 Init⇄Kill 必须配对 / 我的卡片要什么控件 /
+我的文档段是什么"。
+
+**要做的四个扩展点**（每个可独立交付、独立验收）：
+
+| 顺序 | 扩展点 | 吃掉的耦合 | 风险 |
+|---|---|---|---|
+| 1 | `pin_visibility` | `visible_pins.py` 1 处 | 低（纯声明 → 谓词） |
+| 2 | `constraints` | `graph_constraints.py` 19 处 | 中（涉及验证/删除级联语义） |
+| 3 | `widget` | 4 个 widget 文件 17 处 | 高（渲染，需 imgui 回归） |
+| 4 | `docs` | `graph_rules.py` 的 D 类 | 低 |
+
+**棘轮**：`Test/Application/Core/test_extension_coupling_inventory.py` 已登记基线 44，
+只许减少；任何新文件/计数变大立即 FAIL。搬完一项就把对应数字改小（或删行）。
+
+**不要**用"把类型名挪进常量表"的方式糊过去 —— 那只改形态不改依赖。
 
 
 ---

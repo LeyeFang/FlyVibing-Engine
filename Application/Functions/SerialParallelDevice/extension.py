@@ -263,12 +263,11 @@ class DeviceExtension(UIExtensionBase):
     # ════════════════════════════════════════════════════════════
     # 引擎生命周期钩子（P0 解耦 — 主线耦合审计 §8.1-1）
     # ════════════════════════════════════════════════════════════
-    # 契约（扩展侧提案，待主线实现调度）:
-    #   宿主在 PIE / 成品运行开始、结束时**只对已加载（已启用）的扩展**
-    #   调用本方法；未启用 → 不调用 → spd-io 不会被裸 import 拉起。
-    #   这替代 `Runtime/GameRuntime.py` / `PlayerBootstrap.py` 里的直接
-    #   `from Application.Functions.SerialParallelDevice import start`。
-    # 现有直接调用保留为过渡期兼容；本钩子幂等（租约模型），两者并存不会重复开线程。
+    # 现状（2026-11-14）: **引擎不会调用这两个方法**。PIE/成品的启动与收尾改由
+    # `Application.Core.Extension.OptionalExtensions` 直接调包级
+    # `start("runtime")` / `stop("runtime")` / `stop_all()`（runtime_packaging §9）。
+    # 保留钩子仅为将来"扩展生命周期调度"落地时接入；不要在它们里面放**唯一**逻辑
+    # —— 现在没人调用它们，放了就不执行。
 
     def on_engine_start(self, mode: str = "pie") -> None:
         """引擎运行开始（PIE / 导出）→ 获取 runtime 租约。

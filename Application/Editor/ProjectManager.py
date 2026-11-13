@@ -187,11 +187,8 @@ class ProjectManager:
                     project_root=proj_dir,
                     output_root=os.path.join(proj_dir, "output"))
             else:
-                # 未保存工程 → 只清 project，output 回退到 <引擎>/output
-                st = EditorHost._state()
-                st['project_root'] = ""
-                st['game_root'] = ""
-                st['output_root'] = ""
+                # 未保存工程 → 清掉（clear 也会打戳，避免沿用上一个工程的根）
+                EditorHost.clear_data_roots()
         except Exception as e:      # noqa: BLE001 — 根同步失败不阻断工程操作
             print(f"[Project] data roots skipped: {e!r}")
 

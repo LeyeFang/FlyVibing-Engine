@@ -7,13 +7,13 @@
 
 | 区域 | print 条数 |
 |---|---:|
-| Functions | 241 |
+| Functions | 295 |
 | Editor | 200 |
 | Core | 121 |
 | Runtime | 66 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **635** |
+| **合计** | **689** |
 
 热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **53** 条。
 
@@ -41,7 +41,7 @@
 
 ## 3. 全部文件（按条数降序；`Functions/**` 扩展自有，不计入明细）
 
-`Application/Functions/**` 共 **241** 条，由各扩展自行治理，不列入本表。
+`Application/Functions/**` 共 **295** 条，由各扩展自行治理，不列入本表。
 
 | 文件 | 条数 |
 |---|---:|

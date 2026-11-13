@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Union
+import itertools
 import os
 import threading
 import atexit
@@ -63,6 +64,16 @@ class WindowType(Enum):
 # ════════════════════════════════════════════════════════════════
 # 帧同步 — 多引擎场景 (PIE) 下协调渲染线程
 # ════════════════════════════════════════════════════════════════
+
+#: 路径根声明顺序号（进程级单调递增，见 `Engine.set_data_roots`）。
+#: 用 `itertools.count` 而不是 `int + 1`：free-threading 下 `next()` 是原子的，
+#: 而 `_roots_seq += 1` 不是（这里只需近似排序，但别留一个会咬人的写放大）。
+_ROOTS_SEQ = itertools.count(1)
+
+
+def _next_roots_seq() -> int:
+    return next(_ROOTS_SEQ)
+
 
 class FrameSync:
     """单生产者单消费者帧同步 — **严格逐帧交替**。
@@ -168,6 +179,7 @@ class Engine:
                 'project_root': "",
                 'engine_root': "",
                 'game_root': "",
+                'roots_seq': 0,      # 最后声明顺序号（见 set_data_roots）
                 # ── 时间系统 ──
                 '_engine_start_time': 0.0,   # init() 时设置
                 '_last_frame_time': 0.0,     # 上一帧 perf_counter
@@ -278,6 +290,34 @@ class Engine:
             st['engine_root'] = os.path.abspath(engine_root)
         if game_root:
             st['game_root'] = os.path.abspath(game_root)
+        # ★ 打时间戳（2026-11-13, 扩展侧 O7）: 根挂在**子类** state 上
+        #   （`EditorHost` / `GameRuntime`），而 `DataPaths` 只能 import `Engine`
+        #   —— 没有戳时它读的永远是 `Engine` 自己那份（空），于是编辑器里
+        #   `<ProjectRoot>`/`<OutputRoot>` 退化成引擎根，与 PIE/成品不一致。
+        #   戳让 `DataPaths` 能跨子类选出「最后一次声明的那个上下文」。
+        st['roots_seq'] = _next_roots_seq()
+
+    @classmethod
+    def clear_data_roots(cls) -> None:
+        """清空本 Engine 的路径根（工程关闭 / 未保存时用）。
+
+        ★ 必须**同样打戳** —— “清空”也是一次声明。否则 `DataPaths` 会跳过
+        这个空表、继续沿用上一个工程（甚至上一次 PIE）留下的根。
+        """
+        st = cls._state()
+        st['output_root'] = ""
+        st['project_root'] = ""
+        st['engine_root'] = ""
+        st['game_root'] = ""
+        st['roots_seq'] = _next_roots_seq()
+
+    @classmethod
+    def roots_stamp(cls) -> int:
+        """本 Engine 最后一次声明根的顺序号（0 = 从未声明）。"""
+        try:
+            return int(cls._state().get('roots_seq') or 0)
+        except Exception:      # noqa: BLE001
+            return 0
 
     @classmethod
     def data_roots(cls) -> dict:

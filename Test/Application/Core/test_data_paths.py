@@ -192,6 +192,50 @@ def main() -> int:
         check("partial roots fall back to derived engine root",
               os.path.isabs(partial) and partial.endswith("x"), partial)
 
+        # ── A4. 根挂在**子类** state 上（扩展侧 O7，2026-11-13）──────
+        #   `set_data_roots` 是 classmethod → 宿主写的是 `EditorHost` / `GameRuntime`
+        #   的表；而 `DataPaths` 只能 import `Engine` 基类。不跨子类扫描的话，
+        #   编辑器里 `<ProjectRoot>` / `<OutputRoot>` 会退化成引擎根，与 PIE/成品
+        #   不一致（扩展侧实测发现并报了 O7）。
+        from Application.Core.Engine import Engine as _Eng
+
+        class _RootProbeHost(_Eng):
+            pass
+
+        class _RootProbeSecond(_Eng):
+            pass
+
+        try:
+            _RootProbeHost.set_data_roots(
+                project_root=os.path.join(tmp, "o7proj"),
+                output_root=os.path.join(tmp, "o7proj", "output"))
+            live = data_roots()
+            check("O7: subclass roots are visible through DataPaths",
+                  _norm(live["project"]) == _norm(os.path.join(tmp, "o7proj")),
+                  str(live))
+            check("O7: <OutputRoot> uses the subclass output root",
+                  _norm(resolve_write_path("<OutputRoot>/a.txt"))
+                  == _norm(os.path.join(tmp, "o7proj", "output", "a.txt")),
+                  resolve_write_path("<OutputRoot>/a.txt"))
+            # 清空也是一次声明 —— 不能继续沿用上一个工程的根
+            _RootProbeHost.clear_data_roots()
+            check("O7: clearing roots falls back to derived values",
+                  _norm(data_roots()["project"]) != _norm(os.path.join(tmp, "o7proj")),
+                  str(data_roots()))
+            # 后声明者胜出（编辑器 / PIE 同时存在时取最近那次上下文）
+            _RootProbeHost.set_data_roots(
+                project_root=os.path.join(tmp, "first"),
+                output_root=os.path.join(tmp, "first", "output"))
+            _RootProbeSecond.set_data_roots(
+                project_root=os.path.join(tmp, "second"),
+                output_root=os.path.join(tmp, "second", "output"))
+            check("O7: the most recent declaration wins",
+                  _norm(data_roots()["project"]) == _norm(os.path.join(tmp, "second")),
+                  str(data_roots()))
+        finally:
+            _RootProbeHost.clear_data_roots()
+            _RootProbeSecond.clear_data_roots()
+
         # 语法选择：`<` `>` 在 Windows 上是非法文件名字符 → 磁盘上不可能
         # 存在与宏同名的真实目录（这正是选它而不是 $() 的理由）。
         if os.name == "nt":

@@ -131,13 +131,51 @@ def _engine_dir() -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 
+def _all_engine_classes():
+    """`Engine` + 全部子类（递归）—— 根可能挂在任一子类的 state 上。"""
+    from Application.Core.Engine import Engine
+
+    seen: list = []
+    stack = [Engine]
+    while stack:
+        cls = stack.pop()
+        if cls in seen:
+            continue
+        seen.append(cls)
+        stack.extend(cls.__subclasses__())
+    return seen
+
+
 def _engine_roots() -> dict:
-    """向当前 Engine 询问已配置的根（无 Engine / 未初始化 → 空）。"""
+    """向当前进程里的 Engine **族**询问路径根。
+
+    2026-11-13 修正（扩展侧 O7）: `set_data_roots` 是 classmethod，宿主把根写在
+    `EditorHost` / `GameRuntime` 的 per-class state 上；而本模块只能 import
+    `Engine` 基类 —— 直接 `Engine.data_roots()` 读的是**基类自己那份（永远空）**，
+    于是编辑器里 `<ProjectRoot>` / `<OutputRoot>` 退化成引擎根，与 PIE/成品不一致。
+
+    现在的规则: 扫 `Engine` + 全部子类，取**最后声明**的那份（含"清空"的声明 ——
+    工程关闭后不应该继续沿用上一个工程的根）。
+    """
+    best: dict = {}
+    best_seq = -1
     try:
-        from Application.Core.Engine import Engine
-        return Engine.data_roots()
+        classes = _all_engine_classes()
     except Exception:      # noqa: BLE001 — 无引擎上下文（单测/工具）不是错误
         return {}
+    for cls in classes:
+        try:
+            seq = int(cls.roots_stamp())
+        except Exception:      # noqa: BLE001
+            continue
+        if seq < best_seq or seq == 0:
+            continue
+        try:
+            roots = dict(cls.data_roots() or {})
+        except Exception:      # noqa: BLE001
+            continue
+        best, best_seq = roots, seq
+    return best
 
 
 def data_roots(engine=None) -> dict:

@@ -46,17 +46,43 @@ class ExtensionPanel(BasePanel):
                  first_size: tuple[float, float] | None = None) -> None:
         super().__init__()
         self.name = str(name)
-        self.visible = bool(visible)
+        self._ext_id = ext_id              # 先于 visible 赋值（见 visible setter 的构造保护）
+        # ★ 直接写后备字段：构造期不落盘（否则扩展声明 visible=True 就会永久自开）
+        self._visible = bool(visible)
         self.flags = flags
         self.first_use_pos = first_pos
         self.first_use_size = first_size
         self._draw_fn = draw_fn
-        self._ext_id = ext_id
         self._error_streak = 0
         self._last_error = ""
         self._on_closed = on_closed          # callable(name) — 宿主钩子（由 ExtensionUI 组装）
         self.close_policy = str(close_policy)
         self.show_on_enable = bool(show_on_enable)
+
+    # ── 可见性（单一咽喉 — 勾选框/持久意图跟着它走） ──
+    #
+    # 任何路径（菜单/View 菜单/`ui.panel` op/`show_all`/`hide_all`/用户 X/隔离器）
+    # 最终都落在 `panel.visible = ...`，所以在这里落盘就无需在每个入口重复 ——
+    # 也不会出现“面板关了但菜单还勾着”（两者读的是同一个值）。
+    @property
+    def visible(self) -> bool:
+        return bool(getattr(self, "_visible", False))
+
+    @visible.setter
+    def visible(self, value) -> None:
+        value = bool(value)
+        if getattr(self, "_visible", False) == value:
+            return
+        self._visible = value
+        name = getattr(self, "name", "")
+        if not name:
+            return
+        try:
+            from Application.Editor.Extensions.ExtensionManager import ExtensionManager
+            # 按**窗口名**记（不是 ext id）— 附属窗口也要能恢复
+            ExtensionManager.set_panel_intent(name, value)
+        except Exception:  # noqa: BLE001 — 持久化失败不得拖垮帧
+            traceback.print_exc()
 
     # ── 供 ExtensionUI / ExtensionManager 读取 ──
     @property
@@ -212,3 +238,21 @@ class ExtensionUI:
             if (isinstance(panel, ExtensionPanel) and panel.ext_id == ext_id
                     and getattr(panel, "show_on_enable", True)):
                 panel.visible = True
+
+    @classmethod
+    def hide_all(cls, ext_id: str) -> int:
+        """隐藏某扩展的**全部**窗口（不停用 — 对称于 `show_all`）。
+
+        与 `show_all` 不同，这里不管 `show_on_enable`：用户点“关”就该全关。
+        注意：这里走 programmatic 路径（直接置 visible=False），不会触发
+        `_notify_closed`，所以不产生 on_ui_event("closed") 也不会触发 disable 策略。
+        Returns: 实际被隐藏的窗口数。
+        """
+        from Application.Editor.UI.UIManager import UIManager
+        hidden = 0
+        for panel in list(UIManager._panels):
+            if (isinstance(panel, ExtensionPanel) and panel.ext_id == ext_id
+                    and bool(panel.visible)):
+                panel.visible = False
+                hidden += 1
+        return hidden

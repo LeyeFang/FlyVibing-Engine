@@ -127,6 +127,9 @@ class ExtensionInfo:
         return _has_registered_panel(self.id)
 
     def to_dict(self) -> dict:
+        from Application.Editor.Extensions.ExtensionManager import (
+            ExtensionManager as _M,
+        )
         return {
             "id": self.id, "name": self.name, "version": self.version,
             "api_version": self.api_version, "maturity": self.maturity,
@@ -141,6 +144,9 @@ class ExtensionInfo:
             "scope": self.scope or ("builtin" if self.bundled else "user"),
             "always_on": bool(self.always_on),
             "has_ui": bool(self.has_ui),
+            # 面板：**视图**状态（与 enabled 是两件事 — 菜单勾选读这个）
+            "panel_visible": bool(_M.has_visible_panel(self.id)),
+            "panel_state": _M.panel_state(self.id),
             "python": {**({"declared": dict(self.python)} if self.python else {}),
                        **(dict(self.python_runtime) if self.python_runtime else {})},
         }
@@ -355,22 +361,32 @@ class ExtensionManager:
 
     @classmethod
     def _read_state_full(cls) -> dict:
-        """状态文件 → `{"enabled": {...}, "python": {ext_id: exe}}`（v1 文件兼容）。"""
+        """状态文件 → `{"enabled": {...}, "python": {...}, "panels": {...}}`。
+
+        `panels`（2026-11-13）: 每个扩展**面板是否应显示**的持久意图。
+        它和 `enabled` 是两件事 —— 前者是视图，后者是生命周期；菜单勾选读前者。
+        """
         try:
-            with open(cls._state_path(), "r", encoding="utf-8") as fh:
+            # `utf-8-sig`: 用户会用记事本/VSCode 手改这个文件，Windows 记事本默认
+            # 写 UTF-8 **带 BOM** —— 按纯 utf-8 读会在 BOM 上抛 JSONDecodeError，
+            # 然后静默回落到默认（= 所有扩展开关归零，2026-11-13 实测踩到）。
+            with open(cls._state_path(), "r", encoding="utf-8-sig") as fh:
                 data = json.load(fh)
         except FileNotFoundError:
-            return {"enabled": {}, "python": {}}
+            return {"enabled": {}, "python": {}, "panels": {}}
         except Exception as e:  # noqa: BLE001 — 损坏状态文件按默认处理
             print(f"[Extensions] state read failed (using defaults): {e!r}")
-            return {"enabled": {}, "python": {}}
+            return {"enabled": {}, "python": {}, "panels": {}}
         if not isinstance(data, dict):
-            return {"enabled": {}, "python": {}}
+            return {"enabled": {}, "python": {}, "panels": {}}
         python = data.get("python") or {}
+        panels = data.get("panels") or {}
         return {
             "enabled": dict(data.get("enabled") or {}),
             "python": {str(k): str(v) for k, v in python.items() if str(v).strip()}
             if isinstance(python, dict) else {},
+            "panels": {str(k): bool(v) for k, v in panels.items()}
+            if isinstance(panels, dict) else {},
         }
 
     @classmethod
@@ -378,13 +394,18 @@ class ExtensionManager:
         return cls._read_state_full()["enabled"]
 
     @classmethod
-    def _write_state(cls, enabled: dict, python: dict | None = None) -> None:
+    def _write_state(cls, enabled: dict, python: dict | None = None,
+                     panels: dict | None = None) -> None:
         path = cls._state_path()
+        full = cls._read_state_full()
         if python is None:
-            python = cls._read_state_full()["python"]
+            python = full["python"]
+        if panels is None:
+            panels = full["panels"]
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
-            json.dump({"version": 2, "enabled": enabled, "python": python},
+            json.dump({"version": 2, "enabled": enabled, "python": python,
+                       "panels": panels},
                       fh, indent=2, ensure_ascii=False)
 
     # ── 解释器覆盖（`extension.python` op）───────────────────────
@@ -493,6 +514,13 @@ class ExtensionManager:
             elif state.get(info.id, False):
                 info.enabled = True
                 cls._load(info)
+        # ★ 面板恢复（2026-11-13）: 「启用」不等于「显示」。以前 scan 里只 `_load`
+        #   从不 `show_all`，于是**状态文件里 enabled 的扩展每次启动都只有面板注册、
+        #   没有面板可见** —— 而 Extensions 菜单勾的是 enabled → 用户看到「勾着却没
+        #   面板」。现在把「面板是否显示」作为独立持久意图（state["panels"]）恢复，
+        #   菜单勾选读的是同一件事（`has_visible_panel`），两条腿永远一致。
+        #   细节见 `_restore_panel_intents`。
+        cls._restore_panel_intents(infos)
         # ★ 状态文件只应记录「非内置」扩展：内置恒激活，留着的旧条目会误导
         #   （"device: false" 但实际是开着的）。仅在恒激活模式下清理 —— 安全模式下
         #   状态文件仍是内置扩展的权威开关，不能动。
@@ -519,6 +547,52 @@ class ExtensionManager:
             if info.loaded:
                 cls._unload(info)
         cls.scan()
+
+    @classmethod
+    def _restore_panel_intents(cls, infos: dict) -> None:
+        """把持久意图落到窗口可见性上（scan 激活阶段后调用）— 菜单勾选/视图同步的地基。
+
+        按**窗口名**而不是按扩展: 用户昨天开着 Device Monitor，今天还是开着。
+
+        三种情形：
+
+        * `panels[name] is True`  → 打开（上次就开着）;
+        * `panels[name] is False` → 保持隐藏（用户上次关掉的，别自己回来）;
+        * **没有记录**（首次出现）→ 由窗口注册时声明的 `show_on_enable` 决定，
+          但**只对非内置扩展**生效：内置扩展恒激活，"首次运行"和"用户早先关掉了"
+          在状态文件里无法区分，自动弹窗等于覆盖用户的明确选择（也让 e2e 场景的
+          默认布局漂移）。用户自己装的扩展则正是刚点过「启用」的那一个，
+          值得享受和 `enable()` 一样的待遇（否则就是 issue 报告的那个现象:
+          勾着却没面板）。
+
+        写入一律走 `panel.visible` setter（唯一咽喉），因此这里不直接碰状态文件。
+        """
+        panels = cls._read_state_full()["panels"]
+        try:
+            from Application.Editor.Extensions.ExtensionUI import ExtensionPanel
+            from Application.Editor.UI.UIManager import UIManager
+        except Exception:  # noqa: BLE001 — 无 UI 环境
+            return
+        loaded = {i.id: i for i in infos.values() if i.loaded and i.has_ui}
+        if not loaded:
+            return
+        shown: list[str] = []
+        for panel in list(UIManager._panels):
+            if not isinstance(panel, ExtensionPanel):
+                continue
+            info = loaded.get(panel.ext_id)
+            if info is None:
+                continue
+            want = panels.get(panel.name)
+            if want is None:
+                want = bool(panel.show_on_enable) and not bool(info.bundled)
+            if bool(panel.visible) == bool(want):
+                continue
+            panel.visible = bool(want)    # setter 落盘（首跑顺带记录意图，之后稳定）
+            if want:
+                shown.append(panel.name)
+        if shown:
+            print(f"[Extensions] panel state restored: {sorted(shown)}")
 
     @classmethod
     def _parse_manifest(cls, path: Path) -> ExtensionInfo:
@@ -574,7 +648,10 @@ class ExtensionManager:
 
     @classmethod
     def enable(cls, ext_id: str) -> dict:
-        """启用扩展（加载 + on_enable; 持久化）。等同设置页/菜单勾选。
+        """启用扩展（加载 + on_enable; 持久化）。对应 设置 ▸ Extensions 的「启用」。
+
+        注意与**视图**的区别（2026-11-13）: 主菜单 Extensions 的勾选框表示“面板可见”，
+        不再等于“已启用”。关闭面板请用 `hide_panels`/`toggle_panels`，那不会卸载扩展。
 
         内置扩展（allowlist 内）恒激活：这里只保证"已装载 + 面板显示"
         （用户点它通常是"把我刚才关掉的面板叫回来"），不写状态文件。
@@ -587,7 +664,7 @@ class ExtensionManager:
         if info.always_on:
             if not info.loaded:
                 cls._load(info)
-            cls.show_panels(ext_id)
+            cls.show_panels(ext_id)          # 恒激活扩展不写 enabled, 但要记面板意图
             cls._sync_ops(info)
             return info.to_dict()
         info.enabled = True
@@ -602,10 +679,9 @@ class ExtensionManager:
             except Exception as e:  # noqa: BLE001
                 traceback.print_exc()
                 info.error = f"on_enable: {type(e).__name__}: {e}"
-        # 启用 = “想看面板” — 重置窗口可见性（X 隐藏后再次勾选即重新打开; dev protocol §7）
+        # 启用 = “想看面板” — 重置窗口可见性（X 隐藏后再次启用即重新打开; dev protocol §7）
         try:
-            from Application.Editor.Extensions.ExtensionUI import ExtensionUI
-            ExtensionUI.show_all(ext_id)
+            cls.show_panels(ext_id)          # 内含持久化: panels[id] = True
         except Exception:  # noqa: BLE001 — 无 UI 环境跳过
             pass
         cls._sync_ops(info)
@@ -687,11 +763,14 @@ class ExtensionManager:
     def toggle(cls, ext_id: str, on: bool) -> dict:
         return cls.enable(ext_id) if on else cls.disable(ext_id)
 
+    # ── 面板可见性（视图状态 — 与 enabled 分离，见文件头「状态分工」） ──
+
     @classmethod
     def show_panels(cls, ext_id: str) -> int:
         """把某扩展的主窗口置为可见；返回显示数量（无 UI/无环境 → 0）。
 
-        供菜单项使用：内置扩展不能"取消勾选"，点它就是"叫回面板"。
+        这里不需要做什么持久化 —— `ExtensionPanel.visible` 的 setter 按窗口记下意图
+        （唯一写入点），所以也没有 persist 开关可拨。
         """
         try:
             from Application.Editor.Extensions.ExtensionUI import ExtensionUI
@@ -700,6 +779,88 @@ class ExtensionManager:
             return cls._visible_panel_count(ext_id) or before
         except Exception:  # noqa: BLE001 — 无 UI 环境
             return 0
+
+    @classmethod
+    def hide_panels(cls, ext_id: str) -> int:
+        """隐藏某扩展的全部窗口（**不停用**）；返回隐藏的窗口数。
+
+        对称于 `show_panels`。菜单“取消勾选”走这里 —— 面板消失但扩展仍装载、
+        ops/nodes 仍然可用（要真正停用请去 设置 ▸ Extensions 或 `extension.disable`）。
+        """
+        try:
+            from Application.Editor.Extensions.ExtensionUI import ExtensionUI
+            return ExtensionUI.hide_all(ext_id)
+        except Exception:  # noqa: BLE001 — 无 UI 环境
+            return 0
+
+    @classmethod
+    def panel_state(cls, ext_id: str) -> dict:
+        """某扩展各窗口的 `{name: {"visible": bool, "intent": bool|None}}`（诊断用）。"""
+        out: dict = {}
+        try:
+            from Application.Editor.Extensions.ExtensionUI import ExtensionPanel
+            from Application.Editor.UI.UIManager import UIManager
+            panels = cls._read_state_full()["panels"]
+            for p in list(UIManager._panels):
+                if isinstance(p, ExtensionPanel) and p.ext_id == ext_id:
+                    out[p.name] = {"visible": bool(p.visible),
+                                   "intent": panels.get(p.name)}
+        except Exception:  # noqa: BLE001 — 无 UI 环境
+            return out
+        return out
+
+    @classmethod
+    def has_visible_panel(cls, ext_id: str) -> bool:
+        """当前是否至少有一个该扩展的窗口可见 —— **菜单勾选框的唯一数据源**。"""
+        return cls._visible_panel_count(ext_id) > 0
+
+    @classmethod
+    def toggle_panels(cls, ext_id: str) -> bool:
+        """菜单点击入口：可见 → 隐藏; 不可见 → （必要时装载）并显示。返回点击后的可见性。
+
+        这样"勾选框 = 面板是否显示"永远成立，不会出现"勾着但没面板"：
+        - 面板可见 → 取消勾选 = `hide_panels`（扩展仍启用）;
+        - 面板不可见 → 勾上 = `enable`（已启用则跳过）+ `show_panels`。
+        """
+        if cls.has_visible_panel(ext_id):
+            cls.hide_panels(ext_id)
+            return False
+        info = cls._infos.get(str(ext_id))
+        if info is None:
+            return False
+        if not info.loaded:
+            if not info.loadable:
+                print(f"[Extensions] '{ext_id}' is not loadable ({info.status()}): "
+                      f"{info.error or 'entry missing'}")
+                return False
+            # enable() 内部已 show_all + 持久化 intent
+            cls.enable(ext_id)
+            return cls.has_visible_panel(ext_id)
+        cls.show_panels(ext_id)
+        return cls.has_visible_panel(ext_id)
+
+    @classmethod
+    def panel_intent(cls, name: str) -> bool | None:
+        """持久化的“窗口应显示”意图（**按窗口名**）; `None` = 从未显式设过（首跑→隐藏）。
+
+        按窗口而不是按扩展记：Device Manager / Serial Monitor 这类附属窗口也要恢复。
+        """
+        return cls._read_state_full()["panels"].get(str(name))
+
+    @classmethod
+    def set_panel_intent(cls, name: str, visible: bool) -> None:
+        """记录窗口意图（写 `extensions.json` 的 `panels` 段，不动 `enabled`）。
+
+        写入入口只有一个: `ExtensionPanel.visible` 的 setter —— 所以菜单/View 菜单/
+        `ui.panel` op/用户 X/隔离器 全部自动同步，不存在忘调用的路径。
+        """
+        full = cls._read_state_full()
+        panels = dict(full["panels"])
+        key = str(name)
+        if panels.get(key) is bool(visible):
+            return
+        panels[key] = bool(visible)
+        cls._write_state(full["enabled"], full["python"], panels)
 
     @staticmethod
     def _visible_panel_count(ext_id: str) -> int:

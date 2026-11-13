@@ -10,7 +10,7 @@ Extension 体系测试 — ExtensionManager 发现/启停/隔离 + 扩展 op 增
   6. 异常遏制: on_load 抛异常 → broken 且不影响其它扩展
   7. 开关与隔离不变式: 扩展 op 不进入核心注册表（守卫见 test_action_contract 53 计数）
 
-沙箱: MGE_EXTENSIONS_STATE / MGE_EXTENSIONS_DATA / MGE_EXTENSIONS_DIR / MGE_DEVICES_FILE → 临时目录。
+沙箱: MGE_/FVE_EXTENSIONS_STATE / …_DATA / …_DIR / MGE_DEVICES_FILE → 临时目录。
 运行: python Utils/Dev/test_runner.py --only extension_manager
 """
 # TIER: core
@@ -111,7 +111,9 @@ def main() -> int:
                   "MGE_DEVICES_FILE", "FVE_EXTENSIONS_BUNDLED")}
     os.environ["MGE_EXTENSIONS_DIR"] = user_dir
     os.environ["MGE_EXTENSIONS_STATE"] = state_path
+    os.environ["FVE_EXTENSIONS_STATE"] = state_path   # FVE_ 优先 — 见 Test/_path_setup.py
     os.environ["MGE_EXTENSIONS_DATA"] = data_dir
+    os.environ["FVE_EXTENSIONS_DATA"] = data_dir
     # ★ 本用例锁的是 **opt-in 语义**（启用/停用/持久化）——关掉内置恒激活，
     #   否则 Functions/** 的官方扩展会在扫描时就被强制装载（见 test_extension_activation）。
     os.environ["FVE_EXTENSIONS_BUNDLED"] = "off"

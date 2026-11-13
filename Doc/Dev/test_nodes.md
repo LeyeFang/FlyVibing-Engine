@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**116**
-- `core`：111
+- 节点数：**117**
+- `core`：112
 - `heavy`：1
 - `live`：2
 - `manual`：2
@@ -57,6 +57,7 @@
 | `editor.export_extension_scope` | `core` | `integration` | `editor` | `Test/Application/Editor/test_export_extension_scope.py` | Application.Editor.ProjectManager |
 | `editor.export_game_bundle` | `core` | `integration` | `editor` | `Test/Application/Editor/test_export_game_bundle.py` | Application.Core.Engine<br>Application.Core.NodeGraph.canvas<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.ProjectManager<br>Application.Resource.ResourceManager |
 | `editor.export_manifest_nodes` | `core` | `integration` | `editor` | `Test/Application/Editor/test_export_manifest_nodes.py` | Application.Core.NodeGraph.canvas<br>Application.Core.NodeGraph.node_packs<br>Application.Editor.ProjectManager<br>Application.Runtime.PlayerBootstrap |
+| `editor.extension_panel_state` | `core` | `unit` | `editor` | `Test/Application/Editor/test_extension_panel_state.py` | Application.Editor.Extensions.ExtensionManager<br>Application.Editor.Extensions.ExtensionUI |
 | `editor.graph_remove_ops` | `core` | `unit` | `editor` | `Test/Application/Editor/test_graph_remove_ops.py` | Application.Core.NodeGraph<br>Application.Editor.Services.LiveCommandServer |
 | `editor.i18n_coverage` | `core` | `contract` | `editor` | `Test/Application/Editor/test_i18n_coverage.py` | Application.Core.NodeGraph.node_types<br>Application.Editor.DisplayLabels<br>Application.Editor.EditorSettings<br>Application.Editor.I18n<br>Application.Editor.UI.panels.SettingsPanel<br>Application.Editor.UI.panels.node_editor.styling |
 | `editor.imgui_api_doc` | `core` | `contract` | `editor` | `Test/Application/Editor/test_imgui_api_doc.py` | Utils.Dev.imgui_docgen |

@@ -492,6 +492,18 @@ def _draw_extensions_page() -> None:
                     ExtensionManager.toggle(ext_id, bool(enabled))
                 except Exception as e:  # noqa: BLE001 — 单个失败不影响其余
                     print(f"[Extensions] toggle {ext_id} failed: {e!r}")
+
+        # ── 面板（视图 — 与上面「启用」是两件事; 与主菜单勾选读同一份状态）──
+        if row.get("has_ui"):
+            changed, _want = imgui.checkbox(
+                f"{t('settings.ext.panel_box')}##ext_panel_{ext_id}",
+                bool(row.get("panel_visible")))
+            if changed:
+                try:
+                    # 打开 = 未装载则先装载; 关闭 = 隐藏全部窗口（不停用）
+                    ExtensionManager.toggle_panels(ext_id)
+                except Exception as e:  # noqa: BLE001 — 单个失败不影响其余
+                    print(f"[Extensions] toggle panel {ext_id} failed: {e!r}")
         imgui.tree_pop()
 
 

@@ -52,3 +52,22 @@ if _project_root not in sys.path:
 
 # Switch working directory to project root (for ResourceManager relative paths)
 os.chdir(_project_root)
+
+
+# ── Extension state sandbox (2026-11-13) ───────────────────────────────────
+# `ExtensionPanel.visible` persists to extensions.json on **every** write (that
+# is the point of the property setter — one choke point for menu / View menu /
+# `ui.panel` op / user X / detach).  Consequence: a test that merely shows a
+# panel would silently rewrite the developer's real settings at
+# `<APPDATA>/FlyVibingEngine/editor_state/extensions.json`.
+#
+# Point every test process at a throwaway state/data pair unless the test
+# (or the caller) already chose one.  A test that needs its own sandbox still
+# wins because it assigns after importing this module.
+if not (os.environ.get("FVE_EXTENSIONS_STATE")
+        or os.environ.get("MGE_EXTENSIONS_STATE")):
+    import tempfile as _tempfile
+
+    _ext_sandbox = _tempfile.mkdtemp(prefix="fve_test_ext_state_")
+    os.environ["FVE_EXTENSIONS_STATE"] = os.path.join(_ext_sandbox, "extensions.json")
+    os.environ.setdefault("FVE_EXTENSIONS_DATA", os.path.join(_ext_sandbox, "data"))

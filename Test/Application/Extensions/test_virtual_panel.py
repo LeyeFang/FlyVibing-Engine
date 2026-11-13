@@ -87,8 +87,11 @@ def main() -> int:
                  ("MGE_EXTENSIONS_DIR", "MGE_EXTENSIONS_STATE", "MGE_EXTENSIONS_DATA",
                   "FVE_EXTENSIONS_BUNDLED")}
     os.environ["MGE_EXTENSIONS_DIR"] = os.path.join(tmp, "user_ext")
+    # ★ FVE_ 优先于 MGE_（AppIdentity.env_get）— Test/_path_setup.py 会预装 FVE_ 沙箱
     os.environ["MGE_EXTENSIONS_STATE"] = os.path.join(tmp, "state.json")
+    os.environ["FVE_EXTENSIONS_STATE"] = os.environ["MGE_EXTENSIONS_STATE"]
     os.environ["MGE_EXTENSIONS_DATA"] = os.path.join(tmp, "data")
+    os.environ["FVE_EXTENSIONS_DATA"] = os.environ["MGE_EXTENSIONS_DATA"]
     os.environ["FVE_EXTENSIONS_BUNDLED"] = "off"
 
     inst = None

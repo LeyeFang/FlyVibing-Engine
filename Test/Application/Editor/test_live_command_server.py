@@ -623,7 +623,9 @@ def main() -> int:
     import tempfile
     _ext_state = os.path.join(tempfile.mkdtemp(prefix="mge_ext_loop_"), "state.json")
     os.environ["MGE_EXTENSIONS_STATE"] = _ext_state
+    os.environ["FVE_EXTENSIONS_STATE"] = _ext_state   # FVE_ 优先 — 见 Test/_path_setup.py
     os.environ["MGE_EXTENSIONS_DATA"] = os.path.join(os.path.dirname(_ext_state), "data")
+    os.environ["FVE_EXTENSIONS_DATA"] = os.environ["MGE_EXTENSIONS_DATA"]
     resp = roundtrip(port, "extension.list")
     _exts = {e.get("id") for e in ((resp.get("result") or {}).get("extensions") or [])}
     check("extension.list ok (含内置默认扩展)", resp.get("ok") is True and

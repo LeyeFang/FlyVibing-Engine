@@ -7,13 +7,13 @@
 
 | 区域 | print 条数 |
 |---|---:|
-| Functions | 295 |
-| Editor | 200 |
+| Functions | 316 |
+| Editor | 202 |
 | Core | 121 |
 | Runtime | 66 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **689** |
+| **合计** | **712** |
 
 热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **53** 条。
 
@@ -41,7 +41,7 @@
 
 ## 3. 全部文件（按条数降序；`Functions/**` 扩展自有，不计入明细）
 
-`Application/Functions/**` 共 **295** 条，由各扩展自行治理，不列入本表。
+`Application/Functions/**` 共 **316** 条，由各扩展自行治理，不列入本表。
 
 | 文件 | 条数 |
 |---|---:|
@@ -52,7 +52,7 @@
 | `Application/Editor/UI/panels/node_editor/panel.py` | 19 |
 | `Application/Editor/Services/LiveCommandServer.py` | 15 |
 | `Application/Editor/UI/controllers/SimulationController.py` | 15 |
-| `Application/Editor/Extensions/ExtensionManager.py` | 12 |
+| `Application/Editor/Extensions/ExtensionManager.py` | 14 |
 | `Application/Editor/UI/controllers/SceneBrowserController.py` | 10 |
 | `Application/Runtime/PerfStatsLayer.py` | 8 |
 | `Application/Core/Project/RuntimeProjectLoader.py` | 7 |
@@ -69,7 +69,6 @@
 | `Application/Runtime/RuntimeNodeLayer.py` | 5 |
 | `Application/Core/Media/MediaSystem.py` | 4 |
 | `Application/Core/NodeGraph/canvas.py` | 4 |
-| `Application/Editor/Extensions/ExtensionMenu.py` | 4 |
 | `Application/Editor/UI/UIManager.py` | 4 |
 | `Application/Resource/ResourceManager.py` | 4 |
 | `Application/Runtime/GameRuntime.py` | 4 |
@@ -78,6 +77,8 @@
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |
 | `Application/Core/Renderer/ZenGL/ZenGLCore.py` | 3 |
 | `Application/Editor/EditorLayer.py` | 3 |
+| `Application/Editor/Extensions/ExtensionMenu.py` | 3 |
+| `Application/Editor/UI/panels/SettingsPanel.py` | 3 |
 | `Application/Editor/UI/panels/node_editor/group_context.py` | 3 |
 | `Application/Core/AppIdentity.py` | 2 |
 | `Application/Core/DeviceRegistry.py` | 2 |
@@ -93,7 +94,6 @@
 | `Application/Editor/EditorSettings.py` | 2 |
 | `Application/Editor/Extensions/ExtensionUI.py` | 2 |
 | `Application/Editor/UI/controllers/ResourceBrowserController.py` | 2 |
-| `Application/Editor/UI/panels/SettingsPanel.py` | 2 |
 | `Application/Editor/UI/panels/node_editor/io.py` | 2 |
 | `Application/Editor/UI/panels/node_editor/selection.py` | 2 |
 | `Application/Runtime/RuntimeUILayer.py` | 2 |

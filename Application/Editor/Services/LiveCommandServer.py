@@ -1898,7 +1898,11 @@ class LiveCommandServer:
 
     @staticmethod
     def _op_extension_enable(args: dict) -> dict:
-        """启用扩展（加载 on_load/on_enable; 等同 Extensions 菜单勾选; 持久化）。"""
+        """启用扩展（加载 on_load/on_enable; 持久化）。
+
+        等同于 **设置 ▸ Extensions 页的“启用”勾选** —— 主菜单 Extensions 的勾选框
+        从 2026-11-13 起只表示“面板可见”（见 `ExtensionMenu`）；面板关闭不等于停用。
+        """
         ext_id = str(args.get("id") or "")
         if not ext_id:
             raise ValueError("id is required")

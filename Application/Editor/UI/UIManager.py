@@ -126,10 +126,18 @@ class UIManager:
 
         first_layout = not cls._dock_layout_done
         if first_layout:
-            # 启动工作区只保留三个主标签页；Settings / 扩展监视器默认关闭。
+            # 启动工作区只保留三个主标签页；Settings 等内置面板默认关闭。
+            # ★ 扩展面板**不在此列**（2026-11-13）: 它们自己的可见性由
+            #   `ExtensionManager._restore_panel_intents` 按持久意图恢复，而这一帧
+            #   发生在扩展扫描**之后** —— 以前它把刚恢复的面板又按下去，现在还会
+            #   把 intent 写成 false（用户「上次开着」的选择被静默抹掉）。
+            #   判定用 `ext_id` 而不是 import ExtensionPanel（避免 UI ↔ Extensions 循环）。
             for panel in cls._panels:
-                if panel.name not in cls.DEFAULT_VISIBLE_PANELS:
-                    panel.visible = False
+                if panel.name in cls.DEFAULT_VISIBLE_PANELS:
+                    continue
+                if getattr(panel, "ext_id", ""):
+                    continue
+                panel.visible = False
 
         right_flags = (
             imgui.WindowFlags_.no_title_bar

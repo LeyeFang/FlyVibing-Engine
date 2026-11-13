@@ -96,8 +96,12 @@ def main() -> int:
                  ("MGE_EXTENSIONS_DIR", "MGE_EXTENSIONS_STATE", "MGE_EXTENSIONS_DATA",
                   "FVE_EXAMPLES_DIR", "MGE_EXAMPLES_DIR", "FVE_EXTENSIONS_BUNDLED")}
     os.environ["MGE_EXTENSIONS_DIR"] = exts
+    # ★ FVE_ 优先于 MGE_（AppIdentity.env_get），而 Test/_path_setup.py 会预装一个
+    #   FVE_ 沙箱 → 两个都写，否则沙箱路径会盖掉这里的
     os.environ["MGE_EXTENSIONS_STATE"] = state
+    os.environ["FVE_EXTENSIONS_STATE"] = state
     os.environ["MGE_EXTENSIONS_DATA"] = data
+    os.environ["FVE_EXTENSIONS_DATA"] = data
     os.environ["FVE_EXAMPLES_DIR"] = user_examples
     os.environ.pop("MGE_EXAMPLES_DIR", None)
     # ★ 本用例断言"只在用户目录 + 显式注册"的根目录集合 — 关掉内置恒激活，

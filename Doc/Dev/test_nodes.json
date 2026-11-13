@@ -320,6 +320,20 @@
       "visualizes": []
     },
     {
+      "id": "editor.extension_panel_state",
+      "path": "Test/Application/Editor/test_extension_panel_state.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "editor",
+      "covers": [
+        "Application.Editor.Extensions.ExtensionManager",
+        "Application.Editor.Extensions.ExtensionUI"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "editor.export_game_bundle",
       "path": "Test/Application/Editor/test_export_game_bundle.py",
       "tier": "core",

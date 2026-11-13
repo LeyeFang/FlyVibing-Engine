@@ -4,14 +4,18 @@
   - Application/Editor/UI/UIManager.py  _draw_menu_bar  (实际渲染路径)
   - Application/Editor/UI/panels/MenuBarPanel.py        (保留文件, 未注册)
 
-分工（2026-11-10 调整）:
+分工（2026-11-13 调整 —— 状态同步）:
   - 主菜单 Extensions = **UI 面板入口**。只列 `has_ui` 的扩展（capabilities 含
     `ui`，或已注册 ExtensionPanel 窗口）；纯后台扩展（ops/nodes/examples/device）
     不在这里出现 —— 它们的开关/诊断在 设置 ▸ Extensions 页。
-  - **builtin** 扩展（allowlist 内、随引擎分发）恒激活，菜单项不再带勾选框，
-    点击 = 把它的面板叫回来（与 View 菜单同语义）; `local`（Functions 下的非白名单夹具）
-    与 `user` 扩展保持 勾选 = 启停。
-  - broken / planned 不在这里列（管理面在设置页），避免菜单被不可用项塞满;
+  - **勾选框只表达一件事: 这个扩展的面板当前是否可见**（`panel_visible`），
+    与扩展生命周期（enabled）**解耦** —— 启停是 设置 ▸ Extensions 页 / `extension.enable`。
+    点勾选 = 打开/关闭面板（打开时若未装载先装载），所以永远不可能出现
+    “勾着但没面板”。
+    （旧实现: builtin 无勾选框、local/user 勾选框 = enabled，同一位置两种含义;
+    加上启动时从不恢复面板可见性 → 某个 local 扩展“勾着却没面板”。）
+  - 面板可见性作为**独立持久意图**（`extensions.json` 的 `panels` 段）跨会话恢复;
+    broken / planned 不在这里列（管理面在设置页），避免菜单被不可用项塞满;
     菜单底部常驻 "Extension Settings…" 直达管理页 + Rescan。
 
 约束: 须在 imgui.begin_main_menu_bar() 块内调用; 任何扩展体系异常
@@ -38,28 +42,26 @@ def draw_extensions_menu() -> None:
     for info in infos:
         if not info.get("loadable"):
             continue          # planned / 无 entry：管理面在设置页
-        label = f"{info.get('name') or info.get('id')}"
-        tooltip = t("extension.tooltip", id=info.get("id"), version=info.get("version"),
+        ext_id = info.get("id")
+        # ★ 勾选 = 面板可见（唯一数据源: ExtensionPanel.visible）—— 所有 scope 同一语义。
+        #   已启用但被关掉 → 不勾; 未启用 → 不勾（点一下 = 装载 + 打开）。
+        try:
+            visible = ExtensionManager.has_visible_panel(ext_id)
+        except Exception:  # noqa: BLE001 — 无 UI 环境
+            visible = False
+        label = f"{info.get('name') or ext_id}"
+        tooltip = t("extension.tooltip", id=ext_id, version=info.get("version"),
                     maturity=info.get("maturity"), dir=info.get("dir", ""))
-        if info.get("always_on"):
-            # 内置恒激活 → 菜单项 = 面板开关（不是启停）
-            if imgui.menu_item(label, "", False, True)[0]:
-                try:
-                    ExtensionManager.show_panels(info["id"])
-                except Exception as e:  # noqa: BLE001
-                    print(f"[Extensions] show panel failed: {e!r}")
-            if imgui.is_item_hovered():
-                imgui.set_tooltip(t("extension.bundled_tip") + "\n" + tooltip)
-            shown += 1
-            continue
-        changed, val = imgui.menu_item(label, "", bool(info.get("enabled")), True)
+        changed, _val = imgui.menu_item(label, "", visible, True)
         if imgui.is_item_hovered():
-            imgui.set_tooltip(tooltip)
+            hint = t("extension.bundled_tip") if info.get("always_on") \
+                else t("extension.panel_tip")
+            imgui.set_tooltip(hint + "\n" + tooltip)
         if changed:
             try:
-                ExtensionManager.toggle(info["id"], val)
+                ExtensionManager.toggle_panels(ext_id)
             except Exception as e:  # noqa: BLE001
-                print(f"[Extensions] toggle failed: {e!r}")
+                print(f"[Extensions] toggle panel failed: {e!r}")
         shown += 1
 
     if not shown:

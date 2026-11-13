@@ -126,21 +126,19 @@ class GameRuntime(Engine):
                 cls._is_frame_sync_master = False
             # ── 启动设备 I/O 线程 ──
             #    owner="runtime": PIE 持有租约 → 编辑器面板交权（关闭面板不会停线程）
-            from Application.Functions.SerialParallelDevice import start as spd_start
-            spd_start("runtime")
-            # ── 清理上次运行可能残留的 EEG 会话（异常退出保护）──
-            try:  # 设备层缺省时跳过（可选组件）
-                from Application.Functions.VirtualDevice import close_all
+            #    ★ 通过 OptionalExtensions 接缝（O9 2026-11-14）: 成品可能根本没有
+            #      这个扩展目录（场景不用其节点 → 导出器不带），硬 import 会让
+            #      **纯核心场景的成品连窗口都起不来**。缺席 = 静默跳过；
+            #      存在但起不来 = 硬错误（继续跑 = 静默丢刺激）。
+            from Application.Core.Extension.OptionalExtensions import start_io
 
-                close_all()
-            except Exception:  # noqa: BLE001
-                pass
+            start_io("runtime")
+            # ── 清理上次运行可能残留的 EEG 会话（异常退出保护）──
+            from Application.Core.Extension.OptionalExtensions import call as _opt_call
+
+            _opt_call("VirtualDevice", "close_all")
             # ── 清理上次运行可能残留的 epoch 数据集（同一安全网）──
-            try:
-                from Application.Functions.BCIAlgorithm import reset_all as epoch_reset
-                epoch_reset()
-            except Exception:
-                pass
+            _opt_call("BCIAlgorithm", "reset_all")
             # ── ★ READY 屏障 (章 T M2): 等全部 Layer.OnAttach 完成 = 内容注册完毕 ──
             #    同步失败/挂起 → 显式抛错（调用方置错误态），不再静默进入"半加载"运行
             if not cls._state()['layers_attached'].wait(timeout=_READY_TIMEOUT):
@@ -167,8 +165,10 @@ class GameRuntime(Engine):
     ) -> None:
         """阻塞启动 (导出模式)。"""
         cls.init(window_type=window_type, renderer_type=renderer_type)
-        from Application.Functions.SerialParallelDevice import start as spd_start
-        spd_start("runtime")
+        # 设备 I/O 层是**可选扩展**（O9）: 产物里可能没有 → 缺席不是错误
+        from Application.Core.Extension.OptionalExtensions import start_io
+
+        start_io("runtime")
         EngineLifecycleEvent.Pack(stage="start", message="Started in export mode", engine=cls)
         super().run()
 
@@ -181,8 +181,9 @@ class GameRuntime(Engine):
         """请求停止 Runtime 并清理状态，允许再次 start()。"""
         # ── 释放设备 I/O 租约 ──
         #    仅释放 runtime 租约: 编辑器面板若仍持有租约（调试中），线程继续运行
-        from Application.Functions.SerialParallelDevice import stop as spd_stop
-        spd_stop("runtime")
+        from Application.Core.Extension.OptionalExtensions import stop_io
+
+        stop_io("runtime")
         # ── 清理 Runtime 实体（保留宿主保护实体）──
         if cls.scene is not None:
             # ★ 保护实体由宿主注入（编辑器摄像机等）; 独立运行默认空集 → 全部清理
@@ -232,22 +233,11 @@ class GameRuntime(Engine):
         # ── 最后的安全网: 关闭所有仍存活的 EEG 会话（不保存）──
         #    图内 Stop/Kill 设备节点已在 OnGameStop 链路执行完毕;
         #    此处兜底处理图里没有 Kill 节点 / 异常路径的情况。
-        try:  # 设备层缺省时跳过（可选组件）
-            from Application.Functions.VirtualDevice import close_all
+        from Application.Core.Extension.OptionalExtensions import call as _opt_call
 
-            _closed = close_all()
-            if _closed:
-                print(f"[GameRuntime] device safety: closed {_closed} leftover session(s)")
-        except Exception:  # noqa: BLE001
-            pass
+        _opt_call("VirtualDevice", "close_all")
         # ── epoch 数据集安全网（同一兜底语义）──
-        try:
-            from Application.Functions.BCIAlgorithm import reset_all as epoch_reset
-            _n = epoch_reset()
-            if _n:
-                print(f"[GameRuntime] Epoch safety: cleared {_n} leftover dataset(s)")
-        except Exception:
-            pass
+        _opt_call("BCIAlgorithm", "reset_all")
 
     @classmethod
     def is_running(cls) -> bool:

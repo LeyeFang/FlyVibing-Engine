@@ -590,25 +590,14 @@ def run(source: str, max_frames: int = 0, max_seconds: float = 0.0,
     print("[Player] Session ended")
 
     # ── 收尾: 设备 I/O 线程 + EEG 会话安全网（与 GameRuntime.stop 语义一致）──
-    try:
-        # 成品退出 = 进程结束: 释放全部租约（编辑器面板/调试残留一起清）
-        from Application.Functions.SerialParallelDevice import stop_all as spd_stop_all
+    #    成品退出 = 进程结束: 释放全部租约（编辑器面板/调试残留一起清）
+    #    ★ 走 OptionalExtensions 接缝: 产物可能根本不含这些扩展目录（O9）
+    from Application.Core.Extension.OptionalExtensions import (
+        call as _opt_call,
+        stop_all_io,
+    )
 
-        spd_stop_all()
-    except Exception:
-        pass
-    try:
-        from Application.Functions.VirtualDevice import close_all
-
-        _closed = close_all()
-        if _closed:
-            print(f"[Player] device safety: closed {_closed} leftover session(s)")
-    except Exception:
-        pass
-    try:
-        from Application.Functions.BCIAlgorithm import reset_all as epoch_reset
-
-        epoch_reset()
-    except Exception:
-        pass
+    stop_all_io()
+    _opt_call("VirtualDevice", "close_all")
+    _opt_call("BCIAlgorithm", "reset_all")
     return 0

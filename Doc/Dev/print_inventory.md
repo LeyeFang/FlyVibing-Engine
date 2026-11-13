@@ -7,15 +7,15 @@
 
 | 区域 | print 条数 |
 |---|---:|
-| Functions | 316 |
+| Functions | 318 |
 | Editor | 205 |
-| Core | 121 |
-| Runtime | 74 |
+| Core | 128 |
+| Runtime | 71 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **723** |
+| **合计** | **729** |
 
-热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **53** 条。
+热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **51** 条。
 
 保留项（不是调试遗留）: `Application/Core/NodeGraph/evaluators/debug.py`
 （`Print` / `PrintString` 节点的输出语义本身）。
@@ -27,11 +27,11 @@
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
 | `Application/Core/NodeGraph/evaluators/io.py` | 6 |
 | `Application/Runtime/RuntimeNodeLayer.py` | 5 |
-| `Application/Runtime/GameRuntime.py` | 4 |
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |
 | `Application/Core/NodeGraph/evaluators/entity/camera.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/destroy.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/mesh.py` | 2 |
+| `Application/Runtime/GameRuntime.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/action.py` | 1 |
 | `Application/Core/NodeGraph/evaluators/inputs.py` | 1 |
 | `Application/Core/NodeGraph/evaluators/media.py` | 1 |
@@ -41,12 +41,12 @@
 
 ## 3. 全部文件（按条数降序；`Functions/**` 扩展自有，不计入明细）
 
-`Application/Functions/**` 共 **316** 条，由各扩展自行治理，不列入本表。
+`Application/Functions/**` 共 **318** 条，由各扩展自行治理，不列入本表。
 
 | 文件 | 条数 |
 |---|---:|
 | `Application/Editor/ProjectManager.py` | 59 |
-| `Application/Runtime/PlayerBootstrap.py` | 50 |
+| `Application/Runtime/PlayerBootstrap.py` | 49 |
 | `Application/Core/NodeGraph/evaluators/entity/component.py` | 24 |
 | `Application/Core/Window/glfwWindow.py` | 19 |
 | `Application/Editor/UI/panels/node_editor/panel.py` | 19 |
@@ -64,6 +64,7 @@
 | `Application/Editor/Services/ImportService.py` | 6 |
 | `Application/Editor/UI/panels/ResourcePanel.py` | 6 |
 | `Application/Editor/UI/panels/node_editor/validate.py` | 6 |
+| `Application/Core/Extension/OptionalExtensions.py` | 5 |
 | `Application/Core/Scene/PrefabManager.py` | 5 |
 | `Application/Editor/EditorHost.py` | 5 |
 | `Application/Runtime/RuntimeNodeLayer.py` | 5 |
@@ -71,7 +72,6 @@
 | `Application/Core/NodeGraph/canvas.py` | 4 |
 | `Application/Editor/UI/UIManager.py` | 4 |
 | `Application/Resource/ResourceManager.py` | 4 |
-| `Application/Runtime/GameRuntime.py` | 4 |
 | `Application/Core/Engine.py` | 3 |
 | `Application/Core/NodeGraph/evaluator_engine.py` | 3 |
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |
@@ -87,6 +87,7 @@
 | `Application/Core/NodeGraph/evaluators/entity/destroy.py` | 2 |
 | `Application/Core/NodeGraph/evaluators/entity/mesh.py` | 2 |
 | `Application/Core/NodeGraph/node_packs.py` | 2 |
+| `Application/Core/NodeGraph/validation/dry_run.py` | 2 |
 | `Application/Core/Renderer/OpenGL/OpenGLEntities.py` | 2 |
 | `Application/Core/Renderer/ZenGL/ZenGLRenderer.py` | 2 |
 | `Application/Editor/EditorGizmoLayer.py` | 2 |
@@ -96,6 +97,7 @@
 | `Application/Editor/UI/controllers/ResourceBrowserController.py` | 2 |
 | `Application/Editor/UI/panels/node_editor/io.py` | 2 |
 | `Application/Editor/UI/panels/node_editor/selection.py` | 2 |
+| `Application/Runtime/GameRuntime.py` | 2 |
 | `Application/Runtime/RuntimeUILayer.py` | 2 |
 | `Application/Runtime/StubWindow.py` | 2 |
 | `Application/Core/Extension/ExtensionContext.py` | 1 |

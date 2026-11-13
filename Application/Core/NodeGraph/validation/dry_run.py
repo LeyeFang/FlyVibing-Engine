@@ -167,30 +167,37 @@ class _DryScene:
 
 
 def _cleanup_dry_sessions() -> list[str]:
-    """清理干跑命名空间下的残留设备会话与设备池（真实会话/池不受影响）。"""
+    """清理干跑命名空间下的残留设备会话与设备池（真实会话/池不受影响）。
+
+    ★ 设备层是**可选扩展**（O9）：产物/精简安装里可能根本没有
+    `Application.Functions.VirtualDevice`。所以走 `OptionalExtensions.module()`
+    拿模块，缺席时直接跳过 —— 不要在这里裸 import（与 GameRuntime 同一规则）。
+    """
     removed: list[str] = []
-    try:
-        from Application.Functions.VirtualDevice import (
-            destroy_pool,
-            kill_device,
-            list_pools,
-            list_sessions,
-        )
+    from Application.Core.Extension.OptionalExtensions import module as _opt_module
 
-        for name in list_sessions():
-            if name.startswith(DRY_RUN_SESSION_PREFIX):
-                kill_device(name)
-                removed.append(name)
-        for p in list_pools():
-            pname = str(p.get("name", ""))
-            if pname.startswith(DRY_RUN_SESSION_PREFIX):
-                destroy_pool(pname)
-        # epoch 数据集 (BCIAlgorithm) — 与设备层同一 dryrun# 命名空间
-        from Application.Functions.BCIAlgorithm import clear_matching
-
-        clear_matching(DRY_RUN_SESSION_PREFIX)
-    except Exception:  # noqa: BLE001 — 设备层不可用时忽略
-        pass
+    devices = _opt_module("VirtualDevice")
+    if devices is not None:
+        try:
+            for name in devices.list_sessions():
+                if name.startswith(DRY_RUN_SESSION_PREFIX):
+                    devices.kill_device(name)
+                    removed.append(name)
+            for pool in devices.list_pools():
+                pname = str(pool.get("name", ""))
+                if pname.startswith(DRY_RUN_SESSION_PREFIX):
+                    devices.destroy_pool(pname)
+        except Exception as exc:  # noqa: BLE001 — 清理失败不得影响干跑结果
+            print(f"[dry-run] device cleanup skipped: {type(exc).__name__}: {exc}")
+    # epoch 数据集 (BCIAlgorithm) — 与设备层同一 dryrun# 命名空间
+    bci = _opt_module("BCIAlgorithm")
+    if bci is not None:
+        try:
+            clear = getattr(bci, "clear_matching", None)
+            if callable(clear):
+                clear(DRY_RUN_SESSION_PREFIX)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[dry-run] epoch cleanup skipped: {type(exc).__name__}: {exc}")
     return removed
 
 

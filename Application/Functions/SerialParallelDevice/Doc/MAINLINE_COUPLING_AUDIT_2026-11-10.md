@@ -5,6 +5,12 @@
 > **读者**: Serial/Parallel 扩展现任维护者与后续接手人
 > **性质**: **只读审计，未改动任何引擎代码**（本次仅新增本文）。本文是工作单 + 验收标准，不是立刻动手的通知。
 > **处置协议**: 主线**冻结现状、保留兼容** → 扩展侧在不破坏用户的前提下重做 → 扩展侧回执（§12）→ 主线执行移出（§11）。**未收到回执前，主线不动这些代码。**
+>
+> **✅ 2026-11-14 主线完成迁移**：P0 全部改走接缝 `Core.Extension.OptionalExtensions`；
+> `Core/DeviceRegistry.py` **已删除**（实现唯一在本扩展），核心只留能力凭据
+> `Application.Core.DeviceAliases` + manifest `device_aliases` 声明式发现；
+> SPD 专属的 C 类余债仅剩 3 处（`visible_pins.py` / `group_layout.py` ×2，等 pack 扩展点）。
+> **收尾交接与不变量见 `Doc/HANDOFF_2026-11-14_engine_decoupling.md`**（本文 §12 已更新）。
 
 ---
 
@@ -347,17 +353,24 @@ Get-ChildItem Examples -Recurse -File -Filter *.scene |
 
 | # | 条目 | 状态 | 日期 | 签名 | 证据（命令输出/截图/commit） |
 |---|---|---|---|---|---|
-| 1 | 生命周期钩子迁移 | ☑ 进行中（扩展侧完成，待主线调度） | 2026-11-10 | SerialParallelDevice 维护 agent | `extension.py::on_engine_start/on_engine_stop`；租约幂等 |
-| 2 | 端点台账（3.1a / 3.1b） | ☑ 完成（3.1a；扩展侧自持，待主线删文件） | 2026-11-10 | 同上 | `device_registry.py`；`ext.device.status.registry_backend` |
-| 3 | 节点语义文档 | ☑ 完成 | 2026-11-10 | 同上 | `node_pack.py` 两段 `props_text`（编码/范围/framing/复位） |
-| 4 | 端口控件改 `choices_source` | ☐ 未开始（等主线通用契约） | | | 现仍用 `kind="serial_port"` |
-| 6 | 校验器 `@alias` 贡献点 | ☐ 未开始（等工具仓贡献点） | | | 已预留 `device_registry.resolve` |
+| 1 | 生命周期钩子迁移 | ☑ 完成（**方式变了**：主线用接缝 `OptionalExtensions` 调包级函数；钩子保留为死代码） | 2026-11-14 | 主线 + 扩展侧 | `Core/Extension/OptionalExtensions.py`；`test_runtime_optional_extensions`；扩展缺席的产物不再 `ModuleNotFoundError` |
+| 2 | 端点台账（3.1a / 3.1b） | ☑ **完成（3.1a）** — 核心 `Core/DeviceRegistry.py` 已删除，实现唯一在本扩展 | 2026-11-14 | 主线 + 扩展侧（v0.7.0 认领） | `device_registry.py` 自注册 + `extension.json.device_aliases`；`A.status()` → `available=True provider=device`；`test_extension_coupling_inventory` 13/13 |
+| 3 | 节点语义文档 | ☑ 扩展侧完成（主线删表仍待办） | 2026-11-10 | 扩展侧 | `node_pack.py` 两段 `props_text`（编码/范围/framing/复位） |
+| 4 | 端口控件改 `choices_source` | ☐ 未开始（等主线 pack 扩展点） | | | 现仍用 `kind="serial_port"` |
+| 6 | 校验器 `@alias` 贡献点 | ☑ 完成（**不需要贡献点**：校验器改读 `Application.Core.DeviceAliases`） | 2026-11-14 | 主线 | 无扩展环境零 `device_alias_check_unavailable`；有扩展时正常报未绑定 |
 | 7 | 示例工程迁移 | ☐ 未开始（计划 Batch B） | | | 见 `Doc/MAINLINE_DECOUPLING_PLAN_2026-11-10.md` §5 |
-| — | 兼容红线 §9 自查（10/10） | ☑ 完成 | 2026-11-10 | 同上 | 计划文档 §4 逐条对照 |
+| — | 兼容红线 §9 自查（10/10） | ☑ 完成 | 2026-11-10（2026-11-14 复测） | 扩展侧 | 计划文档 §4 逐条对照；`devices.json` 未迁移 |
 
 **扩展侧备注**（裁决意见、异见、阻塞项）：
 
 ```text
+扩展侧备注（裁决意见、异见、阻塞项）：
+
+```text
+【2026-11-14 收尾】主线已完成迁移（逻辑互 + 删 DeviceRegistry + 能力凭据 + 声明发现）。
+扩展侧认领 v0.7.0：版本/CHANGELOG/本表已更新；并加了一层跨版本保护（旧引擎无
+DeviceAliases 时跳过自注册，不 ImportError）。回信：Doc/REPLY_TO_MAINLINE_2026-11-14.md。
+
 裁决: 端点台账选 3.1a（严格搬走），落地为“自持实现 + 过渡委托”：
 - 新模块 Application/Functions/SerialParallelDevice/device_registry.py；
   核心模块仍存在时公开函数整体委托，backend()=="core"；核心删除后自动接管（"extension"）。

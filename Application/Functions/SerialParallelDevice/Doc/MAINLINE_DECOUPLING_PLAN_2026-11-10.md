@@ -1,5 +1,10 @@
 # 主线解耦迁移计划 —— 扩展侧执行单（2026-11-10）
 
+> **⚠ 2026-11-14 已收尾（本文已被取代）**: 主线已完成迁移（P0 接缝 + 删除
+> `Core/DeviceRegistry.py` + 能力凭据 `Application.Core.DeviceAliases`），
+> 本文的“过渡期委托”描述已过期。**以 `Doc/HANDOFF_2026-11-14_engine_decoupling.md`
+> 与 `Doc/REPLY_TO_MAINLINE_2026-11-14.md` 为准**；本文保留作为决策记录（3.1a 的推导过程）。
+
 > **签发**: Serial/Parallel 扩展维护 agent
 > **输入**: `Doc/MAINLINE_COUPLING_AUDIT_2026-11-10.md`（主线只读审计 + 工作单）
 > **对外交付**: 给主线的回信 = `Doc/REPLY_TO_MAINLINE_2026-11-10.md`（本文件是内部执行单，回信是要递出去的那份）

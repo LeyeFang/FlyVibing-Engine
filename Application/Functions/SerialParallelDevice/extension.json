@@ -1,7 +1,7 @@
 {
   "id": "device",
   "name": "Device (Serial/Parallel)",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "api_version": "1",
   "maturity": "partial",
   "description": "Serial / parallel monitor panel + Device Manager (bind/rebind/unbind @alias with node-impact confirmation) + discovered-port picker + comm send + parallel write with payload preview (byte/float32/string) and configurable pulse width + extension-owned @alias registry (Application.Core.DeviceAliases capability) - official example extension",

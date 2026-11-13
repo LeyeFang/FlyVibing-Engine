@@ -13,6 +13,9 @@
 
 | 版本 | 破坏性更改 | 谁的代码会断 | 一次性动作 |
 |---|---|---|---|
+| **0.7.0** | `Application.Core.DeviceRegistry` **已删除**（不是"将来"）：核心只留能力凭据 `Application.Core.DeviceAliases`，台账实现唯一在本扩展 `device_registry.py` | 任何 `from Application.Core.DeviceRegistry import ...` 的代码 | 改用 `Application.Functions.SerialParallelDevice.device_registry`，或读核心凭据 `Application.Core.DeviceAliases.{names,get,describe,resolve}` |
+| **0.7.0** | `DeviceUnresolved` 不再复用核心类，改由本扩展定义（同名同语义，仍是 `RuntimeError`） | 用 `isinstance(e, Application.Core.DeviceRegistry.DeviceUnresolved)` 的判断 | 改成 `except RuntimeError`（推荐）或从本包取 `DeviceUnresolved` |
+| **0.7.0** | 引擎启动/收尾改走接缝 `Core.Extension.OptionalExtensions`；`on_engine_start` / `on_engine_stop` **无人调用** | 把逻辑写在钩子里的扩展代码 | 唯一逻辑要放包级函数或 `on_enable`，不要只放钩子 |
 | **0.6.0** | `@alias` 台账迁出核心：`Application.Core.DeviceRegistry` → `Application.Functions.SerialParallelDevice.device_registry` | 任何 `from Application.Core.DeviceRegistry import ...` 的扩展/脚本 | 改 import；异常可从包级取 `from Application.Functions.SerialParallelDevice import DeviceUnresolved` |
 | **0.6.0** | `encode(..., prefix=, suffix=)` 新增校验：非 `string` 格式或含 CR/LF → `ValueError` | 自行拼行、或在 `bytes` 格式上顺手传 prefix 的调用方 | prefix/suffix 只配 `format="string"`；换行由 `encode` 统一追加 |
 | **0.6.0** | prefix/suffix 非空时数值按**最短十进制**格式化（`14` 而非 `14.0`） | 依赖 `14.0\n` 文本的旧断言/文档 | 空 prefix/suffix 行为不变；有 prefix 时按 `40,14` 断言 |
@@ -34,6 +37,9 @@
 
 | Version | Breaking change | Action |
 |---|---|---|
+| 0.7.0 | `Application.Core.DeviceRegistry` **removed**; the ledger lives only in this extension's `device_registry.py`, core keeps the `Application.Core.DeviceAliases` capability | import from the extension, or read `DeviceAliases.{names,get,describe,resolve}` |
+| 0.7.0 | `DeviceUnresolved` is defined here (same name/semantics, still `RuntimeError`) | catch `RuntimeError`, or import it from this package |
+| 0.7.0 | engine start/stop go through `Core.Extension.OptionalExtensions`; `on_engine_start` / `on_engine_stop` are **never called** | never put the only logic in those hooks |
 | 0.6.0 | `@alias` registry moved out of core: use `Application.Functions.SerialParallelDevice.device_registry` instead of `Application.Core.DeviceRegistry` | change imports; `DeviceUnresolved` re-exported from the package |
 | 0.6.0 | `encode(..., prefix=, suffix=)` raises `ValueError` for non-`string` formats or CR/LF in affixes | use affixes with `format="string"` only |
 | 0.6.0 | with affixes, values are formatted shortest (`14`, not `14.0`) | empty affixes keep legacy `str(value)` output |
@@ -46,6 +52,80 @@
 | 0.1.x | `SerialSend.port` no longer defaults to `COM1` (empty = explicit error + skip) | set `port` explicitly (prefer `@alias`) |
 
 Scene data (node types, pin names, prop keys) is unchanged in 0.6.0 — no scene migration needed.
+
+---
+
+## 0.7.0 — 2026-11-14（未发布）
+
+主题：**主线解耦收尾（认领）** —— `@alias` 台账实现**完全归属本扩展**，
+核心只剩能力凭据。功能与 0.6.0 一致，变化在归属、发现方式与诊断面。
+回执与不变量见 `Doc/HANDOFF_2026-11-14_engine_decoupling.md`。
+
+### 破坏性更改
+
+1. **`Application.Core.DeviceRegistry` 已删除**
+   - 实现只在 `device_registry.py`；核心新增 `Application.Core.DeviceAliases`
+     做**能力凭据**（`register / provider / names / all / get / describe / parse_ref /
+     is_ref / resolve / status`），缺席时安全降级（空清单，不抛）。
+   - 迁移：
+     ```python
+     # 旧（现已 ImportError）
+     from Application.Core.DeviceRegistry import resolve, DeviceUnresolved
+     # 新 —— 需要台账实现时（扩展代码内）
+     from Application.Functions.SerialParallelDevice import device_registry as reg
+     from Application.Functions.SerialParallelDevice import DeviceUnresolved
+     # 新 —— 只需要"有哪些别名 / 解析一下"（核心/编辑器/校验器，含无扩展场景）
+     from Application.Core import DeviceAliases as aliases
+     aliases.names(), aliases.describe("@mibox"), aliases.resolve("@mibox")
+     ```
+   - **`DeviceUnresolved` 改为本扩展本地定义**（同名同语义，仍继承 `RuntimeError`）。
+     只有做 `isinstance` 精确比对的代码需要改；`except RuntimeError` 不受影响。
+
+2. **manifest 才是发现入口，不要绕过它**
+   ```json
+   "device_aliases": { "module": "device_registry", "dir": "." }
+   ```
+   核心按这个键做**惰性发现**（首次查询时扫描 `Application/Functions/*/extension.json`
+   与用户扩展目录），按**包限定名**导入 → 与扩展自己的 import 是同一个模块对象、
+   同一份缓存。删掉这个键或删掉模块末尾的 `_Aliases.register("device", ...)`：
+   **别名能力静默消失**（编辑器只显示物理端口，校验器报
+   `device_alias_check_unavailable`）—— 不报错，只是"数据不见了"。
+
+3. **引擎生命周期钩子是死代码**
+   `on_engine_start` / `on_engine_stop` **没有任何调用方**。PIE / 成品的启动收尾由
+   `Application.Core.Extension.OptionalExtensions` 调包级 `start("runtime")` /
+   `stop("runtime")` / `stop_all()`。钩子保留给将来"扩展生命周期调度"接入，
+   **不要把唯一逻辑放进去**。
+
+### 新增
+
+- `device_registry.names()`（排序后的逻辑名列表；核心里 `DeviceAliases.names()` 会优先用它）。
+- `device_registry.capability()` / `capability_status()`：核心能力层视角
+  （`available / provider / aliases / capability`）；旧引擎无能力层时安全降级。
+- `ext.device.status.alias_capability` = `capability_status()` 的结果
+  （用于一眼看出"面板绑了、编辑器看不到"这类双实现事故）。
+  原有 `registry_backend` 保留，恒为 `"extension"`。
+
+### 兼容
+
+- **旧引擎（无 `Application.Core.DeviceAliases`）仍可加载**：能力层 import 改为防御式，
+  缺失时跳过自注册，台账 / 求值器 / 面板均照常工作（`capability()` 返回 `""`）。
+  这是必需的：`api_version` 仍为 `"1"`，用户只升级扩展不升级引擎属于常见场景；
+  硬 import 会让整个节点族变成 missing extension。
+
+### 变更（由主线代改，本版本认领）
+
+- `device_registry.py`：删除过渡委托层（`_legacy_module` / `_delegate` / `backend()=="core"`），
+  异常本地化，新增 `names()`，末尾自注册。
+- `extension.json`：新增 `device_aliases` 声明；`description` 去掉 "transitional delegation to core"。
+- `__init__.py` / `serial_manager.py`：模块文档由"过渡期委托核心"改为"自持 + 自注册"。
+- `extension.py`：生命周期钩子注释改为事实（引擎不调用）。
+
+### 未变（重要）
+
+- 节点类型 / 引脚 / props 键：**未变**。
+- 9 个 `ext.device.*` op 名称与参数：**未变**（`status` 仅新增一个诊断字段）。
+- 台账路径 `devices.json`、格式、`*_DEVICES_FILE` 覆盖：**未变**，无需迁移数据。
 
 ---
 
@@ -228,39 +308,44 @@ Scene data (node types, pin names, prop keys) is unchanged in 0.6.0 — no scene
 |---|---|---|
 | 节点类型 + 求值器 + 声明式字段 | `node_pack.py` | 核心不再声明；`NodePackRegistry` 自动发现 |
 | 节点语义正文 | `node_pack.py` 的 `props_text` | 主线删除 `graph_rules` 表格后，这是 `graph.types` 的正文来源 |
-| `@alias` 台账 | `device_registry.py` | 过渡期委托核心；核心删除后接管 |
+| `@alias` 台账（**唯一实现**） | `device_registry.py` | 导入即向 `Application.Core.DeviceAliases` 注册；manifest `device_aliases.module` 声明供惰性发现 |
 | USB 指纹 / 自动重绑 | `identity.py` + `extension.py::_op_autobind` | — |
 | 串口 / 并口 I/O + 线程 + 租约 | `api.py` / `state.py` / `io_thread.py` / `tasks.py` | 单线程 `spd-io` |
 | 复位调度 / 脉冲宽度 | `parallel_manager.py` + `api.set_reset_delay` | 设备级全局设置 |
 | 端口枚举 / 事件环缓 / watch | `monitor.py` | 环缓 500 条 |
 | 面板 + Device Manager + 9 ops | `extension.py` | 同一实现 |
-| 引擎生命周期钩子 | `extension.py::on_engine_start/on_engine_stop` | 待主线调用（导出模式入口未定） |
+| 引擎生命周期钩子 | `extension.py::on_engine_start/on_engine_stop` | **目前无人调用**（引擎走包级函数）；仅保留给将来的调度协议 |
+
+**核心侧只保留能力凭据**：`Application.Core.DeviceAliases`（`register/provider/names/all/get/
+describe/parse_ref/is_ref/resolve/status`，缺席安全降级）—— 它不实现台账，也不认识任何扩展名。
 
 **仍由主线提供（我们不改，只提需求）**：
 端口下拉的通用控件 kind（`serial_port` → `choices_source`）、引脚可见性规则
-（`visible_pins.py`）、卡片高度 `WIDGET_TYPES`、离线校验器的 `@alias` 检查、
-`graph_rules` 表格、`Runtime` 侧的调度点。详见 `Doc/REPLY_TO_MAINLINE_2026-11-10.md` §三/§四。
+（`visible_pins.py`）、卡片高度 `WIDGET_TYPES`、`graph_rules` 表格。
+（离线校验器的 `@alias` 检查已在 2026-11-14 改读能力凭据，不再需要扩展贡献点。）
+详见 `Doc/HANDOFF_2026-11-14_engine_decoupling.md` §5 与 `Doc/REPLY_TO_MAINLINE_2026-11-10.md`。
 
 ---
 
-## E. 迁移检查单（从 0.5.0 升到 0.6.0）
+## E. 迁移检查单（从 0.6.0 升到 0.7.0）
 
 ```powershell
-# 1) 还有没有直接依赖核心台账的代码？（应为空）
+# 1) 还有没有直接依赖已删除核心台账的代码？（应为空）
 Get-ChildItem Application,Test -Recurse -File -Include *.py |
   Select-String -Pattern 'Application\.Core\.DeviceRegistry'
 
-# 2) 扩展/脚本是否检查了 send/write_parallel 的返回值？
-#    （忽略返回值 = 发送被丢弃时你收不到任何信号）
-Select-String -Path <你的文件> -Pattern 'spd_send|write_parallel|\.send\('
+# 2) 需要“有哪些别名/解析”（不想要实现）的代码，改读能力凭据
+Select-String -Path <你的文件> -Pattern 'DeviceAliases|device_registry'
 
-# 3) 有没有在非 string 格式上使用 prefix/suffix？（会 ValueError）
-#    有没有把 "\n" 写进 prefix/suffix？（会 ValueError）
-Select-String -Path <你的场景或代码> -Pattern 'prefix|suffix'
+# 3) 能力凭据是否已就位（应看到 available=True provider=device）
+.\\.venv-py314t\\Scripts\\python.exe -Xgil=0 -c "from Application.Core import DeviceAliases as A; print(A.status())"
 
-# 4) 台账后端确认（过渡期应为 core；主线删文件后应为 extension）
-.\.venv-py314t\Scripts\engine-editor-cli.exe call ext.device.status
+# 4) 扩展视角的后端/能力快照（registry_backend 恒为 extension；alias_capability 应 available=True）
+.\\.venv-py314t\\Scripts\\engine-editor-cli.exe call ext.device.status
 ```
+
+> 从 0.5.0 直接升上来的读者，还要看 §0.6.0 的两条：`send/write_parallel` 返回值与
+> `prefix/suffix` 校验（脚本里 `Select-String -Pattern 'spd_send|write_parallel|prefix|suffix'`）。
 
 ```python
 # 推荐写法：先拿租约，再发送，并检查结果
@@ -374,44 +459,53 @@ engine-editor-cli call graph.add --json "@args.json"  # 建节点（不要求先
 
 ---
 
-## G. 迁移路线（预告，不含代码）
+## G. 迁移路线（状态：2026-11-14）
 
-主线接 `Doc/REPLY_TO_MAINLINE_2026-11-10.md` 后按 8 步执行，扩展侧同步提供替换件：
+主线已经做完了 **1 / 3 / 6 / 7**（其中 1 的实现方式与我们当初的提案不同：不是调用钩子，
+而是接缝 `OptionalExtensions` + 包级函数）；**2 / 4 / 5 仍在主线待办**（需“pack 扩展点”）。
 
-| 步 | 主线 | 扩展侧 | 对开发者的影响 |
-|---|---|---|---|
-| 1 | 生命周期调度上线（先 PIE） | 无（钩子已就位） | `extension.disable id=device` 后 PIE 不再拉起 `spd-io` |
-| 2 | 通用 `pin_visibility` + `choices_source` 契约 | 改 `fields` / 提供 `ports()` 回调 | 面板端口下拉形态可能变，**场景数据不变** |
-| 3 | 工具仓 checker 贡献点 | 提供 `@alias` 解析实现 | 离线校验提示改由扩展提供 |
-| 4 | 删核心 `serial_port` 分支 / `@rule("ParallelSend")` / `WIDGET_TYPES` 两项 | 已切换到声明式 | 行为等价，用户无感 |
-| 5 | 删 `graph_rules` IO 表格（并处理导出 `_rules`） | 无（`props_text` 已完整） | agent 必须改读 `graph.types` |
-| 6 | 删 `Core/DeviceRegistry.py` | `backend()` 自动切 `"extension"` | **`from Application.Core.DeviceRegistry import ...` 将 ImportError** |
-| 7 | 删 `GameRuntime` / `PlayerBootstrap` 直接 import | 无 | 导出模式按主线裁决（保留直接调用 / 加载扩展入口） |
-| 8 | 注释与通用测试去具体化 | 无 | — |
+| 步 | 主线 | 扩展侧 | 对开发者的影响 | 状态 |
+|---|---|---|---|---|
+| 1 | 引擎启动/收尾改走接缝（不调钩子） | 包级 `start/stop/stop_all` 保持语义 | 扩展缺席的产物不再启动即崩 | ✅ 2026-11-14 |
+| 2 | 通用 `pin_visibility` + `choices_source` 契约 | 改 `fields` / 提供 `ports()` 回调 | 面板端口下拉形态可能变，**场景数据不变** | ⏳ 主线待办 |
+| 3 | 校验器改读能力凭据（不再需要扩展贡献点） | 已提供 `DeviceAliases` 可读的 provider | 无扩展环境不再报噪声 warning | ✅ 2026-11-14 |
+| 4 | 删核心 `serial_port` 分支 / `@rule("ParallelSend")` / `WIDGET_TYPES` 两项 | 已切换到声明式 | 行为等价，用户无感 | ⏳ 待步 2 |
+| 5 | 删 `graph_rules` IO 表格（并处理导出 `_rules`） | 无（`props_text` 已完整） | agent 必须改读 `graph.types` | ⏳ 主线待办 |
+| 6 | 删 `Core/DeviceRegistry.py` | 实现已在扩展；`backend()` 恒 `"extension"` | **`from Application.Core.DeviceRegistry import ...` 已 ImportError** | ✅ 2026-11-14 |
+| 7 | 删 `GameRuntime` / `PlayerBootstrap` 等硬 import | 无 | 纯核心场景的成品可启动 | ✅ 2026-11-14 |
+| 8 | 注释与通用测试去具体化 | 无 | — | ⏳ 部分 |
 
-> 第 6 步的隐藏坑（写给主线，也写给开发者）：`widgets/core.py` 对核心台账的 import 有
-> `try/except`，先删文件**不会报错**，只会静默把端口下拉降级为"只有 COM 口、没有 `@alias`"。
+> **仍会听到的 SPD 专属余债（主线待办，不需要我们动）**：
+> `visible_pins.py` 的 `ParallelSend` manual 隐藏 `Value`（见 F3-3）与
+> `group_layout.py` ×2 的自动分组高度。等“pack 扩展点”落地后搬进 `node_pack.py` 声明。
 
 ---
 
-## H. 本轮验证基线（0.6.0）
+## H. 验证基线（0.7.0，2026-11-14 复测）
 
 | 用例 | 结果 |
 |---|---|
-| `Test/Application/Functions/test_device_alias.py` | 41/41 |
-| `Test/Application/Functions/test_device_autobind.py` | 27/27 |
-| `Test/Application/Functions/test_serial_parallel_device.py` | 79/79 |
-| `Test/Application/Functions/test_spd_monitor.py` | 14/14 |
-| `Test/Application/NodeGraph/test_node_pack.py` | 26/26 |
-| `Test/Application/Extensions/test_extension_manager.py` | 36/36 |
-| `review_extension.py Application/Functions/SerialParallelDevice` | 20 pass / 0 warn / 0 fail |
+| `test_serial_parallel_device` | PASS |
+| `test_spd_monitor` | PASS |
+| `test_device_alias` | PASS |
+| `test_device_autobind` | PASS |
+| `test_extension_coupling_inventory`（能力契约 13/13） | PASS |
+| `test_node_pack` | 26/26 |
+| `test_extension_manager` | 36/36 |
+| `review_extension.py`（M7/M8 必过） | 待本版本重跑 |
 
-接管路径（模拟核心台账不可用）：
+能力凭据（不 import 扩展也能读到台账）:
 
 ```powershell
-$env:MGE_DEVICES_FILE = Join-Path $env:TEMP 'spd_reg_fallback.json'
-.venv-py314t\Scripts\python.exe -c "import sys; sys.modules['Application.Core.DeviceRegistry']=None; `
- from Application.Functions.SerialParallelDevice import device_registry as r; `
- r.bind('lab', port='COM5', baud=9600); print(r.backend(), r.describe('lab')); print(r.unbind('lab'))"
-# extension  @lab -> COM5 @9600  /  True
+.\\.venv-py314t\\Scripts\\python.exe -Xgil=0 -c "from Application.Core import DeviceAliases as A; print(A.status())"
+# {'available': True, 'provider': 'device', 'aliases': ['@SSSEP-Stimulator']}
+```
+
+自注册后的同一性（防“两份缓存”事故）:
+
+```powershell
+.\\.venv-py314t\\Scripts\\python.exe -Xgil=0 -c "from Application.Core import DeviceAliases as A; `
+ import Application.Functions.SerialParallelDevice.device_registry as r; `
+ print(A.provider() is r, r.backend())"
+# True extension
 ```

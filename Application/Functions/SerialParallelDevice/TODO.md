@@ -1,6 +1,8 @@
 # Device (Serial/Parallel) Extension — TODO（状态档案）
 
-> 状态: **v0.6.0 — 主线解耦 Batch A（端点台账自持 `device_registry.py` + 节点语义文本 + 生命周期钩子）；
+> 状态: **v0.7.0 — 主线解耦收尾（认领）：台账实现唯一在本扩展 + 自注册 + manifest 声明发现；
+>   `ext.device.status.alias_capability`；旧引擎（无 `DeviceAliases`）安全降级；
+>   v0.6.0 — 主线解耦 Batch A（端点台账自持 `device_registry.py` + 节点语义文本 + 生命周期钩子）；
 >   v0.5.0 — 监视面板 + Device Manager（绑定/改绑/解绑 + 节点影响确认）+ 枚举端口下拉 + 逻辑设备名 + NodePack 注入 + 自动重绑
 >   + 并口写入修复（byte 单字节默认 / 载荷预览 / 面板自持 I/O 租约 / 脉冲宽度可调）**
 > **接手入口: `HANDOFF.md`（交接书）+ `HANDOFF_PROMPT.md`（启动提示词）— 新维护者先读这两份**

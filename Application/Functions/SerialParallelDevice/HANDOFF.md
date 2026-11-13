@@ -27,8 +27,13 @@
 > 引擎启动/收尾改由 `Application.Core.Extension.OptionalExtensions` 接缝调用（O9），
 > 两个生命周期钩子**目前无人调用**。行动清单与验收命令见
 > **`Doc/HANDOFF_2026-11-14_engine_decoupling.md`**（含必须保持的 4 条不变量）。
+> **★ v0.7.0（2026-11-14，认领主线代改）**: 台账实现**唯一在本扩展**（自注册 +
+> manifest `device_aliases` 声明发现）；`DeviceUnresolved` 改为本地定义；
+> `ext.device.status` 新增 `alias_capability`（核心凭据视角）；钩子明确为死代码。
+> 破坏面与迁移见 `CHANGELOG.md` §0.7.0。
 > **→ 给主线的回信（交给主线维护者处理）: `Doc/REPLY_TO_MAINLINE_2026-11-10.md`**
 > （含我方裁决、已完成项、请主线先做的 8 步顺序、6 个待答复问题）。
+> **→ 最新回信（2026-11-14 收尾）: `Doc/REPLY_TO_MAINLINE_2026-11-14.md`**（认领 + 4 条不变量复核）。
 > **→ 扩展开发者请先读 `CHANGELOG.md`**（破坏性更改总览 + 迁移检查单 + 节点图构建指导）。
 
 ---

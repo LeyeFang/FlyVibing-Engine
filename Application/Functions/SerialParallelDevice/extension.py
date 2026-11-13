@@ -170,7 +170,7 @@ class DeviceExtension(UIExtensionBase):
 
     id = "device"
     name = "Device (Serial/Parallel)"
-    version = "0.6.0"
+    version = "0.7.0"
 
     _WINDOW_NAME = "Serial/Parallel Monitor"
     _MANAGER_NAME = "Device Manager"
@@ -350,10 +350,16 @@ class DeviceExtension(UIExtensionBase):
             io_owner, is_running, parallel_status, reset_delay_ms, watch_state)
         facade = getattr(self, "_python", None)
         python_info = facade.explain(probe=True) if facade is not None else {}
+        # 能力凭据视角（2026-11-14）: 核心不认识本扩展，只通过 DeviceAliases 取台账。
+        # 这里把它看到的东西原样报出来 —— 「面板刚绑的别名、编辑器看不到」这类
+        # 双实现事故，一眼就能在 {available, provider, aliases} 里看出来。
+        # 注: 走 device_registry 的包装（层级边界：本文件不 import Application.Core）。
+        alias_capability = reg.capability_status()
         return {"io_running": is_running(), "io_owner": io_owner(),
                 "reset_ms": reset_delay_ms(), "watch": watch_state(),
                 "parallel": parallel_status(), "settings": dict(self._settings),
                 "registry_backend": reg.backend(),
+                "alias_capability": alias_capability,
                 "python": python_info,
                 "devices": [{"alias": "@" + name, "describe": reg.describe(name), **entry}
                             for name, entry in sorted(reg.all().items())]}

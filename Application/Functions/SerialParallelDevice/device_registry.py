@@ -31,7 +31,13 @@ import threading
 import time
 
 from Application.Core import AppIdentity
-from Application.Core import DeviceAliases as _Aliases
+
+try:  # 核心能力凭据（2026-11-14+）。旧引擎没有它 → 跳过自注册，台账本身照常工作。
+    from Application.Core import DeviceAliases as _Aliases
+    _ALIAS_CAPABILITY = "Application.Core.DeviceAliases"
+except Exception:  # noqa: BLE001 — 跨版本兼容: 旧引擎（api_version 1 早期）无能力层
+    _Aliases = None
+    _ALIAS_CAPABILITY = ""
 
 _NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,31}$")
 
@@ -205,6 +211,31 @@ def backend() -> str:
     return "extension"
 
 
+def capability() -> str:
+    """核心能力凭据模块的限定名；旧引擎无该模块时返回 `""`（诊断用）。"""
+    return _ALIAS_CAPABILITY
+
+
+def capability_status() -> dict:
+    """核心能力凭据的视角（`available / provider / aliases`）—— 诊断用。
+
+    面板/op 只调这个函数，**不直接 import `Application.Core`**（层级边界；
+    也让旧引擎（无能力层）能安全降级为 `available=False`）。
+    """
+    if _Aliases is None:
+        return {"available": False, "provider": "", "aliases": [], "capability": ""}
+    try:
+        snap = dict(_Aliases.status())
+    except Exception as e:  # noqa: BLE001 — 诊断接口不把头错误传染给面板
+        return {"available": False, "provider": "", "aliases": [],
+                "capability": _ALIAS_CAPABILITY,
+                "error": f"{type(e).__name__}: {e}"}
+    snap.setdefault("capability", _ALIAS_CAPABILITY)
+    return snap
+
+
 # ── 自注册为核心的别名能力提供者 ─────────────────────────────
 # 导入即注册：求值器 / 编辑器 / 离线校验器都不需要"启用扩展"就能看到同一份台账。
-_Aliases.register("device", sys.modules[__name__])
+# 旧引擎没有 `Application.Core.DeviceAliases` → 上面已降级为 None，此处跳过。
+if _Aliases is not None:
+    _Aliases.register("device", sys.modules[__name__])

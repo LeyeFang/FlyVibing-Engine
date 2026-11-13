@@ -57,14 +57,18 @@ def _draw_epoch_append_widgets(nid: int, inst, _canvas) -> None:
     name = str(inst.props.get("epochs_name", "")).strip()
     hint = t("widget.epoch.name_hint")
     if name:
-        try:
-            from Application.Functions.BCIAlgorithm import epoch_stats
+        # 扩展可选（O9 规则）：产物/精简安装里没有 BCI 扩展 → 只显示静态提示
+        from Application.Core.Extension.OptionalExtensions import module as _opt_module
 
-            stats, _why = epoch_stats(name)
-            hint = (t("widget.epoch.stats", count=stats['count'], classes=stats['classes'])
-                    if stats else t("widget.epoch.not_captured"))
-        except Exception:  # noqa: BLE001
-            pass
+        bci = _opt_module("BCIAlgorithm")
+        if bci is not None and callable(getattr(bci, "epoch_stats", None)):
+            try:
+                stats, _why = bci.epoch_stats(name)
+                hint = (t("widget.epoch.stats", count=stats['count'],
+                          classes=stats['classes'])
+                        if stats else t("widget.epoch.not_captured"))
+            except Exception:  # noqa: BLE001 — 统计拿不到不影响编辑
+                pass
     imgui.text_disabled(hint)
     imgui.dummy(imgui.ImVec2(0, 2))
 

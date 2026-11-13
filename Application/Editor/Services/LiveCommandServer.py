@@ -399,8 +399,22 @@ class LiveCommandServer:
 
         args: device/device_name（空 = 自动绑定唯一会话）、save_scope/
               scope（session|buffer）、elapsed_s、pool、tag、pump。
+
+        ★ 设备层是**可选扩展**（O9 同一规则）: 精简安装/产物里可能没有
+          `Application.Functions.VirtualDevice`，此时返回可操作错误而不是抛
+          ImportError（后者会让整个 op 变成引擎崩溃）。
         """
-        from Application.Functions.VirtualDevice import save_record
+        from Application.Core.Extension.OptionalExtensions import module as _opt_module
+
+        devices = _opt_module("VirtualDevice")
+        if devices is None or not callable(getattr(devices, "save_record", None)):
+            return {
+                "ok": False,
+                "error": "extension_unavailable",
+                "detail": "device extension ('virtual') is not installed in this build — "
+                          "SaveDeviceData needs it; enable/install the Virtual Device "
+                          "extension, or add the node's extension to the export",
+            }
 
         def _as_bool(value, default=True):
             if value is None:
@@ -416,7 +430,7 @@ class LiveCommandServer:
         name = str(args.get("device") or args.get("device_name") or "").strip()
         scope = str(args.get("save_scope") or args.get("scope") or "session").strip().lower()
         pool = str(args.get("pool") or "").strip() or None
-        ok, detail, info = save_record(
+        ok, detail, info = devices.save_record(
             name, save_scope=scope, elapsed_s=elapsed, pool=pool,
             tag=str(args.get("tag") or ""), pump=_as_bool(args.get("pump", True)))
         result = {"ok": bool(ok), "detail": detail}

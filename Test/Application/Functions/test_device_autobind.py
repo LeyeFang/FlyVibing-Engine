@@ -23,7 +23,7 @@ _TMP = tempfile.mkdtemp(prefix="mge_devautobind_")
 _REG_FILE = os.path.join(_TMP, "devices.json")
 os.environ["MGE_DEVICES_FILE"] = _REG_FILE
 
-from Application.Core import DeviceRegistry as reg                              # noqa: E402
+from Application.Functions.SerialParallelDevice import device_registry as reg       # noqa: E402
 from Application.Functions.SerialParallelDevice import identity                 # noqa: E402
 
 _RESULTS = {"pass": 0, "fail": 0}

@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**119**
-- `core`：114
+- 节点数：**120**
+- `core`：115
 - `heavy`：1
 - `live`：2
 - `manual`：2
@@ -19,6 +19,7 @@
 | `core.canvas_unknown_types` | `core` | `unit` | `core` | `Test/Application/Core/test_canvas_unknown_types.py` | Application.Core.NodeGraph.canvas |
 | `core.component_clamps` | `core` | `integration` | `core` | `Test/Application/Core/test_component_clamps.py` | Application.Core.Scene.BasicComponents<br>Application.Core.Scene.ComponentRegistry<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.controllers.SceneBrowserController |
 | `core.data_paths` | `core` | `integration` | `core` | `Test/Application/Core/test_data_paths.py` | Application.Core.Engine<br>Application.Core.Extension.ExtensionContext<br>Application.Core.FileSystem.DataPaths<br>Application.Core.NodeGraph<br>Application.Core.NodeGraph.evaluator_engine<br>Application.Core.NodeGraph.evaluators<br>Application.Editor.ProjectManager |
+| `core.extension_coupling_inventory` | `core` | `unit` | `core` | `Test/Application/Core/test_extension_coupling_inventory.py` | Application.Core.Extension.OptionalExtensions<br>Application.Core.DeviceAliases |
 | `core.extension_python` | `core` | `integration` | `core` | `Test/Application/Core/test_extension_python.py` | Application.Core.Extension.ExtensionPython<br>Application.Editor.Extensions.ExtensionManager |
 | `core.filesystem.vfs` | `core` | `integration` | `core.filesystem` | `Test/Application/Core/FileSystem/test_vfs.py` | Application.Core.FileSystem.PathUtils<br>Application.Core.FileSystem.VFS |
 | `core.frame_capture_slot` | `core` | `unit` | `core` | `Test/Application/Core/test_frame_capture_slot.py` | Application.Core.Renderer.FrameCaptureSlot |

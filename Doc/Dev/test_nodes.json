@@ -1843,6 +1843,20 @@
       "requires": [],
       "exercises": [],
       "visualizes": []
+    },
+    {
+      "id": "core.extension_coupling_inventory",
+      "path": "Test/Application/Core/test_extension_coupling_inventory.py",
+      "tier": "core",
+      "kind": "unit",
+      "owner": "core",
+      "covers": [
+        "Application.Core.Extension.OptionalExtensions",
+        "Application.Core.DeviceAliases"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
     }
   ]
 }

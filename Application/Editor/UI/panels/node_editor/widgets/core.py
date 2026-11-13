@@ -66,8 +66,11 @@ def _draw_declared_fields(nid: int, inst, fields: list[dict]) -> None:
         if kind == "serial_port":
             ports = _list_com_ports()
             try:
-                from Application.Core.DeviceRegistry import all as _aliases
-                ports = ports + ["@" + n for n in sorted(_aliases())]
+                # 逻辑设备名由**扩展**提供（核心只做能力凭据，见 DeviceAliases）。
+                # 产物/精简安装里没有该扩展 → names() 返回 []，只显示物理端口。
+                from Application.Core.DeviceAliases import names as _alias_names
+
+                ports = ports + ["@" + name for name in _alias_names()]
             except Exception:  # noqa: BLE001 — 无注册表环境降级
                 pass
             if ports:

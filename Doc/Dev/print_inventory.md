@@ -7,13 +7,13 @@
 
 | 区域 | print 条数 |
 |---|---:|
-| Functions | 318 |
 | Editor | 205 |
-| Core | 128 |
+| Core | 110 |
 | Runtime | 71 |
+| Functions | 63 |
 | Resource | 5 |
 | other | 2 |
-| **合计** | **729** |
+| **合计** | **456** |
 
 热路径（`Core/NodeGraph/evaluators` + 运行时循环层）: **51** 条。
 
@@ -41,7 +41,7 @@
 
 ## 3. 全部文件（按条数降序；`Functions/**` 扩展自有，不计入明细）
 
-`Application/Functions/**` 共 **318** 条，由各扩展自行治理，不列入本表。
+`Application/Functions/**` 共 **63** 条，由各扩展自行治理，不列入本表。
 
 | 文件 | 条数 |
 |---|---:|
@@ -56,10 +56,8 @@
 | `Application/Editor/UI/controllers/SceneBrowserController.py` | 10 |
 | `Application/Runtime/PerfStatsLayer.py` | 8 |
 | `Application/Core/Project/RuntimeProjectLoader.py` | 7 |
-| `Application/Core/Renderer/ZenGL/ZenGLOverlays.py` | 7 |
 | `Application/Editor/UI/panels/ScenePanel.py` | 7 |
 | `Application/Core/NodeGraph/evaluators/io.py` | 6 |
-| `Application/Core/Renderer/ZenGL/ZenGLResourceManager.py` | 6 |
 | `Application/Editor/EditorImguiLayer.py` | 6 |
 | `Application/Editor/Services/ImportService.py` | 6 |
 | `Application/Editor/UI/panels/ResourcePanel.py` | 6 |
@@ -75,7 +73,6 @@
 | `Application/Core/Engine.py` | 3 |
 | `Application/Core/NodeGraph/evaluator_engine.py` | 3 |
 | `Application/Core/NodeGraph/evaluators/entity/lifecycle.py` | 3 |
-| `Application/Core/Renderer/ZenGL/ZenGLCore.py` | 3 |
 | `Application/Editor/EditorLayer.py` | 3 |
 | `Application/Editor/Extensions/ExtensionMenu.py` | 3 |
 | `Application/Editor/UI/panels/SettingsPanel.py` | 3 |
@@ -89,7 +86,6 @@
 | `Application/Core/NodeGraph/node_packs.py` | 2 |
 | `Application/Core/NodeGraph/validation/dry_run.py` | 2 |
 | `Application/Core/Renderer/OpenGL/OpenGLEntities.py` | 2 |
-| `Application/Core/Renderer/ZenGL/ZenGLRenderer.py` | 2 |
 | `Application/Editor/EditorGizmoLayer.py` | 2 |
 | `Application/Editor/EditorModule.py` | 2 |
 | `Application/Editor/EditorSettings.py` | 2 |

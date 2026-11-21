@@ -40,6 +40,8 @@ if _ROOT:
 _REPO = os.path.dirname(_ROOT) if _ROOT else ""
 _FUNCS = os.path.join(_REPO, "Application", "Functions")
 
+from Test.Helpers.tree import is_vendor_dir  # noqa: E402  (第三方目录判定单源)
+
 _RESULTS = {"pass": 0, "fail": 0}
 
 
@@ -56,7 +58,8 @@ def _manifest_dirs() -> dict:
     if not os.path.isdir(_FUNCS):
         return found
     for cur, dirs, files in os.walk(_FUNCS):
-        dirs[:] = [d for d in dirs if d not in ("__pycache__", "_archive")]
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", "_archive")
+                   and not is_vendor_dir(d)]
         if "extension.json" not in files:
             continue
         try:

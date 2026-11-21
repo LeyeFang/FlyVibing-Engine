@@ -1093,6 +1093,34 @@
       "visualizes": []
     },
     {
+      "id": "editor.editor_mcp_client_deadline",
+      "path": "Test/Application/Editor/test_editor_mcp_client_deadline.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "editor",
+      "covers": [
+        "Application.Core.Renderer.FrameCaptureSlot"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
+      "id": "core.vendor_dirs",
+      "path": "Test/Application/Core/test_vendor_dirs.py",
+      "tier": "core",
+      "kind": "contract",
+      "owner": "core.filesystem",
+      "covers": [
+        "Application.Core.FileSystem.VendorDirs",
+        "Application.Editor.ProjectManager",
+        "Test.Helpers.tree"
+      ],
+      "requires": [],
+      "exercises": [],
+      "visualizes": []
+    },
+    {
       "id": "core.builtin_mesh_normals",
       "path": "Test/Application/Core/test_builtin_mesh_normals.py",
       "tier": "core",

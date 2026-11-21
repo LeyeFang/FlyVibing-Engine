@@ -5,7 +5,7 @@ VertexLayout — 跨渲染后端的顶点格式描述符。
   - 不可变 (frozen dataclass), 线程安全
   - 零图形 API 依赖 — 存纯粹的数据描述
   - 所有标准布局定义在 STD_LAYOUT 类中, 作为唯一真理来源
-  - 提供 to_zengl_format() / to_gl() 等辅助方法, 渲染器各取所需
+  - 提供 to_gl_attribs() 等辅助方法, 渲染器各取所需
 
 使用方式:
   from Application.Core.Renderer.VertexLayout import VertexLayout, STD_LAYOUT
@@ -58,22 +58,6 @@ class VertexLayout:
     # 后端适配方法
     # ══════════════════════════════════════════════════
 
-    def to_zengl_format(self) -> str:
-        """生成 ZenGL 的 zengl.bind() 格式字符串。
-
-        例如 ENTITY_POS_UV_NORMAL → '3f 2f 3f'
-        """
-        attrs = sorted(self.attributes, key=lambda a: a[2])
-        return ' '.join(f'{c}f' for _, c, _ in attrs)
-
-    def to_zengl_locations(self) -> list[int]:
-        """生成 ZenGL 的 zengl.bind() locations 参数。
-
-        例如 ENTITY_POS_UV_NORMAL → [0, 1, 2]
-        """
-        attrs = sorted(self.attributes, key=lambda a: a[2])
-        return [loc for loc, _, _ in attrs]
-
     def to_gl_attribs(self) -> list[tuple[int, int, int, int]]:
         """生成 OpenGL glVertexAttribPointer 参数列表。
 
@@ -103,38 +87,6 @@ class VertexLayout:
     _SHADER_ATTR_RE: re.Pattern = re.compile(
         r'layout\s*\(\s*location\s*=\s*(\d+)\s*\)\s+in\s+\w+\s+(\w+)\s*;'
     )
-
-    def get_active_locations(self, vs_src: str) -> list[int]:
-        """返回与 shader 实际声明位置匹配的 locations (未匹配的填 -1)。
-
-        shader 中声明但未在 main() 中使用的 attribute 视为 inactive，
-        对应的 location 返回 -1。layout 中有但 shader 未声明的也返回 -1。
-
-        这用于 ZenGL 的 zengl.bind() — ZenGL 要求 locations 与 linked
-        program 的 active attributes 严格一致。
-        """
-        if not vs_src:
-            return self.to_zengl_locations()
-
-        # ── 解析 shader 声明的 attribute: location → name ──
-        shader_attrs: dict[int, str] = {}
-        for m in VertexLayout._SHADER_ATTR_RE.finditer(vs_src):
-            shader_attrs[int(m.group(1))] = m.group(2)
-
-        # ── 哪些在 main() 中被实际使用 ──
-        _body = vs_src
-        _mm = re.search(r'void\s+main\s*\(', _body)
-        if _mm:
-            _body = _body[_mm.end():]
-        used_names = {name for name in shader_attrs.values() if name in _body}
-
-        result = []
-        for loc in self.to_zengl_locations():
-            if loc in shader_attrs and shader_attrs[loc] in used_names:
-                result.append(loc)
-            else:
-                result.append(-1)
-        return result
 
     @staticmethod
     def check_shader_consistency(

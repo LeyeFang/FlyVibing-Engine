@@ -52,7 +52,6 @@ from Application.Resource.ResourceManager import ResourceManager
 
 class RendererType(Enum):
     OpenGL = "OpenGL"
-    ZenGL = "ZenGL"
     Vulkan = "Vulkan"
 
 
@@ -253,9 +252,6 @@ class Engine:
         if renderer_type == RendererType.OpenGL:
             from Application.Core.Renderer.OpenGL.OpenGLRenderer import OpenGLRenderer
             return OpenGLRenderer
-        elif renderer_type == RendererType.ZenGL:
-            from Application.Core.Renderer.ZenGL.ZenGLRenderer import ZenGLRenderer
-            return ZenGLRenderer
         elif renderer_type == RendererType.Vulkan:
             from Application.Core.Renderer.Vulkan.vulkanRenderer import vulkanRenderer
             return vulkanRenderer
@@ -787,8 +783,8 @@ class Engine:
         if cls._state().get("_capture_slot") is not None:
             with ph.phase("frame.capture"):
                 cls._maybe_capture()
-        # ── 交换缓冲区 (OpenGL/ZenGL 需要; Vulkan 由 SwapChain 管理) ──
-        if cls.renderer_type in (RendererType.OpenGL, RendererType.ZenGL):
+        # ── 交换缓冲区 (OpenGL 需要; Vulkan 由 SwapChain 管理) ──
+        if cls.renderer_type == RendererType.OpenGL:
             with ph.phase("frame.swap"):
                 window.SwapBuffer()
         # ── 性能统计 ──
@@ -814,9 +810,12 @@ class Engine:
         return slot
 
     @classmethod
-    def request_capture(cls) -> dict:
-        """请求抓取“下一渲染帧”（编辑器主线程调用; 立即返回, 不阻塞）。"""
-        return cls._capture_slot().request()
+    def request_capture(cls, lease_s: float | None = None) -> dict:
+        """请求抓取“下一渲染帧”（编辑器主线程调用; 立即返回, 不阻塞）。
+
+        lease_s: 该请求的租约（秒）; None → FrameCaptureSlot.DEFAULT_LEASE_S。
+        """
+        return cls._capture_slot().request(lease_s)
 
     @classmethod
     def fetch_capture(cls, generation: int | None = None) -> dict:

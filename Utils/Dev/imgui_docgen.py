@@ -556,7 +556,8 @@ def usage_counts() -> Counter:
         if not os.path.isdir(start):
             continue
         for dirpath, dirnames, files in os.walk(start):
-            dirnames[:] = [d for d in dirnames if d not in ("__pycache__", "dist", "build")]
+            dirnames[:] = [d for d in dirnames
+                           if d not in ("dist", "build") and not _is_vendor_dir(d)]
             for fname in files:
                 if not fname.endswith(".py"):
                     continue
@@ -590,6 +591,24 @@ def _repo_root() -> str:
             return here
         root = parent
     return root or here
+
+
+def _is_vendor_dir(name: str) -> bool:
+    """第三方 / 工具生成目录（`.venv*` / `venv*` / site-packages …）—— 不统计。
+
+    单一来源在 `Application.Core.FileSystem.VendorDirs`；这里做惰性导入 + 本地兜底，
+    保证工具在引擎包不可导入时（独立仓库/裸解释器）仍然能跑。
+    """
+    try:
+        root = _repo_root()
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        from Application.Core.FileSystem.VendorDirs import is_vendor_dir as _impl
+        return bool(_impl(name))
+    except Exception:  # noqa: BLE001 — 包不可用时退化为最小前缀判断
+        low = str(name or "").lower()
+        return low in {"__pycache__", "site-packages", "node_modules"} or \
+            low.startswith(".venv") or low.startswith("venv")
 
 
 def default_out_path() -> str | None:

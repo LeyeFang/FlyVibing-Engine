@@ -1,4 +1,4 @@
-"""
+﻿"""
 E2E: EditorMcp v0.4.0 实机验收（需引擎运行中 — 先启动 startup.bat）。
 
 覆盖:
@@ -19,6 +19,8 @@ import os
 import subprocess
 import sys
 import time
+import asyncio
+import inspect
 
 _keep = "--keep" in sys.argv
 
@@ -41,6 +43,17 @@ def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"  [{'OK' if ok else 'FAIL'}] {name}" + (f"  -- {detail}" if detail and not ok else ""))
     if not ok:
         _failures.append(name)
+
+
+def _tool(fn, *args, **kwargs):
+    """lite 工具自 2026-11-16 起是 async（不让一次阻塞冻住 stdio 事件循环）。
+
+    脚本里没有事件循环 → 这里跑一个；同步实现则原样返回。
+    """
+    result = fn(*args, **kwargs)
+    if inspect.isawaitable(result):
+        return asyncio.run(result)
+    return result
 
 
 def _run_cli(args: list[str], stdin: str | None = None) -> tuple[int, str, str]:
@@ -94,48 +107,48 @@ def main() -> int:
 
     # ── 1. engine_call：新建/变换/别名/未知参数提醒/未知 op ──
     print("── engine_call ──")
-    r = srv.engine_call("entity.add", {"name": "MCP040_A"})
+    r = _tool(srv.engine_call, "entity.add", {"name": "MCP040_A"})
     eid = r.get("entity_id")
     check("engine_call entity.add", isinstance(eid, int), str(r))
     if isinstance(eid, int):
-        r = srv.engine_call("entity.transform", {"id": eid, "position": [1.5, 0, 0], "scale": 2})
+        r = _tool(srv.engine_call, "entity.transform", {"id": eid, "position": [1.5, 0, 0], "scale": 2})
         check("engine_call entity.transform", "error" not in r, str(r))
-        r = srv.engine_call("editor_entity_get", {"id": eid})  # 旧工具名别名
+        r = _tool(srv.engine_call, "editor_entity_get", {"id": eid})  # 旧工具名别名
         check("alias editor_entity_get -> entity.get", "error" not in r and r.get("name") == "MCP040_A", str(r))
-        r = srv.engine_call("sim.state", {"bogus": 1})
+        r = _tool(srv.engine_call, "sim.state", {"bogus": 1})
         check("_unknown_args warning", r.get("_unknown_args") == ["bogus"], str(r))
-        r = srv.engine_call("no.such.op")
+        r = _tool(srv.engine_call, "no.such.op")
         check("unknown op -> error+hint", "error" in r and "hint" in r, str(r))
-        r = srv.engine_call("entity.delete", {"id": eid})
+        r = _tool(srv.engine_call, "entity.delete", {"id": eid})
         check("engine_call entity.delete", "error" not in r, str(r))
 
     # ── 2. engine_batch ──
     print("── engine_batch ──")
-    rb = srv.engine_batch([
+    rb = _tool(srv.engine_batch, [
         {"op": "entity.add", "args": {"name": "MCP040_B"}},
         {"op": "entity.transform", "args": {"name": "MCP040_B", "position": [1, 0, 0]}},
         {"op": "entity.delete", "args": {"name": "MCP040_B"}},
     ])
     check("batch 3/3 ok", rb.get("count") == 3 and all("error" not in x for x in rb.get("results", [])), str(rb))
-    rb2 = srv.engine_batch([{"op": "no.such.op"}, {"op": "sim.state"}])
+    rb2 = _tool(srv.engine_batch, [{"op": "no.such.op"}, {"op": "sim.state"}])
     check("batch stops on error", rb2.get("count") == 1, str(rb2))
 
     # ── 3. engine_validate_graph（source=graph, summary 默认）──
     print("── engine_validate_graph (summary) ──")
-    rv = srv.engine_validate_graph(source="graph", graph=_tiny_graph(), frames=30)
+    rv = _tool(srv.engine_validate_graph, source="graph", graph=_tiny_graph(), frames=30)
     report = rv.get("report") or {}
     check("validate no error", "error" not in rv, str(rv))
     check("validate ok", report.get("ok") is True, str(report.get("counts")))
     check("summary shape (detail marker)", str(report.get("detail", "")).startswith("summary"), str(report.keys()))
     check("summary counts present", "counts" in report)
 
-    rv_full = srv.engine_validate_graph(source="graph", graph=_tiny_graph(), frames=30, detail="full")
+    rv_full = _tool(srv.engine_validate_graph, source="graph", graph=_tiny_graph(), frames=30, detail="full")
     rf = rv_full.get("report") or {}
     check("full report has log", isinstance(rf.get("log"), list) and len(rf["log"]) > 0, str(rf.keys()))
 
     # ── 4. engine_capture ──
     print("── engine_capture ──")
-    cap = srv.engine_capture("editor")
+    cap = _tool(srv.engine_capture, "editor")
     ok_cap = isinstance(cap, list) and len(cap) == 2 and "saved:" in str(cap[1])
     path = str(cap[1]).split("saved: ", 1)[-1].strip() if ok_cap else ""
     check("capture returns [image, path]", ok_cap, str(cap)[:200])
@@ -185,7 +198,7 @@ def main() -> int:
     # ── 6. 收尾 ──
     if not _keep:
         print("── editor.quit ──")
-        rq = srv.engine_call("editor.quit")
+        rq = _tool(srv.engine_call, "editor.quit")
         check("quit requested", "error" not in rq, str(rq))
     else:
         print("--keep: 编辑器保持运行")

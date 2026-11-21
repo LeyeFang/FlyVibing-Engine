@@ -16,6 +16,7 @@
 
 TIER: core
 """
+# SERIAL: timing (帧同步断言 — 并行会让等待时间失真)
 
 from __future__ import annotations
 

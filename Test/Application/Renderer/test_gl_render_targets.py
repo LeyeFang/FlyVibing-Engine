@@ -15,6 +15,7 @@ GL 渲染目标测试 — RT (FBO) 创建/采样/销毁/恢复（真实 GL, 探�
 运行: python Utils/Dev/test_runner.py --only gl_render_targets
 """
 # TIER: core
+# SERIAL: gl (独立 GL 上下文; 并行会抢驱动/隐藏窗)
 
 from __future__ import annotations
 

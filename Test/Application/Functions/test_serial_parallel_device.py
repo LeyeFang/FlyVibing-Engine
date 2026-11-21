@@ -36,6 +36,7 @@ from Application.Functions.SerialParallelDevice import (
     is_running, parallel_ready,
     _test_get_reset_schedule, _test_clear_reset_schedule,
     _test_inject_parallel, _test_get_parallel_driver,
+    set_reset_delay,
 )
 from Application.Functions.SerialParallelDevice.protocol import encode, decode
 
@@ -257,30 +258,29 @@ def test_parallel_mock():
     start()
     time.sleep(0.05)
 
-    # ── 写入后立即检查调度 (2ms < 5ms 复位窗口; 重试容忍线程调度抖动) ──
-    sched = []
-    for _ in range(3):
-        _test_clear_reset_schedule()
-        write_parallel(0x378, 0x55, "byte")
-        time.sleep(0.002)  # 只等 I/O 线程取走任务，不等复位
-        sched = _test_get_reset_schedule()
-        if len(sched) == 1:
-            break
+    # ── 复位调度内容 ──
+    # 不采样"瞬时队列"（复位窗口只有 5ms，IO 线程会与采样赛跑 → 并行跑测试时假失败）。
+    # 用产品自己的旋钮把窗口拉长到 1s，采样就是确定性的。
+    set_reset_delay(1000.0)
+    _test_clear_reset_schedule()
+    write_parallel(0x378, 0x55, "byte")
+    got_write = _wait_until(
+        lambda: any(c == call(0x378, 0x55) for c in mock_pp.out8.call_args_list),
+        timeout=1.0)
+    check(got_write, "mock driver received the byte write")
+    _wait_until(lambda: len(_test_get_reset_schedule()) == 1, timeout=1.0)
+    sched = _test_get_reset_schedule()
 
-    # 验证写入
-    mock_pp.out8.assert_any_call(0x378, 0x55)
-    print(f"  [INFO] out8 call count after write: {mock_pp.out8.call_count}")
-
-    # 调度中应有 1 个待复位 (5ms 还没过)
+    # 调度中应有 1 个待复位（窗口已被拉长到 1s，不会被消费）
     check(len(sched) == 1, f"reset scheduled (got {len(sched)})")
     if sched:
         deadline, addr, count = sched[0]
         check(addr == 0x378, f"reset addr=0x378 (got 0x{addr:04X})")
         check(count == 1, f"reset byte_count=1 (got {count})")
 
-    # ── 等待复位触发 (有界轮询: 复位窗口 5ms) ──
-    mock_pp.out8.reset_mock()
-    _wait_until(lambda: len(_test_get_reset_schedule()) == 0, timeout=1.0)
+    # ── 复位真的会被触发并消费（恢复默认 5ms 窗口，有界轮询）──
+    set_reset_delay(5.0)
+    _wait_until(lambda: len(_test_get_reset_schedule()) == 0, timeout=2.0)
 
     # 调度应已清空
     sched_after = _test_get_reset_schedule()
@@ -293,23 +293,22 @@ def test_parallel_mock():
           f"reset out8(0x378, 0) called ({len(reset_calls)} times)")
 
     # ── 写入 float32 值 ──
+    # 同样不采样瞬时队列：拉长复位窗口后断言，最后再恢复默认值
     mock_pp.out8.reset_mock()
-    sched_f32 = []
-    for _ in range(3):
-        _test_clear_reset_schedule()
-        write_parallel(0x278, 3.14, "bytes")
-        time.sleep(0.002)
-        sched_f32 = _test_get_reset_schedule()
-        if len(sched_f32) == 1:
-            break
+    set_reset_delay(1000.0)
+    _test_clear_reset_schedule()
+    write_parallel(0x278, 3.14, "bytes")
+    _wait_until(lambda: len(_test_get_reset_schedule()) >= 1, timeout=1.0)
+    sched_f32 = _test_get_reset_schedule()
 
     check(len(sched_f32) == 1, f"float32 write scheduled reset (got {len(sched_f32)})")
     if sched_f32:
         check(sched_f32[0][1] == 0x278, "float32 reset addr=0x278")
         check(sched_f32[0][2] == 4, "float32 reset byte_count=4")
 
-    # 等复位触发 (有界轮询)
-    _wait_until(lambda: len(_test_get_reset_schedule()) == 0, timeout=1.0)
+    # 等复位触发 (有界轮询; 恢复默认窗口)
+    set_reset_delay(5.0)
+    _wait_until(lambda: len(_test_get_reset_schedule()) == 0, timeout=2.0)
     sched_f32_after = _test_get_reset_schedule()
     check(len(sched_f32_after) == 0, "float32 reset consumed")
 
@@ -443,8 +442,13 @@ def test_strict_writes():
     time.sleep(0.05)
     check(write_parallel(0x378, 1, "byte", strict=True) is True,
           "strict write returns True when running")
-    _wait_until(lambda: len(_test_get_reset_schedule()) >= 1, timeout=1.0)
-    check(len(_test_get_reset_schedule()) >= 1, "mock driver got the strict write")
+    # 断言"驱动真的收到了复位写"，而不是采样瞬时调度队列：队列是有意被 IO 线程快速消费的
+    # （5ms 窗口），采样会与消费赛跑 —— 并行跑测试时实测偶发假失败（2026-11-17）。
+    got = _wait_until(
+        lambda: any(c == call(0x378, 0) for c in mock_pp.out8.call_args_list),
+        timeout=1.0)
+    check(got, "mock driver got the strict write "
+               f"(calls: {mock_pp.out8.call_args_list[-3:]})")
     stop()
     time.sleep(0.1)
     _test_inject_parallel(None)

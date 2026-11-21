@@ -30,7 +30,7 @@
 
 ---
 
-## 0. 第 0 步（先做，独立可交付）— 踢出 ZenGL
+## 0. 第 0 步（先做，独立可交付）— 踢出 ZenGL ✅ 已完成（2026-11-15，见 §0.4）
 
 ### 0.1 为什么先做这一步
 
@@ -89,6 +89,16 @@
 > **注意**: 第 6 项是唯一的真实风险点 —— `to_gl_attribs()` 目前复用
 > `to_zengl_locations()`。删之前必须把 locations 计算抽成本类自带的能力，
 > 否则 GL 顶点属性绑定会静默失效（画面可能只是"看起来不对"）。
+
+### 0.4 落地记录（2026-11-15）
+
+| 项 | 实际结果 |
+|---|---|
+| 代码 | `Core/Renderer/ZenGL/**` 删除；`RendererType.ZenGL`、`_get_renderer_class` 分支、`_render_one_frame` 的 ZenGL 判定移除；`EditorHost.init` 默认 `'OpenGL'` |
+| `VertexLayout` | 三个方法直接删除，无需"先抽能力"：`to_gl_attribs()` 本就自持 locations（未走 `to_zengl_locations`），`get_active_locations()` 的唯一消费者是 ZenGL |
+| 依赖 / 产物 | `pyproject`、`requirements.runtime/export`、`CHECKSUMS` 去掉 zengl；本地 wheel / `Resource/runtime` / venv 均已清（前两者 gitignore，分别靠 `collect_wheels.py` / `prepare_runtime.py` 重建） |
+| 锁文件 | `uv lock` 重生成：顺带修正 stale 项目名（`your-project` → `flyvibingengine`）并移除已不在 pyproject 的 `gpype`；pillow 用 `--exclude-newer-package` 保持在 **12.3.0**（对齐 `requirements.runtime.txt`），scipy / pylsl 随锁到 1.18.1 / 1.18.7 |
+| 守卫 | `test_vertex_layout` 26/26；`grep -ri zengl` 在 `Application/`、`Test/`、`pyproject.toml` 零命中；`print_inventory.md` 已重跑 |
 
 ---
 
@@ -482,7 +492,7 @@ shader 版本号（半天）→ 全 GL 回归（1 天）→ mac 上补 GLFW coco
 
 | 档 | 内容 |
 |---|---|
-| **Must** | ⓿ ZenGL 全删（§0）· ① 分相计时 ✅ ② 面板去浪费（事件驱动 + clipper） ③ FrameSync 解耦 ✅ ④ `ctx.threads` 托管层 + P0-F ⑤ 成品 runtime 契约定稿（A/B/C）✅ ⑥ DeviceRegistry 收尾 ✅ + `Editor→Functions` 那 1 处 ✅ · ⑦ **文件读写落点统一 ✅**（§6.2） · ⑧ **包扩展点（§6.3）** |
+| **Must** | ⓿ ZenGL 全删（§0）✅ · ① 分相计时 ✅ ② 面板去浪费（事件驱动 + clipper） ③ FrameSync 解耦 ✅ ④ `ctx.threads` 托管层 + P0-F ⑤ 成品 runtime 契约定稿（A/B/C）✅ ⑥ DeviceRegistry 收尾 ✅ + `Editor→Functions` 那 1 处 ✅ · ⑦ **文件读写落点统一 ✅**（§6.2） · ⑧ **包扩展点（§6.3）** |
 | **Should** | ⑧ 帧快照流水线（P1） ⑨ SignalProcess 基座（Init/滤波/参考/SDFT + `ProcessorState`） ⑩ FBCCA + TRCA ⑪ shrinkage-LDA + Riemannian + CV |
 | **Could** | ⑫ 大规模图拐点测量 → 决定闭包链 ⑬ PerfHUD ⑭ GL 4.1 化实验分支 ⑮ 死链检测做成编辑器提示 ⑯ 按需 pick（见 §6.1） |
 | **Won't** | Vulkan · 运行时融合 · 并行图求值 · 常量折叠 · ICA（要 sklearn） · 多 GL 上下文 |
@@ -510,7 +520,7 @@ shader 版本号（半天）→ 全 GL 回归（1 天）→ mac 上补 GLFW coco
 | 节点语义 | `PathVar` / `TextFileWrite` / `SaveData` 新增 `relative_to`（`output` 默认 / `project` / `cwd`）；绝对路径原样 |
 | dry-run | 真正零副作用（旧实现先 `mkdir` 再判 dry-run） |
 | 扩展接口 | `ctx.output_dir`（绝对路径）+ `resolve_write_path()`；`save_data(..., base_dir=)` |
-| 导出卫生 | 按名跳过 `.git`/`.venv`/`__pycache__` 等 + `*.pyc`；逐文件失败不中断，`copy_error_count` 上报 |
+| 导出卫生 | 按名跳过 `.git`/`.venv`/`__pycache__` 等 + `*.pyc`；逐文件失败不中断，`copy_error_count` 上报。**2026-11-17 加固**：判定迁到 `Core/FileSystem/VendorDirs`（单一来源）并改**前缀识别** `.venv*`/`venv*` —— 本地扩展把 `.venv-<ext>` 放进自己的源码目录后，旧的精确名匹配会把这个 219 MB 虚拟环境整棵打进游戏层；`print_audit` / `imgui_docgen` 同用（守卫 `test_vendor_dirs`）。**同日事故**：把"扫描"的目录集误用到"复制产物"上 → `site-packages` 也被跳过，成品 `runtime/Lib/site-packages` 整层丢失（只剩 exe，numpy 全没）。现已拆成 `is_vendor_dir`（扫描）/ `is_copy_skip_dir`（复制，保留 site-packages）两套语义，导出与安装包 staging 都用后者；守卫 `test_vendor_dirs` §2b + `test_export_game_bundle`（断言 41 个顶层包一个不少） |
 | 可移植性审计 | 场景 prop 里的绝对路径 → 清单 `absolute_paths` + `[Export] PORTABILITY:` 告警（Windows 盘符 / POSIX 根 / UNC；`builtin://` 不算） |
 
 **没做（明确留给对方/后续）**：导出器不会替用户改场景里的绝对路径（只报）；
@@ -585,6 +595,6 @@ shader 版本号（半天）→ 全 GL 回归（1 天）→ mac 上补 GLFW coco
 # 线程表
 .venv-py314t\Scripts\python.exe Utils\Dev\thread_probe.py
 
-# ZenGL 残留检查（第 0 步验收）
+# ZenGL 残留检查（第 0 步验收 — 应为零命中）
 Select-String -Path Application\**\*.py,Test\**\*.py,pyproject.toml -Pattern "zengl|ZenGL" -SimpleMatch
 ```

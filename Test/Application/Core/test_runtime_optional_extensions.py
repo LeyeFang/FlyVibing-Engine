@@ -46,6 +46,8 @@ ROOT = os.path.dirname(_d)
 _passed = 0
 _failed: list[str] = []
 
+from Test.Helpers.tree import is_vendor_dir  # noqa: E402  (第三方目录判定单源)
+
 #: 唯一允许触碰 `Application.Functions` 的模块（接缝本身）
 _SEAM = os.path.join("Application", "Core", "Extension", "OptionalExtensions.py")
 
@@ -70,7 +72,8 @@ def _iter_sources():
     for rel in _SCAN_DIRS:
         base = os.path.join(ROOT, rel)
         for cur, dirs, files in os.walk(base):
-            dirs[:] = [d for d in dirs if d not in ("__pycache__", ".git")]
+            dirs[:] = [d for d in dirs
+                       if d not in ("__pycache__", ".git") and not is_vendor_dir(d)]
             for name in files:
                 if name.endswith(".py"):
                     yield os.path.join(cur, name)

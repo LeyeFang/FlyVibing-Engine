@@ -32,6 +32,8 @@ if _ROOT:
     import _path_setup  # noqa: E402
 _REPO = os.path.dirname(_ROOT) if _ROOT else ""
 
+from Test.Helpers.tree import is_vendor_dir  # noqa: E402  (第三方目录判定单源)
+
 _RESULTS = {"pass": 0, "fail": 0}
 
 
@@ -127,7 +129,7 @@ def main() -> int:
     violations: list = []
     editor_root = os.path.join(_REPO, "Application", "Editor")
     for dirpath, dirnames, filenames in os.walk(editor_root):
-        dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+        dirnames[:] = [d for d in dirnames if d != "__pycache__" and not is_vendor_dir(d)]
         for fn in filenames:
             if fn.endswith(".py"):
                 _scan_imgui_literals(os.path.join(dirpath, fn), violations)

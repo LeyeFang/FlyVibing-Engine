@@ -28,6 +28,8 @@ if _ROOT:
     import _path_setup  # noqa: E402
 _REPO = os.path.dirname(_ROOT) if _ROOT else ""   # _ROOT = Test/ → 仓库根再向上一级
 
+from Test.Helpers.tree import is_vendor_dir  # noqa: E402  (第三方目录判定单源)
+
 # 内置扩展白名单（主团队自研 —— 新增必须显式改这里, 见 extension_protocol.md §9 R2）
 _BUILTIN_WHITELIST = {"sigproc", "bci", "device", "virtual"}
 _OFFICIAL_MANIFEST = os.path.join("Application", "Functions", "official_extensions.json")
@@ -132,7 +134,7 @@ def _brand_hits() -> list:
             if _is_brand_skipped_path(cur):
                 dirs[:] = []
                 continue
-            dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
+            dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not is_vendor_dir(d)]
             for fn in files:
                 if os.path.splitext(fn)[1].lower() not in _SCAN_EXT:
                     continue

@@ -10,10 +10,10 @@ Editor Outliner (ID Buffer) — Blender 风格的实体 ID + 屏幕空间边缘�
 架构:
   本文件仅包含纯业务逻辑 — 选择状态管理 + 配置参数。
   所有 GPU 渲染细节委托给 Core/Renderer/ 中的 PostProcess 管线。
-  Editor 层完全不感知 OpenGL / ZenGL。
+  Editor 层完全不感知 OpenGL。
 
 使用方式:
-  OutlinerID.register_to(renderer)     # 自动适配 OpenGL / ZenGL 后端
+  OutlinerID.register_to(renderer)     # 自动适配 OpenGL 后端
   OutlinerID.unregister_from(renderer)
   OutlinerID.set_selected_entities(selected_set)
   OutlinerID.configure(xray=True, outline_width=2, outline_color=(1,0.6,0.2))
@@ -48,7 +48,7 @@ class OutlinerID:
     职责:
       - 持有选择状态和配置参数
       - 委托 PostProcess (Core/Renderer/) 执行 GPU 渲染
-      - 不 import 任何图形 API (OpenGL / ZenGL / zengl / imgui 等)
+      - 不 import 任何图形 API (OpenGL / imgui 等)
 
     线程安全:
       - 主线程: set_selected_entities() / clear() / configure()
@@ -72,7 +72,7 @@ class OutlinerID:
         调用时机: EditorLayer.OnAttach() (渲染线程，GL 上下文有效)。
 
         Args:
-            renderer: openGLRenderer 或 ZenGLRenderer 类
+            renderer: openGLRenderer 类
         """
         from Application.Core.Renderer.PostProcess import HighlightEffectConfig
 

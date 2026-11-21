@@ -19,6 +19,7 @@ GL 光照测试 — Lighting shader + 平面光/点光/环境光（真实 GL, �
 运行: python Utils/Dev/test_runner.py --only gl_lighting
 """
 # TIER: core
+# SERIAL: gl (独立 GL 上下文; 并行会抢驱动/隐藏窗)
 
 from __future__ import annotations
 

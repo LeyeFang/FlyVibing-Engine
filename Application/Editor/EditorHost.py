@@ -303,7 +303,7 @@ class EditorHost(Engine):
     # ════════════════════════════════════════════════════════════
 
     @classmethod
-    def init(cls, window_type='GLFW', renderer_type='ZenGL') -> 'EditorHost':
+    def init(cls, window_type='GLFW', renderer_type='OpenGL') -> 'EditorHost':
         """初始化编辑器 — 同时建立帧同步（Editor 是 master）。"""
         super().init(window_type=window_type, renderer_type=renderer_type)
         # ── 确保默认 Scene 存在 ──

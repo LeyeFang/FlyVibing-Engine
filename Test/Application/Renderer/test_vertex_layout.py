@@ -4,7 +4,7 @@ VertexLayout 标准布局测试 — 不变式 + 后端适配 + shader 一致性�
 覆盖:
   1. STD_LAYOUT 全部布局满足不变式（offset 4 对齐 / stride 覆盖 / loc0=position）
   2. 关键布局钉死（ENTITY_POS_UV_NORMAL = pos3+uv2+normal3, stride 32）
-  3. 后端适配: to_zengl_format / to_zengl_locations / to_gl_attribs
+  3. 后端适配: to_gl_attribs
   4. frozen 不可变
   5. check_shader_consistency 警告快照 — 当前已知状态被钉死;
      Basic/SSVEP 的 "location 2 浪费" (布局有 aNormal, shader 不用) 为已知状态;
@@ -87,8 +87,6 @@ def main() -> int:
 
     # ── 3. 后端适配 ──
     print("── backend adapters ──")
-    check("zengl format", ent.to_zengl_format() == "3f 2f 3f", ent.to_zengl_format())
-    check("zengl locations", ent.to_zengl_locations() == [0, 1, 2], str(ent.to_zengl_locations()))
     check("gl attribs", ent.to_gl_attribs() == [(0, 3, 32, 0), (1, 2, 32, 12), (2, 3, 32, 20)],
           str(ent.to_gl_attribs()))
     no_pos = VertexLayout(attributes=((1, 3, 0),), stride=12)

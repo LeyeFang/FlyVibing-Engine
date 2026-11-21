@@ -118,6 +118,22 @@ def main() -> int:
              if os.path.isfile(os.path.join(OUT, "runtime", n))]
     if runtime_src_exists:
         check(f"runtime bundled ({rt_py or 'NO EXE'})", bool(rt_py))
+        # ★ 2026-11-17 回归守卫: 导出曾把 `Lib/site-packages` 整层跳过（把"扫描源码"
+        #   的第三方目录集误用到"复制产物"上）→ 成品只剩 exe，numpy 全丢，而这里
+        #   只查 exe 存在，所以没被发现。现在要求依赖层**有内容**。
+        src_sp = os.path.join(ROOT, "Resource", "runtime", "Lib", "site-packages")
+        out_sp = os.path.join(OUT, "runtime", "Lib", "site-packages")
+        if os.path.isdir(src_sp):
+            src_pkgs = sorted(n for n in os.listdir(src_sp)
+                              if os.path.isdir(os.path.join(src_sp, n))
+                              and not n.startswith("_"))
+            out_pkgs = sorted(n for n in os.listdir(out_sp)) if os.path.isdir(out_sp) else []
+            check(f"runtime keeps site-packages ({len(out_pkgs)} entries)",
+                  bool(out_pkgs), f"exported runtime has no site-packages; src had {src_pkgs[:5]}")
+            missing = [p for p in src_pkgs if p not in out_pkgs]
+            check(f"runtime keeps every top-level package ({len(src_pkgs)} src)",
+                  not missing, f"missing: {missing[:5]}")
+            check("runtime keeps numpy (import-critical)", "numpy" in out_pkgs, str(out_pkgs[:8]))
     else:
         print("  [info] Resource/runtime not prepared yet — runtime bundling skipped")
 

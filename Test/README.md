@@ -28,9 +28,26 @@
 
 ```powershell
 .\.venv-py314t\Scripts\python.exe Utils\Dev\test_runner.py --list
-.\.venv-py314t\Scripts\python.exe Utils\Dev\test_runner.py --tier core
+.\.venv-py314t\Scripts\python.exe Utils\Dev\test_runner.py --tier core          # 全量门禁（并行, ~90s）
+.\.venv-py314t\Scripts\python.exe Utils\Dev\test_runner.py --changed            # 内层循环：改哪跑哪
+.\.venv-py314t\Scripts\python.exe Utils\Dev\test_runner.py -j 1 --tier core     # 串行基线（排障用）
 .\.venv-py314t\Scripts\python.exe Utils\Dev\test_runner.py --only test_scene_manager
 ```
+
+并行（2026-11-17 起默认 `-j auto = min(8, CPU)`）：每个测试本来就是独立进程 + 独立
+`MGE_TEST_TMP`，并行不改语义。`--tier core` 实测 **286s → 87s**。
+独占资源的测试用文件头标记声明，它们不会进并行批次：
+
+```python
+# SERIAL: gl       # 独立 GL 上下文（隐藏窗）
+# SERIAL: port     # 真实端口 / 端口台账
+# SERIAL: timing   # 计时断言、忙等校准、线程争用敏感
+# SERIAL: global   # 其它机器级单例
+```
+
+`gl` / `port` 与并行批次重叠跑（同类互斥即可）；`timing` / `global` 独占整机、最后单独跑。
+断言的**正确写法**是有界轮询（`_wait_until(pred, timeout)`），不是 `sleep(0.002)` 后假定线程已推进
+—— 后者在并行下必然假失败。
 
 测试节点地图 / UI 展开图：
 
@@ -57,3 +74,6 @@ GUI 场景不再需要单独找入口：
 - 输出最后一行必须是 `RESULT: OK (n)` / `RESULT: n/m passed...` / `RESULT: FAIL ...`。
 - 写盘只用 `MGE_TEST_TMP` 或临时目录，不写仓库根。
 - 需要 GL、硬件、运行中编辑器的测试请标 `TIER: gui/live/manual`，不要混入 core 默认批次。
+- **扫 `Application/` 的树遍历必须走 `Test/Helpers/tree.py::iter_py`**（或 `is_vendor_dir(d)` 过滤）：
+  本地扩展常把实机 venv 放进自己目录（`.venv-<ext>`），裸 `os.walk` 会去解析第三方源码。
+  守卫 `test_vendor_dirs.py` §4 会当场 FAIL。实测这曾让两个测试从 0.8s 涨到 33.6s。

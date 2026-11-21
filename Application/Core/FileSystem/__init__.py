@@ -17,8 +17,20 @@ FileSystem — 引擎文件系统抽象层。
 
 from .VFS import VFS
 from .PathUtils import PathUtils
+from .VendorDirs import (
+    COPY_KEEP_DIR_NAMES,
+    COPY_SKIP_DIR_NAMES,
+    VENDOR_DIR_NAMES,
+    is_copy_skip_dir,
+    is_vendor_dir,
+)
 
 __all__ = [
     "VFS",
     "PathUtils",
+    "VENDOR_DIR_NAMES",
+    "COPY_KEEP_DIR_NAMES",
+    "COPY_SKIP_DIR_NAMES",
+    "is_vendor_dir",
+    "is_copy_skip_dir",
 ]

@@ -34,6 +34,7 @@ if _ROOT:
 
 from flyvibing_extension_kit.imgui_headless import headless_imgui  # noqa: E402
 from imgui_bundle import imgui                                     # noqa: E402
+from Test.Helpers.tree import is_vendor_dir                       # noqa: E402
 
 _RESULTS = {"pass": 0, "fail": 0}
 
@@ -66,7 +67,7 @@ def _py_files(*trees: str):
     for tree in trees:
         base = os.path.join(_ROOT, *tree.split("/"))
         for dirpath, dirs, files in os.walk(base):
-            dirs[:] = [d for d in dirs if d not in _PRUNE_DIRS]
+            dirs[:] = [d for d in dirs if d not in _PRUNE_DIRS and not is_vendor_dir(d)]
             for fn in sorted(files):
                 if fn.endswith(".py"):
                     yield os.path.join(dirpath, fn)

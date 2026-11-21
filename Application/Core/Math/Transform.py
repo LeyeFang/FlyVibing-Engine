@@ -11,7 +11,7 @@ Convention:
     - S: scale matrix
     - R: rotation matrix (Euler Z*Y*X, pure numpy)
     - T: translation matrix
-  - For OpenGL/ZenGL upload: GL_FALSE (C-contiguous bytes → column-vector in shader)
+  - For OpenGL upload: GL_FALSE (C-contiguous bytes → column-vector in shader)
 
 Design:
   Math 层不依赖任何 Scene/ECS 类型。调用方从 ECS 组件中提取数值

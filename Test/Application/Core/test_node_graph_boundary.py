@@ -25,6 +25,8 @@ if _d:
     sys.path.insert(0, _d)
 import _path_setup  # noqa: E402
 
+from Test.Helpers.tree import is_vendor_dir  # noqa: E402  (第三方目录判定单源)
+
 _PASS = 0
 _FAIL = 0
 
@@ -121,7 +123,8 @@ def test_editor_only_scan() -> None:
             continue
         # 扩展包目录（子目录含 extension.json）整体免扫 — 编辑器侧贡献区
         dirs[:] = [d for d in dirs
-                   if not os.path.isfile(os.path.join(base, d, "extension.json"))]
+                   if not os.path.isfile(os.path.join(base, d, "extension.json"))
+                   and not is_vendor_dir(d)]
         if "extension.json" in files:
             continue
         for fn in files:

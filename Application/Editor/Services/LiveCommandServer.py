@@ -39,6 +39,10 @@ _PUMP_TIMEOUT = 15.0    # 主线程回执等待上限（秒; 逐 op 可覆盖）
 _OP_PUMP_TIMEOUT_OVERRIDES = {
     "project.open": 120.0,     # 大工程资源+场景全量加载
     "project.export": 900.0,   # 游戏层复制 runtime 镜像（数百 MB / 上万文件）— 分钟级
+    # 抓帧是"即时"op: 主线程若被 GL 驱动/模态阻塞, 让客户端快速拿到结论,
+    # 而不是陪着等 15s（客户端侧 per-call 上限 3s, 这里要更短）
+    "frame.request": 2.5,
+    "frame.fetch": 2.5,
 }
 _MAX_OPS_PER_FRAME = 16
 
@@ -1981,17 +1985,23 @@ class LiveCommandServer:
         """请求抓取目标窗口“下一渲染帧”（立即返回; 结果用 frame.fetch 取回）。
 
         target: 'editor'（编辑器窗口）/ 'pie'（运行时窗口 — 必须运行中）。
+        lease_s: 可选租约（秒）; 超时未产帧 → frame.fetch 返回 state=expired。
+        回执带 window_state / framebuffer, 让客户端在"窗口最小化"时快速失败而不是盲等。
         """
         target = str(args.get("target", "editor")).lower()
         engine_cls = _capture_engine_cls(target)
-        info = engine_cls.request_capture()
-        return {"target": target, "generation": int(info["generation"])}
+        raw_lease = args.get("lease_s")
+        lease_s = float(raw_lease) if raw_lease is not None else None
+        info = engine_cls.request_capture(lease_s)
+        result = {"target": target, "generation": int(info["generation"])}
+        result.update(_window_state(engine_cls))
+        return result
 
     @staticmethod
     def _op_frame_fetch(args: dict) -> dict:
         """按代数取帧; 就绪时随回执附带二进制负载（result.binary_bytes 声明长度）。
 
-        state: pending（未抓到）/ superseded（该代已被更新请求覆盖）/ error / ready。
+        state: pending（未抓到）/ expired（超过租约仍无帧）/ superseded（该代已被更新请求覆盖）/ error / ready。
         """
         target = str(args.get("target", "editor")).lower()
         engine_cls = _capture_engine_cls(target)
@@ -2008,6 +2018,8 @@ class LiveCommandServer:
         if not info.get("ready"):
             if info.get("error"):
                 result["error"] = info["error"]
+            if info.get("pending_ms") is not None:
+                result["pending_ms"] = info["pending_ms"]
             if info.get("latest_generation") is not None:
                 result["latest_generation"] = int(info["latest_generation"])
             return result
@@ -2652,6 +2664,33 @@ def _capture_engine_cls(target: str):
             raise ValueError("PIE is not running — start it first (sim.play)")
         return GameRuntime
     raise ValueError(f"unknown target: {target!r} (expected 'editor' or 'pie')")
+
+
+def _window_state(engine_cls) -> dict:
+    """目标窗口状态（是否最小化 / framebuffer 尺寸）— 只读, 任何异常降级为 unknown。
+
+    用途: 客户端在"窗口最小化 → 渲染线程不产帧"时快速给出可执行结论,
+    而不是把 6s 预算盲等完。GLFW 查询必须在持有窗口的线程（pump = 主线程）调用。
+    """
+    out: dict = {"window_state": "unknown"}
+    try:
+        window = engine_cls.get_window()
+    except Exception:  # noqa: BLE001
+        return out
+    glfw_win = getattr(window, "glfw_window", None)
+    if glfw_win is None:
+        return out
+    try:
+        import glfw
+
+        out["window_state"] = (
+            "iconified" if glfw.get_window_attrib(glfw_win, glfw.ICONIFIED) else "normal"
+        )
+        width, height = glfw.get_framebuffer_size(glfw_win)
+        out["framebuffer"] = [int(width), int(height)]
+    except Exception:  # noqa: BLE001 — 无 GLFW/窗口已销毁: 保持 unknown
+        return out
+    return out
 
 
 def _camera_entity_for_role(role: str):

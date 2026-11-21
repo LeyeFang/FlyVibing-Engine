@@ -26,6 +26,7 @@ import os
 from typing import Optional
 
 from Application.Core.Extension import ExtensionRuntimeDeps as RuntimeDeps
+from Application.Core.FileSystem.VendorDirs import COPY_SKIP_DIR_NAMES, is_copy_skip_dir
 
 # 导出游戏包时 Utils/User 下要跳过的目录（构建产物/临时文件 — 成品里只留运行时辅助）。
 # 守卫: Test/Application/Editor/test_utils_layout.py::test_utils_export_selection
@@ -42,13 +43,15 @@ LOCAL_STATE_DIRS = ("Application/Editor/Config",)
 # （`Application/Functions/<ext>/.git`），git 对象在 Windows 上是只读的 →
 # `copytree` 复制时刷出数百条 `Permission denied`，真告警被淹没，而且目录处于
 # "部分拷贝"状态无法判断成品完不完整。这些目录对成品毫无用处，跳过即可。
-EXPORT_SKIP_DIR_NAMES = frozenset({
-    ".git", ".hg", ".svn",          # 版本控制
-    ".venv", "venv", "env",          # 虚拟环境
-    "__pycache__", ".idea", ".vscode", ".vs",
-    ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox", ".nox",
-    "node_modules",
-})
+#
+# 2026-11-17: 名字列表迁移到 `Core/FileSystem/VendorDirs`（单一来源）+ 前缀识别。
+# 起因: 本地扩展把 `.venv-<ext>` 放进自己的源码目录后，本表只做精确匹配 →
+# 219 MB / 5,434 个文件的虚拟环境被打进游戏层（`.venv` 命中、`.venv-<ext>` 不命中）。
+#
+# ★ 这里用 **COPY** 语义（`COPY_SKIP_DIR_NAMES`），不是扫描语义：`site-packages`
+#   必须保留 —— `Resource/runtime/Lib/site-packages` 就是运行时依赖本身。曾经误用
+#   扫描集，成品里 numpy 全丢（只剩 exe），见 `test_vendor_dirs` §2 的守卫。
+EXPORT_SKIP_DIR_NAMES = COPY_SKIP_DIR_NAMES
 
 # 导出时跳过的文件后缀（编译产物 — 会随运行时/解释器重建）。
 EXPORT_SKIP_FILE_SUFFIXES = (".pyc", ".pyo")
@@ -1270,7 +1273,7 @@ class ProjectManager:
         def _ignore(_dir, names):
             ignored = set()
             for n in names:
-                if n in skip:
+                if n in skip or is_copy_skip_dir(n):
                     ignored.add(n)
                     continue
                 if n.lower().endswith(EXPORT_SKIP_FILE_SUFFIXES):

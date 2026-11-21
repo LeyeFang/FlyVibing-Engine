@@ -13,7 +13,6 @@ RHI 命令模型:
 子类实现:
   - openGLRenderer   : OpenGL/  — PyOpenGL 后端
   - vulkanRenderer   : Vulkan/  — Vulkan 后端
-  - ZenGLRenderer    : ZenGL/   — ZenGL 后端
 
 相机矩阵:
   Renderer 不持有相机引用。view/proj 矩阵由逻辑线程的相机模块计算后，
@@ -295,7 +294,7 @@ class Renderer(ABC):
         """解析 overlay 的声明式 uniform → 当前帧的 np.ndarray 值。
 
         后端调用此方法获取每帧的 uniform 值，然后用自己的 API 上传到 GPU。
-        OpenGL: glUniform*    ZenGL: pipeline.uniforms[name][:] = value
+        OpenGL: glUniform*
 
         Args:
             uniforms: overlay.uniforms 字典 (静态值 | 动态源标识符)
@@ -325,7 +324,7 @@ class Renderer(ABC):
         return resolved
 
     def _render_overlay_drawables(self, view: np.ndarray, proj: np.ndarray) -> None:
-        """遍历数据驱动 overlay 并绘制 — 子类 (OpenGL/ZenGL) 实现。
+        """遍历数据驱动 overlay 并绘制 — 子类 (OpenGL/Vulkan) 实现。
 
         声明式 overlay: Editor 提供纯数据 (overlay_drawable_struct),
         渲染器负责 GPU 上传和绘制 (如 Grid/Gizmo)。

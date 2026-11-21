@@ -12,6 +12,7 @@
 用法:
     .venv-py314t\\Scripts\\python.exe Test/Application/Editor/test_port_ledger.py
 """
+# SERIAL: port (端口台账/预占状态是机器级共享资源)
 
 from __future__ import annotations
 

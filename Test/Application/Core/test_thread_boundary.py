@@ -25,6 +25,8 @@ if _d:
 ROOT = os.path.dirname(_d)
 APP = os.path.join(ROOT, "Application")
 
+from Test.Helpers.tree import is_vendor_dir  # noqa: E402  (第三方目录判定单源)
+
 # 本地兼容夹具（git-ignored 本地资产, 非引擎内容 — 品牌独立进程内部线程,
 # 不参与引擎线程边界; 与 extension boundary guard 同口径的夹具豁免）
 _SKIP_PATHS = (os.path.join(APP, "Functions", "Gtec"),)
@@ -59,7 +61,7 @@ def _iter_py(root: str):
                for p in _SKIP_PATHS):
             dirnames[:] = []
             continue
-        dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+        dirnames[:] = [d for d in dirnames if d != "__pycache__" and not is_vendor_dir(d)]
         for fn in filenames:
             if fn.endswith(".py"):
                 yield os.path.join(dirpath, fn)

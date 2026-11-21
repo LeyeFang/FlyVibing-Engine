@@ -12,7 +12,7 @@
 
 | 包 | cp314t（free-threaded） | cp314（GIL） | 结论 |
 |---|---|---|---|
-| numpy / scipy / zengl / esper / mcp / pillow / rpds | ✅ 全有 | ✅ | 无障碍 |
+| numpy / scipy / esper / mcp / pillow / rpds | ✅ 全有 | ✅ | 无障碍 |
 | **imgui_bundle** | ❌ 无 | ✅ 1.92.900（macosx_14_0_arm64 专用轮） | **mac 侧先走 GIL 版 3.14** |
 | glfw（py2.py3-none 纯轮） | ✅ | ✅ | 无障碍 |
 

@@ -46,7 +46,7 @@
   - `Editor`：`UIManager`、`MenuBarPanel`、`ResourcePanel`、`FileDialog` 等面板/对话框缺少行为测试；UI 场景未入 runner。
   - `NodeGraph`：部分 evaluator、`graph_rules` / `graph_constraints` 边界缺少直接测试。
   - 厂家 SDK 扩展：硬件/后端测试需明确 `live/manual`，纯逻辑测试应迁入标准 tree 或显式发现。
-  - Renderer：OpenGL 有像素/命令测试；Vulkan/ZenGL 为 WIP，先明确“不承诺覆盖”，不要伪覆盖。
+  - Renderer：OpenGL 有像素/命令测试；Vulkan 为 WIP，先明确“不承诺覆盖”，不要伪覆盖。
 
 ## 2. 分阶段实施
 

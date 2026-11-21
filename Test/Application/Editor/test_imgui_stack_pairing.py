@@ -35,6 +35,7 @@ if _ROOT:
     sys.path.insert(0, os.path.join(_ROOT, "Utils", "ExtDev", "ExtensionKit"))
 
 import review_extension as kit  # noqa: E402  (规则同源)
+from Test.Helpers.tree import is_vendor_dir  # noqa: E402  (第三方目录判定单源)
 
 _RESULTS = {"pass": 0, "fail": 0}
 
@@ -111,7 +112,8 @@ def _scan(target: str):
     files = gated = 0
     imbalance: list = []
     for dirpath, dirs, names in os.walk(base):
-        dirs[:] = [d for d in dirs if d not in ("__pycache__", "_runs")]
+        dirs[:] = [d for d in dirs
+                   if d not in ("__pycache__", "_runs") and not is_vendor_dir(d)]
         for fn in sorted(names):
             if not fn.endswith(".py"):
                 continue
@@ -198,7 +200,8 @@ def main() -> int:
     for target in _SCAN_DIRS:
         base = os.path.join(_ROOT, *target.split("/"))
         for dirpath, dirs, names in os.walk(base):
-            dirs[:] = [d for d in dirs if d not in ("__pycache__", "_runs")]
+            dirs[:] = [d for d in dirs
+                       if d not in ("__pycache__", "_runs") and not is_vendor_dir(d)]
             for fn in names:
                 if not fn.endswith(".py"):
                     continue

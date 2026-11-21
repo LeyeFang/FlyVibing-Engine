@@ -50,8 +50,9 @@ def check(name: str, ok: bool, detail: str = "") -> None:
         _failures.append(name)
 
 
-def _run_cli(args: list[str], stdin: str | None = None,
-             env_extra: dict[str, str] | None = None) -> tuple[int, str, str]:
+def _run_cli_subprocess(args: list[str], stdin: str | None,
+                        env_extra: dict[str, str] | None) -> tuple[int, str, str]:
+    """原始实现（子进程）— 作为 in-process 失败时的保底路径。"""
     env = dict(os.environ)
     env["PYTHONPATH"] = SRC + os.pathsep + env.get("PYTHONPATH", "")
     env["PYTHONIOENCODING"] = "utf-8"
@@ -67,6 +68,51 @@ def _run_cli(args: list[str], stdin: str | None = None,
         cwd=ROOT,
     )
     return proc.returncode, proc.stdout, proc.stderr
+
+
+def _run_cli(args: list[str], stdin: str | None = None,
+             env_extra: dict[str, str] | None = None) -> tuple[int, str, str]:
+    """跑一次 CLI（**in-process**，省掉每次 ~1.2s 的解释器启动）。
+
+    2026-11-17: 这里原本每次起一个 `python -m engine_editor_mcp.cli` 子进程，
+    24 次调用 ≈ 29s —— 而 CLI 本身是纯函数式（无全局状态，除自增请求 id）。
+    改为进程内调用 + 重定向 stdio，语义等价。任何异常（argparse 的 SystemExit、
+    reconfigure 失败等）都退回子进程，避免"优化让测试误报"。
+    """
+    try:
+        import contextlib
+        import io as _io
+
+        from engine_editor_mcp import cli as cli_mod
+    except Exception:  # noqa: BLE001 — 包不可导入 → 走子进程（保底）
+        return _run_cli_subprocess(args, stdin, env_extra)
+
+    saved_env: dict[str, str | None] = {}
+    old_cwd = os.getcwd()
+    old_stdin = sys.stdin
+    out, err = _io.StringIO(), _io.StringIO()
+    try:
+        for key, value in (env_extra or {}).items():
+            saved_env[key] = os.environ.get(key)
+            os.environ[key] = value
+        os.chdir(ROOT)
+        if stdin is not None:
+            sys.stdin = _io.StringIO(stdin)
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = cli_mod.main(list(args))
+        return int(code or 0), out.getvalue(), err.getvalue()
+    except SystemExit as exc:      # argparse 用法错误 — 与子进程退出码一致
+        return int(exc.code or 0), out.getvalue(), err.getvalue()
+    except BaseException:          # noqa: BLE001 — 任何意外都回退，别让测试失真
+        return _run_cli_subprocess(args, stdin, env_extra)
+    finally:
+        sys.stdin = old_stdin
+        os.chdir(old_cwd)
+        for key, old in saved_env.items():
+            if old is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = old
 
 
 def test_registry() -> None:

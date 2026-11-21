@@ -16,6 +16,7 @@ Standalone PIE Test — 不使用完整 Editor，直接测试 GameRuntime 启动
     - Runtime 窗口应能正常创建和销毁
     - 无报错、无死锁
 """
+# SERIAL: timing (真跑窗口/帧 — 并行会抢 GL 与帧预算)
 
 from __future__ import annotations
 import sys, os, time, threading, glfw

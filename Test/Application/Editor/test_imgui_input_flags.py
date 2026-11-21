@@ -28,6 +28,8 @@ ROOT = _d or ""
 if ROOT:
     sys.path.insert(0, ROOT)
 
+from Test.Helpers.tree import is_vendor_dir  # noqa: E402  (第三方目录判定单源)
+
 _RESULTS = {"pass": 0, "fail": 0}
 SCAN_ROOT = os.path.join(ROOT, "Application")
 SKIP_DIRS = {"__pycache__", "dist", "build"}   # 产物目录不参与规则检查
@@ -85,7 +87,9 @@ def scan_tree(root: str) -> tuple[list[str], int]:
     issues: list[str] = []
     count = 0
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in ("__pycache__", "dist", "build")]
+        dirnames[:] = [d for d in dirnames
+                       if d not in ("__pycache__", "dist", "build")
+                       and not is_vendor_dir(d)]
         for name in filenames:
             if not name.endswith(".py"):
                 continue

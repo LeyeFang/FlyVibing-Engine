@@ -5,8 +5,8 @@
 
 ## 概览
 
-- 节点数：**120**
-- `core`：115
+- 节点数：**122**
+- `core`：117
 - `heavy`：1
 - `live`：2
 - `manual`：2
@@ -48,11 +48,13 @@
 | `core.ui_showcase` | `core` | `contract` | `core` | `Test/Application/Core/test_ui_showcase.py` | Application.Core.Scene.UIComponents<br>Application.Core.UI.tree<br>Application.Core.UI.scene<br>Examples.UIShowcase |
 | `core.ui_tree` | `core` | `contract` | `core` | `Test/Application/Core/test_ui_tree.py` | Application.Core.UI.tree<br>Application.Core.UI.scene<br>Application.Core.UI.theme |
 | `core.uniform_schema` | `core` | `integration` | `core` | `Test/Application/Core/test_uniform_schema.py` | Application.Resource.UniformSpec<br>Application.Resource._resource_utils<br>Application.Resource.Material<br>Application.Resource.ResourceManager |
+| `core.vendor_dirs` | `core` | `contract` | `core.filesystem` | `Test/Application/Core/test_vendor_dirs.py` | Application.Core.FileSystem.VendorDirs<br>Application.Editor.ProjectManager<br>Test.Helpers.tree |
 | `core.window_click_through` | `core` | `unit` | `core` | `Test/Application/Core/test_window_click_through.py` | Application.Core.Window.glfwWindow |
 | `core.window_display_fallback` | `core` | `unit` | `core` | `Test/Application/Core/test_window_display_fallback.py` | Application.Core.Window.glfwWindow |
 | `editor.action_contract` | `core` | `contract` | `editor` | `Test/Application/Editor/test_action_contract.py` | Application.Core.Scene.Scene<br>Application.Core.Scene.SceneManager<br>Application.Editor.EditorHost<br>Application.Editor.Gizmos.TransformGizmo<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.controllers.SceneBrowserController<br>Application.Editor.UI.controllers.SelectionController |
 | `editor.debug_report` | `core` | `unit` | `editor` | `Test/Application/Editor/test_debug_report.py` | Application.Core.Diagnostics.DebugEvents<br>Application.Runtime.RuntimeDebugLayer<br>Application.Editor.UI.panels.SettingsPanel |
 | `editor.e2e_node_group_live` | `live` | `e2e` | `editor` | `Test/Application/Editor/test_e2e_node_group_live.py` | Application.Core.NodeGraph.group_geometry<br>Application.Core.NodeGraph.group_layout<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.UI.panels.node_editor.panel |
+| `editor.editor_mcp_client_deadline` | `core` | `contract` | `editor` | `Test/Application/Editor/test_editor_mcp_client_deadline.py` | Application.Core.Renderer.FrameCaptureSlot |
 | `editor.editor_mcp_package` | `core` | `contract` | `editor` | `Test/Application/Editor/test_editor_mcp_package.py` | Application.Core.NodeGraph<br>Application.Core.NodeGraph.node_packs |
 | `editor.editor_settings` | `core` | `integration` | `editor` | `Test/Application/Editor/test_editor_settings.py` | Application.Core.NodeGraph<br>Application.Editor.EditorSettings<br>Application.Editor.Extensions.ExtensionUI<br>Application.Editor.I18n<br>Application.Editor.Services.LiveCommandServer<br>Application.Editor.StartupOptions<br>Application.Editor.UI.UIManager<br>Application.Editor.UI.panels.SettingsPanel<br>Application.Editor.UI.panels.node_editor.panel |
 | `editor.examples_catalog` | `core` | `integration` | `editor` | `Test/Application/Editor/test_examples_catalog.py` | Application.Editor.UI.UIManager |

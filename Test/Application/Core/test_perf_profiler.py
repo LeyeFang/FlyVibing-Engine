@@ -10,6 +10,7 @@
       - stop() 之后窗口清空（二次 init 不混入旧帧）。
 """
 # TIER: core
+# SERIAL: timing (计时/线程争用敏感 — 并行会污染断言)
 
 from __future__ import annotations
 

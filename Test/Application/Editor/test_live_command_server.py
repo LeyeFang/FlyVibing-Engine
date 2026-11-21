@@ -452,6 +452,8 @@ def main() -> int:
     resp = roundtrip(port, "frame.request", {"target": "editor"})
     gen = (resp.get("result") or {}).get("generation")
     check("frame.request ok", resp.get("ok") is True and isinstance(gen, int), str(resp))
+    check("frame.request reports window_state (headless → unknown)",
+          (resp.get("result") or {}).get("window_state") == "unknown", str(resp))
 
     # 手动模拟渲染线程发布 2x2 红色 RGBA 帧（headless 无 GL）
     red = bytes([255, 0, 0, 255]) * 4
@@ -475,6 +477,18 @@ def main() -> int:
     resp = roundtrip(port, "frame.fetch", {"target": "editor", "generation": gen3})
     check("not yet captured → pending", (resp.get("result") or {}).get("state") == "pending", str(resp))
     EditorHost._capture_slot().take_pending()   # 清理未消费请求
+
+    # 租约: 渲染线程不产帧（窗口最小化/驱动阻塞）→ 有确定结论, 不无限 pending
+    resp = roundtrip(port, "frame.request", {"target": "editor", "lease_s": 0.05})
+    gen4 = (resp.get("result") or {}).get("generation")
+    check("lease_s accepted", isinstance(gen4, int), str(resp))
+    EditorHost._capture_slot().take_pending()   # 交给"渲染线程"后卡住
+    time.sleep(0.12)
+    resp = roundtrip(port, "frame.fetch", {"target": "editor", "generation": gen4})
+    result = resp.get("result") or {}
+    check("past lease → expired", result.get("state") == "expired", str(resp))
+    check("expired carries reason", "没有产出新帧" in str(result.get("error")), str(resp))
+    check("expired carries pending_ms", float(result.get("pending_ms") or 0) >= 50, str(resp))
 
     # ── 9.5 v3: 容器 ops 冒烟（无场景环境 → 受控错误 / 空结果）──
     print("── v3 container ops smoke ──")

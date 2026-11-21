@@ -6,7 +6,7 @@ Editor Grid — 摄像机跟随参考网格 (圆形淡化边缘)。
   - 网格中心跟随 EditorCamera 的注视点 (orbit_target)
   - 网格半径 = 摄像机到注视点的距离 (orbit_distance), 记为 r
   - 0.8r ~ 1r 范围边缘逐渐虚化到透明
-  - ★ 零图形后端依赖 — 不 import OpenGL / ZenGL / Vulkan
+  - ★ 零图形后端依赖 — 不 import OpenGL / Vulkan
 
 坐标约定:
   - 编辑器 X 轴 = GL  X 轴  (+X 方向)

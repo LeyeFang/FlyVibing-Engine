@@ -22,9 +22,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 APP = os.path.join(ROOT, "Application")
 OUT = os.path.join(ROOT, "Doc", "Dev", "print_inventory.md")
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)   # 供 VendorDirs（单一来源的"第三方目录"判定）
+
+from Application.Core.FileSystem.VendorDirs import is_vendor_dir  # noqa: E402
 
 _PRINT_RE = re.compile(r"^\s*print\(")
-_SKIP_DIRS = {"__pycache__", "Config", "runtime", "wheels"}
+_SKIP_DIRS = {"Config", "runtime", "wheels"}   # 引擎自有的非源码目录（第三方目录见 VendorDirs）
 
 # 热路径判定：这些位置会在每个逻辑帧 / 每次节点执行时跑（最高优先级迁移）
 _HOT_PREFIXES = (
@@ -47,7 +51,7 @@ _KEEP_FILES = {
 def _scan() -> list[tuple[str, int, str]]:
     rows: list[tuple[str, int, str]] = []
     for base, dirs, files in os.walk(APP):
-        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
+        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not is_vendor_dir(d)]
         for name in files:
             if not name.endswith(".py"):
                 continue

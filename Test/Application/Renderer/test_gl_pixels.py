@@ -15,6 +15,7 @@ GL 像素测试 — 真实 GL 上下文端到端（探针 = 隐藏窗口 + OpenG
 运行: python Utils/Dev/test_runner.py --only gl_pixels
 """
 # TIER: core
+# SERIAL: gl (独立 GL 上下文; 并行会抢驱动/隐藏窗)
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-﻿"""Regression: Scene 并发安全（2026-11-10 P0 竞态修复）。
+"""Regression: Scene 并发安全（2026-11-10 P0 竞态修复）。
 
 事故
     渲染线程的 `NodeEditorPanel._ensure_default_scene()`（每帧）与主线程的
@@ -16,6 +16,7 @@
 额外验: 深拷贝独立性（改副本不影响原图，包括 node_graph）与"新锁不共享"。
 """
 # TIER: core
+# SERIAL: timing (计时/线程争用敏感 — 并行会污染断言)
 
 from __future__ import annotations
 

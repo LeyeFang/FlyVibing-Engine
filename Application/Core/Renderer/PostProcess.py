@@ -4,7 +4,7 @@ PostProcess — 屏幕空间后处理管线抽象基类。
 设计原则:
   - Renderer 不知道 Editor 的存在，只知道有"后处理效果"
   - Editor (OutlinerID) 不 import 任何图形 API，只提供纯数据
-  - 每个后端实现自己的 PostProcess Mixin (OpenGLPostProcess / ZenGLPostProcess)
+  - 每个后端实现自己的 PostProcess Mixin (如 OpenGLPostProcess)
 
 后处理效果:
   - HighlightEffect: 实体轮廓高亮 (ID buffer + 边缘检测 + 合成)
@@ -54,7 +54,7 @@ class HighlightEffectConfig:
 class PostProcess:
     """后处理管线 Mixin 基类。
 
-    子类 (OpenGLPostProcess / ZenGLPostProcess) 必须实现:
+    子类 (如 OpenGLPostProcess) 必须实现:
       - _init_highlight(config)
       - _render_highlight(view, proj)
       - _release_highlight()

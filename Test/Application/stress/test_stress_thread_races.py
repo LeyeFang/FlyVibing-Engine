@@ -14,6 +14,7 @@
   .venv-py314t\\Scripts\\python.exe Test/Application/stress/test_stress_thread_races.py
 """
 # TIER: core
+# SERIAL: timing (计时/线程争用敏感 — 并行会污染断言)
 
 from __future__ import annotations
 

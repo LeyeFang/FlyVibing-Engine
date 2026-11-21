@@ -10,6 +10,8 @@
   2. publish(blank=True) 会在 fetch 里透出 `blank`
   3. 未请求就 fetch = pending；新代覆盖旧代 = superseded
   4. publish_error → state=error + 原因
+  5. 租约（2026-11-16 — "抓帧永远有返回点"）: 排队中 / 已交给渲染线程但没回,
+     超过租约都返回 expired, 而不是无限 pending
 """
 
 # TIER: core
@@ -18,6 +20,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 
 _d = os.path.dirname(os.path.abspath(__file__))
 while _d and not os.path.exists(os.path.join(_d, "_path_setup.py")):
@@ -90,6 +93,55 @@ def main() -> int:
     err = slot.fetch(gen3)
     check("publish_error -> state=error", err["state"] == "error", str(err))
     check("error carries reason", "GL context lost" in str(err.get("error")), str(err))
+
+    # ── 5. 租约: 渲染线程不产帧时不得无限 pending ──
+    leased = FrameCaptureSlot()
+    gen4 = leased.request(lease_s=0.05)["generation"]
+    check("fresh request is pending", leased.fetch(gen4)["state"] == "pending")
+    time.sleep(0.12)
+    expired = leased.fetch(gen4)
+    check("queued past lease -> expired", expired["state"] == "expired", str(expired))
+    check("expired explains why", "没有产出新帧" in str(expired.get("error")), str(expired))
+    check("expired reports waited ms", float(expired.get("pending_ms") or 0) >= 50,
+          str(expired.get("pending_ms")))
+
+    # 已交给渲染线程（take_pending）但渲染线程卡在 glReadPixels → 同样要过期
+    gen5 = leased.request(lease_s=0.05)["generation"]
+    leased.take_pending()
+    check("in-flight is pending before lease", leased.fetch(gen5)["state"] == "pending")
+    time.sleep(0.12)
+    check("in-flight past lease -> expired", leased.fetch(gen5)["state"] == "expired",
+          str(leased.fetch(gen5)))
+
+    # 迟到的帧仍然可取回（租约只影响"等待结论", 不丢数据）
+    leased.publish(gen5, 1, 1, b"\x00\x00\x00\x00")
+    late = leased.fetch(gen5)
+    check("late publish still readable", late["state"] == "ready", str(late))
+
+    # publish 后不再是 in-flight（不会因为旧租约又把新查询判成过期）
+    check("publish clears in-flight", leased.fetch(gen5)["state"] == "ready")
+    check("lease_s default is 10s",
+          FrameCaptureSlot().lease_s == FrameCaptureSlot.DEFAULT_LEASE_S,
+          str(FrameCaptureSlot().lease_s))
+
+    # 多个 agent 并发抓帧: 老代也必须能过期（不能因为"不是最新请求"就永远 pending）
+    leased2 = FrameCaptureSlot()
+    gen6 = leased2.request(lease_s=0.05)["generation"]
+    gen7 = leased2.request(lease_s=0.05)["generation"]
+    time.sleep(0.12)
+    check("older gen expires too (multi-client)", leased2.fetch(gen6)["state"] == "expired",
+          str(leased2.fetch(gen6)))
+    check("newest gen expires as well", leased2.fetch(gen7)["state"] == "expired",
+          str(leased2.fetch(gen7)))
+
+    # 请求表有上限: 被挤出的代给出"不再被跟踪", 而不是永远 pending
+    leased3 = FrameCaptureSlot()
+    first_gen = leased3.request(lease_s=0)["generation"]
+    for _ in range(FrameCaptureSlot.MAX_TRACKED_REQUESTS + 4):
+        leased3.request(lease_s=0)
+    pruned = leased3.fetch(first_gen)
+    check("pruned generation -> expired (not pending)", pruned["state"] == "expired", str(pruned))
+    check("pruned explains re-request", "重新发起" in str(pruned.get("error")), str(pruned))
 
     total = _RESULTS["pass"] + _RESULTS["fail"]
     print(f"RESULT: {'OK' if _RESULTS['fail'] == 0 else 'FAIL'} "

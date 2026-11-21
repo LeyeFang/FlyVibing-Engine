@@ -20,7 +20,13 @@
   - 测试最后一行应输出 `RESULT: OK (n)` / `RESULT: FAIL (k): ...` / `RESULT: n/m passed, k failed`
    （未识别格式或缺省时按退出码判定并告警）
   - 文件头可声明 `# TIER: core|gui|heavy|live`; 未声明按文件名启发式分类
+  - 文件头可声明 `# SERIAL: gl|port|timing|global` → **不进并行 lane**（独占资源/计时敏感）
   - 子进程环境: MGE_TEST_TMP=<runs>/tmp/<test>（沙箱）; PYTHONIOENCODING=utf-8
+
+并行（2026-11-17）:
+  - 默认 `-j auto` = min(8, CPU)；`-j 1` 退化为串行（行为与旧版一致）
+  - 每个测试本来就是独立进程 + 独立 MGE_TEST_TMP → 并行不改语义
+  - 带 `# SERIAL:` 标记的测试在并行批次**之后**单独串行跑（GL 上下文/端口/计时）
 
 退出码: 0 全部通过 / 1 有失败 / 2 用法错误
 """
@@ -34,6 +40,7 @@ import re
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve()
@@ -51,6 +58,8 @@ SEARCH_DIRS = ["Test/Application"]
 SCENARIO_DIRS = ["Test/Application/Editor/scenarios"]
 UI_SCENARIO_RUNNER = "Test/Application/Editor/ui_scenario.py"
 TIER_RE = re.compile(r"TIER\s*[:=]\s*['\"]?(core|gui|heavy|live|manual)", re.IGNORECASE)
+#: 独占资源 / 计时敏感标记（文件头 40 行内）—— 不进并行 lane。
+SERIAL_RE = re.compile(r"^\s*#\s*SERIAL\s*:\s*([a-z_, |-]+)", re.IGNORECASE | re.MULTILINE)
 
 GUI_HINTS = ("gizmo", "grid", "outliner")
 HEAVY_HINTS = ("export_game_bundle",)
@@ -222,6 +231,16 @@ def _classify(path: Path, rel: str) -> str:
     return "core"
 
 
+def _serial_tag(path: Path) -> str:
+    """文件头声明的独占资源标记（`# SERIAL: gl,port`）; 空串 = 可并行。"""
+    try:
+        head = "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[:40])
+    except OSError:
+        return ""
+    m = SERIAL_RE.search(head)
+    return m.group(1).strip() if m else ""
+
+
 def discover(only: str | None) -> list[tuple[str, Path, str]]:
     found: list[tuple[str, Path, str]] = []
     for base in SEARCH_DIRS:
@@ -377,6 +396,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--changed", action="store_true",
                         help="用 git status 的改动文件调用 --affected")
     parser.add_argument("--timeout", type=float, default=600.0)
+    parser.add_argument("-j", "--jobs", type=int, default=0,
+                        help="并行测试数; 0=auto (min(8, CPU)), 1=串行（默认 auto）")
+    parser.add_argument("--fail-fast", action="store_true",
+                        help="首个失败后不再启动新测试（已跑的会完成）")
     parser.add_argument("--list", action="store_true", help="只列出发现的测试与档位")
     parser.add_argument("--json", action="store_true", help="末尾输出单行 JSON 摘要")
     parser.add_argument("--stress", type=int, default=1,
@@ -424,7 +447,9 @@ def main(argv: list[str] | None = None) -> int:
     if ns.list:
         for rel, _p, tier in tests:
             reason = affected_reasons.get(Path(rel).stem, "")
-            print(f"[{tier:6s}] {rel}" + (f"  ({reason})" if reason else ""))
+            tag = _serial_tag(_p)
+            mark = f"  [SERIAL:{tag}]" if tag else ""
+            print(f"[{tier:6s}] {rel}{mark}" + (f"  ({reason})" if reason else ""))
         if affected_names and not tests:
             print("no discovered tests matched affected selection")
         return 0
@@ -440,22 +465,96 @@ def main(argv: list[str] | None = None) -> int:
     runs_dir.mkdir(parents=True, exist_ok=True)
 
     rounds = max(1, ns.stress)
+
+    def _auto_jobs(n: int) -> int:
+        """并行度: 显式 --jobs 优先, 否则 min(8, CPU)；测试太少时退化串行。"""
+        if ns.jobs and ns.jobs > 0:
+            return max(1, int(ns.jobs))
+        env = os.environ.get("MGE_TEST_JOBS", "")
+        if env.isdigit() and int(env) > 0:
+            return max(1, int(env))
+        if n < 4:
+            return 1
+        return max(1, min(8, os.cpu_count() or 4))
+
+    jobs = _auto_jobs(len(selected))
+    lanes = [(i, t, _serial_tag(t[1])) for i, t in enumerate(selected, 1)]
+    parallel = [(i, t) for i, t, tag in lanes if not tag]
+    # 串行资源分两类:
+    #   - 可与并行批次**重叠**（gl / port — 只需"同类互斥"，不关心 CPU 负载）
+    #   - 必须独占整机（timing / global — 并行负载会让计时断言失真）
+    def _is_exclusive(tag: str) -> bool:
+        return any(key in tag for key in ("timing", "global"))
+
+    shared_serial = [(i, t) for i, t, tag in lanes if tag and not _is_exclusive(tag)]
+    exclusive_serial = [(i, t) for i, t, tag in lanes if tag and _is_exclusive(tag)]
+    serial = shared_serial + exclusive_serial
     print(f"== test_runner | tier={tier} | {len(selected)} tests"
-          f"{f' x{rounds} rounds' if rounds > 1 else ''} | runs: {runs_dir.relative_to(ROOT)} ==")
+          f"{f' x{rounds} rounds' if rounds > 1 else ''}"
+          f" | jobs={jobs}"
+          f"{f' (+{len(serial)} serial: {len(shared_serial)} overlap / {len(exclusive_serial)} solo)' if serial else ''}"
+          f" | runs: {runs_dir.relative_to(ROOT)} ==")
     results: list[dict] = []
     t0 = time.time()
-    for round_no in range(1, rounds + 1):
-        for i, (rel, path, _tier) in enumerate(selected, 1):
-            r = run_one(rel, path, runs_dir, ns.timeout,
-                        round_no=(round_no if rounds > 1 else 0))
+    aborted = False
+
+    def _report(r: dict, idx: int, round_no: int) -> None:
+        tag = "PASS" if r["passed"] else "FAIL"
+        extra = f"  first_error: {r['first_error']}" if r["first_error"] and not r["passed"] else ""
+        note = f"  [{r['note']}]" if r["note"] else ""
+        prefix = f"r{round_no} " if rounds > 1 else ""
+        print(f"[{prefix}{idx:3d}/{len(selected)}] {tag}  {r['name']} ({r['elapsed']}s){note}{extra}")
+        if not r["passed"]:
+            print(f"        log: {r['log']}")
+
+    def _run_lane(items: list[tuple[int, tuple]], round_no: int) -> bool:
+        """串行跑一组 (idx, (rel, path, tier))；返回是否有失败。"""
+        for idx, (rel, path, _t) in items:
+            if aborted:
+                return False
+            r = run_one(rel, path, runs_dir, ns.timeout, round_no=round_no)
             results.append(r)
-            tag = "PASS" if r["passed"] else "FAIL"
-            extra = f"  first_error: {r['first_error']}" if r["first_error"] and not r["passed"] else ""
-            note = f"  [{r['note']}]" if r["note"] else ""
-            prefix = f"r{round_no} " if rounds > 1 else ""
-            print(f"[{prefix}{i:3d}/{len(selected)}] {tag}  {r['name']} ({r['elapsed']}s){note}{extra}")
+            _report(r, idx, round_no)
             if not r["passed"]:
-                print(f"        log: {r['log']}")
+                return True
+        return False
+
+    for round_no in range(1, rounds + 1):
+        rn = round_no if rounds > 1 else 0
+        if jobs > 1 and len(parallel) + len(shared_serial) > 1:
+            with ThreadPoolExecutor(max_workers=jobs, thread_name_prefix="test") as pool:
+                futures = {
+                    pool.submit(run_one, rel, path, runs_dir, ns.timeout, rn): (idx, path)
+                    for idx, (rel, path, _t) in parallel
+                }
+                # 重叠 lane: gl/port 一次一个，但不与并行批次抢"独占"语义
+                shared_future = (pool.submit(_run_lane, shared_serial, rn)
+                                 if shared_serial else None)
+                for fut in as_completed(futures):
+                    idx, _path = futures[fut]
+                    try:
+                        r = fut.result()
+                    except Exception as exc:  # noqa: BLE001 — 子进程封装异常不应打断整批
+                        r = {"name": _path.stem, "rel": str(_path), "passed": False,
+                             "elapsed": 0.0, "result_line": "", "first_error": repr(exc)[:180],
+                             "note": "runner error", "exit": -1, "log": ""}
+                    results.append(r)
+                    _report(r, idx, round_no)
+                    if ns.fail_fast and not r["passed"]:
+                        aborted = True
+                        for f in futures:
+                            f.cancel()
+                        break
+                if shared_future is not None and shared_future.result():
+                    aborted = True
+        else:
+            if _run_lane(parallel + shared_serial, rn):   # -j 1 或只有 1 个可并行测试
+                aborted = True
+        if not aborted:
+            if _run_lane(exclusive_serial, rn):
+                aborted = True
+        if aborted and ns.fail_fast:
+            break
 
     total_time = time.time() - t0
     by_name: dict[str, list[dict]] = {}

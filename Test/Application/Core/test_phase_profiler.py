@@ -15,6 +15,7 @@
 
 TIER: core
 """
+# SERIAL: timing (忙等校准 — 并行会让耗时断言抖动)
 
 from __future__ import annotations
 

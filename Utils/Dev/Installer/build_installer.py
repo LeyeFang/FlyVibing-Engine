@@ -47,6 +47,23 @@ _SKIP_DIRS = {"__pycache__", ".git", ".venv-py314t", ".vscode", "build", "dist",
 _SKIP_SUFFIX = (".pyc", ".pyo")
 _OFFICIAL_MANIFEST = "official_extensions.json"
 
+
+def _is_copy_skip_dir(name: str) -> bool:
+    """复制产物树时要跳过的目录（**保留** `site-packages` — 运行时镜像的依赖在里面）。
+
+    与扫描语义不同：安装包 staging 会把 `Resource/runtime/Lib/site-packages`
+    整层带进安装包，用扫描集（含 site-packages）会得到"没有 numpy 的运行时"。
+    """
+    try:
+        import sys
+        if ROOT not in sys.path:
+            sys.path.insert(0, ROOT)
+        from Application.Core.FileSystem.VendorDirs import is_copy_skip_dir as _impl
+        return bool(_impl(name))
+    except Exception:  # noqa: BLE001 — 引擎包不可用时退化为前缀判断
+        low = str(name or "").lower()
+        return low.startswith(".venv") or low.startswith("venv")
+
 # 编辑器本地状态（git-ignored；扩展启用表、PIE/UI 布局、插件数据）不进安装包。
 # 与 Application/Editor/ProjectManager.LOCAL_STATE_DIRS 保持同一契约；
 # 守卫: Test/Application/Editor/test_release_layout.py。
@@ -65,7 +82,7 @@ def _copy_tree(src: str, dst: str, skip_top: tuple[str, ...] = (),
                exclude_paths: set[str] | None = None) -> None:
     blocked = {os.path.normcase(os.path.abspath(p)) for p in (exclude_paths or ())}
     for base, dirs, files in os.walk(src):
-        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS
+        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not _is_copy_skip_dir(d)
                    and os.path.normcase(os.path.abspath(os.path.join(base, d))) not in blocked]
         if base == src and skip_top:
             dirs[:] = [d for d in dirs if d not in skip_top]
